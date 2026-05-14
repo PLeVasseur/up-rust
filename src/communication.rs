@@ -26,7 +26,7 @@ use bytes::Bytes;
 use tokio::{sync::oneshot, time::timeout};
 
 use crate::{
-    LocalUriProvider, RawBytes, UAttributes, UCode, UDeserializer, UEncoding, UFrameHeader,
+    LocalUriProvider, RawBytes, UAttributes, UCode, UDeserializer, UEncoding, UFrameMetadata,
     UMessageType, UOwnedFrame, UOwnedListener, UOwnedTransport, UPriority, USerializer, UStatus,
     UUri, UWireError, WireFormat, UUID,
 };
@@ -526,7 +526,7 @@ impl RpcResponseListener {
 #[async_trait]
 impl UOwnedListener for RpcResponseListener {
     async fn on_receive_owned(&self, frame: UOwnedFrame) {
-        let attributes = frame.header().attributes();
+        let attributes = frame.metadata().attributes();
         if attributes.message_type() != UMessageType::Response {
             return;
         }
@@ -588,8 +588,8 @@ where
             .verify_rpc_response()
             .map_err(|error| ServiceInvocationError::InvalidArgument(error.to_string()))?;
 
-        let (request_header, request_id, ttl) =
-            rpc_request_header(method.clone(), reply_to.clone(), call_options)?;
+        let (request_metadata, request_id, ttl) =
+            rpc_request_metadata(method.clone(), reply_to.clone(), call_options)?;
         let response_filter = method.clone();
         let (sender, receiver) = oneshot::channel();
         let listener = Arc::new(RpcResponseListener::new(request_id, sender));
@@ -601,7 +601,7 @@ where
 
         let send_result = self
             .transport
-            .send_owned(frame_from_payload(request_header, payload))
+            .send_owned(frame_from_payload(request_metadata, payload))
             .await;
         if let Err(status) = send_result {
             unregister_response_listener(
@@ -633,7 +633,7 @@ where
             Err(_elapsed) => return Err(ServiceInvocationError::DeadlineExceeded),
         };
 
-        if let Some(commstatus) = response.header().attributes().commstatus() {
+        if let Some(commstatus) = response.metadata().attributes().commstatus() {
             if commstatus != UCode::OK {
                 return Err(ServiceInvocationError::from(UStatus::fail_with_code(
                     commstatus,
@@ -684,8 +684,12 @@ where
     }
 
     async fn send_response(&self, request: &UOwnedFrame, payload: Option<UPayload>, status: UCode) {
-        let attributes = request.header().attributes();
-        let Some(reply_to) = request.header().sink().map(|_| attributes.source().clone()) else {
+        let attributes = request.metadata().attributes();
+        let Some(reply_to) = request
+            .metadata()
+            .sink()
+            .map(|_| attributes.source().clone())
+        else {
             return;
         };
         let mut response_attributes = UAttributes::new(
@@ -700,7 +704,7 @@ where
             response_attributes = response_attributes.with_commstatus(status);
         }
         let response = frame_from_payload(
-            UFrameHeader::new(response_attributes, UEncoding::default()),
+            UFrameMetadata::new(response_attributes, UEncoding::default()),
             payload,
         );
         let _ = self.transport.send_owned(response).await;
@@ -714,9 +718,9 @@ where
     T: UOwnedTransport + ?Sized,
 {
     async fn on_receive_owned(&self, frame: UOwnedFrame) {
-        let attributes = frame.header().attributes();
+        let attributes = frame.metadata().attributes();
         if attributes.message_type() != UMessageType::Request
-            || frame.header().sink() != Some(&self.method)
+            || frame.metadata().sink() != Some(&self.method)
         {
             return;
         }
@@ -929,7 +933,7 @@ where
             ));
         }
 
-        let header = header_with_options(
+        let metadata = metadata_with_options(
             source,
             Some(destination.to_owned()),
             UMessageType::Notification,
@@ -937,7 +941,7 @@ where
             call_options,
         );
         self.transport
-            .send_owned(frame_from_payload(header, payload))
+            .send_owned(frame_from_payload(metadata, payload))
             .await
             .map_err(NotificationError::NotifyError)
     }
@@ -1010,7 +1014,7 @@ where
         topic
             .verify_event()
             .map_err(|error| PubSubError::InvalidArgument(error.to_string()))?;
-        let header = header_with_options(
+        let metadata = metadata_with_options(
             topic,
             None,
             UMessageType::Publish,
@@ -1018,7 +1022,7 @@ where
             call_options,
         );
         self.transport
-            .send_owned(frame_from_payload(header, payload))
+            .send_owned(frame_from_payload(metadata, payload))
             .await
             .map_err(PubSubError::PublishError)
     }
@@ -1075,13 +1079,13 @@ where
     }
 }
 
-fn header_with_options(
+fn metadata_with_options(
     source: UUri,
     sink: Option<UUri>,
     message_type: UMessageType,
     default_priority: UPriority,
     options: CallOptions,
-) -> UFrameHeader {
+) -> UFrameMetadata {
     let id = options.message_id.unwrap_or_else(UUID::build);
     let priority = options.priority.unwrap_or(default_priority);
     let mut attributes = UAttributes::new(id, source, sink, message_type).with_priority(priority);
@@ -1091,15 +1095,15 @@ fn header_with_options(
     if let Some(token) = options.token {
         attributes = attributes.with_token(token);
     }
-    UFrameHeader::new(attributes, UEncoding::default())
+    UFrameMetadata::new(attributes, UEncoding::default())
 }
 
 #[cfg(feature = "util")]
-fn rpc_request_header(
+fn rpc_request_metadata(
     method: UUri,
     reply_to: UUri,
     options: CallOptions,
-) -> Result<(UFrameHeader, UUID, u32), ServiceInvocationError> {
+) -> Result<(UFrameMetadata, UUID, u32), ServiceInvocationError> {
     let ttl = options.ttl.ok_or_else(|| {
         ServiceInvocationError::InvalidArgument("RPC request TTL is required".to_string())
     })?;
@@ -1117,7 +1121,11 @@ fn rpc_request_header(
     if let Some(token) = options.token {
         attributes = attributes.with_token(token);
     }
-    Ok((UFrameHeader::new(attributes, UEncoding::default()), id, ttl))
+    Ok((
+        UFrameMetadata::new(attributes, UEncoding::default()),
+        id,
+        ttl,
+    ))
 }
 
 #[cfg(feature = "util")]
@@ -1127,16 +1135,16 @@ fn payload_from_frame(frame: &UOwnedFrame) -> Option<UPayload> {
     } else {
         Some(UPayload::new(
             frame.payload().clone(),
-            frame.header().encoding().clone(),
+            frame.metadata().encoding().clone(),
         ))
     }
 }
 
-fn frame_from_payload(header: UFrameHeader, payload: Option<UPayload>) -> UOwnedFrame {
+fn frame_from_payload(metadata: UFrameMetadata, payload: Option<UPayload>) -> UOwnedFrame {
     if let Some(payload) = payload {
         let (encoding, bytes) = payload.into_parts();
-        UOwnedFrame::new(header.with_encoding(encoding), bytes)
+        UOwnedFrame::new(metadata.with_encoding(encoding), bytes)
     } else {
-        UOwnedFrame::new(header, Bytes::new())
+        UOwnedFrame::new(metadata, Bytes::new())
     }
 }

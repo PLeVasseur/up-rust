@@ -33,6 +33,7 @@ version = "0.10.0-SNAPSHOT"
 [features]
 default = ["util"]
 protobuf-wire = ["dep:protobuf"]
+symphony = ["util", "dep:symphony"]
 util = ["tokio/sync", "tokio/time"]
 test-util = ["mockall"]
 
@@ -47,6 +48,7 @@ rand = { version = "0.9" }
 regex = { version = "1.11" }
 serde = { version = "1.0", features = ["derive"] }
 serde_json = { version = "1.0" }
+symphony = { version = "0.1", optional = true }
 tokio = { version = "1.45.1", default-features = false, optional = true }
 tracing = { version = "0.1", default-features = false, features = ["log", "std"] }
 uriparse = { version = "0.6" }
@@ -83,6 +85,22 @@ max_combination_size = 3
 [[example]]
 name = "owned_wire_format"
 required-features = ["util"]
+
+[[example]]
+name = "simple_publish"
+required-features = ["util"]
+
+[[example]]
+name = "simple_notify"
+required-features = ["util"]
+
+[[example]]
+name = "simple_rpc"
+required-features = ["util"]
+
+[[example]]
+name = "symphony_target"
+required-features = ["symphony"]
 
 [[example]]
 name = "zero_copy_wire_format"

@@ -19,7 +19,7 @@ use bytes::Bytes;
 
 use crate::{UCode, UStatus, UUri, UUID};
 
-/// Native uProtocol message kind carried in a frame header.
+/// Native uProtocol message kind carried in a frame metadata.
 #[derive(Clone, Copy, Debug, Eq, Hash, PartialEq)]
 pub enum UMessageType {
     Publish,
@@ -325,19 +325,19 @@ impl From<UWireError> for UMessageBuilderError {
 
 /// Native frame metadata used by transport APIs.
 ///
-/// `UFrameHeader` groups native uProtocol [`UAttributes`] with payload
+/// `UFrameMetadata` groups native uProtocol [`UAttributes`] with payload
 /// [`UEncoding`]. It is not a generated protocol envelope and it is not a
 /// replacement for `UAttributes`; transports should project these fields into
 /// their own metadata channels where possible. Prefer [`UMessageBuilder`] for
 /// constructing application frames because it validates message-type-specific
 /// attribute rules before producing an owned frame.
 #[derive(Clone, Debug, Eq, PartialEq)]
-pub struct UFrameHeader {
+pub struct UFrameMetadata {
     attributes: UAttributes,
     encoding: UEncoding,
 }
 
-impl UFrameHeader {
+impl UFrameMetadata {
     pub fn new(attributes: UAttributes, encoding: UEncoding) -> Self {
         Self {
             attributes,
@@ -426,33 +426,33 @@ impl UFrameHeader {
 /// Owned, serialization-neutral uProtocol frame.
 #[derive(Clone, Debug, PartialEq)]
 pub struct UOwnedFrame {
-    header: UFrameHeader,
+    metadata: UFrameMetadata,
     payload: Bytes,
 }
 
 impl UOwnedFrame {
-    pub fn new(header: UFrameHeader, payload: impl Into<Bytes>) -> Self {
+    pub fn new(metadata: UFrameMetadata, payload: impl Into<Bytes>) -> Self {
         Self {
-            header,
+            metadata,
             payload: payload.into(),
         }
     }
 
-    pub fn from_serializable<F, T>(header: UFrameHeader, value: &T) -> Result<Self, UWireError>
+    pub fn from_serializable<F, T>(metadata: UFrameMetadata, value: &T) -> Result<Self, UWireError>
     where
         F: WireFormat,
         T: USerializer<F>,
     {
         let payload = value.serialize_owned()?;
-        Ok(Self::new(header.with_encoding(F::encoding()), payload))
+        Ok(Self::new(metadata.with_encoding(F::encoding()), payload))
     }
 
-    pub fn header(&self) -> &UFrameHeader {
-        &self.header
+    pub fn metadata(&self) -> &UFrameMetadata {
+        &self.metadata
     }
 
-    pub fn header_mut(&mut self) -> &mut UFrameHeader {
-        &mut self.header
+    pub fn metadata_mut(&mut self) -> &mut UFrameMetadata {
+        &mut self.metadata
     }
 
     pub fn payload(&self) -> &Bytes {
@@ -463,8 +463,8 @@ impl UOwnedFrame {
         self.payload.as_ref()
     }
 
-    pub fn into_header(self) -> UFrameHeader {
-        self.header
+    pub fn into_metadata(self) -> UFrameMetadata {
+        self.metadata
     }
 
     pub fn into_payload(self) -> Bytes {
@@ -476,9 +476,9 @@ impl UOwnedFrame {
         F: WireFormat,
         T: UDeserializer<'a, F>,
     {
-        if self.header.encoding() != &F::encoding() {
+        if self.metadata.encoding() != &F::encoding() {
             return Err(UWireError::UnsupportedEncoding(
-                self.header.encoding().clone(),
+                self.metadata.encoding().clone(),
             ));
         }
         T::deserialize_from(self.payload_bytes())
@@ -611,9 +611,9 @@ impl UMessageBuilder {
         self
     }
 
-    /// Builds only the frame header.
-    pub fn build_header(&self) -> Result<UFrameHeader, UMessageBuilderError> {
-        Ok(UFrameHeader::new(
+    /// Builds only the frame metadata.
+    pub fn build_metadata(&self) -> Result<UFrameMetadata, UMessageBuilderError> {
+        Ok(UFrameMetadata::new(
             self.build_attributes()?,
             self.encoding.clone(),
         ))
@@ -622,7 +622,7 @@ impl UMessageBuilder {
     /// Builds an owned frame with the currently configured payload, if any.
     pub fn build(&self) -> Result<UOwnedFrame, UMessageBuilderError> {
         Ok(UOwnedFrame::new(
-            self.build_header()?,
+            self.build_metadata()?,
             self.payload.clone().unwrap_or_default(),
         ))
     }
@@ -818,8 +818,8 @@ impl Default for UMessageBuilder {
 }
 
 impl UZeroCopyRxFrame for UOwnedFrame {
-    fn header(&self) -> &UFrameHeader {
-        &self.header
+    fn metadata(&self) -> &UFrameMetadata {
+        &self.metadata
     }
 
     fn payload(&self) -> &[u8] {
@@ -908,15 +908,15 @@ impl<'a> UDeserializer<'a, RawBytes> for &'a [u8] {
 
 /// Mutable transmit storage reserved from a zero-copy transport.
 pub trait UTxBuffer {
-    fn header(&self) -> &UFrameHeader;
-    fn header_mut(&mut self) -> &mut UFrameHeader;
+    fn metadata(&self) -> &UFrameMetadata;
+    fn metadata_mut(&mut self) -> &mut UFrameMetadata;
     fn payload(&self) -> &[u8];
     fn payload_mut(&mut self) -> &mut [u8];
 }
 
 /// Receive-side zero-copy frame lease.
 pub trait UZeroCopyRxFrame {
-    fn header(&self) -> &UFrameHeader;
+    fn metadata(&self) -> &UFrameMetadata;
     fn payload(&self) -> &[u8];
 
     fn deserialize_borrowed<'a, F, T>(&'a self) -> Result<T, UWireError>
@@ -924,9 +924,9 @@ pub trait UZeroCopyRxFrame {
         F: WireFormat,
         T: UDeserializer<'a, F>,
     {
-        if self.header().encoding() != &F::encoding() {
+        if self.metadata().encoding() != &F::encoding() {
             return Err(UWireError::UnsupportedEncoding(
-                self.header().encoding().clone(),
+                self.metadata().encoding().clone(),
             ));
         }
         T::deserialize_from(self.payload())
@@ -936,30 +936,30 @@ pub trait UZeroCopyRxFrame {
 /// Owned buffer useful for tests, examples, and adapters that emulate a transmit loan.
 #[derive(Clone, Debug, PartialEq)]
 pub struct UVecTxBuffer {
-    header: UFrameHeader,
+    metadata: UFrameMetadata,
     payload: Vec<u8>,
 }
 
 impl UVecTxBuffer {
-    pub fn new(header: UFrameHeader, payload_len: usize) -> Self {
+    pub fn new(metadata: UFrameMetadata, payload_len: usize) -> Self {
         Self {
-            header,
+            metadata,
             payload: vec![0_u8; payload_len],
         }
     }
 
     pub fn into_frame(self) -> UOwnedFrame {
-        UOwnedFrame::new(self.header, self.payload)
+        UOwnedFrame::new(self.metadata, self.payload)
     }
 }
 
 impl UTxBuffer for UVecTxBuffer {
-    fn header(&self) -> &UFrameHeader {
-        &self.header
+    fn metadata(&self) -> &UFrameMetadata {
+        &self.metadata
     }
 
-    fn header_mut(&mut self) -> &mut UFrameHeader {
-        &mut self.header
+    fn metadata_mut(&mut self) -> &mut UFrameMetadata {
+        &mut self.metadata
     }
 
     fn payload(&self) -> &[u8] {
@@ -989,12 +989,12 @@ mod tests {
     fn owned_frame_uses_selected_wire_format() {
         let topic = UUri::try_from("//my-vehicle/4210/1/B24D").unwrap();
         let frame = UOwnedFrame::from_serializable::<RawBytes, _>(
-            UFrameHeader::publish(topic),
+            UFrameMetadata::publish(topic),
             &&[0x0a_u8, 0x0b_u8][..],
         )
         .unwrap();
 
-        assert_eq!(frame.header().encoding(), &RawBytes::encoding());
+        assert_eq!(frame.metadata().encoding(), &RawBytes::encoding());
         assert_eq!(frame.payload_bytes(), &[0x0a_u8, 0x0b_u8]);
     }
 
@@ -1020,7 +1020,7 @@ mod tests {
     fn owned_frame_deserialize_rejects_wrong_wire_format() {
         let topic = UUri::try_from("//my-vehicle/4210/1/B24D").unwrap();
         let frame = UOwnedFrame::from_serializable::<RawBytes, _>(
-            UFrameHeader::publish(topic),
+            UFrameMetadata::publish(topic),
             &&[0x0a_u8, 0x0b_u8][..],
         )
         .unwrap();
@@ -1044,7 +1044,7 @@ mod tests {
             .build_with_raw_payload(vec![0x01, 0x02])
             .unwrap();
 
-        let attributes = frame.header().attributes();
+        let attributes = frame.metadata().attributes();
         assert_eq!(attributes.id(), &message_id);
         assert_eq!(attributes.message_type(), UMessageType::Publish);
         assert_eq!(attributes.priority(), UPriority::CS2);
@@ -1052,7 +1052,7 @@ mod tests {
         assert_eq!(attributes.sink(), None);
         assert_eq!(attributes.ttl(), Some(5_000));
         assert_eq!(attributes.traceparent(), Some(traceparent));
-        assert_eq!(frame.header().encoding(), &RawBytes::encoding());
+        assert_eq!(frame.metadata().encoding(), &RawBytes::encoding());
         assert_eq!(frame.payload_bytes(), &[0x01, 0x02]);
     }
 
@@ -1065,13 +1065,13 @@ mod tests {
             .build()
             .unwrap();
         let response_id = UUID::build();
-        let response = UMessageBuilder::response_for_request(request.header().attributes())
+        let response = UMessageBuilder::response_for_request(request.metadata().attributes())
             .with_message_id(response_id.clone())
             .with_commstatus(UCode::DEADLINE_EXCEEDED)
             .build()
             .unwrap();
 
-        let attributes = response.header().attributes();
+        let attributes = response.metadata().attributes();
         assert_eq!(attributes.id(), &response_id);
         assert_eq!(attributes.message_type(), UMessageType::Response);
         assert_eq!(attributes.priority(), UPriority::CS5);
@@ -1079,7 +1079,7 @@ mod tests {
         assert_eq!(attributes.sink(), Some(&reply_to));
         assert_eq!(
             attributes.request_id(),
-            Some(request.header().attributes().id())
+            Some(request.metadata().attributes().id())
         );
         assert_eq!(attributes.commstatus(), Some(UCode::DEADLINE_EXCEEDED));
         assert_eq!(attributes.ttl(), Some(5_000));
@@ -1106,7 +1106,7 @@ mod tests {
             .build_with_serializable::<RawBytes, _>(&&[0x0a_u8, 0x0b_u8][..])
             .unwrap();
 
-        assert_eq!(frame.header().encoding(), &RawBytes::encoding());
+        assert_eq!(frame.metadata().encoding(), &RawBytes::encoding());
         assert_eq!(frame.payload_bytes(), &[0x0a_u8, 0x0b_u8]);
     }
 }

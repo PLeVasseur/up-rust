@@ -78,7 +78,7 @@ mod tests {
     use protobuf::well_known_types::wrappers::StringValue;
 
     use crate::{
-        UDeserializer, UFrameHeader, UOwnedFrame, USerializer, UTxBuffer, UUri, UVecTxBuffer,
+        UDeserializer, UFrameMetadata, UOwnedFrame, USerializer, UTxBuffer, UUri, UVecTxBuffer,
         UZeroCopyRxFrame,
     };
 
@@ -95,12 +95,14 @@ mod tests {
         let topic = UUri::try_from("//vehicle/4210/1/8001").unwrap();
         let input = message("owned protobuf payload");
 
-        let frame =
-            UOwnedFrame::from_serializable::<ProtobufWire, _>(UFrameHeader::publish(topic), &input)
-                .unwrap();
+        let frame = UOwnedFrame::from_serializable::<ProtobufWire, _>(
+            UFrameMetadata::publish(topic),
+            &input,
+        )
+        .unwrap();
         let decoded: StringValue = frame.deserialize::<ProtobufWire, _>().unwrap();
 
-        assert_eq!(frame.header().encoding(), &ProtobufWire::encoding());
+        assert_eq!(frame.metadata().encoding(), &ProtobufWire::encoding());
         assert_eq!(decoded.value, input.value);
     }
 
@@ -110,7 +112,7 @@ mod tests {
         let input = message("zero-copy protobuf payload");
         let payload_len = <StringValue as USerializer<ProtobufWire>>::encoded_len(&input);
         let mut buffer = UVecTxBuffer::new(
-            UFrameHeader::publish(topic).with_encoding(ProtobufWire::encoding()),
+            UFrameMetadata::publish(topic).with_encoding(ProtobufWire::encoding()),
             payload_len,
         );
 
@@ -120,7 +122,7 @@ mod tests {
         let frame = buffer.into_frame();
         let decoded: StringValue = frame.deserialize_borrowed::<ProtobufWire, _>().unwrap();
 
-        assert_eq!(frame.header().encoding(), &ProtobufWire::encoding());
+        assert_eq!(frame.metadata().encoding(), &ProtobufWire::encoding());
         assert_eq!(decoded.value, input.value);
     }
 

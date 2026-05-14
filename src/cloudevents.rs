@@ -18,7 +18,7 @@ use std::{collections::BTreeMap, error::Error, fmt::Display, str::FromStr};
 use bytes::Bytes;
 
 use crate::{
-    UAttributes, UCode, UEncoding, UFrameHeader, UMessageType, UOwnedFrame, UPriority, UUri, UUID,
+    UAttributes, UCode, UEncoding, UFrameMetadata, UMessageType, UOwnedFrame, UPriority, UUri, UUID,
 };
 
 pub const CLOUDEVENTS_SPEC_VERSION: &str = "1.0";
@@ -97,7 +97,7 @@ impl TryFrom<UOwnedFrame> for CloudEvent {
     type Error = CloudEventError;
 
     fn try_from(frame: UOwnedFrame) -> Result<Self, Self::Error> {
-        let header = frame.header();
+        let header = frame.metadata();
         let attributes = header.attributes();
         let mut event = Self::new(
             attributes.id().to_hyphenated_string(),
@@ -215,7 +215,7 @@ impl TryFrom<CloudEvent> for UOwnedFrame {
             .ok_or(CloudEventError::MissingAttribute("datacontenttype"))?;
         let encoding = UEncoding::new(format_id, content_type, event.data_schema);
         Ok(UOwnedFrame::new(
-            UFrameHeader::new(attributes, encoding),
+            UFrameMetadata::new(attributes, encoding),
             event.data.unwrap_or_default(),
         ))
     }
@@ -371,7 +371,7 @@ mod tests {
             Some("type.googleapis.com/google.protobuf.StringValue"),
         );
         let frame = UOwnedFrame::new(
-            UFrameHeader::new(attributes, encoding.clone()),
+            UFrameMetadata::new(attributes, encoding.clone()),
             Bytes::from_static(b"payload"),
         );
 
@@ -390,7 +390,7 @@ mod tests {
         );
 
         let frame = UOwnedFrame::try_from(event).unwrap();
-        let received = frame.header().attributes();
+        let received = frame.metadata().attributes();
 
         assert_eq!(received.id(), &id);
         assert_eq!(received.source(), &source);
@@ -403,7 +403,7 @@ mod tests {
         assert_eq!(received.token(), Some("auth-token"));
         assert_eq!(received.permission_level(), Some(7));
         assert_eq!(received.commstatus(), Some(UCode::UNAVAILABLE));
-        assert_eq!(frame.header().encoding(), &encoding);
+        assert_eq!(frame.metadata().encoding(), &encoding);
         assert_eq!(frame.payload_bytes(), b"payload");
     }
 

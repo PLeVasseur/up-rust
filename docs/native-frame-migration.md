@@ -202,8 +202,8 @@ struct MyTransport;
 #[async_trait]
 impl UOwnedTransport for MyTransport {
     async fn send_owned(&self, frame: UOwnedFrame) -> Result<(), UStatus> {
-        let attributes = frame.header().attributes();
-        let encoding = frame.header().encoding();
+        let attributes = frame.metadata().attributes();
+        let encoding = frame.metadata().encoding();
         let payload = frame.payload_bytes();
 
         // Project attributes and encoding into the transport-native metadata channel.

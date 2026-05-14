@@ -20,7 +20,7 @@ use std::sync::Arc;
 use async_trait::async_trait;
 
 use crate::{
-    UCode, UFrameHeader, UOwnedFrame, USerializer, UStatus, UTxBuffer, UUri, UWireError,
+    UCode, UFrameMetadata, UOwnedFrame, USerializer, UStatus, UTxBuffer, UUri, UWireError,
     UZeroCopyRxFrame, WireFormat,
 };
 
@@ -176,12 +176,17 @@ pub trait UOwnedTransport: Send + Sync {
 /// Convenience methods for owned transports.
 #[async_trait]
 pub trait UOwnedTransportExt: UOwnedTransport {
-    async fn send_serialized<F, T>(&self, header: UFrameHeader, value: &T) -> Result<(), UStatus>
+    async fn send_serialized<F, T>(
+        &self,
+        metadata: UFrameMetadata,
+        value: &T,
+    ) -> Result<(), UStatus>
     where
         F: WireFormat + Send + Sync,
         T: USerializer<F> + Sync,
     {
-        let frame = UOwnedFrame::from_serializable::<F, T>(header, value).map_err(UStatus::from)?;
+        let frame =
+            UOwnedFrame::from_serializable::<F, T>(metadata, value).map_err(UStatus::from)?;
         self.send_owned(frame).await
     }
 }
@@ -205,7 +210,7 @@ pub trait UZeroCopyTransport: Send + Sync {
 
     async fn reserve(
         &self,
-        header: UFrameHeader,
+        metadata: UFrameMetadata,
         payload_len: usize,
         alignment: usize,
     ) -> Result<Self::Tx, UStatus>;
@@ -253,7 +258,7 @@ pub trait UZeroCopyTransport: Send + Sync {
 pub trait UZeroCopyTransportExt: UZeroCopyTransport {
     async fn send_serialized_zero_copy<F, T>(
         &self,
-        header: UFrameHeader,
+        metadata: UFrameMetadata,
         value: &T,
     ) -> Result<(), UStatus>
     where
@@ -263,7 +268,7 @@ pub trait UZeroCopyTransportExt: UZeroCopyTransport {
         let payload_len = value.encoded_len();
         let mut buffer = self
             .reserve(
-                header.with_encoding(F::encoding()),
+                metadata.with_encoding(F::encoding()),
                 payload_len,
                 T::ALIGNMENT,
             )

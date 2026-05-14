@@ -42,7 +42,7 @@ impl RegisteredOwnedListener {
     }
 
     fn matches_frame(&self, frame: &UOwnedFrame) -> bool {
-        self.matches(frame.header().source(), frame.header().sink())
+        self.matches(frame.metadata().source(), frame.metadata().sink())
     }
 
     async fn on_receive(&self, frame: UOwnedFrame) {

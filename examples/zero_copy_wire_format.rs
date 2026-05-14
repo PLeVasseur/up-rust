@@ -15,7 +15,7 @@ use std::{collections::VecDeque, error::Error};
 
 use tokio::sync::Mutex;
 use up_rust::{
-    UCode, UDeserializer, UEncoding, UFrameHeader, UOwnedFrame, USerializer, UStatus, UUri,
+    UCode, UDeserializer, UEncoding, UFrameMetadata, UOwnedFrame, USerializer, UStatus, UUri,
     UVecTxBuffer, UWireError, UZeroCopyRxFrame, UZeroCopyTransport, UZeroCopyTransportExt,
     WireFormat,
 };
@@ -105,7 +105,7 @@ impl UZeroCopyTransport for LoopbackZeroCopyTransport {
 
     async fn reserve(
         &self,
-        header: UFrameHeader,
+        header: UFrameMetadata,
         payload_len: usize,
         _alignment: usize,
     ) -> Result<Self::Tx, UStatus> {
@@ -142,7 +142,7 @@ pub async fn main() -> Result<(), Box<dyn Error>> {
     };
 
     transport
-        .send_serialized_zero_copy::<ImageWire, _>(UFrameHeader::publish(topic.clone()), &image)
+        .send_serialized_zero_copy::<ImageWire, _>(UFrameMetadata::publish(topic.clone()), &image)
         .await?;
 
     let rx = transport.receive_zero_copy(&topic, None).await?;

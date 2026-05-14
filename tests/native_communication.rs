@@ -201,14 +201,14 @@ async fn simple_publisher_sends_native_owned_frame() {
         .unwrap();
 
     let frame = receiver.await.unwrap();
-    let attributes = frame.header().attributes();
+    let attributes = frame.metadata().attributes();
     assert_eq!(attributes.message_type(), UMessageType::Publish);
     assert_eq!(attributes.id(), &message_id);
     assert_eq!(attributes.source(), &topic);
     assert_eq!(attributes.sink(), None);
     assert_eq!(attributes.ttl(), Some(5_000));
     assert_eq!(attributes.priority(), UPriority::CS3);
-    assert_eq!(frame.header().encoding(), &RawBytes::encoding());
+    assert_eq!(frame.metadata().encoding(), &RawBytes::encoding());
     assert_eq!(frame.payload_bytes(), &[0x01, 0x02, 0x03]);
 }
 
@@ -236,7 +236,7 @@ async fn simple_notifier_sends_to_registered_notification_listener() {
         .unwrap();
 
     let frame = receiver.await.unwrap();
-    let attributes = frame.header().attributes();
+    let attributes = frame.metadata().attributes();
     assert_eq!(attributes.message_type(), UMessageType::Notification);
     assert_eq!(attributes.source(), &topic);
     assert_eq!(attributes.sink(), Some(&destination));

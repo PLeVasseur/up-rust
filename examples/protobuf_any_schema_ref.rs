@@ -12,7 +12,7 @@
  ********************************************************************************/
 
 use protobuf::well_known_types::{any::Any, wrappers::StringValue};
-use up_rust::{ProtobufWire, UEncoding, UFrameHeader, UOwnedFrame, USerializer, UUri};
+use up_rust::{ProtobufWire, UEncoding, UFrameMetadata, UOwnedFrame, USerializer, UUri};
 
 fn main() -> Result<(), Box<dyn std::error::Error>> {
     let topic = UUri::try_from("//vehicle/4210/1/8001")?;
@@ -22,7 +22,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
 
     let payload = <Any as USerializer<ProtobufWire>>::serialize_owned(&any)?;
     let frame = UOwnedFrame::new(
-        UFrameHeader::publish(topic).with_encoding(UEncoding::new(
+        UFrameMetadata::publish(topic).with_encoding(UEncoding::new(
             "protobuf-any",
             "application/x-protobuf",
             Some(any.type_url.clone()),
@@ -36,7 +36,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         .expect("unexpected protobuf Any type");
 
     assert_eq!(
-        frame.header().encoding().schema_ref(),
+        frame.metadata().encoding().schema_ref(),
         Some(any.type_url.as_str())
     );
     assert_eq!(decoded.value, message.value);

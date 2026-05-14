@@ -27,12 +27,15 @@ pub mod communication;
 
 pub mod core;
 
+#[cfg(feature = "symphony")]
+pub mod symphony;
+
 #[cfg(feature = "protobuf-wire")]
 pub mod protobuf_wire;
 
 mod uframe;
 pub use uframe::{
-    RawBytes, UAttributes, UDeserializer, UEncoding, UErasedSerializer, UFrameHeader,
+    RawBytes, UAttributes, UDeserializer, UEncoding, UErasedSerializer, UFrameMetadata,
     UMessageBuilder, UMessageBuilderError, UMessageType, UOwnedFrame, UPriority, USerializer,
     UTxBuffer, UVecTxBuffer, UWireError, UZeroCopyRxFrame, WireFormat,
 };
