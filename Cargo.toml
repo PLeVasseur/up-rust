@@ -17,6 +17,7 @@ description = "The Eclipse uProtocol Rust Language Library"
 edition = "2021"
 include = [
     "/Cargo.toml",
+    "/docs/*",
     "/examples/*",
     "/README.md",
     "/src/*",

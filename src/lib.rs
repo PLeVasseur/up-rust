@@ -32,9 +32,9 @@ pub mod protobuf_wire;
 
 mod uframe;
 pub use uframe::{
-    RawBytes, UAttributes, UDeserializer, UEncoding, UErasedSerializer, UFrameHeader, UMessageType,
-    UOwnedFrame, UPriority, USerializer, UTxBuffer, UVecTxBuffer, UWireError, UZeroCopyRxFrame,
-    WireFormat,
+    RawBytes, UAttributes, UDeserializer, UEncoding, UErasedSerializer, UFrameHeader,
+    UMessageBuilder, UMessageBuilderError, UMessageType, UOwnedFrame, UPriority, USerializer,
+    UTxBuffer, UVecTxBuffer, UWireError, UZeroCopyRxFrame, WireFormat,
 };
 
 #[cfg(feature = "protobuf-wire")]

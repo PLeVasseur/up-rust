@@ -15,7 +15,11 @@
 
 use std::sync::{Arc, Mutex};
 
+#[cfg(feature = "protobuf-wire")]
+use protobuf::well_known_types::wrappers::StringValue;
 use tokio::sync::oneshot;
+#[cfg(feature = "protobuf-wire")]
+use up_rust::ProtobufWire;
 use up_rust::{
     communication::{
         CallOptions, InMemoryRpcClient, InMemoryRpcServer, Notifier, Publisher, RequestHandler,
@@ -143,6 +147,32 @@ impl RequestHandler for IncrementReadingHandler {
             .map_err(|error| ServiceInvocationError::InvalidArgument(error.to_string()))?;
         let response = Reading(reading.0 + 1);
         UPayload::from_serializable::<ReadingWire, _>(&response)
+            .map(Some)
+            .map_err(|error| ServiceInvocationError::InvalidArgument(error.to_string()))
+    }
+}
+
+#[cfg(feature = "protobuf-wire")]
+struct ProtobufGreetingHandler;
+
+#[cfg(feature = "protobuf-wire")]
+#[async_trait::async_trait]
+impl RequestHandler for ProtobufGreetingHandler {
+    async fn handle_request(
+        &self,
+        _resource_id: u16,
+        _attributes: &UAttributes,
+        request_payload: Option<UPayload>,
+    ) -> Result<Option<UPayload>, ServiceInvocationError> {
+        let request_payload = request_payload.ok_or_else(|| {
+            ServiceInvocationError::InvalidArgument("missing protobuf payload".to_string())
+        })?;
+        let request: StringValue = request_payload
+            .deserialize::<ProtobufWire, _>()
+            .map_err(|error| ServiceInvocationError::InvalidArgument(error.to_string()))?;
+        let mut response = StringValue::new();
+        response.value = format!("hello, {}", request.value);
+        UPayload::from_serializable::<ProtobufWire, _>(&response)
             .map(Some)
             .map_err(|error| ServiceInvocationError::InvalidArgument(error.to_string()))
     }
@@ -297,4 +327,32 @@ async fn rpc_client_ext_invokes_typed_wire_format() {
         .unwrap();
 
     assert_eq!(response, Some(Reading(42)));
+}
+
+#[cfg(feature = "protobuf-wire")]
+#[tokio::test]
+async fn rpc_client_ext_invokes_typed_protobuf_payload() {
+    let transport = Arc::new(LocalTransport::default());
+    let uri_provider = Arc::new(StaticUriProvider::new("", 0x0005, 0x02));
+    let server = InMemoryRpcServer::new(transport.clone(), uri_provider.clone());
+    let client = InMemoryRpcClient::new(transport, uri_provider.clone());
+
+    server
+        .register_endpoint(None, 0x0003, Arc::new(ProtobufGreetingHandler))
+        .await
+        .unwrap();
+
+    let mut request = StringValue::new();
+    request.value = "protobuf rpc".to_string();
+
+    let response: Option<StringValue> = client
+        .invoke_serialized_method::<ProtobufWire, ProtobufWire, _, StringValue>(
+            uri_provider.get_resource_uri(0x0003),
+            CallOptions::for_rpc_request(5_000, None, None, None),
+            &request,
+        )
+        .await
+        .unwrap();
+
+    assert_eq!(response.unwrap().value, "hello, protobuf rpc");
 }

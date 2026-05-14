@@ -41,6 +41,21 @@ pub enum UPriority {
     CS6,
 }
 
+impl UPriority {
+    /// Gets the numeric priority class value.
+    pub fn value(self) -> u8 {
+        match self {
+            Self::CS0 => 0,
+            Self::CS1 => 1,
+            Self::CS2 => 2,
+            Self::CS3 => 3,
+            Self::CS4 => 4,
+            Self::CS5 => 5,
+            Self::CS6 => 6,
+        }
+    }
+}
+
 /// Native uProtocol attributes. This intentionally does not wrap a generated message envelope.
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub struct UAttributes {
@@ -276,7 +291,46 @@ impl From<UWireError> for UStatus {
     }
 }
 
-/// Native uProtocol metadata plus serialization-neutral encoding metadata.
+/// Error type used by the native [`UMessageBuilder`].
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub enum UMessageBuilderError {
+    InvalidAttributes(String),
+    Payload(UWireError),
+}
+
+impl UMessageBuilderError {
+    fn invalid_attributes(message: impl Into<String>) -> Self {
+        Self::InvalidAttributes(message.into())
+    }
+}
+
+impl Display for UMessageBuilderError {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            Self::InvalidAttributes(message) => {
+                f.write_fmt(format_args!("invalid frame attributes: {message}"))
+            }
+            Self::Payload(error) => f.write_fmt(format_args!("invalid frame payload: {error}")),
+        }
+    }
+}
+
+impl Error for UMessageBuilderError {}
+
+impl From<UWireError> for UMessageBuilderError {
+    fn from(value: UWireError) -> Self {
+        Self::Payload(value)
+    }
+}
+
+/// Native frame metadata used by transport APIs.
+///
+/// `UFrameHeader` groups native uProtocol [`UAttributes`] with payload
+/// [`UEncoding`]. It is not a generated protocol envelope and it is not a
+/// replacement for `UAttributes`; transports should project these fields into
+/// their own metadata channels where possible. Prefer [`UMessageBuilder`] for
+/// constructing application frames because it validates message-type-specific
+/// attribute rules before producing an owned frame.
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub struct UFrameHeader {
     attributes: UAttributes,
@@ -422,7 +476,344 @@ impl UOwnedFrame {
         F: WireFormat,
         T: UDeserializer<'a, F>,
     {
+        if self.header.encoding() != &F::encoding() {
+            return Err(UWireError::UnsupportedEncoding(
+                self.header.encoding().clone(),
+            ));
+        }
         T::deserialize_from(self.payload_bytes())
+    }
+}
+
+/// Native builder for creating [`UOwnedFrame`]s.
+///
+/// This restores the old `UMessageBuilder` ergonomics without reintroducing
+/// generated message envelopes. The builder output is a native owned frame.
+#[derive(Clone, Debug)]
+pub struct UMessageBuilder {
+    commstatus: Option<UCode>,
+    encoding: UEncoding,
+    message_id: Option<UUID>,
+    message_type: UMessageType,
+    payload: Option<Bytes>,
+    permission_level: Option<u32>,
+    priority: UPriority,
+    request_id: Option<UUID>,
+    sink: Option<UUri>,
+    source: Option<UUri>,
+    token: Option<String>,
+    traceparent: Option<String>,
+    ttl: Option<u32>,
+}
+
+impl UMessageBuilder {
+    /// Creates a builder for a Publish frame.
+    pub fn publish(topic: UUri) -> Self {
+        Self {
+            message_type: UMessageType::Publish,
+            source: Some(topic),
+            ..Self::default()
+        }
+    }
+
+    /// Creates a builder for a Notification frame.
+    pub fn notification(origin: UUri, destination: UUri) -> Self {
+        Self {
+            message_type: UMessageType::Notification,
+            source: Some(origin),
+            sink: Some(destination),
+            ..Self::default()
+        }
+    }
+
+    /// Creates a builder for an RPC Request frame.
+    pub fn request(method_to_invoke: UUri, reply_to_address: UUri, ttl: u32) -> Self {
+        Self {
+            message_type: UMessageType::Request,
+            priority: UPriority::CS4,
+            sink: Some(method_to_invoke),
+            source: Some(reply_to_address),
+            ttl: Some(ttl),
+            ..Self::default()
+        }
+    }
+
+    /// Creates a builder for an RPC Response frame.
+    pub fn response(reply_to_address: UUri, request_id: UUID, invoked_method: UUri) -> Self {
+        Self {
+            message_type: UMessageType::Response,
+            priority: UPriority::CS4,
+            request_id: Some(request_id),
+            sink: Some(reply_to_address),
+            source: Some(invoked_method),
+            ..Self::default()
+        }
+    }
+
+    /// Creates a response builder initialized from request attributes.
+    pub fn response_for_request(request_attributes: &UAttributes) -> Self {
+        Self {
+            message_type: UMessageType::Response,
+            priority: request_attributes.priority(),
+            request_id: Some(request_attributes.id().clone()),
+            sink: Some(request_attributes.source().clone()),
+            source: request_attributes.sink().cloned(),
+            ttl: request_attributes.ttl(),
+            ..Self::default()
+        }
+    }
+
+    /// Sets the frame identifier.
+    pub fn with_message_id(&mut self, message_id: UUID) -> &mut Self {
+        self.message_id = Some(message_id);
+        self
+    }
+
+    /// Sets the frame priority.
+    pub fn with_priority(&mut self, priority: UPriority) -> &mut Self {
+        self.priority = priority;
+        self
+    }
+
+    /// Sets the frame time-to-live in milliseconds.
+    pub fn with_ttl(&mut self, ttl: u32) -> &mut Self {
+        self.ttl = Some(ttl);
+        self
+    }
+
+    /// Sets the authorization token. Only RPC Request frames may carry tokens.
+    pub fn with_token(&mut self, token: impl Into<String>) -> &mut Self {
+        self.token = Some(token.into());
+        self
+    }
+
+    /// Sets the permission level. Only RPC Request frames may carry permission levels.
+    pub fn with_permission_level(&mut self, permission_level: u32) -> &mut Self {
+        self.permission_level = Some(permission_level);
+        self
+    }
+
+    /// Sets the communication status. Only RPC Response frames may carry communication status.
+    pub fn with_commstatus(&mut self, commstatus: UCode) -> &mut Self {
+        self.commstatus = Some(commstatus);
+        self
+    }
+
+    /// Sets the W3C trace context identifier.
+    pub fn with_traceparent(&mut self, traceparent: impl Into<String>) -> &mut Self {
+        self.traceparent = Some(traceparent.into());
+        self
+    }
+
+    /// Sets explicit payload encoding metadata for subsequent [`Self::build`] calls.
+    pub fn with_encoding(&mut self, encoding: UEncoding) -> &mut Self {
+        self.encoding = encoding;
+        self
+    }
+
+    /// Builds only the frame header.
+    pub fn build_header(&self) -> Result<UFrameHeader, UMessageBuilderError> {
+        Ok(UFrameHeader::new(
+            self.build_attributes()?,
+            self.encoding.clone(),
+        ))
+    }
+
+    /// Builds an owned frame with the currently configured payload, if any.
+    pub fn build(&self) -> Result<UOwnedFrame, UMessageBuilderError> {
+        Ok(UOwnedFrame::new(
+            self.build_header()?,
+            self.payload.clone().unwrap_or_default(),
+        ))
+    }
+
+    /// Builds an owned frame with raw bytes.
+    pub fn build_with_raw_payload<T: Into<Bytes>>(
+        &mut self,
+        payload: T,
+    ) -> Result<UOwnedFrame, UMessageBuilderError> {
+        self.build_with_payload(payload, RawBytes::encoding())
+    }
+
+    /// Builds an owned frame with explicit encoding metadata.
+    pub fn build_with_payload<T: Into<Bytes>>(
+        &mut self,
+        payload: T,
+        encoding: UEncoding,
+    ) -> Result<UOwnedFrame, UMessageBuilderError> {
+        self.payload = Some(payload.into());
+        self.encoding = encoding;
+        self.build()
+    }
+
+    /// Serializes a typed payload and builds an owned frame using the selected wire format.
+    pub fn build_with_serializable<F, T>(
+        &mut self,
+        value: &T,
+    ) -> Result<UOwnedFrame, UMessageBuilderError>
+    where
+        F: WireFormat,
+        T: USerializer<F>,
+    {
+        self.payload = Some(value.serialize_owned()?);
+        self.encoding = F::encoding();
+        self.build()
+    }
+
+    /// Serializes a Protocol Buffers payload and builds an owned frame.
+    #[cfg(feature = "protobuf-wire")]
+    pub fn build_with_protobuf_payload<T>(
+        &mut self,
+        value: &T,
+    ) -> Result<UOwnedFrame, UMessageBuilderError>
+    where
+        T: USerializer<crate::ProtobufWire>,
+    {
+        self.build_with_serializable::<crate::ProtobufWire, _>(value)
+    }
+
+    fn build_attributes(&self) -> Result<UAttributes, UMessageBuilderError> {
+        self.validate_message_specific_fields()?;
+        let id = self.message_id.clone().unwrap_or_else(UUID::build);
+        if !id.is_uprotocol_uuid() {
+            return Err(UMessageBuilderError::invalid_attributes(
+                "message ID must be a valid uProtocol UUID",
+            ));
+        }
+        let source = self
+            .source
+            .clone()
+            .ok_or_else(|| UMessageBuilderError::invalid_attributes("source URI is required"))?;
+        let sink = self.sink.clone();
+        let mut attributes =
+            UAttributes::new(id, source, sink, self.message_type).with_priority(self.priority);
+        if let Some(ttl) = self.ttl {
+            attributes = attributes.with_ttl(ttl);
+        }
+        if let Some(request_id) = self.request_id.clone() {
+            attributes = attributes.with_request_id(request_id);
+        }
+        if let Some(traceparent) = self.traceparent.clone() {
+            attributes = attributes.with_traceparent(traceparent);
+        }
+        if let Some(token) = self.token.clone() {
+            attributes = attributes.with_token(token);
+        }
+        if let Some(permission_level) = self.permission_level {
+            attributes = attributes.with_permission_level(permission_level);
+        }
+        if let Some(commstatus) = self.commstatus {
+            attributes = attributes.with_commstatus(commstatus);
+        }
+        Ok(attributes)
+    }
+
+    fn validate_message_specific_fields(&self) -> Result<(), UMessageBuilderError> {
+        match self.message_type {
+            UMessageType::Publish => self.validate_publish(),
+            UMessageType::Notification => self.validate_notification(),
+            UMessageType::Request => self.validate_request(),
+            UMessageType::Response => self.validate_response(),
+        }
+    }
+
+    fn validate_publish(&self) -> Result<(), UMessageBuilderError> {
+        if self.sink.is_some() {
+            return Err(UMessageBuilderError::invalid_attributes(
+                "publish frames must not have a sink URI",
+            ));
+        }
+        if self.token.is_some() || self.permission_level.is_some() || self.commstatus.is_some() {
+            return Err(UMessageBuilderError::invalid_attributes(
+                "publish frames must not carry RPC-only attributes",
+            ));
+        }
+        Ok(())
+    }
+
+    fn validate_notification(&self) -> Result<(), UMessageBuilderError> {
+        if self.sink.is_none() {
+            return Err(UMessageBuilderError::invalid_attributes(
+                "notification frames require a sink URI",
+            ));
+        }
+        if self.token.is_some() || self.permission_level.is_some() || self.commstatus.is_some() {
+            return Err(UMessageBuilderError::invalid_attributes(
+                "notification frames must not carry RPC-only attributes",
+            ));
+        }
+        Ok(())
+    }
+
+    fn validate_request(&self) -> Result<(), UMessageBuilderError> {
+        if self.sink.is_none() {
+            return Err(UMessageBuilderError::invalid_attributes(
+                "request frames require a method sink URI",
+            ));
+        }
+        let ttl = self.ttl.ok_or_else(|| {
+            UMessageBuilderError::invalid_attributes("request frames require a TTL")
+        })?;
+        if ttl == 0 {
+            return Err(UMessageBuilderError::invalid_attributes(
+                "request frame TTL must be greater than 0",
+            ));
+        }
+        if self.priority.value() < UPriority::CS4.value() {
+            return Err(UMessageBuilderError::invalid_attributes(
+                "request frame priority must be CS4 or higher",
+            ));
+        }
+        if self.commstatus.is_some() {
+            return Err(UMessageBuilderError::invalid_attributes(
+                "request frames must not carry communication status",
+            ));
+        }
+        Ok(())
+    }
+
+    fn validate_response(&self) -> Result<(), UMessageBuilderError> {
+        if self.sink.is_none() {
+            return Err(UMessageBuilderError::invalid_attributes(
+                "response frames require a reply-to sink URI",
+            ));
+        }
+        if self.request_id.is_none() {
+            return Err(UMessageBuilderError::invalid_attributes(
+                "response frames require a request ID",
+            ));
+        }
+        if self.priority.value() < UPriority::CS4.value() {
+            return Err(UMessageBuilderError::invalid_attributes(
+                "response frame priority must be CS4 or higher",
+            ));
+        }
+        if self.token.is_some() || self.permission_level.is_some() {
+            return Err(UMessageBuilderError::invalid_attributes(
+                "response frames must not carry request authorization attributes",
+            ));
+        }
+        Ok(())
+    }
+}
+
+impl Default for UMessageBuilder {
+    fn default() -> Self {
+        Self {
+            commstatus: None,
+            encoding: UEncoding::default(),
+            message_id: None,
+            message_type: UMessageType::Publish,
+            payload: None,
+            permission_level: None,
+            priority: UPriority::default(),
+            request_id: None,
+            sink: None,
+            source: None,
+            token: None,
+            traceparent: None,
+            ttl: None,
+        }
     }
 }
 
@@ -533,6 +924,11 @@ pub trait UZeroCopyRxFrame {
         F: WireFormat,
         T: UDeserializer<'a, F>,
     {
+        if self.header().encoding() != &F::encoding() {
+            return Err(UWireError::UnsupportedEncoding(
+                self.header().encoding().clone(),
+            ));
+        }
         T::deserialize_from(self.payload())
     }
 }
@@ -597,6 +993,118 @@ mod tests {
             &&[0x0a_u8, 0x0b_u8][..],
         )
         .unwrap();
+
+        assert_eq!(frame.header().encoding(), &RawBytes::encoding());
+        assert_eq!(frame.payload_bytes(), &[0x0a_u8, 0x0b_u8]);
+    }
+
+    struct OtherWire;
+
+    impl WireFormat for OtherWire {
+        fn name() -> &'static str {
+            "other"
+        }
+
+        fn encoding() -> UEncoding {
+            UEncoding::new(Self::name(), "application/x-other", None::<String>)
+        }
+    }
+
+    impl<'a> UDeserializer<'a, OtherWire> for &'a [u8] {
+        fn deserialize_from(src: &'a [u8]) -> Result<Self, UWireError> {
+            Ok(src)
+        }
+    }
+
+    #[test]
+    fn owned_frame_deserialize_rejects_wrong_wire_format() {
+        let topic = UUri::try_from("//my-vehicle/4210/1/B24D").unwrap();
+        let frame = UOwnedFrame::from_serializable::<RawBytes, _>(
+            UFrameHeader::publish(topic),
+            &&[0x0a_u8, 0x0b_u8][..],
+        )
+        .unwrap();
+
+        assert!(matches!(
+            frame.deserialize::<OtherWire, &[u8]>(),
+            Err(UWireError::UnsupportedEncoding(_))
+        ));
+    }
+
+    #[test]
+    fn message_builder_builds_publish_frame_with_raw_payload() {
+        let topic = UUri::try_from("//my-vehicle/4210/1/B24D").unwrap();
+        let message_id = UUID::build();
+        let traceparent = "00-4bf92f3577b34da6a3ce929d0e0e4736-00f067aa0ba902b7-01";
+        let frame = UMessageBuilder::publish(topic.clone())
+            .with_message_id(message_id.clone())
+            .with_priority(UPriority::CS2)
+            .with_ttl(5_000)
+            .with_traceparent(traceparent)
+            .build_with_raw_payload(vec![0x01, 0x02])
+            .unwrap();
+
+        let attributes = frame.header().attributes();
+        assert_eq!(attributes.id(), &message_id);
+        assert_eq!(attributes.message_type(), UMessageType::Publish);
+        assert_eq!(attributes.priority(), UPriority::CS2);
+        assert_eq!(attributes.source(), &topic);
+        assert_eq!(attributes.sink(), None);
+        assert_eq!(attributes.ttl(), Some(5_000));
+        assert_eq!(attributes.traceparent(), Some(traceparent));
+        assert_eq!(frame.header().encoding(), &RawBytes::encoding());
+        assert_eq!(frame.payload_bytes(), &[0x01, 0x02]);
+    }
+
+    #[test]
+    fn message_builder_builds_response_from_request_attributes() {
+        let method = UUri::try_from("//vehicle/4210/1/0001").unwrap();
+        let reply_to = UUri::try_from("//client/ABCD/1/0000").unwrap();
+        let request = UMessageBuilder::request(method.clone(), reply_to.clone(), 5_000)
+            .with_priority(UPriority::CS5)
+            .build()
+            .unwrap();
+        let response_id = UUID::build();
+        let response = UMessageBuilder::response_for_request(request.header().attributes())
+            .with_message_id(response_id.clone())
+            .with_commstatus(UCode::DEADLINE_EXCEEDED)
+            .build()
+            .unwrap();
+
+        let attributes = response.header().attributes();
+        assert_eq!(attributes.id(), &response_id);
+        assert_eq!(attributes.message_type(), UMessageType::Response);
+        assert_eq!(attributes.priority(), UPriority::CS5);
+        assert_eq!(attributes.source(), &method);
+        assert_eq!(attributes.sink(), Some(&reply_to));
+        assert_eq!(
+            attributes.request_id(),
+            Some(request.header().attributes().id())
+        );
+        assert_eq!(attributes.commstatus(), Some(UCode::DEADLINE_EXCEEDED));
+        assert_eq!(attributes.ttl(), Some(5_000));
+    }
+
+    #[test]
+    fn message_builder_rejects_low_rpc_priority() {
+        let method = UUri::try_from("//vehicle/4210/1/0001").unwrap();
+        let reply_to = UUri::try_from("//client/ABCD/1/0000").unwrap();
+        let result = UMessageBuilder::request(method, reply_to, 5_000)
+            .with_priority(UPriority::CS3)
+            .build();
+
+        assert!(matches!(
+            result,
+            Err(UMessageBuilderError::InvalidAttributes(_))
+        ));
+    }
+
+    #[test]
+    fn message_builder_uses_selected_wire_format_for_typed_payload() {
+        let topic = UUri::try_from("//my-vehicle/4210/1/B24D").unwrap();
+        let frame = UMessageBuilder::publish(topic)
+            .build_with_serializable::<RawBytes, _>(&&[0x0a_u8, 0x0b_u8][..])
+            .unwrap();
 
         assert_eq!(frame.header().encoding(), &RawBytes::encoding());
         assert_eq!(frame.payload_bytes(), &[0x0a_u8, 0x0b_u8]);

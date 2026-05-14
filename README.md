@@ -21,6 +21,22 @@ up-rust = { version = "0.9" }
 ```
 
 Please refer to the [examples](./examples/) for owned-buffer and zero-copy wire-format usage.
+The [native frame migration guide](./docs/native-frame-migration.md) explains how to move from generated `UMessage` envelopes to `UOwnedFrame`, `UMessageBuilder`, and serializer-neutral payloads.
+
+`UMessageBuilder` provides native builder ergonomics for `UOwnedFrame` construction without reintroducing generated message envelopes:
+
+```rust
+use up_rust::{UMessageBuilder, UUri};
+
+# fn main() -> Result<(), Box<dyn std::error::Error>> {
+let topic = UUri::try_from("//my-vehicle/4210/1/B24D")?;
+let frame = UMessageBuilder::publish(topic).build_with_raw_payload(vec![0x01, 0x02])?;
+assert_eq!(frame.payload_bytes(), &[0x01, 0x02]);
+# Ok(())
+# }
+```
+
+Use `build_with_serializable::<MyWireFormat, _>(&value)` to create frames with custom serializer-neutral payloads. Protocol Buffers remain available as optional payload support through the `protobuf-wire` feature.
 
 ## Building from Source
 <!--
