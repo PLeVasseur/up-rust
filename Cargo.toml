@@ -41,6 +41,7 @@ test-util = ["mockall"]
 async-trait = { version = "0.1" }
 base64 = { version = "0.22" }
 bytes = { version = "1.11.1" }
+futures-channel = { version = "0.3" }
 mediatype = "0.20"
 mockall = { version = "0.13", optional = true }
 protobuf = { version = "3.7.2", features = ["with-bytes"], optional = true }

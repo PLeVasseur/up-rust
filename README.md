@@ -38,6 +38,8 @@ assert_eq!(frame.payload_bytes(), &[0x01, 0x02]);
 
 Use `build_with_serializable::<MyWireFormat, _>(&value)` to create frames with custom serializer-neutral payloads. Protocol Buffers remain available as optional payload support through the `protobuf-wire` feature.
 
+Transport implementers can expose push-oriented receives by implementing `register_owned_listener`; the default `receive_owned` implementation uses a temporary listener and does not require a separate transport-specific pull queue. Routing code that needs to work with owned and zero-copy endpoints can use `UTransportEndpoint` to wrap `UOwnedTransport` or true `UZeroCopyTransport` implementations.
+
 ## Building from Source
 <!--
 `uman~up-language-building~1`

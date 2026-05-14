@@ -71,6 +71,7 @@ Transport implementations should project these fields into their native metadata
 | Generated `UMessageBuilder` | Native `UMessageBuilder` that builds `UOwnedFrame` |
 | `UTransport::send` | `UOwnedTransport::send_owned` or `UZeroCopyTransport::send_zero_copy` |
 | `UTransport::register_listener` | `register_owned_listener` or `register_zero_copy_listener` |
+| Pull-style receive helpers | `receive_owned` default adapter over `register_owned_listener` where appropriate |
 
 ## Builder Entry Points
 
@@ -264,6 +265,28 @@ impl UOwnedTransport for MyTransport {
 
 Zero-copy transports should implement `UZeroCopyTransport` only when the transport can honestly loan transmit storage and return receive leases. Network and broker transports should not fake zero-copy by copying into hidden buffers.
 
+### Pull Receive On Push-Oriented Transports
+
+`UOwnedTransport::receive_owned` has a default implementation that registers a temporary owned listener and returns the first matching frame. Transports that already implement `register_owned_listener` and `unregister_owned_listener` usually do not need a separate `receive_owned` queue.
+
+This is intentionally not a zero-copy adapter. It is an owned-frame convenience for transports whose natural receive model is callback or subscription based.
+
+### Generic Endpoint Adapters
+
+Use `UTransportEndpoint` when routing code needs one object that can send owned frames through either an owned transport or a true zero-copy transport:
+
+```rust
+use std::sync::Arc;
+use up_rust::{UOwnedTransport, UTransportEndpoint};
+
+# fn wrap(transport: Arc<dyn UOwnedTransport>) {
+let endpoint = UTransportEndpoint::from_owned(transport);
+# let _ = endpoint;
+# }
+```
+
+For zero-copy transports, `UTransportEndpoint::from_zero_copy` copies an owned frame payload into a transmit loan for sends and adapts zero-copy receive leases to owned listener callbacks for generic routing. It does not make a network or broker transport zero-copy; only transports that implement true loaned storage should use the zero-copy constructor.
+
 ## Validation Checklist
 
 Use this checklist when migrating an application or transport:
@@ -274,4 +297,6 @@ Use this checklist when migrating an application or transport:
 4. Use `WireFormat` serializers for typed payloads.
 5. Enable `protobuf-wire` only when Protocol Buffers payload support is needed.
 6. Use `send_owned` for owned transports and `send_zero_copy` only for true loaned-storage transports.
-7. Add tests for raw payloads, custom wire formats, optional protobuf payloads, and wrong-wire-format rejection.
+7. Prefer the default `receive_owned` adapter instead of adding duplicate pull queues to push-oriented owned transports.
+8. Use `UTransportEndpoint` for generic owned/zero-copy routing boundaries.
+9. Add tests for raw payloads, custom wire formats, optional protobuf payloads, and wrong-wire-format rejection.

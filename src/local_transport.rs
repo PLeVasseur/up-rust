@@ -119,3 +119,36 @@ impl UOwnedTransport for LocalTransport {
         }
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use std::sync::Arc;
+
+    use crate::{
+        local_transport::LocalTransport, UFrameMetadata, UOwnedFrame, UOwnedTransport, UUri,
+    };
+
+    #[tokio::test]
+    async fn receive_owned_uses_registered_listener_path() {
+        let transport = Arc::new(LocalTransport::default());
+        let topic = UUri::try_from_parts("vehicle", 0x4210, 1, 0x9000).expect("valid topic");
+        let frame = UOwnedFrame::new(UFrameMetadata::publish(topic.clone()), b"hello".as_slice());
+
+        let receive_task = tokio::spawn({
+            let transport = transport.clone();
+            let topic = topic.clone();
+            async move { transport.receive_owned(&topic, None).await }
+        });
+        tokio::task::yield_now().await;
+        transport
+            .send_owned(frame.clone())
+            .await
+            .expect("send should succeed");
+
+        let received = receive_task
+            .await
+            .expect("receive task should complete")
+            .expect("receive should succeed");
+        assert_eq!(received, frame);
+    }
+}

@@ -46,6 +46,9 @@ pub use protobuf_wire::ProtobufWire;
 mod uri;
 pub use uri::{UUri, UUriError};
 
+mod transport_endpoint;
+pub use transport_endpoint::{UTransportEndpoint, UTransportEndpointRegistration, UTransportMode};
+
 pub mod usubscription;
 pub use usubscription::*;
 

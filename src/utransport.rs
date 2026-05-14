@@ -15,7 +15,7 @@ use std::fmt::{Debug, Formatter};
 use std::hash::{Hash, Hasher};
 use std::num::TryFromIntError;
 use std::ops::Deref;
-use std::sync::Arc;
+use std::sync::{Arc, Mutex};
 
 use async_trait::async_trait;
 
@@ -132,6 +132,30 @@ pub trait UOwnedListener: Send + Sync {
     async fn on_receive_owned(&self, frame: UOwnedFrame);
 }
 
+struct OneShotOwnedListener {
+    sender: Mutex<Option<futures_channel::oneshot::Sender<UOwnedFrame>>>,
+}
+
+impl OneShotOwnedListener {
+    fn new(sender: futures_channel::oneshot::Sender<UOwnedFrame>) -> Self {
+        Self {
+            sender: Mutex::new(Some(sender)),
+        }
+    }
+}
+
+#[async_trait]
+impl UOwnedListener for OneShotOwnedListener {
+    async fn on_receive_owned(&self, frame: UOwnedFrame) {
+        let Ok(mut sender) = self.sender.lock() else {
+            return;
+        };
+        if let Some(sender) = sender.take() {
+            let _ = sender.send(frame);
+        }
+    }
+}
+
 /// The serialization-neutral owned-buffer transport API.
 #[async_trait]
 pub trait UOwnedTransport: Send + Sync {
@@ -139,13 +163,26 @@ pub trait UOwnedTransport: Send + Sync {
 
     async fn receive_owned(
         &self,
-        _source_filter: &UUri,
-        _sink_filter: Option<&UUri>,
+        source_filter: &UUri,
+        sink_filter: Option<&UUri>,
     ) -> Result<UOwnedFrame, UStatus> {
-        Err(UStatus::fail_with_code(
-            UCode::UNIMPLEMENTED,
-            "not implemented",
-        ))
+        // Pull receive is built from the listener API so push-oriented transports
+        // do not need a separate queueing implementation.
+        let (sender, receiver) = futures_channel::oneshot::channel();
+        let listener: Arc<dyn UOwnedListener> = Arc::new(OneShotOwnedListener::new(sender));
+        self.register_owned_listener(source_filter, sink_filter, listener.clone())
+            .await?;
+        let received = receiver.await.map_err(|_| {
+            UStatus::fail_with_code(UCode::CANCELLED, "receive listener was cancelled")
+        });
+        let unregister_result = self
+            .unregister_owned_listener(source_filter, sink_filter, listener)
+            .await;
+        match (received, unregister_result) {
+            (Ok(frame), Ok(())) => Ok(frame),
+            (Ok(_), Err(err)) => Err(err),
+            (Err(err), _) => Err(err),
+        }
     }
 
     async fn register_owned_listener(
