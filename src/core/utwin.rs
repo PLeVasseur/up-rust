@@ -1,5 +1,5 @@
 /********************************************************************************
- * Copyright (c) 2024 Contributors to the Eclipse Foundation
+ * Copyright (c) 2026 Contributors to the Eclipse Foundation
  *
  * See the NOTICE file(s) distributed with this work for additional
  * information regarding copyright ownership.
@@ -11,4 +11,17 @@
  * SPDX-License-Identifier: Apache-2.0
  ********************************************************************************/
 
-pub use crate::up_core_api::utwin::{GetLastMessagesResponse, MessageResponse};
+use crate::{UOwnedFrame, UUri};
+
+/// Native response entry for a uTwin last-message lookup.
+#[derive(Clone, Debug, PartialEq)]
+pub struct MessageResponse {
+    pub topic: UUri,
+    pub frame: Option<UOwnedFrame>,
+}
+
+/// Native response containing last known frames for requested topics.
+#[derive(Clone, Debug, Default, PartialEq)]
+pub struct GetLastMessagesResponse {
+    pub messages: Vec<MessageResponse>,
+}

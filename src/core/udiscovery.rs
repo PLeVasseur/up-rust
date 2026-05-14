@@ -1,5 +1,5 @@
 /********************************************************************************
- * Copyright (c) 2024 Contributors to the Eclipse Foundation
+ * Copyright (c) 2026 Contributors to the Eclipse Foundation
  *
  * See the NOTICE file(s) distributed with this work for additional
  * information regarding copyright ownership.
@@ -12,34 +12,19 @@
  ********************************************************************************/
 
 use async_trait::async_trait;
-#[cfg(test)]
-use mockall::automock;
 
-pub use crate::up_core_api::udiscovery::{
-    FindServicesRequest, FindServicesResponse, GetServiceTopicsRequest, GetServiceTopicsResponse,
-    ServiceTopicInfo,
-};
 use crate::{UStatus, UUri};
 
-/// The uEntity (type) identifier of the uDiscovery service.
+/// The uEntity type identifier of the uDiscovery service.
 pub const UDISCOVERY_TYPE_ID: u32 = 0x0000_0001;
-/// The (latest) major version of the uDiscovery service.
+/// The latest major version of the uDiscovery service contract represented here.
 pub const UDISCOVERY_VERSION_MAJOR: u8 = 0x03;
-/// The resource identifier of uDiscovery's _find services_ operation.
+/// Resource identifier of uDiscovery's find-services operation.
 pub const RESOURCE_ID_FIND_SERVICES: u16 = 0x0001;
-/// The resource identifier of uDiscovery's _get service topics_ operation.
+/// Resource identifier of uDiscovery's get-service-topics operation.
 pub const RESOURCE_ID_GET_SERVICE_TOPICS: u16 = 0x0002;
 
-/// Gets a UUri referring to one of the local uDiscovery service's resources.
-///
-/// # Examples
-///
-/// ```rust
-/// use up_rust::core::udiscovery;
-///
-/// let uuri = udiscovery::udiscovery_uri(udiscovery::RESOURCE_ID_FIND_SERVICES);
-/// assert_eq!(uuri.resource_id, 0x0001);
-/// ```
+/// Gets a local uDiscovery service URI for a resource.
 pub fn udiscovery_uri(resource_id: u16) -> UUri {
     UUri::try_from_parts(
         "",
@@ -47,42 +32,67 @@ pub fn udiscovery_uri(resource_id: u16) -> UUri {
         UDISCOVERY_VERSION_MAJOR,
         resource_id,
     )
-    .unwrap()
+    .expect("native uDiscovery constants must form a valid UUri")
 }
 
-/// The uProtocol Application Layer client interface to the uDiscovery service.
-///
-/// Please refer to the [uDiscovery service specification](https://github.com/eclipse-uprotocol/up-spec/blob/v1.6.0-alpha.7/up-l3/udiscovery/v3/client.adoc)
-/// for details.
-#[cfg_attr(test, automock)]
+/// Request for finding services matching a URI pattern.
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct FindServicesRequest {
+    pub uri_pattern: UUri,
+    pub recursive: bool,
+}
+
+/// Response containing service URIs matching a discovery request.
+#[derive(Clone, Debug, Default, Eq, PartialEq)]
+pub struct FindServicesResponse {
+    pub services: Vec<UUri>,
+}
+
+/// Request for topic information matching a URI pattern.
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct GetServiceTopicsRequest {
+    pub topic_pattern: UUri,
+    pub recursive: bool,
+}
+
+/// Native topic information published by a service.
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct ServiceTopicInfo {
+    pub topic: UUri,
+    pub publisher: Option<UUri>,
+}
+
+/// Response containing service topic information.
+#[derive(Clone, Debug, Default, Eq, PartialEq)]
+pub struct GetServiceTopicsResponse {
+    pub topics: Vec<ServiceTopicInfo>,
+}
+
+/// Native uDiscovery client contract.
 #[async_trait]
 pub trait UDiscovery: Send + Sync {
-    /// Finds service instances based on search criteria.
-    ///
-    /// # Parameters
-    ///
-    /// * `uri_pattern` - The URI pattern to use for looking up service instances.
-    /// * `recursive` - Flag indicating whether the service should extend the search to its parent uDiscovery node.
-    ///
-    /// # Returns
-    ///
-    /// The service instances matching the given search criteria.
-    async fn find_services(&self, uri_pattern: UUri, recursive: bool)
-        -> Result<Vec<UUri>, UStatus>;
+    async fn find_services(
+        &self,
+        request: FindServicesRequest,
+    ) -> Result<FindServicesResponse, UStatus>;
 
-    /// Gets information about topic(s) that a service (instance) publishes messages to.
-    ///
-    /// # Parameters
-    ///
-    /// * `topic_pattern` - The URI pattern to use for looking up topic information.
-    /// * `recursive` - Flag indicating whether the service should extend the search to its parent uDiscovery node.
-    ///
-    /// # Returns
-    ///
-    /// The topics.
     async fn get_service_topics(
         &self,
-        topic_pattern: UUri,
-        recursive: bool,
-    ) -> Result<Vec<ServiceTopicInfo>, UStatus>;
+        request: GetServiceTopicsRequest,
+    ) -> Result<GetServiceTopicsResponse, UStatus>;
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn udiscovery_uri_uses_core_service_identity() {
+        let uri = udiscovery_uri(RESOURCE_ID_FIND_SERVICES);
+
+        assert_eq!(uri.authority_name, "");
+        assert_eq!(uri.ue_id, UDISCOVERY_TYPE_ID);
+        assert_eq!(uri.ue_version_major, u32::from(UDISCOVERY_VERSION_MAJOR));
+        assert_eq!(uri.resource_id, u32::from(RESOURCE_ID_FIND_SERVICES));
+    }
 }

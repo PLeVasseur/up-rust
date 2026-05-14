@@ -12,7 +12,6 @@
  ********************************************************************************/
 
 // [impl->dsn~uri-data-model-naming~1]
-// [impl->req~uri-data-model-proto~1]
 
 use std::hash::{Hash, Hasher};
 use std::str::FromStr;
@@ -20,7 +19,14 @@ use std::sync::LazyLock;
 
 use uriparse::{Authority, URIReference};
 
-pub use crate::up_core_api::uri::UUri;
+/// Native uProtocol URI.
+#[derive(Clone, Debug, Default, PartialEq)]
+pub struct UUri {
+    pub authority_name: String,
+    pub ue_id: u32,
+    pub ue_version_major: u32,
+    pub resource_id: u32,
+}
 
 pub(crate) const WILDCARD_AUTHORITY: &str = "*";
 pub(crate) const WILDCARD_ENTITY_INSTANCE: u32 = 0xFFFF_0000;
@@ -202,7 +208,6 @@ impl FromStr for UUri {
                     ue_id,
                     ue_version_major: ue_version_major as u32,
                     resource_id: resource_id as u32,
-                    ..Default::default()
                 })
             }
             _ => Err(UUriError::serialization_error(
@@ -388,7 +393,6 @@ impl UUri {
             ue_id: entity_id,
             ue_version_major: entity_version as u32,
             resource_id: resource_id as u32,
-            ..Default::default()
         })
     }
 
@@ -404,7 +408,6 @@ impl UUri {
             ue_id: WILDCARD_ENTITY_INSTANCE | WILDCARD_ENTITY_TYPE,
             ue_version_major: WILDCARD_ENTITY_VERSION,
             resource_id,
-            ..Default::default()
         }
     }
 
@@ -553,7 +556,7 @@ impl UUri {
     ///
     /// This check is not necessary, if any of UUri's constructors functions has been used
     /// to create the URI. However, if the origin of a UUri is unknown, e.g. when it has
-    /// been deserialized from a protobuf, then this function can be used to check if all
+    /// been deserialized from an external representation, then this function can be used to check if all
     /// properties are compliant with the uProtocol specification.
     ///
     /// # Errors
@@ -1008,6 +1011,8 @@ impl UUri {
 
 #[cfg(test)]
 mod tests {
+    #![allow(clippy::needless_update)]
+
     use super::*;
     use test_case::test_case;
 

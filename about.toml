@@ -17,17 +17,3 @@ ignore-dev-dependencies = true
 
 [unicode-ident]
 accepted = ["Unicode-3.0"]
-
-[protobuf.clarify]
-license = "MIT"
-
-[[protobuf.clarify.files]]
-path = "LICENSE.txt"
-checksum = "7f2fa80a60e84f8dc0747abb0e42342f83bded04a20461a636b47c0331b92ddf"
-
-[protobuf-support.clarify]
-license = "MIT"
-
-[[protobuf-support.clarify.files]]
-path = "LICENSE.txt"
-checksum = "7f2fa80a60e84f8dc0747abb0e42342f83bded04a20461a636b47c0331b92ddf"

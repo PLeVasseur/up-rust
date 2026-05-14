@@ -1,5 +1,5 @@
 /********************************************************************************
- * Copyright (c) 2024 Contributors to the Eclipse Foundation
+ * Copyright (c) 2026 Contributors to the Eclipse Foundation
  *
  * See the NOTICE file(s) distributed with this work for additional
  * information regarding copyright ownership.
@@ -11,11 +11,11 @@
  * SPDX-License-Identifier: Apache-2.0
  ********************************************************************************/
 
-#[cfg(feature = "usubscription")]
-pub mod usubscription;
+//! Native uProtocol core service contracts.
+//!
+//! These modules replace the generated protobuf-backed core exports with native
+//! Rust types that can be carried by any selected [`crate::WireFormat`].
 
-// Types not used by up_rust, but re-exported to up_rust users, keeping them in their respective submodules
-#[cfg(feature = "udiscovery")]
 pub mod udiscovery;
-#[cfg(feature = "utwin")]
+pub mod usubscription;
 pub mod utwin;

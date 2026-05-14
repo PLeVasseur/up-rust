@@ -11,144 +11,136 @@
  * SPDX-License-Identifier: Apache-2.0
  ********************************************************************************/
 
-use std::error::Error;
+use std::{error::Error, fmt::Display};
 
-pub use crate::up_core_api::ucode::UCode;
-pub use crate::up_core_api::ustatus::UStatus;
+/// Native uProtocol status code.
+#[derive(Clone, Copy, Debug, Default, Eq, Hash, PartialEq)]
+#[allow(non_camel_case_types)]
+pub enum UCode {
+    #[default]
+    OK,
+    CANCELLED,
+    UNKNOWN,
+    INVALID_ARGUMENT,
+    DEADLINE_EXCEEDED,
+    NOT_FOUND,
+    ALREADY_EXISTS,
+    PERMISSION_DENIED,
+    RESOURCE_EXHAUSTED,
+    FAILED_PRECONDITION,
+    ABORTED,
+    OUT_OF_RANGE,
+    UNIMPLEMENTED,
+    INTERNAL,
+    UNAVAILABLE,
+    DATA_LOSS,
+    UNAUTHENTICATED,
+}
+
+impl UCode {
+    pub fn as_u8(self) -> u8 {
+        match self {
+            Self::OK => 0,
+            Self::CANCELLED => 1,
+            Self::UNKNOWN => 2,
+            Self::INVALID_ARGUMENT => 3,
+            Self::DEADLINE_EXCEEDED => 4,
+            Self::NOT_FOUND => 5,
+            Self::ALREADY_EXISTS => 6,
+            Self::PERMISSION_DENIED => 7,
+            Self::RESOURCE_EXHAUSTED => 8,
+            Self::FAILED_PRECONDITION => 9,
+            Self::ABORTED => 10,
+            Self::OUT_OF_RANGE => 11,
+            Self::UNIMPLEMENTED => 12,
+            Self::INTERNAL => 13,
+            Self::UNAVAILABLE => 14,
+            Self::DATA_LOSS => 15,
+            Self::UNAUTHENTICATED => 16,
+        }
+    }
+
+    pub fn from_u8(value: u8) -> Option<Self> {
+        match value {
+            0 => Some(Self::OK),
+            1 => Some(Self::CANCELLED),
+            2 => Some(Self::UNKNOWN),
+            3 => Some(Self::INVALID_ARGUMENT),
+            4 => Some(Self::DEADLINE_EXCEEDED),
+            5 => Some(Self::NOT_FOUND),
+            6 => Some(Self::ALREADY_EXISTS),
+            7 => Some(Self::PERMISSION_DENIED),
+            8 => Some(Self::RESOURCE_EXHAUSTED),
+            9 => Some(Self::FAILED_PRECONDITION),
+            10 => Some(Self::ABORTED),
+            11 => Some(Self::OUT_OF_RANGE),
+            12 => Some(Self::UNIMPLEMENTED),
+            13 => Some(Self::INTERNAL),
+            14 => Some(Self::UNAVAILABLE),
+            15 => Some(Self::DATA_LOSS),
+            16 => Some(Self::UNAUTHENTICATED),
+            _ => None,
+        }
+    }
+}
+
+/// Native uProtocol status value.
+#[derive(Clone, Debug, Default, Eq, PartialEq)]
+pub struct UStatus {
+    code: UCode,
+    message: String,
+}
 
 impl UStatus {
-    /// Creates a status representing a success.
-    ///
-    /// # Examples
-    ///
-    /// ```rust
-    /// use up_rust::{UCode, UStatus};
-    ///
-    /// let status = UStatus::ok();
-    /// assert_eq!(status.code.unwrap(), UCode::OK);
-    /// ```
+    /// Creates a status representing success.
     pub fn ok() -> Self {
-        UStatus {
-            code: UCode::OK.into(),
-            ..Default::default()
+        Self {
+            code: UCode::OK,
+            message: String::new(),
         }
     }
 
-    /// Creates a status representing a failure.
-    ///
-    /// # Examples
-    ///
-    /// ```rust
-    /// use up_rust::UStatus;
-    ///
-    /// let status = UStatus::fail("something went wrong");
-    /// assert_eq!(status.message.unwrap(), "something went wrong");
-    /// ```
+    /// Creates a failure status with [`UCode::UNKNOWN`].
     pub fn fail<M: Into<String>>(msg: M) -> Self {
-        UStatus {
-            code: UCode::UNKNOWN.into(),
-            message: Some(msg.into()),
-            ..Default::default()
-        }
+        Self::fail_with_code(UCode::UNKNOWN, msg)
     }
 
-    /// Creates a status representing a failure.
-    ///
-    /// # Examples
-    ///
-    /// ```rust
-    /// use up_rust::{UCode, UStatus};
-    ///
-    /// let status = UStatus::fail_with_code(UCode::DATA_LOSS, "something went wrong");
-    /// assert_eq!(status.code.unwrap(), UCode::DATA_LOSS);
-    /// assert_eq!(status.message.unwrap(), "something went wrong");
-    /// ```
+    /// Creates a failure status with an explicit code.
     pub fn fail_with_code<M: Into<String>>(code: UCode, msg: M) -> Self {
-        UStatus {
-            code: code.into(),
-            message: Some(msg.into()),
-            ..Default::default()
+        Self {
+            code,
+            message: msg.into(),
         }
     }
 
-    /// Checks if this status represents a failure.
-    ///
-    /// # Examples
-    ///
-    /// ```rust
-    /// use up_rust::UStatus;
-    ///
-    /// let failed_status = UStatus::fail("something went wrong");
-    /// assert!(failed_status.is_failed());
-    ///
-    /// let succeeded_status = UStatus::ok();
-    /// assert!(!succeeded_status.is_failed());
-    /// ```
+    /// Checks whether this status represents failure.
     pub fn is_failed(&self) -> bool {
-        self.get_code() != UCode::OK
+        self.code != UCode::OK
     }
 
-    /// Checks if this status represents a success.
-    ///
-    /// # Examples
-    ///
-    /// ```rust
-    /// use up_rust::UStatus;
-    ///
-    /// let succeeded_status = UStatus::ok();
-    /// assert!(succeeded_status.is_success());
-    ///
-    /// let failed_status = UStatus::fail("something went wrong");
-    /// assert!(!failed_status.is_success());
-    /// ```
+    /// Checks whether this status represents success.
     pub fn is_success(&self) -> bool {
-        self.get_code() == UCode::OK
+        self.code == UCode::OK
     }
 
-    /// Gets this status' error message.
-    ///
-    /// # Returns
-    ///
-    /// an empty string if this instance has been created without a message,
-    /// i.e. not using one of its factory functions.
-    ///
-    /// # Examples
-    ///
-    /// ```rust
-    /// use up_rust::UStatus;
-    ///
-    /// let failed_status = UStatus::fail("my error message");
-    /// assert_eq!(failed_status.get_message(), "my error message");
-    ///
-    /// let succeeded_status = UStatus::ok();
-    /// assert!(succeeded_status.get_message().is_empty());
-    /// ```
+    /// Gets the status message.
     pub fn get_message(&self) -> String {
-        match self.message.as_ref() {
-            Some(msg) => msg.to_owned(),
-            None => String::default(),
-        }
+        self.message.clone()
     }
 
-    /// Gets this status' error code.
-    ///
-    /// # Returns
-    ///
-    /// [`UCode::UNKNOWN`] if this status has been created without providing an error code.
-    ///
-    /// # Examples
-    ///
-    /// ```rust
-    /// use up_rust::{UCode, UStatus};
-    ///
-    /// let status = UStatus::fail("my error message");
-    /// assert_eq!(status.get_code(), UCode::UNKNOWN);
-    ///
-    /// let status_with_code = UStatus::fail_with_code(UCode::INTERNAL, "my error message");
-    /// assert_eq!(status_with_code.get_code(), UCode::INTERNAL);
-    /// ```
+    /// Gets the status code.
     pub fn get_code(&self) -> UCode {
-        self.code.enum_value_or_default()
+        self.code
+    }
+}
+
+impl Display for UStatus {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        if self.message.is_empty() {
+            write!(f, "{:?}", self.code)
+        } else {
+            write!(f, "{:?}: {}", self.code, self.message)
+        }
     }
 }
 
@@ -158,73 +150,40 @@ impl Error for UStatus {}
 mod tests {
     use super::*;
 
-    use protobuf::{well_known_types::any::Any, Enum, EnumOrUnknown, Message};
-
     #[test]
-    // [utest->req~ustatus-data-model-impl~1]
-    fn test_ustatus_fail_with_code() {
-        let details = vec![Any {
-            type_url: "type.googleapis.com/google.protobuf.Timestamp".to_string(),
-            ..Default::default()
-        }];
-        UCode::VALUES.iter().for_each(|code| {
-            let mut ustatus = UStatus::fail_with_code(*code, "the message");
-            // just make sure that the field exists and we can assign a value to it
-            ustatus.details = details.clone();
-            assert!(
-                ustatus.code.enum_value().is_ok_and(|v| v == *code)
-                    && ustatus.message.is_some_and(|v| v == "the message")
-            );
-        });
+    fn success_and_failure_statuses_work_without_generated_types() {
+        assert!(UStatus::ok().is_success());
+        assert!(UStatus::fail_with_code(UCode::DATA_LOSS, "lost").is_failed());
+        assert_eq!(
+            UStatus::fail_with_code(UCode::DATA_LOSS, "lost").get_code(),
+            UCode::DATA_LOSS
+        );
     }
 
     #[test]
-    // [utest->req~ustatus-data-model-proto~1]
-    fn test_proto_serialization() {
-        let ustatus = UStatus {
-            code: UCode::CANCELLED.into(),
-            message: Some("the message".to_string()),
-            details: vec![Any {
-                type_url: "type.googleapis.com/google.protobuf.Timestamp".to_string(),
-                ..Default::default()
-            }],
-            ..Default::default()
-        };
-        let proto = ustatus
-            .write_to_bytes()
-            .expect("failed to serialize to protobuf");
-        let deserialized_status =
-            UStatus::parse_from_bytes(proto.as_slice()).expect("failed to deserialize protobuf");
-        assert_eq!(ustatus, deserialized_status);
-    }
-
-    #[test]
-    fn test_is_failed() {
-        assert!(!UStatus {
-            ..Default::default()
+    fn status_codes_have_stable_byte_representation() {
+        for code in [
+            UCode::OK,
+            UCode::CANCELLED,
+            UCode::UNKNOWN,
+            UCode::INVALID_ARGUMENT,
+            UCode::DEADLINE_EXCEEDED,
+            UCode::NOT_FOUND,
+            UCode::ALREADY_EXISTS,
+            UCode::PERMISSION_DENIED,
+            UCode::RESOURCE_EXHAUSTED,
+            UCode::FAILED_PRECONDITION,
+            UCode::ABORTED,
+            UCode::OUT_OF_RANGE,
+            UCode::UNIMPLEMENTED,
+            UCode::INTERNAL,
+            UCode::UNAVAILABLE,
+            UCode::DATA_LOSS,
+            UCode::UNAUTHENTICATED,
+        ] {
+            assert_eq!(UCode::from_u8(code.as_u8()), Some(code));
         }
-        .is_failed());
-        UCode::VALUES.iter().for_each(|code| {
-            let ustatus = UStatus {
-                code: EnumOrUnknown::from(*code),
-                ..Default::default()
-            };
-            assert_eq!(ustatus.is_failed(), *code != UCode::OK);
-        });
-    }
 
-    #[test]
-    fn test_is_success() {
-        assert!(UStatus {
-            ..Default::default()
-        }
-        .is_success());
-        UCode::VALUES.iter().for_each(|code| {
-            let ustatus = UStatus {
-                code: EnumOrUnknown::from(*code),
-                ..Default::default()
-            };
-            assert_eq!(ustatus.is_success(), *code == UCode::OK);
-        });
+        assert_eq!(UCode::from_u8(17), None);
     }
 }

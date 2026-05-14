@@ -16,7 +16,12 @@ use rand::RngCore;
 use std::time::{Duration, SystemTime};
 use std::{hash::Hash, str::FromStr};
 
-pub use crate::up_core_api::uuid::UUID;
+/// Native uProtocol UUIDv7 value.
+#[derive(Clone, Debug, Default, PartialEq)]
+pub struct UUID {
+    pub msb: u64,
+    pub lsb: u64,
+}
 
 use uuid_simd::{AsciiCase, Out};
 
@@ -93,7 +98,6 @@ impl UUID {
         UUID {
             msb: u64::from_be_bytes(msb),
             lsb: u64::from_be_bytes(lsb),
-            ..Default::default()
         }
     }
 
@@ -112,18 +116,14 @@ impl UUID {
     ///
     /// Returns an error if the given bytes contain an invalid version and/or variant identifier.
     // [impl->dsn~uuid-spec~1]
-    pub(crate) fn from_u64_pair(msb: u64, lsb: u64) -> Result<Self, UuidConversionError> {
+    pub fn from_u64_pair(msb: u64, lsb: u64) -> Result<Self, UuidConversionError> {
         if !is_correct_version(msb) {
             return Err(UuidConversionError::new("not a v7 UUID"));
         }
         if !is_correct_variant(lsb) {
             return Err(UuidConversionError::new("not an RFC4122 UUID"));
         }
-        Ok(UUID {
-            msb,
-            lsb,
-            ..Default::default()
-        })
+        Ok(UUID { msb, lsb })
     }
 
     // [impl->dsn~uuid-spec~1]
@@ -490,11 +490,7 @@ mod tests {
         let msb = 0x0000000000017000_u64;
         // variant = 0b10, random = 0x0010101010101a1a
         let lsb = 0x8010101010101a1a_u64;
-        let uuid = UUID {
-            msb,
-            lsb,
-            ..Default::default()
-        };
+        let uuid = UUID { msb, lsb };
 
         assert_eq!(String::from(&uuid), "00000000-0001-7000-8010-101010101a1a");
         assert_eq!(String::from(uuid), "00000000-0001-7000-8010-101010101a1a");

@@ -11,25 +11,24 @@
  * SPDX-License-Identifier: Apache-2.0
  ********************************************************************************/
 
-/*!
-Provides a local UTransport which can be used for connecting uEntities running in the same
-process.
-*/
+//! Local owned-frame transport for examples and tests.
 
 use std::{collections::HashSet, sync::Arc};
 
 use tokio::sync::RwLock;
 
-use crate::{ComparableListener, UListener, UMessage, UStatus, UTransport, UUri};
+use crate::{
+    ComparableOwnedListener, UCode, UOwnedFrame, UOwnedListener, UOwnedTransport, UStatus, UUri,
+};
 
 #[derive(Eq, PartialEq, Hash)]
-struct RegisteredListener {
+struct RegisteredOwnedListener {
     source_filter: UUri,
     sink_filter: Option<UUri>,
-    listener: ComparableListener,
+    listener: ComparableOwnedListener,
 }
 
-impl RegisteredListener {
+impl RegisteredOwnedListener {
     fn matches(&self, source: &UUri, sink: Option<&UUri>) -> bool {
         if !self.source_filter.matches(source) {
             return false;
@@ -41,70 +40,56 @@ impl RegisteredListener {
             sink.is_none()
         }
     }
-    fn matches_msg(&self, msg: &UMessage) -> bool {
-        if let Some(source) = msg
-            .attributes
-            .as_ref()
-            .and_then(|attribs| attribs.source.as_ref())
-        {
-            self.matches(
-                source,
-                msg.attributes
-                    .as_ref()
-                    .and_then(|attribs| attribs.sink.as_ref()),
-            )
-        } else {
-            false
-        }
+
+    fn matches_frame(&self, frame: &UOwnedFrame) -> bool {
+        self.matches(frame.header().source(), frame.header().sink())
     }
-    async fn on_receive(&self, msg: UMessage) {
-        self.listener.on_receive(msg).await
+
+    async fn on_receive(&self, frame: UOwnedFrame) {
+        self.listener.on_receive_owned(frame).await
     }
 }
 
-/// A [`UTransport`] that can be used to exchange messages within a single process.
-///
-/// A message sent via [`UTransport::send`] will be dispatched to all registered listeners that
-/// match the message's source and sink filters.
+/// A local owned-frame transport for exchanging frames within a process.
 #[derive(Default)]
 pub struct LocalTransport {
-    listeners: RwLock<HashSet<RegisteredListener>>,
+    owned_listeners: RwLock<HashSet<RegisteredOwnedListener>>,
 }
 
 impl LocalTransport {
-    async fn dispatch(&self, message: UMessage) {
-        let listeners = self.listeners.read().await;
+    async fn dispatch_owned(&self, frame: UOwnedFrame) {
+        let listeners = self.owned_listeners.read().await;
         for listener in listeners.iter() {
-            if listener.matches_msg(&message) {
-                listener.on_receive(message.clone()).await;
+            if listener.matches_frame(&frame) {
+                listener.on_receive(frame.clone()).await;
             }
         }
     }
 }
 
 #[async_trait::async_trait]
-impl UTransport for LocalTransport {
-    async fn send(&self, message: UMessage) -> Result<(), UStatus> {
-        self.dispatch(message).await;
+impl UOwnedTransport for LocalTransport {
+    async fn send_owned(&self, frame: UOwnedFrame) -> Result<(), UStatus> {
+        self.dispatch_owned(frame).await;
         Ok(())
     }
 
-    async fn register_listener(
+    async fn register_owned_listener(
         &self,
         source_filter: &UUri,
         sink_filter: Option<&UUri>,
-        listener: Arc<dyn UListener>,
+        listener: Arc<dyn UOwnedListener>,
     ) -> Result<(), UStatus> {
-        let registered_listener = RegisteredListener {
+        let registered_listener = RegisteredOwnedListener {
             source_filter: source_filter.to_owned(),
-            sink_filter: sink_filter.map(|u| u.to_owned()),
-            listener: ComparableListener::new(listener),
+            sink_filter: sink_filter.map(ToOwned::to_owned),
+            listener: ComparableOwnedListener::new(listener),
         };
-        let mut listeners = self.listeners.write().await;
+        let mut listeners = self.owned_listeners.write().await;
         if listeners.contains(&registered_listener) {
             Err(UStatus::fail_with_code(
-                crate::UCode::ALREADY_EXISTS,
-                "listener already registered for filters",
+                UCode::ALREADY_EXISTS,
+                "owned listener already registered for filters",
             ))
         } else {
             listeners.insert(registered_listener);
@@ -112,115 +97,25 @@ impl UTransport for LocalTransport {
         }
     }
 
-    async fn unregister_listener(
+    async fn unregister_owned_listener(
         &self,
         source_filter: &UUri,
         sink_filter: Option<&UUri>,
-        listener: Arc<dyn UListener>,
+        listener: Arc<dyn UOwnedListener>,
     ) -> Result<(), UStatus> {
-        let registered_listener = RegisteredListener {
+        let registered_listener = RegisteredOwnedListener {
             source_filter: source_filter.to_owned(),
-            sink_filter: sink_filter.map(|u| u.to_owned()),
-            listener: ComparableListener::new(listener),
+            sink_filter: sink_filter.map(ToOwned::to_owned),
+            listener: ComparableOwnedListener::new(listener),
         };
-        let mut listeners = self.listeners.write().await;
+        let mut listeners = self.owned_listeners.write().await;
         if listeners.remove(&registered_listener) {
             Ok(())
         } else {
             Err(UStatus::fail_with_code(
-                crate::UCode::NOT_FOUND,
-                "no such listener registered for filters",
+                UCode::NOT_FOUND,
+                "no such owned listener registered for filters",
             ))
         }
-    }
-}
-
-#[cfg(test)]
-mod tests {
-    use super::*;
-    use crate::{utransport::MockUListener, LocalUriProvider, StaticUriProvider, UMessageBuilder};
-
-    #[tokio::test]
-    async fn test_send_dispatches_to_matching_listener() {
-        const RESOURCE_ID: u16 = 0xa1b3;
-        let mut listener = MockUListener::new();
-        listener.expect_on_receive().once().return_const(());
-        let listener_ref = Arc::new(listener);
-        let uri_provider = StaticUriProvider::new("my-vehicle", 0x100d, 0x02);
-        let transport = LocalTransport::default();
-
-        transport
-            .register_listener(
-                &uri_provider.get_resource_uri(RESOURCE_ID),
-                None,
-                listener_ref.clone(),
-            )
-            .await
-            .unwrap();
-        let _ = transport
-            .send(
-                UMessageBuilder::publish(uri_provider.get_resource_uri(RESOURCE_ID))
-                    .build()
-                    .unwrap(),
-            )
-            .await;
-
-        transport
-            .unregister_listener(
-                &uri_provider.get_resource_uri(RESOURCE_ID),
-                None,
-                listener_ref,
-            )
-            .await
-            .unwrap();
-        let _ = transport
-            .send(
-                UMessageBuilder::publish(uri_provider.get_resource_uri(RESOURCE_ID))
-                    .build()
-                    .unwrap(),
-            )
-            .await;
-    }
-
-    #[tokio::test]
-    async fn test_send_does_not_dispatch_to_non_matching_listener() {
-        const RESOURCE_ID: u16 = 0xa1b3;
-        let mut listener = MockUListener::new();
-        listener.expect_on_receive().never().return_const(());
-        let listener_ref = Arc::new(listener);
-        let uri_provider = StaticUriProvider::new("my-vehicle", 0x100d, 0x02);
-        let transport = LocalTransport::default();
-
-        transport
-            .register_listener(
-                &uri_provider.get_resource_uri(RESOURCE_ID + 10),
-                None,
-                listener_ref.clone(),
-            )
-            .await
-            .unwrap();
-        let _ = transport
-            .send(
-                UMessageBuilder::publish(uri_provider.get_resource_uri(RESOURCE_ID))
-                    .build()
-                    .unwrap(),
-            )
-            .await;
-
-        transport
-            .unregister_listener(
-                &uri_provider.get_resource_uri(RESOURCE_ID + 10),
-                None,
-                listener_ref,
-            )
-            .await
-            .unwrap();
-        let _ = transport
-            .send(
-                UMessageBuilder::publish(uri_provider.get_resource_uri(RESOURCE_ID))
-                    .build()
-                    .unwrap(),
-            )
-            .await;
     }
 }

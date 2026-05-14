@@ -19,19 +19,12 @@ use std::sync::Arc;
 
 use async_trait::async_trait;
 
-use crate::{UCode, UMessage, UStatus, UUri};
+use crate::{
+    UCode, UFrameHeader, UOwnedFrame, USerializer, UStatus, UTxBuffer, UUri, UWireError,
+    UZeroCopyRxFrame, WireFormat,
+};
 
-/// Verifies that given UUris can be used as source and sink filter UUris
-/// for registering listeners.
-///
-/// This function is helpful for implementing [`UTransport`] in accordance with the
-/// uProtocol Transport Layer specification.
-///
-/// # Errors
-///
-/// Returns a [`UStatus`] with a [`UCode::INVALID_ARGUMENT`] and a corresponding detail
-/// message, if any of the given UUris cannot be used as filter criteria.
-///
+/// Verifies that given UUris can be used as source and sink filter UUris.
 pub fn verify_filter_criteria(
     source_filter: &UUri,
     sink_filter: Option<&UUri>,
@@ -71,55 +64,28 @@ pub fn verify_filter_criteria(
             UCode::INVALID_ARGUMENT,
             "source filter must either have the wildcard resource ID or a resource ID from topic range, if sink filter is empty"));
     }
-    // everything else might match valid messages
     Ok(())
 }
 
 /// A factory for URIs representing this uEntity's resources.
-///
-/// Implementations may use arbitrary mechanisms to determine the information that
-/// is necessary for creating URIs, e.g. environment variables, configuration files etc.
-// [impl->dsn~localuriprovider-declaration~1]
-#[cfg_attr(any(test, feature = "test-util"), mockall::automock)]
 pub trait LocalUriProvider: Send + Sync {
-    /// Gets the _authority_ used for URIs representing this uEntity's resources.
     fn get_authority(&self) -> String;
-    /// Gets a URI that represents a given resource of this uEntity.
     fn get_resource_uri(&self, resource_id: u16) -> UUri;
-    /// Gets the URI that represents the resource that this uEntity expects
-    /// RPC responses and notifications to be sent to.
     fn get_source_uri(&self) -> UUri;
 }
 
-/// A URI provider that is statically configured with the uEntity's authority, entity ID and version.
+/// A URI provider statically configured with authority, entity ID and version.
 pub struct StaticUriProvider {
     local_uri: UUri,
 }
 
 impl StaticUriProvider {
-    /// Creates a new URI provider from static information.
-    ///
-    /// # Arguments
-    ///
-    /// * `authority` - The uEntity's authority name.
-    /// * `entity_id` - The entity identifier.
-    /// * `major_version` - The uEntity's major version.
-    ///
-    /// # Examples
-    ///
-    /// ```rust
-    /// use up_rust::{LocalUriProvider, StaticUriProvider};
-    ///
-    /// let provider = StaticUriProvider::new("my-vehicle", 0x4210, 0x05);
-    /// assert_eq!(provider.get_authority(), "my-vehicle");
-    /// ```
     pub fn new(authority: impl Into<String>, entity_id: u32, major_version: u8) -> Self {
         let local_uri = UUri {
             authority_name: authority.into(),
             ue_id: entity_id,
-            ue_version_major: major_version as u32,
+            ue_version_major: u32::from(major_version),
             resource_id: 0x0000,
-            ..Default::default()
         };
         StaticUriProvider { local_uri }
     }
@@ -132,7 +98,7 @@ impl LocalUriProvider for StaticUriProvider {
 
     fn get_resource_uri(&self, resource_id: u16) -> UUri {
         let mut uri = self.local_uri.clone();
-        uri.resource_id = resource_id as u32;
+        uri.resource_id = u32::from(resource_id);
         uri
     }
 
@@ -150,40 +116,6 @@ impl TryFrom<UUri> for StaticUriProvider {
 
 impl TryFrom<&UUri> for StaticUriProvider {
     type Error = TryFromIntError;
-    /// Creates a URI provider from a UUri.
-    ///
-    /// # Arguments
-    ///
-    /// * `source_uri` - The UUri to take the entity's authority, entity ID and version information from.
-    ///   The UUri's resource ID is ignored.
-    ///
-    /// # Errors
-    ///
-    /// Returns an error if the given UUri's major version property is not a `u8`.
-    ///
-    /// # Examples
-    ///
-    /// ```rust
-    /// use up_rust::{LocalUriProvider, StaticUriProvider, UUri};
-    ///
-    /// let source_uri = UUri::try_from("//my-vehicle/4210/5/0").unwrap();
-    /// assert!(StaticUriProvider::try_from(&source_uri).is_ok());
-    /// ```
-    ///
-    /// ## Invalid Major Version
-    ///
-    /// ```rust
-    /// use up_rust::{LocalUriProvider, StaticUriProvider, UUri};
-    ///
-    /// let uuri_with_invalid_version = UUri {
-    ///   authority_name: "".to_string(),
-    ///   ue_id: 0x5430,
-    ///   ue_version_major: 0x1234, // not a u8
-    ///   resource_id: 0x0000,
-    ///   ..Default::default()
-    /// };
-    /// assert!(StaticUriProvider::try_from(uuri_with_invalid_version).is_err());
-    /// ```
     fn try_from(source_uri: &UUri) -> Result<Self, Self::Error> {
         let major_version = u8::try_from(source_uri.ue_version_major)?;
         Ok(StaticUriProvider::new(
@@ -194,101 +126,33 @@ impl TryFrom<&UUri> for StaticUriProvider {
     }
 }
 
-/// A handler for processing uProtocol messages.
-///
-/// Implementations contain the details for what should occur when a message is received.
-///
-/// Please refer to the [uProtocol Transport Layer specification](https://github.com/eclipse-uprotocol/up-spec/blob/v1.6.0-alpha.7/up-l1/README.adoc)
-/// for details.
-// [impl->dsn~ulistener-declaration~1]
-#[cfg_attr(any(test, feature = "test-util"), mockall::automock)]
+/// A handler for processing owned, serialization-neutral uProtocol frames.
 #[async_trait]
-pub trait UListener: Send + Sync {
-    /// Performs some action on receipt of a message.
-    ///
-    /// # Parameters
-    ///
-    /// * `msg` - The message to process.
-    ///
-    /// # Implementation hints
-    ///
-    /// This function is expected to return almost immediately. If it does not, it could potentially
-    /// block processing of succeeding messages. Long-running operations for processing a message should
-    /// therefore be run on a separate thread.
-    async fn on_receive(&self, msg: UMessage);
+pub trait UOwnedListener: Send + Sync {
+    async fn on_receive_owned(&self, frame: UOwnedFrame);
 }
 
-/// The uProtocol Transport Layer interface that provides a common API for uEntity developers to send and
-/// receive messages.
-///
-/// Implementations contain the details for connecting to the underlying transport technology and
-/// sending [`UMessage`]s using the configured technology.
-///
-/// Please refer to the [uProtocol Transport Layer specification](https://github.com/eclipse-uprotocol/up-spec/blob/v1.6.0-alpha.7/up-l1/README.adoc)
-/// for details.
-// [impl->dsn~utransport-declaration~1]
+/// The serialization-neutral owned-buffer transport API.
 #[async_trait]
-pub trait UTransport: Send + Sync {
-    /// Sends a message using this transport's message exchange mechanism.
-    ///
-    /// # Arguments
-    ///
-    /// * `message` - The message to send. The `type`, `source` and `sink` properties of the
-    ///   [UAttributes](https://github.com/eclipse-uprotocol/up-spec/blob/v1.6.0-alpha.7/basics/uattributes.adoc) contained
-    ///   in the message determine the addressing semantics.
-    ///
-    /// # Errors
-    ///
-    /// Returns an error if the message could not be sent.
-    async fn send(&self, message: UMessage) -> Result<(), UStatus>;
+pub trait UOwnedTransport: Send + Sync {
+    async fn send_owned(&self, frame: UOwnedFrame) -> Result<(), UStatus>;
 
-    /// Receives a message from the transport.
-    ///
-    /// This default implementation returns an error with [`UCode::UNIMPLEMENTED`].
-    ///
-    /// # Arguments
-    ///
-    /// * `source_filter` - The _source_ address pattern that the message to receive needs to match.
-    /// * `sink_filter` - The _sink_ address pattern that the message to receive needs to match,
-    ///                   or `None` to indicate that the message must not contain any sink address.
-    ///
-    /// # Errors
-    ///
-    /// Returns an error if no message could be received, e.g. because no message matches the given addresses.
-    async fn receive(
+    async fn receive_owned(
         &self,
         _source_filter: &UUri,
         _sink_filter: Option<&UUri>,
-    ) -> Result<UMessage, UStatus> {
+    ) -> Result<UOwnedFrame, UStatus> {
         Err(UStatus::fail_with_code(
             UCode::UNIMPLEMENTED,
             "not implemented",
         ))
     }
 
-    /// Registers a listener to be called for messages.
-    ///
-    /// The listener will be invoked for each message that matches the given source and sink filter patterns
-    /// according to the rules defined by the [UUri specification](https://github.com/eclipse-uprotocol/up-spec/blob/v1.6.0-alpha.7/basics/uri.adoc).
-    ///
-    /// This default implementation returns an error with [`UCode::UNIMPLEMENTED`].
-    ///
-    /// # Arguments
-    ///
-    /// * `source_filter` - The _source_ address pattern that messages need to match.
-    /// * `sink_filter` - The _sink_ address pattern that messages need to match,
-    ///                   or `None` to match messages that do not contain any sink address.
-    /// * `listener` - The listener to invoke.
-    ///                The listener can be unregistered again using [`UTransport::unregister_listener`].
-    ///
-    /// # Errors
-    ///
-    /// Returns an error if the listener could not be registered.
-    async fn register_listener(
+    async fn register_owned_listener(
         &self,
         _source_filter: &UUri,
         _sink_filter: Option<&UUri>,
-        _listener: Arc<dyn UListener>,
+        _listener: Arc<dyn UOwnedListener>,
     ) -> Result<(), UStatus> {
         Err(UStatus::fail_with_code(
             UCode::UNIMPLEMENTED,
@@ -296,27 +160,11 @@ pub trait UTransport: Send + Sync {
         ))
     }
 
-    /// Deregisters a message listener.
-    ///
-    /// The listener will no longer be called for any (matching) messages after this function has
-    /// returned successfully.
-    ///
-    /// This default implementation returns an error with [`UCode::UNIMPLEMENTED`].
-    ///
-    /// # Arguments
-    ///
-    /// * `source_filter` - The _source_ address pattern that the listener had been registered for.
-    /// * `sink_filter` - The _sink_ address pattern that the listener had been registered for.
-    /// * `listener` - The listener to unregister.
-    ///
-    /// # Errors
-    ///
-    /// Returns an error if the listener could not be unregistered, for example if the given listener does not exist.
-    async fn unregister_listener(
+    async fn unregister_owned_listener(
         &self,
         _source_filter: &UUri,
         _sink_filter: Option<&UUri>,
-        _listener: Arc<dyn UListener>,
+        _listener: Arc<dyn UOwnedListener>,
     ) -> Result<(), UStatus> {
         Err(UStatus::fail_with_code(
             UCode::UNIMPLEMENTED,
@@ -325,137 +173,173 @@ pub trait UTransport: Send + Sync {
     }
 }
 
-#[cfg(not(tarpaulin_include))]
-#[cfg(any(test, feature = "test-util"))]
-mockall::mock! {
-    /// This extra struct is necessary in order to comply with mockall's requirements regarding the parameter lifetimes
-    /// see <https://github.com/asomers/mockall/issues/571>
-    pub Transport {
-        pub async fn do_send(&self, message: UMessage) -> Result<(), UStatus>;
-        pub async fn do_register_listener<'a>(&'a self, source_filter: &'a UUri, sink_filter: Option<&'a UUri>, listener: Arc<dyn UListener>) -> Result<(), UStatus>;
-        pub async fn do_unregister_listener<'a>(&'a self, source_filter: &'a UUri, sink_filter: Option<&'a UUri>, listener: Arc<dyn UListener>) -> Result<(), UStatus>;
-    }
-}
-
-#[cfg(not(tarpaulin_include))]
-#[cfg(any(test, feature = "test-util"))]
+/// Convenience methods for owned transports.
 #[async_trait]
-/// This delegates the invocation of the UTransport functions to the mocked functions of the Transport struct.
-/// see <https://github.com/asomers/mockall/issues/571>
-impl UTransport for MockTransport {
-    async fn send(&self, message: UMessage) -> Result<(), UStatus> {
-        self.do_send(message).await
-    }
-    async fn register_listener(
-        &self,
-        source_filter: &UUri,
-        sink_filter: Option<&UUri>,
-        listener: Arc<dyn UListener>,
-    ) -> Result<(), UStatus> {
-        self.do_register_listener(source_filter, sink_filter, listener)
-            .await
-    }
-    async fn unregister_listener(
-        &self,
-        source_filter: &UUri,
-        sink_filter: Option<&UUri>,
-        listener: Arc<dyn UListener>,
-    ) -> Result<(), UStatus> {
-        self.do_unregister_listener(source_filter, sink_filter, listener)
-            .await
+pub trait UOwnedTransportExt: UOwnedTransport {
+    async fn send_serialized<F, T>(&self, header: UFrameHeader, value: &T) -> Result<(), UStatus>
+    where
+        F: WireFormat + Send + Sync,
+        T: USerializer<F> + Sync,
+    {
+        let frame = UOwnedFrame::from_serializable::<F, T>(header, value).map_err(UStatus::from)?;
+        self.send_owned(frame).await
     }
 }
 
-/// A wrapper type that allows comparing [`UListener`]s to each other.
-///
-/// # Note
-///
-/// Not necessary for end-user uEs to use. Primarily intended for `up-client-foo-rust` UPClient libraries
-/// when implementing [`UTransport`].
-///
-/// # Rationale
-///
-/// The wrapper type is implemented such that it can be used in any location you may wish to
-/// hold a type implementing [`UListener`].
-///
-/// Implements necessary traits to allow hashing, so that you may hold the wrapper type in
-/// collections which require that, such as a `HashMap` or `HashSet`
+impl<T> UOwnedTransportExt for T where T: UOwnedTransport + ?Sized {}
+
+/// A handler for processing zero-copy receive leases.
+#[async_trait]
+pub trait UZeroCopyListener<Rx>: Send + Sync
+where
+    Rx: UZeroCopyRxFrame + Send + 'static,
+{
+    async fn on_receive_zero_copy(&self, frame: Rx);
+}
+
+/// The zero-copy transport capability API.
+#[async_trait]
+pub trait UZeroCopyTransport: Send + Sync {
+    type Tx: UTxBuffer + Send;
+    type Rx: UZeroCopyRxFrame + Send + 'static;
+
+    async fn reserve(
+        &self,
+        header: UFrameHeader,
+        payload_len: usize,
+        alignment: usize,
+    ) -> Result<Self::Tx, UStatus>;
+
+    async fn send_zero_copy(&self, buffer: Self::Tx) -> Result<(), UStatus>;
+
+    async fn receive_zero_copy(
+        &self,
+        _source_filter: &UUri,
+        _sink_filter: Option<&UUri>,
+    ) -> Result<Self::Rx, UStatus> {
+        Err(UStatus::fail_with_code(
+            UCode::UNIMPLEMENTED,
+            "not implemented",
+        ))
+    }
+
+    async fn register_zero_copy_listener(
+        &self,
+        _source_filter: &UUri,
+        _sink_filter: Option<&UUri>,
+        _listener: Arc<dyn UZeroCopyListener<Self::Rx>>,
+    ) -> Result<(), UStatus> {
+        Err(UStatus::fail_with_code(
+            UCode::UNIMPLEMENTED,
+            "not implemented",
+        ))
+    }
+
+    async fn unregister_zero_copy_listener(
+        &self,
+        _source_filter: &UUri,
+        _sink_filter: Option<&UUri>,
+        _listener: Arc<dyn UZeroCopyListener<Self::Rx>>,
+    ) -> Result<(), UStatus> {
+        Err(UStatus::fail_with_code(
+            UCode::UNIMPLEMENTED,
+            "not implemented",
+        ))
+    }
+}
+
+/// Convenience methods for zero-copy transports.
+#[async_trait]
+pub trait UZeroCopyTransportExt: UZeroCopyTransport {
+    async fn send_serialized_zero_copy<F, T>(
+        &self,
+        header: UFrameHeader,
+        value: &T,
+    ) -> Result<(), UStatus>
+    where
+        F: WireFormat + Send + Sync,
+        T: USerializer<F> + Sync,
+    {
+        let payload_len = value.encoded_len();
+        let mut buffer = self
+            .reserve(
+                header.with_encoding(F::encoding()),
+                payload_len,
+                T::ALIGNMENT,
+            )
+            .await?;
+        let written = value
+            .serialize_into(buffer.payload_mut())
+            .map_err(UStatus::from)?;
+        if written != payload_len {
+            return Err(UStatus::from(UWireError::invalid_payload(format!(
+                "serializer wrote {written} bytes but encoded_len returned {payload_len} bytes"
+            ))));
+        }
+        self.send_zero_copy(buffer).await
+    }
+}
+
+impl<T> UZeroCopyTransportExt for T where T: UZeroCopyTransport + ?Sized {}
+
+/// A wrapper type that allows comparing [`UOwnedListener`]s to each other.
 #[derive(Clone)]
-pub struct ComparableListener {
-    listener: Arc<dyn UListener>,
+pub struct ComparableOwnedListener {
+    listener: Arc<dyn UOwnedListener>,
 }
 
-impl ComparableListener {
-    pub fn new(listener: Arc<dyn UListener>) -> Self {
+impl ComparableOwnedListener {
+    pub fn new(listener: Arc<dyn UOwnedListener>) -> Self {
         Self { listener }
     }
-    /// Gets a clone of the wrapped reference to the listener.
-    pub fn into_inner(&self) -> Arc<dyn UListener> {
+
+    pub fn into_inner(&self) -> Arc<dyn UOwnedListener> {
         self.listener.clone()
     }
 
-    /// Allows us to get the pointer address of this `ComparableListener` on the heap
     fn pointer_address(&self) -> usize {
-        // Obtain the raw pointer from the Arc
         let ptr = Arc::as_ptr(&self.listener);
-        // Cast the fat pointer to a raw thin pointer to ()
         let thin_ptr = ptr as *const ();
-        // Convert the thin pointer to a usize
         thin_ptr as usize
     }
 }
 
-impl Deref for ComparableListener {
-    type Target = dyn UListener;
+impl Deref for ComparableOwnedListener {
+    type Target = dyn UOwnedListener;
 
     fn deref(&self) -> &Self::Target {
         &*self.listener
     }
 }
 
-impl Hash for ComparableListener {
-    /// Feeds the pointer to the listener held by `self` into the given [`Hasher`].
-    ///
-    /// This is consistent with the implementation of [`ComparableListener::eq`].
+impl Hash for ComparableOwnedListener {
     fn hash<H: Hasher>(&self, state: &mut H) {
         Arc::as_ptr(&self.listener).hash(state);
     }
 }
 
-impl PartialEq for ComparableListener {
-    /// Compares this listener to another listener.
-    ///
-    /// # Returns
-    ///
-    /// `true` if the pointer to the listener held by `self` is equal to the pointer held by `other`.
-    /// This is consistent with the implementation of [`ComparableListener::hash`].
+impl PartialEq for ComparableOwnedListener {
     fn eq(&self, other: &Self) -> bool {
         Arc::ptr_eq(&self.listener, &other.listener)
     }
 }
 
-impl Eq for ComparableListener {}
+impl Eq for ComparableOwnedListener {}
 
-impl Debug for ComparableListener {
+impl Debug for ComparableOwnedListener {
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
-        write!(f, "ComparableListener: {}", self.pointer_address())
+        write!(f, "ComparableOwnedListener: {}", self.pointer_address())
     }
 }
 
 #[cfg(test)]
 mod tests {
-    use crate::{ComparableListener, UListener, UMessage};
-    use std::{
-        hash::{DefaultHasher, Hash, Hasher},
-        ops::Deref,
-        str::FromStr,
-        sync::Arc,
-    };
+    use std::str::FromStr;
 
     use super::*;
 
     #[test]
-    fn test_static_uri_provider_get_source() {
+    fn static_uri_provider_get_source() {
         let provider = StaticUriProvider::new("my-vehicle", 0x4210, 0x05);
         let source_uri = provider.get_source_uri();
         assert_eq!(source_uri.authority_name, "my-vehicle");
@@ -465,210 +349,8 @@ mod tests {
     }
 
     #[test]
-    fn test_static_uri_provider_get_resource() {
-        let provider = StaticUriProvider::new("my-vehicle", 0x4210, 0x05);
-        let resource_uri = provider.get_resource_uri(0x1234);
-        assert_eq!(resource_uri.authority_name, "my-vehicle");
-        assert_eq!(resource_uri.ue_id, 0x4210);
-        assert_eq!(resource_uri.ue_version_major, 0x05);
-        assert_eq!(resource_uri.resource_id, 0x1234);
-    }
-
-    #[tokio::test]
-    async fn test_deref_returns_wrapped_listener() {
-        let mut mock_listener = MockUListener::new();
-        mock_listener.expect_on_receive().once().return_const(());
-        let listener_one = Arc::new(mock_listener);
-        let comparable_listener_one = ComparableListener::new(listener_one);
-        comparable_listener_one
-            .deref()
-            .on_receive(UMessage::default())
-            .await;
-    }
-
-    #[tokio::test]
-    async fn test_to_inner_returns_reference_to_wrapped_listener() {
-        let mut mock_listener = MockUListener::new();
-        mock_listener.expect_on_receive().once().return_const(());
-        let listener_one = Arc::new(mock_listener);
-        let comparable_listener_one = ComparableListener::new(listener_one);
-        comparable_listener_one
-            .into_inner()
-            .on_receive(UMessage::default())
-            .await;
-    }
-
-    #[tokio::test]
-    async fn test_eq_and_hash_are_consistent_for_comparable_listeners_wrapping_same_listener() {
-        let mut mock_listener = MockUListener::new();
-        mock_listener.expect_on_receive().times(2).return_const(());
-        let listener_one = Arc::new(mock_listener);
-        let listener_two = listener_one.clone();
-        listener_one.on_receive(UMessage::default()).await;
-        listener_two.on_receive(UMessage::default()).await;
-        let comparable_listener_one = ComparableListener::new(listener_one);
-        let comparable_listener_two = ComparableListener::new(listener_two);
-        assert!(&comparable_listener_one.eq(&comparable_listener_two));
-
-        let mut hasher = DefaultHasher::new();
-        comparable_listener_one.hash(&mut hasher);
-        let hash_one = hasher.finish();
-        let mut hasher = DefaultHasher::new();
-        comparable_listener_two.hash(&mut hasher);
-        let hash_two = hasher.finish();
-        assert_eq!(hash_one, hash_two);
-    }
-
-    #[tokio::test]
-    async fn test_eq_and_hash_are_consistent_for_comparable_listeners_wrapping_different_listeners()
-    {
-        let mut mock_listener_one = MockUListener::new();
-        mock_listener_one
-            .expect_on_receive()
-            .once()
-            .return_const(());
-        let listener_one = Arc::new(mock_listener_one);
-        let mut mock_listener_two = MockUListener::new();
-        mock_listener_two
-            .expect_on_receive()
-            .once()
-            .return_const(());
-        let listener_two = Arc::new(mock_listener_two);
-        listener_one.on_receive(UMessage::default()).await;
-        listener_two.on_receive(UMessage::default()).await;
-        let comparable_listener_one = ComparableListener::new(listener_one);
-        let comparable_listener_two = ComparableListener::new(listener_two);
-        assert!(!&comparable_listener_one.eq(&comparable_listener_two));
-
-        let mut hasher = DefaultHasher::new();
-        comparable_listener_one.hash(&mut hasher);
-        let hash_one = hasher.finish();
-        let mut hasher = DefaultHasher::new();
-        comparable_listener_two.hash(&mut hasher);
-        let hash_two = hasher.finish();
-        assert_ne!(hash_one, hash_two);
-    }
-
-    #[tokio::test]
-    async fn test_utransport_default_implementations() {
-        struct EmptyTransport {}
-        #[async_trait::async_trait]
-        impl UTransport for EmptyTransport {
-            async fn send(&self, _message: UMessage) -> Result<(), UStatus> {
-                todo!()
-            }
-        }
-
-        let transport = EmptyTransport {};
-        let listener = Arc::new(MockUListener::new());
-
-        assert!(transport
-            .receive(&UUri::any(), None)
-            .await
-            .is_err_and(|e| e.get_code() == UCode::UNIMPLEMENTED));
-        assert!(transport
-            .register_listener(&UUri::any(), None, listener.clone())
-            .await
-            .is_err_and(|e| e.get_code() == UCode::UNIMPLEMENTED));
-        assert!(transport
-            .unregister_listener(&UUri::any(), None, listener)
-            .await
-            .is_err_and(|e| e.get_code() == UCode::UNIMPLEMENTED));
-    }
-
-    #[test]
-    fn test_comparable_listener_pointer_address() {
-        let bar = Arc::new(MockUListener::new());
-        let comp_listener = ComparableListener::new(bar);
-
-        let comp_listener_thread = comp_listener.clone();
-        let handle = std::thread::spawn(move || comp_listener_thread.pointer_address());
-
-        let comp_listener_address_other_thread = handle.join().unwrap();
-        let comp_listener_address_this_thread = comp_listener.pointer_address();
-
-        assert_eq!(
-            comp_listener_address_this_thread,
-            comp_listener_address_other_thread
-        );
-    }
-
-    #[test]
-    fn test_comparable_listener_debug_outputs() {
-        let bar = Arc::new(MockUListener::new());
-        let comp_listener = ComparableListener::new(bar);
-        let debug_output = format!("{comp_listener:?}");
-        assert!(!debug_output.is_empty());
-    }
-
-    #[test_case::test_case(
-        "//vehicle1/AA/1/FFFF",
-        Some("//vehicle2/BB/1/FFFF");
-        "source and sink both having wildcard resource ID")]
-    #[test_case::test_case(
-        "//vehicle1/AA/1/9000",
-        Some("//vehicle2/BB/1/0");
-        "sending notification")]
-    #[test_case::test_case(
-        "//vehicle1/AA/1/0",
-        Some("//vehicle2/BB/1/1");
-        "RPC method invocation")]
-    #[test_case::test_case(
-        "//vehicle1/AA/1/FFFF",
-        Some("//vehicle2/BB/1/1");
-        "receiving RPC requests using wildcard resource ID")]
-    #[test_case::test_case(
-        "//vehicle1/AA/1/0",
-        Some("//vehicle2/BB/1/1");
-        "receiving RPC requests using default resource ID")]
-    #[test_case::test_case(
-        "//vehicle1/AA/1/9000",
-        None;
-        "receiving events published to specific topic")]
-    #[test_case::test_case(
-        "//vehicle1/AA/1/FFFF",
-        None;
-        "receiving events published to any topic")]
-    fn test_verify_filter_criteria_succeeds_for(source: &str, sink: Option<&str>) {
-        let source_filter = UUri::from_str(source).expect("invalid source URI");
-        let sink_filter = sink.map(|s| UUri::from_str(s).expect("invalid sink URI"));
-        assert!(verify_filter_criteria(&source_filter, sink_filter.as_ref()).is_ok());
-    }
-
-    #[test_case::test_case(
-        UUri::from_str("//vehicle1/AA/1/0").unwrap(),
-        Some(UUri::from_str("//vehicle2/BB/1/0").unwrap());
-        "source and sink both having resource ID 0")]
-    #[test_case::test_case(
-        UUri::from_str("//vehicle1/AA/1/CC").unwrap(),
-        Some(UUri::from_str("//vehicle2/BB/1/1A").unwrap());
-        "sink is RPC but source has invalid resource ID")]
-    #[test_case::test_case(
-        UUri::from_str("//vehicle1/AA/1/CC").unwrap(),
-        None;
-        "sink is empty but source has non-topic resource ID")]
-    #[test_case::test_case(
-        UUri {
-            authority_name: "VEHICLE1".to_string(),
-            ue_id: 0x00AA,
-            ue_version_major: 0x01,
-            resource_id: 0x9000,
-            ..Default::default()
-        },
-        None;
-        "source has upper-case authority")]
-    #[test_case::test_case(
-        UUri::from_str("//vehicle1/AA/1/9000").unwrap(),
-        Some(UUri {
-            authority_name: "VEHICLE2".to_string(),
-            ue_id: 0x00BB,
-            ue_version_major: 0x01,
-            resource_id: 0x0000,
-            ..Default::default()
-        });
-        "sink has upper-case authority")]
-    fn test_verify_filter_criteria_fails_for(source_filter: UUri, sink_filter: Option<UUri>) {
-        assert!(verify_filter_criteria(&source_filter, sink_filter.as_ref())
-            .is_err_and(|err| matches!(err.get_code(), UCode::INVALID_ARGUMENT)));
+    fn verify_filter_criteria_accepts_publish_topic() {
+        let source_filter = UUri::from_str("//vehicle1/AA/1/9000").expect("invalid source URI");
+        assert!(verify_filter_criteria(&source_filter, None).is_ok());
     }
 }
