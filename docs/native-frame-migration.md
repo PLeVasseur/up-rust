@@ -35,6 +35,32 @@ transport.send_owned(frame).await?;
 
 The important difference is that transports receive native frame metadata plus payload bytes. They do not receive a generated `UMessage` wrapper.
 
+## Generated `UMessage` Removal
+
+The native transport API intentionally removes generated `UMessage` as the transport envelope. `UMessage` serialized all transport metadata through Protocol Buffers, which made every transport pay the same encode/decode cost and made shared-memory zero-copy transports impossible to model honestly.
+
+Applications should now treat the frame as two native parts:
+
+| Frame part | Purpose |
+| --- | --- |
+| `UFrameMetadata` | In-memory metadata: `UAttributes` plus `UEncoding` |
+| Payload bytes or loaned payload storage | Serializer-produced application payload |
+
+Protocol Buffers are still supported for payloads when the `protobuf-wire` feature is enabled. They are not used to wrap `UAttributes` into a generated transport envelope.
+
+## `UFrameMetadata` And `UAttributes`
+
+`UFrameMetadata` is not a new protocol header. It is the native frame metadata object passed between applications, transports, and streamers. It contains:
+
+| Field | Meaning |
+| --- | --- |
+| `attributes()` | The uProtocol `UAttributes` source of truth |
+| `encoding()` | The payload representation as `UEncoding` |
+
+Use `frame.metadata().attributes()` to inspect message type, source, sink, TTL, priority, request ID, token, permission level, traceparent, and communication status. Use `frame.metadata().encoding()` to preserve or validate the payload format.
+
+Transport implementations should project these fields into their native metadata channel when one exists. Avoid serializing a generated attributes blob unless the transport truly has no metadata channel and the transport binding specifies an explicit native-frame prefix.
+
 ## Type Mapping
 
 | Old concept | Native replacement |
@@ -45,6 +71,28 @@ The important difference is that transports receive native frame metadata plus p
 | Generated `UMessageBuilder` | Native `UMessageBuilder` that builds `UOwnedFrame` |
 | `UTransport::send` | `UOwnedTransport::send_owned` or `UZeroCopyTransport::send_zero_copy` |
 | `UTransport::register_listener` | `register_owned_listener` or `register_zero_copy_listener` |
+
+## Builder Entry Points
+
+The native `UMessageBuilder` keeps the common builder ergonomics but returns `UOwnedFrame`:
+
+| Builder | Required fields |
+| --- | --- |
+| `publish(topic)` | Source topic, no sink |
+| `notification(origin, destination)` | Source and sink |
+| `request(method_to_invoke, reply_to_address, ttl)` | Method sink, reply-to source, non-zero TTL |
+| `response(reply_to_address, request_id, invoked_method)` | Reply-to sink, request ID, invoked method source |
+| `response_for_request(request_attributes)` | Request attributes from the incoming request |
+
+Payload helpers set `UEncoding` and payload bytes in one step:
+
+| Helper | Use case |
+| --- | --- |
+| `build()` | Empty raw payload |
+| `build_with_raw_payload(...)` | Already-encoded opaque bytes |
+| `build_with_payload(encoding, payload)` | Explicit `UEncoding` and bytes |
+| `build_with_serializable::<Wire, _>(...)` | Serializer-neutral typed payload |
+| `build_with_protobuf_payload(...)` | Protobuf payload, only with `protobuf-wire` |
 
 ## Building Common Message Types
 
