@@ -663,6 +663,40 @@ pub trait RpcServer: Send + Sync {
     ) -> Result<(), RegistrationError>;
 }
 
+#[cfg(not(tarpaulin_include))]
+#[cfg(any(test, feature = "test-util"))]
+mockall::mock! {
+    pub RpcServer {
+        pub async fn do_register_endpoint<'a>(&'a self, origin_filter: Option<&'a UUri>, resource_id: u16, request_handler: Arc<dyn RequestHandler>) -> Result<(), RegistrationError>;
+        pub async fn do_unregister_endpoint<'a>(&'a self, origin_filter: Option<&'a UUri>, resource_id: u16, request_handler: Arc<dyn RequestHandler>) -> Result<(), RegistrationError>;
+    }
+}
+
+#[cfg(not(tarpaulin_include))]
+#[cfg(any(test, feature = "test-util"))]
+#[async_trait]
+impl RpcServer for MockRpcServer {
+    async fn register_endpoint(
+        &self,
+        origin_filter: Option<&UUri>,
+        resource_id: u16,
+        request_handler: Arc<dyn RequestHandler>,
+    ) -> Result<(), RegistrationError> {
+        self.do_register_endpoint(origin_filter, resource_id, request_handler)
+            .await
+    }
+
+    async fn unregister_endpoint(
+        &self,
+        origin_filter: Option<&UUri>,
+        resource_id: u16,
+        request_handler: Arc<dyn RequestHandler>,
+    ) -> Result<(), RegistrationError> {
+        self.do_unregister_endpoint(origin_filter, resource_id, request_handler)
+            .await
+    }
+}
+
 #[cfg(feature = "util")]
 struct RpcResponseListener {
     request_id: UUID,
@@ -842,17 +876,9 @@ where
 
     async fn send_response(&self, request: &UOwnedFrame, payload: Option<UPayload>, status: UCode) {
         let attributes = request.metadata().attributes();
-        let Some(reply_to) = request
-            .metadata()
-            .sink()
-            .map(|_| attributes.source().clone())
-        else {
-            return;
-        };
-        let mut builder =
-            UMessageBuilder::response(reply_to, attributes.id().clone(), self.method.clone());
+        let mut builder = UMessageBuilder::response_for_request(attributes);
         if status != UCode::OK {
-            builder = builder.with_commstatus(status);
+            builder = builder.with_comm_status(status);
         }
         let Ok(response_metadata) = builder.build_metadata() else {
             return;

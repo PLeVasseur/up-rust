@@ -28,8 +28,8 @@ use up_rust::{
     },
     local_transport::LocalTransport,
     LocalUriProvider, RawBytes, StaticUriProvider, UAttributes, UDeserializer, UEncoding,
-    UMessageType, UOwnedFrame, UOwnedListener, UOwnedTransport, UPriority, USerializer, UWireError,
-    WireFormat, UUID,
+    UMessageBuilder, UMessageType, UOwnedFrame, UOwnedListener, UOwnedTransport, UPriority,
+    USerializer, UWireError, WireFormat, UUID,
 };
 
 #[derive(Debug, Eq, PartialEq)]
@@ -274,6 +274,56 @@ async fn in_memory_rpc_round_trips_native_payload() {
 
     assert_eq!(response.encoding(), &RawBytes::encoding());
     assert_eq!(response.payload_bytes(), &[0x55, 0xaa]);
+
+    server
+        .unregister_endpoint(None, 0x0001, handler)
+        .await
+        .unwrap();
+}
+
+#[tokio::test]
+async fn rpc_server_response_preserves_request_metadata() {
+    let transport = Arc::new(LocalTransport::default());
+    let uri_provider = Arc::new(StaticUriProvider::new("", 0x0005, 0x02));
+    let server = InMemoryRpcServer::new(transport.clone(), uri_provider.clone());
+    let handler = Arc::new(EchoRequestHandler);
+
+    server
+        .register_endpoint(None, 0x0001, handler.clone())
+        .await
+        .unwrap();
+
+    let method = uri_provider.get_resource_uri(0x0001);
+    let reply_to = uri_provider.get_source_uri();
+    let (sender, receiver) = oneshot::channel();
+    transport
+        .register_owned_listener(
+            &method,
+            Some(&reply_to),
+            Arc::new(CaptureListener::new(sender)),
+        )
+        .await
+        .unwrap();
+
+    let request_id = UUID::build();
+    let request = UMessageBuilder::request(method.clone(), reply_to.clone(), 7_000)
+        .with_message_id(request_id.clone())
+        .with_priority(UPriority::CS5)
+        .with_token("rpc-token")
+        .build_with_raw_payload(vec![0x12, 0x34])
+        .unwrap();
+    transport.send_owned(request).await.unwrap();
+
+    let response = receiver.await.unwrap();
+    let attributes = response.metadata().attributes();
+    assert_eq!(attributes.message_type(), UMessageType::Response);
+    assert_eq!(attributes.request_id(), Some(&request_id));
+    assert_eq!(attributes.source(), &method);
+    assert_eq!(attributes.sink(), Some(&reply_to));
+    assert_eq!(attributes.priority(), UPriority::CS5);
+    assert_eq!(attributes.ttl(), Some(7_000));
+    assert_eq!(attributes.commstatus(), None);
+    assert_eq!(response.payload_bytes(), &[0x12, 0x34]);
 
     server
         .unregister_endpoint(None, 0x0001, handler)

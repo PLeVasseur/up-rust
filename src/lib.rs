@@ -23,6 +23,10 @@ Applications usually start with [`UMessageBuilder`] and [`UOwnedFrame`]: build a
 Publish, Notification, Request, or Response frame, then send it with an
 [`UOwnedTransport`].
 
+For discoverability, the same public types are grouped by role under [`frame`],
+[`wire`], [`transport`], [`zero_copy`], and [`prelude`]. The crate root keeps the
+most common re-exports for compatibility and short examples.
+
 # Advanced Paths
 
 Custom payload codecs implement [`WireFormat`], [`USerializer`], and
@@ -111,4 +115,46 @@ pub use uuid::UUID;
 #[cfg(feature = "protobuf-wire")]
 pub mod up_core_api {
     include!(concat!(env!("OUT_DIR"), "/uprotocol/mod.rs"));
+}
+
+/// Frame metadata, builders, and owned-frame types for the common path.
+pub mod frame {
+    pub use crate::{
+        UAttributes, UFrameMetadata, UMessageBuilder, UMessageBuilderError, UMessageType,
+        UOwnedFrame, UPriority,
+    };
+}
+
+/// Serializer-neutral payload wire-format contracts and helpers.
+pub mod wire {
+    pub use crate::{
+        RawBytes, UDeserializer, UEncoding, UErasedSerializer, USerializer, UWireError, WireFormat,
+    };
+}
+
+/// Owned-buffer transport APIs and endpoint adapters.
+pub mod transport {
+    pub use crate::{
+        verify_filter_criteria, ComparableOwnedListener, LocalUriProvider, StaticUriProvider,
+        UOwnedListener, UOwnedTransport, UOwnedTransportExt, UTransportEndpoint,
+        UTransportEndpointRegistration, UTransportMode,
+    };
+}
+
+/// Zero-copy transport capability APIs.
+pub mod zero_copy {
+    pub use crate::{
+        UTxBuffer, UVecTxBuffer, UZeroCopyListener, UZeroCopyRxFrame, UZeroCopyTransport,
+        UZeroCopyTransportExt,
+    };
+}
+
+/// Common imports for applications using native owned frames.
+pub mod prelude {
+    pub use crate::{
+        frame::{UFrameMetadata, UMessageBuilder, UMessageType, UOwnedFrame, UPriority},
+        transport::{UOwnedListener, UOwnedTransport, UOwnedTransportExt},
+        wire::{RawBytes, UDeserializer, UEncoding, USerializer, UWireError, WireFormat},
+        UCode, UStatus, UUri, UUID,
+    };
 }

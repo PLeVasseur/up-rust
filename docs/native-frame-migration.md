@@ -75,7 +75,8 @@ Transport implementations should project these fields into their native metadata
 | Protobuf payload helpers | `build_with_protobuf_payload`, `ProtobufWire` | `protobuf-wire` | Protobuf is a payload codec, not the transport envelope. |
 | uSubscription service payloads | Generated `up-core-api` protobuf DTOs | `protobuf-wire` | uSubscription service methods use their full-fidelity protobuf service DTOs inside native frames. |
 | `up_rust::*` service DTO imports | Module imports such as `up_rust::usubscription::Subscription` | Always | Service DTOs are grouped under service modules to keep the crate root focused on common frame and transport APIs. |
-| Generated/mock transport test helpers | `test-util` mocks and `test_util::{InMemoryOwnedTransport, InMemoryZeroCopyTransport, RecordingOwnedListener}` | `test-util` | Use automocks for object-safe communication/service traits and in-memory transports for borrowed-filter transport traits. |
+| Flat root-only imports | Role-focused modules such as `frame`, `wire`, `transport`, `zero_copy`, and `prelude` | Always | Root re-exports remain for compatibility and short examples; modules make simple application code and advanced transport code easier to separate. |
+| Generated/mock transport test helpers | `test-util` mocks and `test_util::{InMemoryOwnedTransport, InMemoryZeroCopyTransport, RecordingOwnedListener}` | `test-util` | Use mocks for communication/service traits and in-memory transports for borrowed-filter transport traits. |
 
 ## Owned And Zero-Copy Transport Parity
 
@@ -93,7 +94,7 @@ Use `UOwnedTransport` for the normal network, brokered, and in-process path. Use
 | Typed send helper | `UOwnedTransportExt::send_serialized::<Wire, _>(...)` | `UZeroCopyTransportExt::send_serialized_zero_copy::<Wire, _>(...)` | Same `WireFormat` and `USerializer` contract; the zero-copy helper reserves a loan and serializes into it. |
 | Typed receive decode | `UOwnedFrame::deserialize::<Wire, T>()` | `UZeroCopyRxFrame::deserialize_borrowed::<Wire, T>()` | Both check `UEncoding` before decoding. The zero-copy path can return borrowed views into the receive lease. |
 | Test fakes | `test_util::InMemoryOwnedTransport` | `test_util::InMemoryZeroCopyTransport` | The zero-copy fake uses `UVecTxBuffer` and `UOwnedFrame` to exercise the trait shape without shared-memory middleware. |
-| Trait mocks | `MockUOwnedTransport`, `MockUOwnedListener` | `MockUZeroCopyTransport` | Enabled by `test-util`; mock the trait shape you are depending on. |
+| Trait mocks | `MockUOwnedTransport`, `MockUOwnedListener`, communication mocks such as `communication::MockRpcServer` | `MockUZeroCopyTransport` | Enabled by `test-util`; mock the trait shape you are depending on. |
 
 The send mapping is easiest to remember as a buffer-ownership swap:
 
@@ -152,6 +153,8 @@ Payload helpers set `UEncoding` and payload bytes in one step:
 | `build_with_payload(payload, encoding)` | Explicit `UEncoding` and bytes |
 | `build_with_serializable::<Wire, _>(...)` | Serializer-neutral typed payload |
 | `build_with_protobuf_payload(...)` | Protobuf payload, only with `protobuf-wire` |
+
+For response communication status, prefer `with_comm_status(...)`. The older `with_commstatus(...)` spelling remains available for code that mirrors the wire-field name.
 
 ## Building Common Message Types
 

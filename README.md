@@ -23,6 +23,8 @@ up-rust = { version = "0.10" }
 Please refer to the [examples](./examples/) for owned-buffer and zero-copy wire-format usage.
 The [native frame migration guide](./docs/native-frame-migration.md) explains how to move from generated `UMessage` envelopes to `UOwnedFrame`, `UMessageBuilder`, and serializer-neutral payloads, including a side-by-side owned/zero-copy transport API matrix.
 
+The crate root keeps the common native-frame types available for short examples. For larger codebases, prefer the role-focused modules `frame`, `wire`, `transport`, `zero_copy`, and `prelude` to make simple application code and advanced transport code easier to separate.
+
 `UMessageBuilder` provides native builder ergonomics for `UOwnedFrame` construction without reintroducing generated message envelopes:
 
 ```rust

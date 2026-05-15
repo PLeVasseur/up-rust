@@ -206,7 +206,7 @@ impl TryFrom<CloudEvent> for UOwnedFrame {
             let commstatus = UCode::from_u8(commstatus).ok_or_else(|| {
                 CloudEventError::InvalidAttribute("unsupported commstatus".to_string())
             })?;
-            attributes = attributes.with_commstatus(commstatus);
+            attributes = attributes.with_comm_status(commstatus);
         }
 
         let format_id = required_string_extension(&event, EXTENSION_NAME_FORMAT_ID)?;
@@ -364,7 +364,7 @@ mod tests {
         .with_traceparent(TRACEPARENT)
         .with_token("auth-token")
         .with_permission_level(7)
-        .with_commstatus(UCode::UNAVAILABLE);
+        .with_comm_status(UCode::UNAVAILABLE);
         let encoding = UEncoding::new(
             "protobuf",
             "application/x-protobuf",

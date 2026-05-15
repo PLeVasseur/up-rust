@@ -180,6 +180,12 @@ impl UAttributes {
         self
     }
 
+    /// Sets the communication status using Rust-style word separation.
+    #[must_use]
+    pub fn with_comm_status(self, commstatus: UCode) -> Self {
+        self.with_commstatus(commstatus)
+    }
+
     /// Returns whether this frame has expired according to its UUID timestamp and TTL.
     pub fn is_expired(&self) -> bool {
         let Some(ttl) = self.ttl else {
@@ -747,6 +753,11 @@ impl UMessageBuilder {
         self
     }
 
+    /// Sets the communication status using Rust-style word separation.
+    pub fn with_comm_status(self, commstatus: UCode) -> Self {
+        self.with_commstatus(commstatus)
+    }
+
     /// Sets the W3C trace context identifier.
     pub fn with_traceparent(mut self, traceparent: impl Into<String>) -> Self {
         self.traceparent = Some(traceparent.into());
@@ -848,7 +859,7 @@ impl UMessageBuilder {
             attributes = attributes.with_permission_level(permission_level);
         }
         if let Some(commstatus) = self.commstatus {
-            attributes = attributes.with_commstatus(commstatus);
+            attributes = attributes.with_comm_status(commstatus);
         }
         attributes.validate()?;
         Ok(attributes)
@@ -1221,7 +1232,7 @@ mod tests {
         let response_id = UUID::build();
         let response = UMessageBuilder::response_for_request(request.metadata().attributes())
             .with_message_id(response_id.clone())
-            .with_commstatus(UCode::DEADLINE_EXCEEDED)
+            .with_comm_status(UCode::DEADLINE_EXCEEDED)
             .build()
             .unwrap();
 

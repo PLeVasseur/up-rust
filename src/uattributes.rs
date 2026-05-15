@@ -472,7 +472,7 @@ mod tests {
         let invalid = valid.clone().with_priority(UPriority::CS3);
         assert!(RequestValidator.validate(&invalid).is_err());
 
-        let invalid = valid.with_commstatus(UCode::CANCELLED);
+        let invalid = valid.with_comm_status(UCode::CANCELLED);
         assert!(RequestValidator.validate(&invalid).is_err());
     }
 
