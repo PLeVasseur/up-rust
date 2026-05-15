@@ -235,6 +235,11 @@ where
 /// Implement this trait only when the transport can loan transmit storage or
 /// deliver receive leases without hiding transport-owned copies.
 ///
+/// This is the zero-copy sibling of [`UOwnedTransport`]. Pull receive and
+/// listener registration map one-to-one to the owned API, while send is
+/// intentionally split into [`Self::reserve`] plus [`Self::send_zero_copy`] so
+/// serializers can write directly into the transport loan.
+///
 /// ```no_run
 /// # use async_trait::async_trait;
 /// # use up_rust::{UFrameMetadata, UOwnedFrame, UStatus, UUri, UVecTxBuffer, UZeroCopyTransport};
