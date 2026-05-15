@@ -85,25 +85,23 @@ pub struct StaticUriProvider {
 
 impl StaticUriProvider {
     pub fn new(authority: impl Into<String>, entity_id: u32, major_version: u8) -> Self {
-        let local_uri = UUri {
-            authority_name: authority.into(),
-            ue_id: entity_id,
-            ue_version_major: u32::from(major_version),
-            resource_id: 0x0000,
-        };
+        let local_uri = UUri::from_parts_unchecked(
+            authority.into(),
+            entity_id,
+            u32::from(major_version),
+            0x0000,
+        );
         StaticUriProvider { local_uri }
     }
 }
 
 impl LocalUriProvider for StaticUriProvider {
     fn get_authority(&self) -> String {
-        self.local_uri.authority_name.clone()
+        self.local_uri.authority_name()
     }
 
     fn get_resource_uri(&self, resource_id: u16) -> UUri {
-        let mut uri = self.local_uri.clone();
-        uri.resource_id = u32::from(resource_id);
-        uri
+        self.local_uri.clone().with_resource_id(resource_id)
     }
 
     fn get_source_uri(&self) -> UUri {
@@ -121,10 +119,10 @@ impl TryFrom<UUri> for StaticUriProvider {
 impl TryFrom<&UUri> for StaticUriProvider {
     type Error = TryFromIntError;
     fn try_from(source_uri: &UUri) -> Result<Self, Self::Error> {
-        let major_version = u8::try_from(source_uri.ue_version_major)?;
+        let major_version = u8::try_from(source_uri.ue_version_major())?;
         Ok(StaticUriProvider::new(
-            &source_uri.authority_name,
-            source_uri.ue_id,
+            source_uri.authority_name(),
+            source_uri.ue_id(),
             major_version,
         ))
     }
@@ -515,10 +513,10 @@ mod tests {
     fn static_uri_provider_get_source() {
         let provider = StaticUriProvider::new("my-vehicle", 0x4210, 0x05);
         let source_uri = provider.get_source_uri();
-        assert_eq!(source_uri.authority_name, "my-vehicle");
-        assert_eq!(source_uri.ue_id, 0x4210);
-        assert_eq!(source_uri.ue_version_major, 0x05);
-        assert_eq!(source_uri.resource_id, 0x0000);
+        assert_eq!(source_uri.authority_name(), "my-vehicle");
+        assert_eq!(source_uri.ue_id(), 0x4210);
+        assert_eq!(source_uri.ue_version_major(), 0x05);
+        assert_eq!(source_uri.resource_id_raw(), 0x0000);
     }
 
     #[test]

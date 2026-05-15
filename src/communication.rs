@@ -30,8 +30,12 @@ use bytes::Bytes;
 #[cfg(feature = "util")]
 use tokio::{sync::oneshot, time::timeout};
 
+#[cfg(feature = "protobuf-wire")]
+use crate::core::usubscription;
 #[cfg(all(feature = "util", feature = "protobuf-wire"))]
-use crate::core::usubscription::{State, Update};
+use crate::core::usubscription::SubscriptionResponseExt;
+#[cfg(all(feature = "util", feature = "protobuf-wire"))]
+use crate::core::usubscription::{from_proto_uri, to_proto_uri, State, Update};
 #[cfg(feature = "protobuf-wire")]
 use crate::core::usubscription::{SubscriptionRequest, USubscription, UnsubscribeRequest};
 #[cfg(feature = "protobuf-wire")]
@@ -39,9 +43,9 @@ use crate::ProtobufWire;
 #[cfg(feature = "util")]
 use crate::UMessageBuilder;
 use crate::{
-    core::usubscription, LocalUriProvider, RawBytes, UAttributes, UCode, UDeserializer, UEncoding,
-    UFrameMetadata, UMessageType, UOwnedFrame, UOwnedListener, UOwnedTransport, UPriority,
-    USerializer, UStatus, UUri, UWireError, WireFormat, UUID,
+    LocalUriProvider, RawBytes, UAttributes, UCode, UDeserializer, UEncoding, UFrameMetadata,
+    UMessageType, UOwnedFrame, UOwnedListener, UOwnedTransport, UPriority, USerializer, UStatus,
+    UUri, UWireError, WireFormat, UUID,
 };
 
 /// An error indicating a problem with registering or unregistering a frame listener.
@@ -215,7 +219,10 @@ impl UPayload {
         T: UDeserializer<'a, F>,
     {
         if !self.encoding.is_compatible_with(&F::encoding()) {
-            return Err(UWireError::UnsupportedEncoding(self.encoding.clone()));
+            return Err(UWireError::UnsupportedEncoding {
+                expected: F::encoding(),
+                actual: self.encoding.clone(),
+            });
         }
         T::deserialize_from(self.payload_bytes())
     }
@@ -337,10 +344,18 @@ pub trait Subscriber: Send + Sync {
 }
 
 /// Handles subscription status updates for a subscribed topic.
+#[cfg(feature = "protobuf-wire")]
 #[cfg_attr(any(test, feature = "test-util"), mockall::automock)]
 pub trait SubscriptionChangeHandler: Send + Sync {
     fn on_subscription_change(&self, topic: UUri, status: usubscription::SubscriptionStatus);
 }
+
+/// Handles subscription status updates for a subscribed topic.
+///
+/// Subscription status payloads are protobuf service DTOs, so no callback method
+/// is available unless `protobuf-wire` is enabled.
+#[cfg(not(feature = "protobuf-wire"))]
+pub trait SubscriptionChangeHandler: Send + Sync {}
 
 /// An error indicating a problem with invoking a service operation.
 #[derive(Clone, Debug, Eq, PartialEq)]
@@ -837,7 +852,7 @@ where
         let mut builder =
             UMessageBuilder::response(reply_to, attributes.id().clone(), self.method.clone());
         if status != UCode::OK {
-            builder.with_commstatus(status);
+            builder = builder.with_commstatus(status);
         }
         let Ok(response_metadata) = builder.build_metadata() else {
             return;
@@ -1271,7 +1286,7 @@ impl UOwnedListener for SubscriptionChangeListener {
         let Ok(subscription_update) = payload.deserialize::<ProtobufWire, Update>() else {
             return;
         };
-        let Some(topic) = subscription_update.topic.as_ref() else {
+        let Some(topic) = subscription_update.topic.as_ref().map(from_proto_uri) else {
             return;
         };
         let Some(status) = subscription_update.status.as_ref() else {
@@ -1281,8 +1296,8 @@ impl UOwnedListener for SubscriptionChangeListener {
         let Ok(handlers) = self.subscription_change_handlers.read() else {
             return;
         };
-        if let Some(handler) = handlers.get(topic) {
-            handler.on_subscription_change(topic.to_owned(), status.to_owned());
+        if let Some(handler) = handlers.get(&topic) {
+            handler.on_subscription_change(topic, status.to_owned());
         }
     }
 }
@@ -1361,29 +1376,29 @@ where
         subscription_change_handler: Option<Arc<dyn SubscriptionChangeHandler>>,
     ) -> Result<State, RegistrationError> {
         let subscription_request = SubscriptionRequest {
-            topic: Some(topic.to_owned()),
+            topic: Some(to_proto_uri(topic)).into(),
             ..Default::default()
         };
         match self.usubscription.subscribe(subscription_request).await {
-            Ok(response) if response.is_state(State::Subscribed) => {
+            Ok(response) if response.is_state(State::SUBSCRIBED) => {
                 if let Some(handler) = subscription_change_handler {
                     self.subscription_change_listener
                         .add_handler(topic.to_owned(), handler)?;
                 }
-                Ok(State::Subscribed)
+                Ok(State::SUBSCRIBED)
             }
-            Ok(response) if response.is_state(State::SubscribePending) => {
+            Ok(response) if response.is_state(State::SUBSCRIBE_PENDING) => {
                 if let Some(handler) = subscription_change_handler {
                     self.subscription_change_listener
                         .add_handler(topic.to_owned(), handler)?;
                 }
-                Ok(State::SubscribePending)
+                Ok(State::SUBSCRIBE_PENDING)
             }
             Ok(response) => Err(RegistrationError::Unknown(UStatus::fail_with_code(
                 UCode::FAILED_PRECONDITION,
-                response.status.map_or_else(
+                response.status.as_ref().map_or_else(
                     || "unknown subscription state".to_string(),
-                    |status| status.message,
+                    |status| status.message.clone(),
                 ),
             ))),
             Err(_) => Err(RegistrationError::Unknown(UStatus::fail_with_code(
@@ -1395,7 +1410,8 @@ where
 
     async fn invoke_unsubscribe(&self, topic: &UUri) -> Result<(), RegistrationError> {
         let request = UnsubscribeRequest {
-            topic: Some(topic.to_owned()),
+            topic: Some(to_proto_uri(topic)).into(),
+            ..Default::default()
         };
         self.usubscription
             .unsubscribe(request)
@@ -1536,10 +1552,11 @@ fn rpc_request_metadata(
     })?;
     let id = options.message_id.unwrap_or_else(UUID::build);
     let priority = options.priority.unwrap_or(UPriority::CS4);
-    let mut builder = UMessageBuilder::request(method, reply_to, ttl);
-    builder.with_message_id(id.clone()).with_priority(priority);
+    let mut builder = UMessageBuilder::request(method, reply_to, ttl)
+        .with_message_id(id.clone())
+        .with_priority(priority);
     if let Some(token) = options.token {
-        builder.with_token(token);
+        builder = builder.with_token(token);
     }
     let metadata = builder
         .build_metadata()
@@ -1591,17 +1608,14 @@ mod tests {
     async fn in_memory_subscriber_invokes_usubscription_before_registering_listener() {
         let topic = subscription_topic();
         let mut usubscription = MockUSubscription::new();
-        let expected_topic = topic.clone();
+        let expected_topic = to_proto_uri(&topic);
         usubscription
             .expect_subscribe()
             .once()
             .withf(move |request| request.topic.as_ref() == Some(&expected_topic))
             .returning(|request| {
                 Ok(usubscription::SubscriptionResponse {
-                    status: Some(usubscription::SubscriptionStatus {
-                        state: State::Subscribed,
-                        ..Default::default()
-                    }),
+                    status: Some(usubscription::subscription_status(State::SUBSCRIBED, "")).into(),
                     topic: request.topic,
                     ..Default::default()
                 })
@@ -1635,12 +1649,13 @@ mod tests {
     async fn subscription_change_listener_dispatches_protobuf_update() {
         let topic = subscription_topic();
         let status = usubscription::SubscriptionStatus {
-            state: State::Subscribed,
+            state: protobuf::EnumOrUnknown::from(State::SUBSCRIBED),
             message: "ready".to_string(),
+            ..Default::default()
         };
         let update = Update {
-            topic: Some(topic.clone()),
-            status: Some(status.clone()),
+            topic: Some(to_proto_uri(&topic)).into(),
+            status: Some(status.clone()).into(),
             ..Default::default()
         };
         let payload = UPayload::from_serializable::<ProtobufWire, _>(&update).unwrap();

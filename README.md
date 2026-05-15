@@ -36,11 +36,11 @@ assert_eq!(frame.payload_bytes(), &[0x01, 0x02]);
 # }
 ```
 
-Use `build_with_serializable::<MyWireFormat, _>(&value)` to create frames with custom serializer-neutral payloads. Protocol Buffers remain available as optional payload support through the `protobuf-wire` feature. uSubscription service DTO payloads also use Protocol Buffers when the `protobuf-wire` feature is enabled, while the transport envelope remains a native frame.
+Use `build_with_serializable::<MyWireFormat, _>(&value)` to create frames with custom serializer-neutral payloads. Protocol Buffers remain available as optional payload support through the `protobuf-wire` feature. uSubscription service DTO payloads use the generated `up-core-api` protobuf DTOs when the `protobuf-wire` feature is enabled, while the transport envelope remains a native frame.
 
 Transport trait defaults match the mainline `UTransport` shape: optional receive/listener methods return `UNIMPLEMENTED` unless a transport implements them. Push-oriented transports should implement listener registration; transports that support true pull receive should implement `receive_owned` directly. Routing code that needs to work with owned and zero-copy endpoints can use `UTransportEndpoint` to wrap `UOwnedTransport` or true `UZeroCopyTransport` implementations.
 
-Use `UMessageBuilder` or `UFrameMetadata::try_*` constructors for checked metadata construction. The shorter `UFrameMetadata::{publish, notification, request, response}` constructors are unchecked convenience helpers for tests, adapters, and cases that validate separately.
+Use `UMessageBuilder` or `UFrameMetadata::try_*` constructors for checked metadata construction. The shorter `UFrameMetadata::{publish, notification, request, response}` constructors are unchecked convenience helpers for tests, adapters, and cases that validate separately. Native domain types such as `UUri` and `UUID` keep their fields private; use constructors and accessors instead of struct literals.
 
 Tests can enable the `test-util` feature for supported `mockall` mocks and in-memory owned/zero-copy transport fakes under `up_rust::test_util`.
 
@@ -57,7 +57,7 @@ First, the repository needs to be cloned using:
 git clone https://github.com/eclipse-uprotocol/up-rust.git
 ```
 
-No generated schema build step is required for the native frame API.
+No generated schema build step is required for the default native frame API. Enabling `protobuf-wire` runs build-script code generation for the checked-in `up-spec/up-core-api` protobuf definitions using a vendored `protoc` binary.
 
 The crate can then be built using the [Cargo package manager](https://doc.rust-lang.org/cargo/) from the root folder:
 <!--

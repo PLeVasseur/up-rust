@@ -109,6 +109,6 @@ mod uuid;
 pub use uuid::UUID;
 
 #[cfg(feature = "protobuf-wire")]
-mod up_core_api {
+pub mod up_core_api {
     include!(concat!(env!("OUT_DIR"), "/uprotocol/mod.rs"));
 }

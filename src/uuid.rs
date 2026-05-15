@@ -19,8 +19,8 @@ use std::{hash::Hash, str::FromStr};
 /// Native uProtocol UUIDv7 value.
 #[derive(Clone, Debug, Default, PartialEq)]
 pub struct UUID {
-    pub msb: u64,
-    pub lsb: u64,
+    msb: u64,
+    lsb: u64,
 }
 
 use uuid_simd::{AsciiCase, Out};
@@ -95,10 +95,16 @@ impl UUID {
     ///
     /// a uProtocol [`UUID`] with the given timestamp and random values.
     pub(crate) fn from_bytes_unchecked(msb: [u8; 8], lsb: [u8; 8]) -> Self {
-        UUID {
-            msb: u64::from_be_bytes(msb),
-            lsb: u64::from_be_bytes(lsb),
-        }
+        Self::from_u64_pair_unchecked(u64::from_be_bytes(msb), u64::from_be_bytes(lsb))
+    }
+
+    /// Creates a UUID from raw high/low parts without validating version or variant bits.
+    ///
+    /// Prefer [`Self::from_u64_pair`] when constructing application UUIDs. This
+    /// escape hatch is intended for adapters that already validated data or need
+    /// to preserve wire-level values for later validation.
+    pub fn from_u64_pair_unchecked(msb: u64, lsb: u64) -> Self {
+        UUID { msb, lsb }
     }
 
     /// Creates a new UUID from a high/low value pair.
@@ -186,7 +192,7 @@ impl UUID {
     /// let msb = 0x0000000000017000_u64;
     /// // variant = 0b10, random = 0x0010101010101a1a
     /// let lsb = 0x8010101010101a1a_u64;
-    /// let uuid = UUID { msb, lsb, ..Default::default() };
+    /// let uuid = UUID::from_u64_pair(msb, lsb).unwrap();
     /// assert_eq!(uuid.to_hyphenated_string(), "00000000-0001-7000-8010-101010101a1a");
     /// ```
     // [impl->req~uuid-hex-and-dash~1]
@@ -217,14 +223,14 @@ impl UUID {
     /// let msb = 0x018D548EA8E07000u64;
     /// // variant = 0b10
     /// let lsb = 0x8000000000000000u64;
-    /// let creation_time = UUID { msb, lsb, ..Default::default() }.get_time();
+    /// let creation_time = UUID::from_u64_pair(msb, lsb).unwrap().get_time();
     /// assert_eq!(creation_time.unwrap(), 0x018D548EA8E0_u64);
     ///
     /// // timestamp = 1, (invalid) ver = 0b1100
     /// let msb = 0x000000000001C000u64;
     /// // variant = 0b10
     /// let lsb = 0x8000000000000000u64;
-    /// let creation_time = UUID { msb, lsb, ..Default::default() }.get_time();
+    /// let creation_time = UUID::from_u64_pair_unchecked(msb, lsb).get_time();
     /// assert!(creation_time.is_none());
     /// ```
     // [impl->dsn~uuid-spec~1]
@@ -254,24 +260,39 @@ impl UUID {
     /// let msb = 0x0000000000017000u64;
     /// // variant = 0b10
     /// let lsb = 0x8000000000000000u64;
-    /// assert!(UUID { msb, lsb, ..Default::default() }.is_uprotocol_uuid());
+    /// assert!(UUID::from_u64_pair(msb, lsb).unwrap().is_uprotocol_uuid());
     ///
     /// // timestamp = 1, (invalid) ver = 0b1100
     /// let msb = 0x000000000001C000u64;
     /// // variant = 0b10
     /// let lsb = 0x8000000000000000u64;
-    /// assert!(!UUID { msb, lsb, ..Default::default() }.is_uprotocol_uuid());
+    /// assert!(!UUID::from_u64_pair_unchecked(msb, lsb).is_uprotocol_uuid());
     ///
     /// // timestamp = 1, ver = 0b0111
     /// let msb = 0x0000000000017000u64;
     /// // (invalid) variant = 0b01
     /// let lsb = 0x4000000000000000u64;
-    /// assert!(!UUID { msb, lsb, ..Default::default() }.is_uprotocol_uuid());
+    /// assert!(!UUID::from_u64_pair_unchecked(msb, lsb).is_uprotocol_uuid());
     /// ```
     // [impl->dsn~uuid-spec~1]
     // [utest->dsn~uuid-spec~1]
     pub fn is_uprotocol_uuid(&self) -> bool {
         is_correct_version(self.msb) && is_correct_variant(self.lsb)
+    }
+
+    /// Gets the most significant 64 bits of this UUID.
+    pub fn msb(&self) -> u64 {
+        self.msb
+    }
+
+    /// Gets the least significant 64 bits of this UUID.
+    pub fn lsb(&self) -> u64 {
+        self.lsb
+    }
+
+    /// Consumes this UUID and returns its raw high/low parts.
+    pub fn into_parts(self) -> (u64, u64) {
+        (self.msb, self.lsb)
     }
 }
 
@@ -352,7 +373,7 @@ impl From<&UUID> for Vec<u8> {
     /// let msb = 0x0000000000017000_u64;
     /// // variant = 0b10, random = 0x0010101010101a1a
     /// let lsb = 0x8010101010101a1a_u64;
-    /// let uuid = UUID { msb, lsb, ..Default::default() };
+    /// let uuid = UUID::from_u64_pair(msb, lsb).unwrap();
     /// let bytes: Vec<u8> = uuid.into();
     /// assert_eq!(bytes, vec![
     ///     0x00, 0x00, 0x00, 0x00, 0x00, 0x01, 0x70, 0x00,
@@ -405,8 +426,8 @@ impl FromStr for UUID {
     /// assert!(parsing_attempt.is_ok());
     /// let uuid = parsing_attempt.unwrap();
     /// assert!(uuid.is_uprotocol_uuid());
-    /// assert_eq!(uuid.msb, 0x0000000000017000_u64);
-    /// assert_eq!(uuid.lsb, 0x8010101010101a1a_u64);
+    /// assert_eq!(uuid.msb(), 0x0000000000017000_u64);
+    /// assert_eq!(uuid.lsb(), 0x8010101010101a1a_u64);
     ///
     /// // parsing an invalid UUID fails
     /// assert!("a1a2a3a4-b1b2-c1c2-d1d2-d3d4d5d6d7d8"

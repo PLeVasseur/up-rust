@@ -22,10 +22,10 @@ use uriparse::{Authority, URIReference};
 /// Native uProtocol URI.
 #[derive(Clone, Debug, Default, PartialEq)]
 pub struct UUri {
-    pub authority_name: String,
-    pub ue_id: u32,
-    pub ue_version_major: u32,
-    pub resource_id: u32,
+    authority_name: String,
+    ue_id: u32,
+    ue_version_major: u32,
+    resource_id: u32,
 }
 
 pub(crate) const WILDCARD_AUTHORITY: &str = "*";
@@ -91,13 +91,7 @@ impl From<&UUri> for String {
     /// ```rust
     /// use up_rust::UUri;
     ///
-    /// let uuri = UUri {
-    ///     authority_name: String::from("vin.vehicles"),
-    ///     ue_id: 0x0000_800A,
-    ///     ue_version_major: 0x02,
-    ///     resource_id: 0x0000_1a50,
-    ///     ..Default::default()
-    /// };
+    /// let uuri = UUri::try_from_parts("vin.vehicles", 0x0000_800A, 0x02, 0x1a50).unwrap();
     ///
     /// let uri_string = String::from(&uuri);
     /// assert_eq!(uri_string, "//vin.vehicles/800A/2/1A50");
@@ -130,13 +124,7 @@ impl FromStr for UUri {
     /// use std::str::FromStr;
     /// use up_rust::UUri;
     ///
-    /// let uri = UUri {
-    ///     authority_name: "vin.vehicles".to_string(),
-    ///     ue_id: 0x000A_8000,
-    ///     ue_version_major: 0x02,
-    ///     resource_id: 0x0000_1a50,
-    ///     ..Default::default()
-    /// };
+    /// let uri = UUri::try_from_parts("vin.vehicles", 0x000A_8000, 0x02, 0x1a50).unwrap();
     ///
     /// let uri_from = UUri::from_str("//vin.vehicles/A8000/2/1A50").unwrap();
     /// assert_eq!(uri, uri_from);
@@ -236,13 +224,7 @@ impl TryFrom<String> for UUri {
     /// ```rust
     /// use up_rust::UUri;
     ///
-    /// let uri = UUri {
-    ///     authority_name: "".to_string(),
-    ///     ue_id: 0x001A_8000,
-    ///     ue_version_major: 0x02,
-    ///     resource_id: 0x0000_1a50,
-    ///     ..Default::default()
-    /// };
+    /// let uri = UUri::try_from_parts("", 0x001A_8000, 0x02, 0x1a50).unwrap();
     ///
     /// let uri_from = UUri::try_from("/1A8000/2/1A50".to_string()).unwrap();
     /// assert_eq!(uri, uri_from);
@@ -271,13 +253,7 @@ impl TryFrom<&str> for UUri {
     /// ```rust
     /// use up_rust::UUri;
     ///
-    /// let uri = UUri {
-    ///     authority_name: "".to_string(),
-    ///     ue_id: 0x001A_8000,
-    ///     ue_version_major: 0x02,
-    ///     resource_id: 0x0000_1a50,
-    ///     ..Default::default()
-    /// };
+    /// let uri = UUri::try_from_parts("", 0x001A_8000, 0x02, 0x1a50).unwrap();
     ///
     /// let uri_from = UUri::try_from("/1A8000/2/1A50").unwrap();
     /// assert_eq!(uri, uri_from);
@@ -335,13 +311,7 @@ impl UUri {
     /// ```rust
     /// use up_rust::UUri;
     ///
-    /// let uuri = UUri {
-    ///     authority_name: String::from("vin.vehicles"),
-    ///     ue_id: 0x0000_800A,
-    ///     ue_version_major: 0x02,
-    ///     resource_id: 0x0000_1a50,
-    ///     ..Default::default()
-    /// };
+    /// let uuri = UUri::try_from_parts("vin.vehicles", 0x0000_800A, 0x02, 0x1a50).unwrap();
     ///
     /// let uri_string = uuri.to_uri(true);
     /// assert_eq!(uri_string, "up://vin.vehicles/800A/2/1A50");
@@ -394,6 +364,56 @@ impl UUri {
             ue_version_major: entity_version as u32,
             resource_id: resource_id as u32,
         })
+    }
+
+    /// Creates a URI from raw parts without validating them.
+    ///
+    /// Prefer [`Self::try_from_parts`] when constructing application URIs. This
+    /// escape hatch is intended for adapters that already validated data or need
+    /// to preserve wire-level values for later validation.
+    pub fn from_parts_unchecked(
+        authority_name: impl Into<String>,
+        ue_id: u32,
+        ue_version_major: u32,
+        resource_id: u32,
+    ) -> Self {
+        Self {
+            authority_name: authority_name.into(),
+            ue_id,
+            ue_version_major,
+            resource_id,
+        }
+    }
+
+    /// Consumes this URI and returns its raw parts.
+    pub fn into_parts(self) -> (String, u32, u32, u32) {
+        (
+            self.authority_name,
+            self.ue_id,
+            self.ue_version_major,
+            self.resource_id,
+        )
+    }
+
+    /// Gets the raw uEntity identifier field.
+    pub fn ue_id(&self) -> u32 {
+        self.ue_id
+    }
+
+    /// Gets the raw uEntity major version field.
+    pub fn ue_version_major(&self) -> u32 {
+        self.ue_version_major
+    }
+
+    /// Gets the raw resource identifier field.
+    pub fn resource_id_raw(&self) -> u32 {
+        self.resource_id
+    }
+
+    /// Returns a copy of this URI with a new resource identifier.
+    pub fn with_resource_id(mut self, resource_id: u16) -> Self {
+        self.resource_id = u32::from(resource_id);
+        self
     }
 
     /// Gets a URI that consists of wildcards only and therefore matches any URI.
@@ -569,13 +589,7 @@ impl UUri {
     /// ```rust
     /// use up_rust::UUri;
     ///
-    /// let uuri = UUri {
-    ///   authority_name: "valid_name".into(),
-    ///   ue_id: 0x1000,
-    ///   ue_version_major: 0x01,
-    ///   resource_id: 0x8100,
-    ///   ..Default::default()
-    /// };
+    /// let uuri = UUri::try_from_parts("valid_name", 0x1000, 0x01, 0x8100).unwrap();
     /// assert!(uuri.check_validity().is_ok());
     /// ```
     pub fn check_validity(&self) -> Result<(), UUriError> {
@@ -759,13 +773,7 @@ impl UUri {
     /// ```rust
     /// use up_rust::UUri;
     ///
-    /// let uri = UUri {
-    ///     authority_name: String::from("VIN.vehicles"),
-    ///     ue_id: 0x0000_2310,
-    ///     ue_version_major: 0x03,
-    ///     resource_id: 0xa000,
-    ///     ..Default::default()
-    /// };
+    /// let uri = UUri::try_from_parts("vin.vehicles", 0x0000_2310, 0x03, 0xa000).unwrap();
     /// assert!(uri.verify_no_wildcards().is_ok());
     /// ```
     pub fn verify_no_wildcards(&self) -> Result<(), UUriError> {
@@ -802,10 +810,7 @@ impl UUri {
     /// ```rust
     /// use up_rust::UUri;
     ///
-    /// let uri = UUri {
-    ///     resource_id: 0x7FFF,
-    ///     ..Default::default()
-    /// };
+    /// let uri = UUri::try_from_parts("", 0x1000, 0x01, 0x7FFF).unwrap();
     /// assert!(uri.is_rpc_method());
     /// ```
     pub fn is_rpc_method(&self) -> bool {
@@ -824,16 +829,10 @@ impl UUri {
     /// ```rust
     /// use up_rust::UUri;
     ///
-    /// let uri = UUri {
-    ///     resource_id: 0x8000,
-    ///     ..Default::default()
-    /// };
+    /// let uri = UUri::try_from_parts("", 0x1000, 0x01, 0x8000).unwrap();
     /// assert!(uri.verify_rpc_method().is_err());
     ///
-    /// let uri = UUri {
-    ///     resource_id: 0x0,
-    ///     ..Default::default()
-    /// };
+    /// let uri = UUri::try_from_parts("", 0x1000, 0x01, 0x0).unwrap();
     /// assert!(uri.verify_rpc_method().is_err());
     /// ```
     pub fn verify_rpc_method(&self) -> Result<(), UUriError> {
@@ -854,10 +853,7 @@ impl UUri {
     /// ```rust
     /// use up_rust::UUri;
     ///
-    /// let uri = UUri {
-    ///     resource_id: 0,
-    ///     ..Default::default()
-    /// };
+    /// let uri = UUri::try_from_parts("", 0x1000, 0x01, 0).unwrap();
     /// assert!(uri.is_notification_destination());
     /// ```
     pub fn is_notification_destination(&self) -> bool {
@@ -873,10 +869,7 @@ impl UUri {
     /// ```rust
     /// use up_rust::UUri;
     ///
-    /// let uri = UUri {
-    ///     resource_id: 0,
-    ///     ..Default::default()
-    /// };
+    /// let uri = UUri::try_from_parts("", 0x1000, 0x01, 0).unwrap();
     /// assert!(uri.is_rpc_response());
     /// ```
     pub fn is_rpc_response(&self) -> bool {
@@ -895,10 +888,7 @@ impl UUri {
     /// ```rust
     /// use up_rust::UUri;
     ///
-    /// let uri = UUri {
-    ///     resource_id: 0x4001,
-    ///     ..Default::default()
-    /// };
+    /// let uri = UUri::try_from_parts("", 0x1000, 0x01, 0x4001).unwrap();
     /// assert!(uri.verify_rpc_response().is_err());
     /// ```
     pub fn verify_rpc_response(&self) -> Result<(), UUriError> {
@@ -920,10 +910,7 @@ impl UUri {
     /// ```rust
     /// use up_rust::UUri;
     ///
-    /// let uri = UUri {
-    ///     resource_id: 0x8000,
-    ///     ..Default::default()
-    /// };
+    /// let uri = UUri::try_from_parts("", 0x1000, 0x01, 0x8000).unwrap();
     /// assert!(uri.is_event());
     /// ```
     pub fn is_event(&self) -> bool {
@@ -942,10 +929,7 @@ impl UUri {
     /// ```rust
     /// use up_rust::UUri;
     ///
-    /// let uri = UUri {
-    ///     resource_id: 0x7FFF,
-    ///     ..Default::default()
-    /// };
+    /// let uri = UUri::try_from_parts("", 0x1000, 0x01, 0x7FFF).unwrap();
     /// assert!(uri.verify_event().is_err());
     /// ```
     pub fn verify_event(&self) -> Result<(), UUriError> {

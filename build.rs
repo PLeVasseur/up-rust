@@ -11,11 +11,20 @@
  * SPDX-License-Identifier: Apache-2.0
  ********************************************************************************/
 
-use protobuf_codegen::Customize;
-
+#[cfg(feature = "protobuf-wire")]
 const UPROTOCOL_BASE_URI: &str = "up-spec/up-core-api/";
 
 fn main() -> Result<(), Box<dyn std::error::Error>> {
+    #[cfg(feature = "protobuf-wire")]
+    generate_up_core_api()?;
+
+    Ok(())
+}
+
+#[cfg(feature = "protobuf-wire")]
+fn generate_up_core_api() -> Result<(), Box<dyn std::error::Error>> {
+    use protobuf_codegen::Customize;
+
     protobuf_codegen::Codegen::new()
         .protoc()
         .protoc_path(&protoc_bin_vendored::protoc_bin_path()?)

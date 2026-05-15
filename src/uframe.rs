@@ -301,9 +301,15 @@ impl Default for UEncoding {
 /// Error type used by serialization-neutral frame helpers.
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub enum UWireError {
-    BufferTooSmall { expected: usize, actual: usize },
+    BufferTooSmall {
+        expected: usize,
+        actual: usize,
+    },
     InvalidPayload(String),
-    UnsupportedEncoding(UEncoding),
+    UnsupportedEncoding {
+        expected: UEncoding,
+        actual: UEncoding,
+    },
     SerializationError(String),
 }
 
@@ -330,10 +336,14 @@ impl Display for UWireError {
             Self::InvalidPayload(message) => {
                 f.write_fmt(format_args!("invalid payload: {message}"))
             }
-            Self::UnsupportedEncoding(encoding) => f.write_fmt(format_args!(
-                "unsupported encoding: format_id={}, content_type={}",
-                encoding.format_id(),
-                encoding.content_type()
+            Self::UnsupportedEncoding { expected, actual } => f.write_fmt(format_args!(
+                "unsupported encoding: expected format_id={}, content_type={}, schema_ref={:?}; got format_id={}, content_type={}, schema_ref={:?}",
+                expected.format_id(),
+                expected.content_type(),
+                expected.schema_ref(),
+                actual.format_id(),
+                actual.content_type(),
+                actual.schema_ref(),
             )),
             Self::SerializationError(message) => {
                 f.write_fmt(format_args!("serialization error: {message}"))
@@ -597,9 +607,10 @@ impl UOwnedFrame {
     {
         let expected = F::encoding();
         if !self.metadata.encoding().is_compatible_with(&expected) {
-            return Err(UWireError::UnsupportedEncoding(
-                self.metadata.encoding().clone(),
-            ));
+            return Err(UWireError::UnsupportedEncoding {
+                expected,
+                actual: self.metadata.encoding().clone(),
+            });
         }
         T::deserialize_from(self.payload_bytes())
     }
@@ -701,72 +712,70 @@ impl UMessageBuilder {
     }
 
     /// Sets the frame identifier.
-    pub fn with_message_id(&mut self, message_id: UUID) -> &mut Self {
+    pub fn with_message_id(mut self, message_id: UUID) -> Self {
         self.message_id = Some(message_id);
         self
     }
 
     /// Sets the frame priority.
-    pub fn with_priority(&mut self, priority: UPriority) -> &mut Self {
+    pub fn with_priority(mut self, priority: UPriority) -> Self {
         self.priority = priority;
         self
     }
 
     /// Sets the frame time-to-live in milliseconds.
-    pub fn with_ttl(&mut self, ttl: u32) -> &mut Self {
+    pub fn with_ttl(mut self, ttl: u32) -> Self {
         self.ttl = Some(ttl);
         self
     }
 
     /// Sets the authorization token. Only RPC Request frames may carry tokens.
-    pub fn with_token(&mut self, token: impl Into<String>) -> &mut Self {
+    pub fn with_token(mut self, token: impl Into<String>) -> Self {
         self.token = Some(token.into());
         self
     }
 
     /// Sets the permission level. Only RPC Request frames may carry permission levels.
-    pub fn with_permission_level(&mut self, permission_level: u32) -> &mut Self {
+    pub fn with_permission_level(mut self, permission_level: u32) -> Self {
         self.permission_level = Some(permission_level);
         self
     }
 
     /// Sets the communication status. Only RPC Response frames may carry communication status.
-    pub fn with_commstatus(&mut self, commstatus: UCode) -> &mut Self {
+    pub fn with_commstatus(mut self, commstatus: UCode) -> Self {
         self.commstatus = Some(commstatus);
         self
     }
 
     /// Sets the W3C trace context identifier.
-    pub fn with_traceparent(&mut self, traceparent: impl Into<String>) -> &mut Self {
+    pub fn with_traceparent(mut self, traceparent: impl Into<String>) -> Self {
         self.traceparent = Some(traceparent.into());
         self
     }
 
     /// Sets explicit payload encoding metadata for subsequent [`Self::build`] calls.
-    pub fn with_encoding(&mut self, encoding: UEncoding) -> &mut Self {
+    pub fn with_encoding(mut self, encoding: UEncoding) -> Self {
         self.encoding = encoding;
         self
     }
 
     /// Builds only the frame metadata.
-    pub fn build_metadata(&self) -> Result<UFrameMetadata, UMessageBuilderError> {
-        Ok(UFrameMetadata::new(
-            self.build_attributes()?,
-            self.encoding.clone(),
-        ))
+    pub fn build_metadata(self) -> Result<UFrameMetadata, UMessageBuilderError> {
+        Ok(UFrameMetadata::new(self.build_attributes()?, self.encoding))
     }
 
     /// Builds an owned frame with the currently configured payload, if any.
-    pub fn build(&self) -> Result<UOwnedFrame, UMessageBuilderError> {
+    pub fn build(self) -> Result<UOwnedFrame, UMessageBuilderError> {
+        let attributes = self.build_attributes()?;
         Ok(UOwnedFrame::new(
-            self.build_metadata()?,
-            self.payload.clone().unwrap_or_default(),
+            UFrameMetadata::new(attributes, self.encoding),
+            self.payload.unwrap_or_default(),
         ))
     }
 
     /// Builds an owned frame with raw bytes.
     pub fn build_with_raw_payload<T: Into<Bytes>>(
-        &mut self,
+        self,
         payload: T,
     ) -> Result<UOwnedFrame, UMessageBuilderError> {
         self.build_with_payload(payload, RawBytes::encoding())
@@ -774,7 +783,7 @@ impl UMessageBuilder {
 
     /// Builds an owned frame with explicit encoding metadata.
     pub fn build_with_payload<T: Into<Bytes>>(
-        &mut self,
+        mut self,
         payload: T,
         encoding: UEncoding,
     ) -> Result<UOwnedFrame, UMessageBuilderError> {
@@ -785,7 +794,7 @@ impl UMessageBuilder {
 
     /// Serializes a typed payload and builds an owned frame using the selected wire format.
     pub fn build_with_serializable<F, T>(
-        &mut self,
+        mut self,
         value: &T,
     ) -> Result<UOwnedFrame, UMessageBuilderError>
     where
@@ -800,7 +809,7 @@ impl UMessageBuilder {
     /// Serializes a Protocol Buffers payload and builds an owned frame.
     #[cfg(feature = "protobuf-wire")]
     pub fn build_with_protobuf_payload<T>(
-        &mut self,
+        self,
         value: &T,
     ) -> Result<UOwnedFrame, UMessageBuilderError>
     where
@@ -998,9 +1007,10 @@ pub trait UZeroCopyRxFrame {
     {
         let expected = F::encoding();
         if !self.metadata().encoding().is_compatible_with(&expected) {
-            return Err(UWireError::UnsupportedEncoding(
-                self.metadata().encoding().clone(),
-            ));
+            return Err(UWireError::UnsupportedEncoding {
+                expected,
+                actual: self.metadata().encoding().clone(),
+            });
         }
         T::deserialize_from(self.payload())
     }
@@ -1135,7 +1145,7 @@ mod tests {
 
         assert!(matches!(
             frame.deserialize::<OtherWire, &[u8]>(),
-            Err(UWireError::UnsupportedEncoding(_))
+            Err(UWireError::UnsupportedEncoding { .. })
         ));
     }
 
@@ -1171,7 +1181,7 @@ mod tests {
 
         assert!(matches!(
             frame.deserialize::<OtherSchemaWire, &[u8]>(),
-            Err(UWireError::UnsupportedEncoding(_))
+            Err(UWireError::UnsupportedEncoding { .. })
         ));
     }
 

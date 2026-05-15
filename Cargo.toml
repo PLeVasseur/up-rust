@@ -34,7 +34,7 @@ version = "0.10.0-SNAPSHOT"
 
 [features]
 default = ["util"]
-protobuf-wire = ["dep:protobuf"]
+protobuf-wire = ["dep:protobuf", "dep:protobuf-codegen", "dep:protoc-bin-vendored"]
 symphony = ["util", "dep:symphony"]
 util = ["tokio/sync", "tokio/time"]
 test-util = ["mockall"]
@@ -57,8 +57,8 @@ uriparse = { version = "0.6" }
 uuid-simd = { version = "0.8", default-features = false, features = ["std", "detect"] }
 
 [build-dependencies]
-protobuf-codegen = { version = "3.7.2" }
-protoc-bin-vendored = { version = "3.2.0" }
+protobuf-codegen = { version = "3.7.2", optional = true }
+protoc-bin-vendored = { version = "3.2.0", optional = true }
 
 [dev-dependencies]
 clap = { version = "4.5.51" }

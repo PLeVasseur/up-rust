@@ -11,12 +11,15 @@
  * SPDX-License-Identifier: Apache-2.0
  ********************************************************************************/
 
+#[cfg(feature = "protobuf-wire")]
 pub use crate::usubscription::{
+    fetch_subscriptions_request, from_proto_uri, subscription_status, to_proto_uri,
     EventDeliveryConfig, FetchSubscribersRequest, FetchSubscribersResponse,
     FetchSubscriptionsRequest, FetchSubscriptionsResponse, NotificationsRequest,
-    NotificationsResponse, ResetRequest, ResetResponse, State, SubscribeAttributes, SubscriberInfo,
-    Subscription, SubscriptionRequest, SubscriptionResponse, SubscriptionStatus, USubscription,
-    UnsubscribeRequest, UnsubscribeResponse, Update,
+    NotificationsResponse, PassiveMode, ProtoUUri, ResetRequest, ResetResponse, State,
+    SubscribeAttributes, SubscriberInfo, Subscription, SubscriptionRequest, SubscriptionResponse,
+    SubscriptionResponseExt, SubscriptionStatus, USubscription, UnsubscribeRequest,
+    UnsubscribeResponse, Update, UpdateExt,
 };
 
 use crate::UUri;
@@ -61,9 +64,15 @@ mod tests {
     fn usubscription_uri_uses_core_service_identity() {
         let uri = usubscription_uri(RESOURCE_ID_SUBSCRIPTION_CHANGE);
 
-        assert_eq!(uri.authority_name, "");
-        assert_eq!(uri.ue_id, USUBSCRIPTION_TYPE_ID);
-        assert_eq!(uri.ue_version_major, u32::from(USUBSCRIPTION_VERSION_MAJOR));
-        assert_eq!(uri.resource_id, u32::from(RESOURCE_ID_SUBSCRIPTION_CHANGE));
+        assert_eq!(uri.authority_name(), "");
+        assert_eq!(uri.ue_id(), USUBSCRIPTION_TYPE_ID);
+        assert_eq!(
+            uri.ue_version_major(),
+            u32::from(USUBSCRIPTION_VERSION_MAJOR)
+        );
+        assert_eq!(
+            uri.resource_id_raw(),
+            u32::from(RESOURCE_ID_SUBSCRIPTION_CHANGE)
+        );
     }
 }

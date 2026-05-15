@@ -90,9 +90,9 @@ mod tests {
     fn udiscovery_uri_uses_core_service_identity() {
         let uri = udiscovery_uri(RESOURCE_ID_FIND_SERVICES);
 
-        assert_eq!(uri.authority_name, "");
-        assert_eq!(uri.ue_id, UDISCOVERY_TYPE_ID);
-        assert_eq!(uri.ue_version_major, u32::from(UDISCOVERY_VERSION_MAJOR));
-        assert_eq!(uri.resource_id, u32::from(RESOURCE_ID_FIND_SERVICES));
+        assert_eq!(uri.authority_name(), "");
+        assert_eq!(uri.ue_id(), UDISCOVERY_TYPE_ID);
+        assert_eq!(uri.ue_version_major(), u32::from(UDISCOVERY_VERSION_MAJOR));
+        assert_eq!(uri.resource_id_raw(), u32::from(RESOURCE_ID_FIND_SERVICES));
     }
 }

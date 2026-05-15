@@ -73,7 +73,7 @@ Transport implementations should project these fields into their native metadata
 | `UTransport::register_listener` | `register_owned_listener` or `register_zero_copy_listener` | Always | Listener type follows transport capability: `UOwnedListener` or `UZeroCopyListener`. |
 | Pull-style receive helpers | `receive_owned` implemented by transports that truly support pull receive | Always | The default returns `UNIMPLEMENTED`, matching mainline `UTransport`; listener-backed push receive is not hidden behind the pull API. |
 | Protobuf payload helpers | `build_with_protobuf_payload`, `ProtobufWire` | `protobuf-wire` | Protobuf is a payload codec, not the transport envelope. |
-| uSubscription service payloads | Native DTO API with protobuf service payloads | `protobuf-wire` | uSubscription service methods still use their protobuf DTO wire format inside native frames. |
+| uSubscription service payloads | Generated `up-core-api` protobuf DTOs | `protobuf-wire` | uSubscription service methods use their full-fidelity protobuf service DTOs inside native frames. |
 | `up_rust::*` service DTO imports | Module imports such as `up_rust::usubscription::Subscription` | Always | Service DTOs are grouped under service modules to keep the crate root focused on common frame and transport APIs. |
 | Generated/mock transport test helpers | `test-util` mocks and `test_util::{InMemoryOwnedTransport, InMemoryZeroCopyTransport, RecordingOwnedListener}` | `test-util` | Use automocks for object-safe communication/service traits and in-memory transports for borrowed-filter transport traits. |
 
@@ -223,9 +223,11 @@ Use `UMessageBuilder` or `UFrameMetadata::try_publish`, `try_notification`, `try
 
 The shorter `UFrameMetadata::publish`, `notification`, `request`, and `response` constructors are intentionally unchecked convenience helpers. They are useful in tests, adapters, and low-level code that validates separately with `UAttributes::validate` or `UFrameMetadata::validate`.
 
+Native domain types with invariants keep their fields private. Use `UUri::try_from_parts`, `UUri::try_from`, `UUID::build`, `UUID::from_u64_pair`, and accessors such as `UUri::authority_name`, `UUri::ue_id`, `UUri::resource_id_raw`, `UUID::msb`, and `UUID::lsb` instead of struct literals or field mutation. Use `from_parts_unchecked` helpers only when an adapter has already validated data or needs to preserve wire-level values before explicit validation.
+
 ## Protocol Buffers Payloads
 
-Protocol Buffers support is available behind the `protobuf-wire` feature.
+Protocol Buffers support is available behind the `protobuf-wire` feature. Enabling the feature runs build-script code generation for the checked-in `up-spec/up-core-api` protobuf files using a vendored `protoc` binary; builds without `protobuf-wire` do not require protobuf code generation.
 
 ```toml
 [dependencies]
@@ -249,6 +251,8 @@ let frame = UMessageBuilder::publish(topic).build_with_protobuf_payload(payload)
 ```
 
 Protocol Buffers are payload bytes only in this path. They do not wrap the transport frame.
+
+uSubscription service APIs are available with `protobuf-wire` and use the generated `up-core-api` DTOs directly, for example `up_rust::core::usubscription::SubscriptionRequest`. Helper functions convert between native `UUri` values and generated protobuf URI DTOs when constructing service requests.
 
 ## Transport Migration
 
@@ -320,6 +324,6 @@ Use this checklist when migrating an application or transport:
 4. Use `WireFormat` serializers for typed payloads.
 5. Enable `protobuf-wire` only when Protocol Buffers payload support is needed.
 6. Use `send_owned` for owned transports and `send_zero_copy` only for true loaned-storage transports.
-7. Prefer the default `receive_owned` adapter instead of adding duplicate pull queues to push-oriented owned transports.
+7. Do not rely on a listener-backed default `receive_owned`; the default returns `UNIMPLEMENTED`, so implement pull receive directly only when the transport truly supports it.
 8. Use `UTransportEndpoint` for generic owned/zero-copy routing boundaries.
 9. Add tests for raw payloads, custom wire formats, optional protobuf payloads, and wrong-wire-format rejection.

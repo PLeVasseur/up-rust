@@ -18,6 +18,7 @@ use crate::{UAttributes, UMessageType, UPriority, UUri};
 /// Error returned when native uProtocol attributes fail validation.
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub enum UAttributesError {
+    Multiple(Vec<UAttributesError>),
     ValidationError(String),
     ParsingError(String),
 }
@@ -35,6 +36,13 @@ impl UAttributesError {
 impl Display for UAttributesError {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
+            Self::Multiple(errors) => f.write_str(
+                &errors
+                    .iter()
+                    .map(ToString::to_string)
+                    .collect::<Vec<_>>()
+                    .join("; "),
+            ),
             Self::ValidationError(error) => {
                 f.write_fmt(format_args!("Validation failure: {error}"))
             }
@@ -323,17 +331,15 @@ impl UAttributesValidator for ResponseValidator {
 fn aggregate_errors<const N: usize>(
     results: [Result<(), UAttributesError>; N],
 ) -> Result<(), UAttributesError> {
-    let error_message = results
+    let errors = results
         .into_iter()
         .filter_map(Result::err)
-        .map(|error| error.to_string())
-        .collect::<Vec<_>>()
-        .join("; ");
+        .collect::<Vec<_>>();
 
-    if error_message.is_empty() {
+    if errors.is_empty() {
         Ok(())
     } else {
-        Err(UAttributesError::validation_error(error_message))
+        Err(UAttributesError::Multiple(errors))
     }
 }
 
