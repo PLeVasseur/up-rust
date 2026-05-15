@@ -61,17 +61,20 @@ Use `frame.metadata().attributes()` to inspect message type, source, sink, TTL, 
 
 Transport implementations should project these fields into their native metadata channel when one exists. Avoid serializing a generated attributes blob unless the transport truly has no metadata channel and the transport binding specifies an explicit native-frame prefix.
 
-## Type Mapping
+## Migration Matrix
 
-| Old concept | Native replacement |
-| --- | --- |
-| Generated `UMessage` transport envelope | `UOwnedFrame` or zero-copy frame lease |
-| Generated `UAttributes` payload metadata | Native `UAttributes` |
-| Generated payload-format enum | `UEncoding` |
-| Generated `UMessageBuilder` | Native `UMessageBuilder` that builds `UOwnedFrame` |
-| `UTransport::send` | `UOwnedTransport::send_owned` or `UZeroCopyTransport::send_zero_copy` |
-| `UTransport::register_listener` | `register_owned_listener` or `register_zero_copy_listener` |
-| Pull-style receive helpers | `receive_owned` default adapter over `register_owned_listener` where appropriate |
+| Old API or concept | Native replacement | Feature | Notes |
+| --- | --- | --- | --- |
+| Generated `UMessage` transport envelope | `UOwnedFrame` or `UZeroCopyRxFrame` receive lease | Always | Transports receive native metadata plus payload bytes, not a generated wrapper. |
+| Generated `UAttributes` payload metadata | Native `UAttributes` inside `UFrameMetadata` | Always | Use accessors and builders instead of generated public fields. |
+| Generated payload-format enum | `UEncoding` | Always | `format_id` and `content_type` identify the codec; `schema_ref` optionally narrows the schema. |
+| Generated `UMessageBuilder` | Native `UMessageBuilder` that builds `UOwnedFrame` | Always | The name is retained for familiarity, but the output is a native frame. |
+| `UTransport::send` | `UOwnedTransport::send_owned` or `UZeroCopyTransport::send_zero_copy` | Always | Use `send_zero_copy` only for true loaned-storage transports. |
+| `UTransport::register_listener` | `register_owned_listener` or `register_zero_copy_listener` | Always | Listener type follows transport capability: `UOwnedListener` or `UZeroCopyListener`. |
+| Pull-style receive helpers | `receive_owned` default adapter over `register_owned_listener` where appropriate | Always | The adapter registers a temporary listener and unregisters it before returning. |
+| Protobuf payload helpers | `build_with_protobuf_payload`, `ProtobufWire` | `protobuf-wire` | Protobuf is a payload codec, not the transport envelope. |
+| `up_rust::*` service DTO imports | Module imports such as `up_rust::usubscription::Subscription` | Always | Service DTOs are grouped under service modules to keep the crate root focused on common frame and transport APIs. |
+| Generated/mock transport test helpers | `test-util` mocks and `test_util::{InMemoryOwnedTransport, InMemoryZeroCopyTransport, RecordingOwnedListener}` | `test-util` | Use automocks for object-safe communication/service traits and in-memory transports for borrowed-filter transport traits. |
 
 ## Builder Entry Points
 
@@ -91,7 +94,7 @@ Payload helpers set `UEncoding` and payload bytes in one step:
 | --- | --- |
 | `build()` | Empty raw payload |
 | `build_with_raw_payload(...)` | Already-encoded opaque bytes |
-| `build_with_payload(encoding, payload)` | Explicit `UEncoding` and bytes |
+| `build_with_payload(payload, encoding)` | Explicit `UEncoding` and bytes |
 | `build_with_serializable::<Wire, _>(...)` | Serializer-neutral typed payload |
 | `build_with_protobuf_payload(...)` | Protobuf payload, only with `protobuf-wire` |
 
@@ -211,6 +214,8 @@ let frame = UMessageBuilder::publish(topic)
 
 Typed frame deserialization checks `UEncoding` before decoding bytes. If a frame says it contains one wire format and the caller asks for another, deserialization fails instead of handing bytes to the wrong decoder.
 
+`format_id` and `content_type` must match the selected `WireFormat`. Empty schema references are treated as absent. If the selected `WireFormat` declares a non-empty `schema_ref`, the frame must carry the same `schema_ref`. If the selected `WireFormat` has no `schema_ref`, it is treated as a generic decoder for that matching format and content type, so it can decode frames that carry a more specific schema reference. This keeps Protobuf `Any` and similar schema-ref payloads ergonomic without weakening wrong-codec rejection.
+
 ## Protocol Buffers Payloads
 
 Protocol Buffers support is available behind the `protobuf-wire` feature.
@@ -286,6 +291,17 @@ let endpoint = UTransportEndpoint::from_owned(transport);
 ```
 
 For zero-copy transports, `UTransportEndpoint::from_zero_copy` copies an owned frame payload into a transmit loan for sends and adapts zero-copy receive leases to owned listener callbacks for generic routing. It does not make a network or broker transport zero-copy; only transports that implement true loaned storage should use the zero-copy constructor.
+
+## Test Utilities
+
+Enable the `test-util` feature to get `mockall` mocks for the supported object-safe public traits and in-memory transport fakes for borrowed-filter transport APIs:
+
+```toml
+[dev-dependencies]
+up-rust = { version = "0.10", features = ["test-util"] }
+```
+
+`up_rust::test_util::InMemoryOwnedTransport` implements `UOwnedTransport`. `up_rust::test_util::InMemoryZeroCopyTransport` implements `UZeroCopyTransport` using `UVecTxBuffer` and `UOwnedFrame`, which is useful for unit tests that need to exercise the zero-copy trait shape without launching shared-memory middleware. `up_rust::test_util::RecordingOwnedListener` records delivered owned frames for assertions.
 
 ## Validation Checklist
 

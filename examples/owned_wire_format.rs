@@ -32,10 +32,10 @@ impl WireFormat for TemperatureWire {
     }
 
     fn encoding() -> UEncoding {
-        UEncoding::new(
+        UEncoding::with_schema_ref(
             Self::name(),
             "application/x.demo.temperature",
-            Some("urn:demo:TemperatureReading:v1"),
+            "urn:demo:TemperatureReading:v1",
         )
     }
 }

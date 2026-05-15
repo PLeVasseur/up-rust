@@ -16,6 +16,35 @@ up-rust is the Eclipse uProtocol Rust language library.
 
 The public API is native Rust and serializer-neutral. Transports exchange
 frames and wire-format metadata without generated message envelopes.
+
+# Common Path
+
+Applications usually start with [`UMessageBuilder`] and [`UOwnedFrame`]: build a
+Publish, Notification, Request, or Response frame, then send it with an
+[`UOwnedTransport`].
+
+# Advanced Paths
+
+Custom payload codecs implement [`WireFormat`], [`USerializer`], and
+[`UDeserializer`]. Shared-memory transports implement [`UZeroCopyTransport`]
+only when they can honestly loan transmit storage and return receive leases.
+Routing code that needs a single owned-frame facade over either capability can
+use [`UTransportEndpoint`]; adapting a zero-copy endpoint to this facade copies
+payload bytes at the boundary.
+
+# Features
+
+* `util` enables in-crate utility implementations such as the local transport
+  and communication-layer helpers. It is enabled by default.
+* `protobuf-wire` enables optional Protocol Buffers payload codec support.
+  Protocol Buffers remain payload bytes only; they are not used as the frame
+  envelope.
+* `symphony` enables Symphony deployment-target helpers.
+* `test-util` enables `mockall` mocks for supported public traits and in-memory
+  transport fakes under [`test_util`].
+
+Service-specific data transfer objects are grouped under modules such as
+[`usubscription`] instead of being wildcard-exported at the crate root.
 */
 
 #[cfg(feature = "util")]
@@ -26,6 +55,9 @@ pub mod cloudevents;
 pub mod communication;
 
 pub mod core;
+
+#[cfg(any(test, feature = "test-util"))]
+pub mod test_util;
 
 #[cfg(feature = "symphony")]
 pub mod symphony;
@@ -50,7 +82,6 @@ mod transport_endpoint;
 pub use transport_endpoint::{UTransportEndpoint, UTransportEndpointRegistration, UTransportMode};
 
 pub mod usubscription;
-pub use usubscription::*;
 
 mod ustatus;
 pub use ustatus::{UCode, UStatus};
@@ -61,6 +92,9 @@ pub use utransport::{
     UOwnedListener, UOwnedTransport, UOwnedTransportExt, UZeroCopyListener, UZeroCopyTransport,
     UZeroCopyTransportExt,
 };
+
+#[cfg(any(test, feature = "test-util"))]
+pub use utransport::MockUOwnedListener;
 
 mod uuid;
 pub use uuid::UUID;

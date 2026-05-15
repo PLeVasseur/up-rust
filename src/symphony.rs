@@ -96,7 +96,7 @@ pub trait DeploymentTarget: Send + Sync {
 }
 
 fn json_encoding() -> UEncoding {
-    UEncoding::new("json", "application/json", None::<String>)
+    UEncoding::without_schema_ref("json", "application/json")
 }
 
 fn extract_request_data(

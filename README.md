@@ -40,6 +40,8 @@ Use `build_with_serializable::<MyWireFormat, _>(&value)` to create frames with c
 
 Transport implementers can expose push-oriented receives by implementing `register_owned_listener`; the default `receive_owned` implementation uses a temporary listener and does not require a separate transport-specific pull queue. Routing code that needs to work with owned and zero-copy endpoints can use `UTransportEndpoint` to wrap `UOwnedTransport` or true `UZeroCopyTransport` implementations.
 
+Tests can enable the `test-util` feature for supported `mockall` mocks and in-memory owned/zero-copy transport fakes under `up_rust::test_util`.
+
 ## Building from Source
 <!--
 `uman~up-language-building~1`

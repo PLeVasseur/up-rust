@@ -127,6 +127,7 @@ impl TryFrom<&UUri> for StaticUriProvider {
 }
 
 /// A handler for processing owned, serialization-neutral uProtocol frames.
+#[cfg_attr(any(test, feature = "test-util"), mockall::automock)]
 #[async_trait]
 pub trait UOwnedListener: Send + Sync {
     async fn on_receive_owned(&self, frame: UOwnedFrame);
@@ -157,6 +158,25 @@ impl UOwnedListener for OneShotOwnedListener {
 }
 
 /// The serialization-neutral owned-buffer transport API.
+///
+/// Owned transports are the default path for network, brokered, and in-process
+/// transports. They accept native frame metadata plus owned payload bytes.
+///
+/// ```no_run
+/// # use async_trait::async_trait;
+/// # use up_rust::{UOwnedFrame, UOwnedTransport, UStatus};
+/// struct MyTransport;
+///
+/// #[async_trait]
+/// impl UOwnedTransport for MyTransport {
+///     async fn send_owned(&self, frame: UOwnedFrame) -> Result<(), UStatus> {
+///         let metadata = frame.metadata();
+///         let payload = frame.payload_bytes();
+///         # let _ = (metadata, payload);
+///         Ok(())
+///     }
+/// }
+/// ```
 #[async_trait]
 pub trait UOwnedTransport: Send + Sync {
     async fn send_owned(&self, frame: UOwnedFrame) -> Result<(), UStatus>;
@@ -240,6 +260,35 @@ where
 }
 
 /// The zero-copy transport capability API.
+///
+/// Implement this trait only when the transport can loan transmit storage or
+/// deliver receive leases without hiding transport-owned copies.
+///
+/// ```no_run
+/// # use async_trait::async_trait;
+/// # use up_rust::{UFrameMetadata, UOwnedFrame, UStatus, UUri, UVecTxBuffer, UZeroCopyTransport};
+/// struct SharedMemoryTransport;
+///
+/// #[async_trait]
+/// impl UZeroCopyTransport for SharedMemoryTransport {
+///     type Tx = UVecTxBuffer;
+///     type Rx = UOwnedFrame;
+///
+///     async fn reserve(
+///         &self,
+///         metadata: UFrameMetadata,
+///         payload_len: usize,
+///         _alignment: usize,
+///     ) -> Result<Self::Tx, UStatus> {
+///         Ok(UVecTxBuffer::new(metadata, payload_len))
+///     }
+///
+///     async fn send_zero_copy(&self, buffer: Self::Tx) -> Result<(), UStatus> {
+///         # let _ = buffer;
+///         Ok(())
+///     }
+/// }
+/// ```
 #[async_trait]
 pub trait UZeroCopyTransport: Send + Sync {
     type Tx: UTxBuffer + Send;

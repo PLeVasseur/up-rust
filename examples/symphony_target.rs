@@ -61,7 +61,7 @@ impl DeploymentTarget for ExampleDeploymentTarget {
 }
 
 fn json_encoding() -> UEncoding {
-    UEncoding::new("json", "application/json", None::<String>)
+    UEncoding::without_schema_ref("json", "application/json")
 }
 
 #[tokio::main]

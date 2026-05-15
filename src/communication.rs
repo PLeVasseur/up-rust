@@ -249,6 +249,7 @@ impl Display for NotificationError {
 impl Error for NotificationError {}
 
 /// A client for sending Notification frames to a uEntity.
+#[cfg_attr(any(test, feature = "test-util"), mockall::automock)]
 #[async_trait]
 pub trait Notifier: Send + Sync {
     async fn notify(
@@ -293,6 +294,7 @@ impl Display for PubSubError {
 impl Error for PubSubError {}
 
 /// A client for publishing frames to topics.
+#[cfg_attr(any(test, feature = "test-util"), mockall::automock)]
 #[async_trait]
 pub trait Publisher: Send + Sync {
     async fn publish(
@@ -304,6 +306,7 @@ pub trait Publisher: Send + Sync {
 }
 
 /// A client for registering handlers for published topic frames.
+#[cfg_attr(any(test, feature = "test-util"), mockall::automock)]
 #[async_trait]
 pub trait Subscriber: Send + Sync {
     async fn subscribe(
@@ -435,6 +438,7 @@ impl From<ServiceInvocationError> for UStatus {
 }
 
 /// A client for performing RPCs on service methods.
+#[cfg_attr(any(test, feature = "test-util"), mockall::automock)]
 #[async_trait]
 pub trait RpcClient: Send + Sync {
     async fn invoke_method(
@@ -478,6 +482,7 @@ pub trait RpcClientExt: RpcClient {
 impl<T> RpcClientExt for T where T: RpcClient + ?Sized {}
 
 /// A handler for processing incoming RPC requests.
+#[cfg_attr(any(test, feature = "test-util"), mockall::automock)]
 #[async_trait]
 pub trait RequestHandler: Send + Sync {
     async fn handle_request(

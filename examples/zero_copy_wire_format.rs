@@ -35,10 +35,10 @@ impl WireFormat for ImageWire {
     }
 
     fn encoding() -> UEncoding {
-        UEncoding::new(
+        UEncoding::with_schema_ref(
             Self::name(),
             "application/x.demo.image",
-            Some("urn:demo:ImageView:v1"),
+            "urn:demo:ImageView:v1",
         )
     }
 }

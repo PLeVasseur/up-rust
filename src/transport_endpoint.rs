@@ -11,7 +11,11 @@
  * SPDX-License-Identifier: Apache-2.0
  ********************************************************************************/
 
-use std::{marker::PhantomData, sync::Arc};
+use std::{
+    fmt::{Debug, Formatter},
+    marker::PhantomData,
+    sync::Arc,
+};
 
 use async_trait::async_trait;
 
@@ -31,6 +35,14 @@ pub struct UTransportEndpoint {
     inner: Arc<dyn EndpointOps>,
 }
 
+impl Debug for UTransportEndpoint {
+    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("UTransportEndpoint")
+            .field("mode", &self.mode())
+            .finish()
+    }
+}
+
 impl UTransportEndpoint {
     /// Creates an endpoint facade around an owned-frame transport.
     pub fn from_owned(transport: Arc<dyn UOwnedTransport>) -> Self {
@@ -43,6 +55,18 @@ impl UTransportEndpoint {
     ///
     /// Owned sends are copied into a transmit loan, and zero-copy receives are
     /// adapted to owned listener callbacks for generic routing code.
+    ///
+    /// ```no_run
+    /// # use std::sync::Arc;
+    /// # use up_rust::{UTransportEndpoint, UZeroCopyTransport};
+    /// # fn wrap<T>(transport: Arc<T>) -> UTransportEndpoint
+    /// # where
+    /// #     T: UZeroCopyTransport + Send + Sync + 'static,
+    /// # {
+    /// let endpoint = UTransportEndpoint::from_zero_copy(transport);
+    /// # endpoint
+    /// # }
+    /// ```
     pub fn from_zero_copy<T>(transport: Arc<T>) -> Self
     where
         T: UZeroCopyTransport + Send + Sync + 'static,
@@ -75,6 +99,13 @@ impl UTransportEndpoint {
 #[derive(Clone)]
 pub struct UTransportEndpointRegistration {
     inner: Arc<dyn RegistrationOps>,
+}
+
+impl Debug for UTransportEndpointRegistration {
+    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("UTransportEndpointRegistration")
+            .finish_non_exhaustive()
+    }
 }
 
 impl UTransportEndpointRegistration {

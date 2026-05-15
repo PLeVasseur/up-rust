@@ -114,6 +114,7 @@ pub struct ResetRequest;
 #[derive(Clone, Debug, Default, Eq, PartialEq)]
 pub struct ResetResponse;
 
+#[cfg_attr(any(test, feature = "test-util"), mockall::automock)]
 #[async_trait]
 pub trait USubscription: Send + Sync {
     async fn subscribe(

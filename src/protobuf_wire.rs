@@ -28,7 +28,7 @@ impl WireFormat for ProtobufWire {
     }
 
     fn encoding() -> UEncoding {
-        UEncoding::new("protobuf", "application/x-protobuf", None::<String>)
+        UEncoding::without_schema_ref("protobuf", "application/x-protobuf")
     }
 }
 

@@ -191,6 +191,25 @@ impl UAttributes {
 }
 
 /// Identifies the payload representation carried by a frame.
+///
+/// `format_id` and `content_type` identify the codec family. `schema_ref`
+/// narrows that codec to a concrete schema when the decoder requires one.
+/// Empty schema references are normalized to absent.
+/// Decoders with no schema requirement can still accept matching format and
+/// content type when a frame carries a schema reference.
+///
+/// ```
+/// # use up_rust::UEncoding;
+/// let generic_json = UEncoding::without_schema_ref("json", "application/json");
+/// let typed_json = UEncoding::with_schema_ref(
+///     "json",
+///     "application/json",
+///     "urn:example:Telemetry:v1",
+/// );
+///
+/// assert!(typed_json.is_compatible_with(&generic_json));
+/// assert!(typed_json.is_compatible_with(&typed_json));
+/// ```
 #[derive(Clone, Debug, Eq, Hash, PartialEq)]
 pub struct UEncoding {
     format_id: String,
@@ -199,6 +218,7 @@ pub struct UEncoding {
 }
 
 impl UEncoding {
+    /// Creates encoding metadata from all fields.
     pub fn new(
         format_id: impl Into<String>,
         content_type: impl Into<String>,
@@ -207,17 +227,33 @@ impl UEncoding {
         Self {
             format_id: format_id.into(),
             content_type: content_type.into(),
-            schema_ref: schema_ref.map(Into::into),
+            schema_ref: schema_ref.and_then(|schema_ref| {
+                let schema_ref = schema_ref.into();
+                (!schema_ref.is_empty()).then_some(schema_ref)
+            }),
         }
+    }
+
+    /// Creates encoding metadata without a schema reference.
+    pub fn without_schema_ref(
+        format_id: impl Into<String>,
+        content_type: impl Into<String>,
+    ) -> Self {
+        Self::new(format_id, content_type, None::<String>)
+    }
+
+    /// Creates encoding metadata with a schema reference.
+    pub fn with_schema_ref(
+        format_id: impl Into<String>,
+        content_type: impl Into<String>,
+        schema_ref: impl Into<String>,
+    ) -> Self {
+        Self::new(format_id, content_type, Some(schema_ref))
     }
 
     pub fn from_content_type(content_type: impl Into<String>) -> Self {
         let content_type = content_type.into();
-        Self {
-            format_id: content_type.clone(),
-            content_type,
-            schema_ref: None,
-        }
+        Self::without_schema_ref(content_type.clone(), content_type)
     }
 
     pub fn format_id(&self) -> &str {
@@ -230,6 +266,24 @@ impl UEncoding {
 
     pub fn schema_ref(&self) -> Option<&str> {
         self.schema_ref.as_deref()
+    }
+
+    /// Returns whether this actual frame encoding can be decoded by a decoder
+    /// that declares `expected`.
+    ///
+    /// `format_id` and `content_type` must match exactly. If `expected` carries
+    /// a schema reference, the frame must carry the same schema reference. If
+    /// `expected` has no schema reference, the decoder is treated as generic for
+    /// the matching format/content-type pair.
+    pub fn is_compatible_with(&self, expected: &Self) -> bool {
+        self.format_id == expected.format_id
+            && self.content_type == expected.content_type
+            && expected
+                .schema_ref
+                .as_ref()
+                .is_none_or(|expected_schema_ref| {
+                    self.schema_ref.as_ref() == Some(expected_schema_ref)
+                })
     }
 }
 
@@ -424,7 +478,7 @@ impl UFrameMetadata {
 }
 
 /// Owned, serialization-neutral uProtocol frame.
-#[derive(Clone, Debug, PartialEq)]
+#[derive(Clone, Debug, Eq, PartialEq)]
 pub struct UOwnedFrame {
     metadata: UFrameMetadata,
     payload: Bytes,
@@ -476,7 +530,8 @@ impl UOwnedFrame {
         F: WireFormat,
         T: UDeserializer<'a, F>,
     {
-        if self.metadata.encoding() != &F::encoding() {
+        let expected = F::encoding();
+        if !self.metadata.encoding().is_compatible_with(&expected) {
             return Err(UWireError::UnsupportedEncoding(
                 self.metadata.encoding().clone(),
             ));
@@ -485,10 +540,27 @@ impl UOwnedFrame {
     }
 }
 
+impl AsRef<[u8]> for UOwnedFrame {
+    fn as_ref(&self) -> &[u8] {
+        self.payload_bytes()
+    }
+}
+
 /// Native builder for creating [`UOwnedFrame`]s.
 ///
 /// This restores the old `UMessageBuilder` ergonomics without reintroducing
 /// generated message envelopes. The builder output is a native owned frame.
+///
+/// ```
+/// # use up_rust::{UMessageBuilder, UUri};
+/// # fn build() -> Result<(), Box<dyn std::error::Error>> {
+/// let topic = UUri::try_from("//vehicle/4210/1/B24D")?;
+/// let frame = UMessageBuilder::publish(topic)
+///     .build_with_raw_payload(b"reading".to_vec())?;
+/// assert_eq!(frame.payload_bytes(), b"reading");
+/// # Ok(())
+/// # }
+/// ```
 #[derive(Clone, Debug)]
 pub struct UMessageBuilder {
     commstatus: Option<UCode>,
@@ -828,12 +900,35 @@ impl UZeroCopyRxFrame for UOwnedFrame {
 }
 
 /// Compile-time identity for a payload wire representation.
+///
+/// ```
+/// # use up_rust::{UEncoding, WireFormat};
+/// struct JsonTelemetry;
+///
+/// impl WireFormat for JsonTelemetry {
+///     fn name() -> &'static str {
+///         "json-telemetry-v1"
+///     }
+///
+///     fn encoding() -> UEncoding {
+///         UEncoding::with_schema_ref(
+///             Self::name(),
+///             "application/json",
+///             "urn:example:Telemetry:v1",
+///         )
+///     }
+/// }
+/// ```
 pub trait WireFormat {
     fn name() -> &'static str;
     fn encoding() -> UEncoding;
 }
 
 /// Serializes a value into caller-provided storage.
+///
+/// `encoded_len` must return the number of bytes required by `serialize_into`.
+/// If the supplied buffer is too small, implementations should return
+/// [`UWireError::BufferTooSmall`] instead of writing a partial payload.
 pub trait USerializer<F: WireFormat> {
     const ALIGNMENT: usize = 1;
     fn encoded_len(&self) -> usize;
@@ -871,7 +966,7 @@ impl WireFormat for RawBytes {
     }
 
     fn encoding() -> UEncoding {
-        UEncoding::new("raw-bytes", "application/octet-stream", None::<String>)
+        UEncoding::without_schema_ref("raw-bytes", "application/octet-stream")
     }
 }
 
@@ -924,7 +1019,8 @@ pub trait UZeroCopyRxFrame {
         F: WireFormat,
         T: UDeserializer<'a, F>,
     {
-        if self.metadata().encoding() != &F::encoding() {
+        let expected = F::encoding();
+        if !self.metadata().encoding().is_compatible_with(&expected) {
             return Err(UWireError::UnsupportedEncoding(
                 self.metadata().encoding().clone(),
             ));
@@ -934,7 +1030,7 @@ pub trait UZeroCopyRxFrame {
 }
 
 /// Owned buffer useful for tests, examples, and adapters that emulate a transmit loan.
-#[derive(Clone, Debug, PartialEq)]
+#[derive(Clone, Debug, Eq, PartialEq)]
 pub struct UVecTxBuffer {
     metadata: UFrameMetadata,
     payload: Vec<u8>,
@@ -950,6 +1046,12 @@ impl UVecTxBuffer {
 
     pub fn into_frame(self) -> UOwnedFrame {
         UOwnedFrame::new(self.metadata, self.payload)
+    }
+}
+
+impl AsRef<[u8]> for UVecTxBuffer {
+    fn as_ref(&self) -> &[u8] {
+        self.payload()
     }
 }
 
@@ -986,6 +1088,13 @@ mod tests {
     }
 
     #[test]
+    fn encoding_treats_empty_schema_ref_as_absent() {
+        let encoding = UEncoding::new("json", "application/json", Some(""));
+
+        assert_eq!(encoding.schema_ref(), None);
+    }
+
+    #[test]
     fn owned_frame_uses_selected_wire_format() {
         let topic = UUri::try_from("//my-vehicle/4210/1/B24D").unwrap();
         let frame = UOwnedFrame::from_serializable::<RawBytes, _>(
@@ -1016,6 +1125,28 @@ mod tests {
         }
     }
 
+    struct OtherSchemaWire;
+
+    impl WireFormat for OtherSchemaWire {
+        fn name() -> &'static str {
+            "raw-other-schema"
+        }
+
+        fn encoding() -> UEncoding {
+            UEncoding::with_schema_ref(
+                "raw-bytes",
+                "application/octet-stream",
+                "urn:example:Other:v1",
+            )
+        }
+    }
+
+    impl<'a> UDeserializer<'a, OtherSchemaWire> for &'a [u8] {
+        fn deserialize_from(src: &'a [u8]) -> Result<Self, UWireError> {
+            Ok(src)
+        }
+    }
+
     #[test]
     fn owned_frame_deserialize_rejects_wrong_wire_format() {
         let topic = UUri::try_from("//my-vehicle/4210/1/B24D").unwrap();
@@ -1027,6 +1158,42 @@ mod tests {
 
         assert!(matches!(
             frame.deserialize::<OtherWire, &[u8]>(),
+            Err(UWireError::UnsupportedEncoding(_))
+        ));
+    }
+
+    #[test]
+    fn owned_frame_deserialize_allows_generic_decoder_for_schema_ref() {
+        let topic = UUri::try_from("//my-vehicle/4210/1/B24D").unwrap();
+        let frame = UOwnedFrame::new(
+            UFrameMetadata::publish(topic).with_encoding(UEncoding::with_schema_ref(
+                "raw-bytes",
+                "application/octet-stream",
+                "urn:example:Bytes:v1",
+            )),
+            vec![0x0a_u8, 0x0b_u8],
+        );
+
+        assert_eq!(
+            frame.deserialize::<RawBytes, &[u8]>().unwrap(),
+            &[0x0a_u8, 0x0b_u8]
+        );
+    }
+
+    #[test]
+    fn owned_frame_deserialize_rejects_wrong_schema_ref() {
+        let topic = UUri::try_from("//my-vehicle/4210/1/B24D").unwrap();
+        let frame = UOwnedFrame::new(
+            UFrameMetadata::publish(topic).with_encoding(UEncoding::with_schema_ref(
+                "raw-bytes",
+                "application/octet-stream",
+                "urn:example:Bytes:v1",
+            )),
+            vec![0x0a_u8, 0x0b_u8],
+        );
+
+        assert!(matches!(
+            frame.deserialize::<OtherSchemaWire, &[u8]>(),
             Err(UWireError::UnsupportedEncoding(_))
         ));
     }

@@ -22,10 +22,10 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
 
     let payload = <Any as USerializer<ProtobufWire>>::serialize_owned(&any)?;
     let frame = UOwnedFrame::new(
-        UFrameMetadata::publish(topic).with_encoding(UEncoding::new(
-            "protobuf-any",
+        UFrameMetadata::publish(topic).with_encoding(UEncoding::with_schema_ref(
+            "protobuf",
             "application/x-protobuf",
-            Some(any.type_url.clone()),
+            any.type_url.clone(),
         )),
         payload,
     );
