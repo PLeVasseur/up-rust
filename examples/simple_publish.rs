@@ -42,7 +42,7 @@ pub async fn main() -> Result<(), Box<dyn std::error::Error>> {
     let listener = Arc::new(ConsolePrinter);
     let topic = uri_provider.get_resource_uri(TOPIC_RESOURCE_ID);
 
-    subscriber.subscribe(&topic, listener.clone()).await?;
+    subscriber.subscribe(&topic, listener.clone(), None).await?;
 
     publisher
         .publish(

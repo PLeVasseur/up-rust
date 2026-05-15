@@ -15,7 +15,7 @@ use std::fmt::{Debug, Formatter};
 use std::hash::{Hash, Hasher};
 use std::num::TryFromIntError;
 use std::ops::Deref;
-use std::sync::{Arc, Mutex};
+use std::sync::Arc;
 
 use async_trait::async_trait;
 
@@ -23,6 +23,9 @@ use crate::{
     UCode, UFrameMetadata, UOwnedFrame, USerializer, UStatus, UTxBuffer, UUri, UWireError,
     UZeroCopyRxFrame, WireFormat,
 };
+
+#[cfg(any(test, feature = "test-util"))]
+use crate::UVecTxBuffer;
 
 /// Verifies that given UUris can be used as source and sink filter UUris.
 pub fn verify_filter_criteria(
@@ -68,6 +71,7 @@ pub fn verify_filter_criteria(
 }
 
 /// A factory for URIs representing this uEntity's resources.
+#[cfg_attr(any(test, feature = "test-util"), mockall::automock)]
 pub trait LocalUriProvider: Send + Sync {
     fn get_authority(&self) -> String;
     fn get_resource_uri(&self, resource_id: u16) -> UUri;
@@ -133,30 +137,6 @@ pub trait UOwnedListener: Send + Sync {
     async fn on_receive_owned(&self, frame: UOwnedFrame);
 }
 
-struct OneShotOwnedListener {
-    sender: Mutex<Option<futures_channel::oneshot::Sender<UOwnedFrame>>>,
-}
-
-impl OneShotOwnedListener {
-    fn new(sender: futures_channel::oneshot::Sender<UOwnedFrame>) -> Self {
-        Self {
-            sender: Mutex::new(Some(sender)),
-        }
-    }
-}
-
-#[async_trait]
-impl UOwnedListener for OneShotOwnedListener {
-    async fn on_receive_owned(&self, frame: UOwnedFrame) {
-        let Ok(mut sender) = self.sender.lock() else {
-            return;
-        };
-        if let Some(sender) = sender.take() {
-            let _ = sender.send(frame);
-        }
-    }
-}
-
 /// The serialization-neutral owned-buffer transport API.
 ///
 /// Owned transports are the default path for network, brokered, and in-process
@@ -181,28 +161,21 @@ impl UOwnedListener for OneShotOwnedListener {
 pub trait UOwnedTransport: Send + Sync {
     async fn send_owned(&self, frame: UOwnedFrame) -> Result<(), UStatus>;
 
+    /// Receives one matching owned frame from transports that support pull receive.
+    ///
+    /// The default implementation returns [`UCode::UNIMPLEMENTED`], matching the
+    /// mainline `UTransport::receive` default. Push-oriented transports should
+    /// implement listener registration instead of relying on a hidden
+    /// listener-backed receive adapter.
     async fn receive_owned(
         &self,
-        source_filter: &UUri,
-        sink_filter: Option<&UUri>,
+        _source_filter: &UUri,
+        _sink_filter: Option<&UUri>,
     ) -> Result<UOwnedFrame, UStatus> {
-        // Pull receive is built from the listener API so push-oriented transports
-        // do not need a separate queueing implementation.
-        let (sender, receiver) = futures_channel::oneshot::channel();
-        let listener: Arc<dyn UOwnedListener> = Arc::new(OneShotOwnedListener::new(sender));
-        self.register_owned_listener(source_filter, sink_filter, listener.clone())
-            .await?;
-        let received = receiver.await.map_err(|_| {
-            UStatus::fail_with_code(UCode::CANCELLED, "receive listener was cancelled")
-        });
-        let unregister_result = self
-            .unregister_owned_listener(source_filter, sink_filter, listener)
-            .await;
-        match (received, unregister_result) {
-            (Ok(frame), Ok(())) => Ok(frame),
-            (Ok(_), Err(err)) => Err(err),
-            (Err(err), _) => Err(err),
-        }
+        Err(UStatus::fail_with_code(
+            UCode::UNIMPLEMENTED,
+            "not implemented",
+        ))
     }
 
     async fn register_owned_listener(
@@ -373,6 +346,115 @@ pub trait UZeroCopyTransportExt: UZeroCopyTransport {
 
 impl<T> UZeroCopyTransportExt for T where T: UZeroCopyTransport + ?Sized {}
 
+#[cfg(not(tarpaulin_include))]
+#[cfg(any(test, feature = "test-util"))]
+mockall::mock! {
+    pub UOwnedTransport {
+        pub async fn do_send_owned(&self, frame: UOwnedFrame) -> Result<(), UStatus>;
+        pub async fn do_receive_owned<'a>(&'a self, source_filter: &'a UUri, sink_filter: Option<&'a UUri>) -> Result<UOwnedFrame, UStatus>;
+        pub async fn do_register_owned_listener<'a>(&'a self, source_filter: &'a UUri, sink_filter: Option<&'a UUri>, listener: Arc<dyn UOwnedListener>) -> Result<(), UStatus>;
+        pub async fn do_unregister_owned_listener<'a>(&'a self, source_filter: &'a UUri, sink_filter: Option<&'a UUri>, listener: Arc<dyn UOwnedListener>) -> Result<(), UStatus>;
+    }
+}
+
+#[cfg(not(tarpaulin_include))]
+#[cfg(any(test, feature = "test-util"))]
+#[async_trait]
+impl UOwnedTransport for MockUOwnedTransport {
+    async fn send_owned(&self, frame: UOwnedFrame) -> Result<(), UStatus> {
+        self.do_send_owned(frame).await
+    }
+
+    async fn receive_owned(
+        &self,
+        source_filter: &UUri,
+        sink_filter: Option<&UUri>,
+    ) -> Result<UOwnedFrame, UStatus> {
+        self.do_receive_owned(source_filter, sink_filter).await
+    }
+
+    async fn register_owned_listener(
+        &self,
+        source_filter: &UUri,
+        sink_filter: Option<&UUri>,
+        listener: Arc<dyn UOwnedListener>,
+    ) -> Result<(), UStatus> {
+        self.do_register_owned_listener(source_filter, sink_filter, listener)
+            .await
+    }
+
+    async fn unregister_owned_listener(
+        &self,
+        source_filter: &UUri,
+        sink_filter: Option<&UUri>,
+        listener: Arc<dyn UOwnedListener>,
+    ) -> Result<(), UStatus> {
+        self.do_unregister_owned_listener(source_filter, sink_filter, listener)
+            .await
+    }
+}
+
+#[cfg(not(tarpaulin_include))]
+#[cfg(any(test, feature = "test-util"))]
+mockall::mock! {
+    pub UZeroCopyTransport {
+        pub async fn do_reserve(&self, metadata: UFrameMetadata, payload_len: usize, alignment: usize) -> Result<UVecTxBuffer, UStatus>;
+        pub async fn do_send_zero_copy(&self, buffer: UVecTxBuffer) -> Result<(), UStatus>;
+        pub async fn do_receive_zero_copy<'a>(&'a self, source_filter: &'a UUri, sink_filter: Option<&'a UUri>) -> Result<UOwnedFrame, UStatus>;
+        pub async fn do_register_zero_copy_listener<'a>(&'a self, source_filter: &'a UUri, sink_filter: Option<&'a UUri>, listener: Arc<dyn UZeroCopyListener<UOwnedFrame>>) -> Result<(), UStatus>;
+        pub async fn do_unregister_zero_copy_listener<'a>(&'a self, source_filter: &'a UUri, sink_filter: Option<&'a UUri>, listener: Arc<dyn UZeroCopyListener<UOwnedFrame>>) -> Result<(), UStatus>;
+    }
+}
+
+#[cfg(not(tarpaulin_include))]
+#[cfg(any(test, feature = "test-util"))]
+#[async_trait]
+impl UZeroCopyTransport for MockUZeroCopyTransport {
+    type Tx = UVecTxBuffer;
+    type Rx = UOwnedFrame;
+
+    async fn reserve(
+        &self,
+        metadata: UFrameMetadata,
+        payload_len: usize,
+        alignment: usize,
+    ) -> Result<Self::Tx, UStatus> {
+        self.do_reserve(metadata, payload_len, alignment).await
+    }
+
+    async fn send_zero_copy(&self, buffer: Self::Tx) -> Result<(), UStatus> {
+        self.do_send_zero_copy(buffer).await
+    }
+
+    async fn receive_zero_copy(
+        &self,
+        source_filter: &UUri,
+        sink_filter: Option<&UUri>,
+    ) -> Result<Self::Rx, UStatus> {
+        self.do_receive_zero_copy(source_filter, sink_filter).await
+    }
+
+    async fn register_zero_copy_listener(
+        &self,
+        source_filter: &UUri,
+        sink_filter: Option<&UUri>,
+        listener: Arc<dyn UZeroCopyListener<Self::Rx>>,
+    ) -> Result<(), UStatus> {
+        self.do_register_zero_copy_listener(source_filter, sink_filter, listener)
+            .await
+    }
+
+    async fn unregister_zero_copy_listener(
+        &self,
+        source_filter: &UUri,
+        sink_filter: Option<&UUri>,
+        listener: Arc<dyn UZeroCopyListener<Self::Rx>>,
+    ) -> Result<(), UStatus> {
+        self.do_unregister_zero_copy_listener(source_filter, sink_filter, listener)
+            .await
+    }
+}
+
 /// A wrapper type that allows comparing [`UOwnedListener`]s to each other.
 #[derive(Clone)]
 pub struct ComparableOwnedListener {
@@ -443,5 +525,49 @@ mod tests {
     fn verify_filter_criteria_accepts_publish_topic() {
         let source_filter = UUri::from_str("//vehicle1/AA/1/9000").expect("invalid source URI");
         assert!(verify_filter_criteria(&source_filter, None).is_ok());
+    }
+
+    #[tokio::test]
+    async fn owned_transport_defaults_are_unimplemented() {
+        struct EmptyTransport;
+
+        #[async_trait]
+        impl UOwnedTransport for EmptyTransport {
+            async fn send_owned(&self, _frame: UOwnedFrame) -> Result<(), UStatus> {
+                Ok(())
+            }
+        }
+
+        let transport = EmptyTransport;
+        let listener = Arc::new(MockUOwnedListener::new());
+        let source = UUri::any();
+
+        assert!(transport
+            .receive_owned(&source, None)
+            .await
+            .is_err_and(|status| status.get_code() == UCode::UNIMPLEMENTED));
+        assert!(transport
+            .register_owned_listener(&source, None, listener.clone())
+            .await
+            .is_err_and(|status| status.get_code() == UCode::UNIMPLEMENTED));
+        assert!(transport
+            .unregister_owned_listener(&source, None, listener)
+            .await
+            .is_err_and(|status| status.get_code() == UCode::UNIMPLEMENTED));
+    }
+
+    #[tokio::test]
+    async fn mock_owned_transport_delegates_send() {
+        let topic = UUri::try_from_parts("vehicle", 0x4210, 0x01, 0x9000).unwrap();
+        let frame = UOwnedFrame::new(UFrameMetadata::publish(topic), Vec::<u8>::new());
+        let expected = frame.clone();
+        let mut transport = MockUOwnedTransport::new();
+        transport
+            .expect_do_send_owned()
+            .once()
+            .withf(move |actual| actual == &expected)
+            .return_const(Ok(()));
+
+        transport.send_owned(frame).await.unwrap();
     }
 }

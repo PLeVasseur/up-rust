@@ -38,7 +38,8 @@ payload bytes at the boundary.
   and communication-layer helpers. It is enabled by default.
 * `protobuf-wire` enables optional Protocol Buffers payload codec support.
   Protocol Buffers remain payload bytes only; they are not used as the frame
-  envelope.
+  envelope. uSubscription service DTO payloads use this feature for their
+  protobuf-defined service wire format.
 * `symphony` enables Symphony deployment-target helpers.
 * `test-util` enables `mockall` mocks for supported public traits and in-memory
   transport fakes under [`test_util`].
@@ -72,6 +73,12 @@ pub use uframe::{
     UTxBuffer, UVecTxBuffer, UWireError, UZeroCopyRxFrame, WireFormat,
 };
 
+mod uattributes;
+pub use uattributes::{
+    validate_rpc_priority, NotificationValidator, PublishValidator, RequestValidator,
+    ResponseValidator, UAttributesError, UAttributesValidator, UAttributesValidators,
+};
+
 #[cfg(feature = "protobuf-wire")]
 pub use protobuf_wire::ProtobufWire;
 
@@ -94,7 +101,14 @@ pub use utransport::{
 };
 
 #[cfg(any(test, feature = "test-util"))]
-pub use utransport::MockUOwnedListener;
+pub use utransport::{
+    MockLocalUriProvider, MockUOwnedListener, MockUOwnedTransport, MockUZeroCopyTransport,
+};
 
 mod uuid;
 pub use uuid::UUID;
+
+#[cfg(feature = "protobuf-wire")]
+mod up_core_api {
+    include!(concat!(env!("OUT_DIR"), "/uprotocol/mod.rs"));
+}

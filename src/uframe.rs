@@ -17,7 +17,7 @@ use std::{error::Error, fmt::Display};
 
 use bytes::Bytes;
 
-use crate::{UCode, UStatus, UUri, UUID};
+use crate::{UAttributesError, UAttributesValidators, UCode, UStatus, UUri, UUID};
 
 /// Native uProtocol message kind carried in a frame metadata.
 #[derive(Clone, Copy, Debug, Eq, Hash, PartialEq)]
@@ -131,6 +131,11 @@ impl UAttributes {
 
     pub fn commstatus(&self) -> Option<UCode> {
         self.commstatus
+    }
+
+    /// Validates these attributes according to their message type.
+    pub fn validate(&self) -> Result<(), UAttributesError> {
+        UAttributesValidators::get_validator_for_attributes(self).validate(self)
     }
 
     #[must_use]
@@ -348,21 +353,21 @@ impl From<UWireError> for UStatus {
 /// Error type used by the native [`UMessageBuilder`].
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub enum UMessageBuilderError {
-    InvalidAttributes(String),
+    AttributesValidationError(UAttributesError),
     Payload(UWireError),
 }
 
 impl UMessageBuilderError {
     fn invalid_attributes(message: impl Into<String>) -> Self {
-        Self::InvalidAttributes(message.into())
+        Self::AttributesValidationError(UAttributesError::validation_error(message))
     }
 }
 
 impl Display for UMessageBuilderError {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
-            Self::InvalidAttributes(message) => {
-                f.write_fmt(format_args!("invalid frame attributes: {message}"))
+            Self::AttributesValidationError(error) => {
+                f.write_fmt(format_args!("invalid frame attributes: {error}"))
             }
             Self::Payload(error) => f.write_fmt(format_args!("invalid frame payload: {error}")),
         }
@@ -374,6 +379,12 @@ impl Error for UMessageBuilderError {}
 impl From<UWireError> for UMessageBuilderError {
     fn from(value: UWireError) -> Self {
         Self::Payload(value)
+    }
+}
+
+impl From<UAttributesError> for UMessageBuilderError {
+    fn from(value: UAttributesError) -> Self {
+        Self::AttributesValidationError(value)
     }
 }
 
@@ -399,6 +410,9 @@ impl UFrameMetadata {
         }
     }
 
+    /// Creates unchecked Publish metadata.
+    ///
+    /// Prefer [`Self::try_publish`] or [`UMessageBuilder::publish`] for application frames.
     pub fn publish(topic: UUri) -> Self {
         Self::new(
             UAttributes::new(UUID::build(), topic, None, UMessageType::Publish),
@@ -406,6 +420,16 @@ impl UFrameMetadata {
         )
     }
 
+    /// Creates checked Publish metadata.
+    pub fn try_publish(topic: UUri) -> Result<Self, UAttributesError> {
+        let metadata = Self::publish(topic);
+        metadata.validate()?;
+        Ok(metadata)
+    }
+
+    /// Creates unchecked Notification metadata.
+    ///
+    /// Prefer [`Self::try_notification`] or [`UMessageBuilder::notification`] for application frames.
     pub fn notification(origin: UUri, destination: UUri) -> Self {
         Self::new(
             UAttributes::new(
@@ -418,6 +442,16 @@ impl UFrameMetadata {
         )
     }
 
+    /// Creates checked Notification metadata.
+    pub fn try_notification(origin: UUri, destination: UUri) -> Result<Self, UAttributesError> {
+        let metadata = Self::notification(origin, destination);
+        metadata.validate()?;
+        Ok(metadata)
+    }
+
+    /// Creates unchecked RPC Request metadata.
+    ///
+    /// Prefer [`Self::try_request`] or [`UMessageBuilder::request`] for application frames.
     pub fn request(method_to_invoke: UUri, reply_to_address: UUri, ttl: u32) -> Self {
         Self::new(
             UAttributes::new(
@@ -432,6 +466,20 @@ impl UFrameMetadata {
         )
     }
 
+    /// Creates checked RPC Request metadata.
+    pub fn try_request(
+        method_to_invoke: UUri,
+        reply_to_address: UUri,
+        ttl: u32,
+    ) -> Result<Self, UAttributesError> {
+        let metadata = Self::request(method_to_invoke, reply_to_address, ttl);
+        metadata.validate()?;
+        Ok(metadata)
+    }
+
+    /// Creates unchecked RPC Response metadata.
+    ///
+    /// Prefer [`Self::try_response`] or [`UMessageBuilder::response`] for application frames.
     pub fn response(reply_to_address: UUri, request_id: UUID, invoked_method: UUri) -> Self {
         Self::new(
             UAttributes::new(
@@ -444,6 +492,23 @@ impl UFrameMetadata {
             .with_request_id(request_id),
             UEncoding::default(),
         )
+    }
+
+    /// Creates checked RPC Response metadata.
+    pub fn try_response(
+        reply_to_address: UUri,
+        request_id: UUID,
+        invoked_method: UUri,
+    ) -> Result<Self, UAttributesError> {
+        let metadata = Self::response(reply_to_address, request_id, invoked_method);
+        metadata.validate()?;
+        Ok(metadata)
+    }
+
+    /// Validates metadata attributes according to their message type.
+    pub fn validate(&self) -> Result<(), UAttributesError> {
+        UAttributesValidators::get_validator_for_attributes(&self.attributes)
+            .validate(&self.attributes)
     }
 
     pub fn attributes(&self) -> &UAttributes {
@@ -745,7 +810,6 @@ impl UMessageBuilder {
     }
 
     fn build_attributes(&self) -> Result<UAttributes, UMessageBuilderError> {
-        self.validate_message_specific_fields()?;
         let id = self.message_id.clone().unwrap_or_else(UUID::build);
         if !id.is_uprotocol_uuid() {
             return Err(UMessageBuilderError::invalid_attributes(
@@ -777,95 +841,8 @@ impl UMessageBuilder {
         if let Some(commstatus) = self.commstatus {
             attributes = attributes.with_commstatus(commstatus);
         }
+        attributes.validate()?;
         Ok(attributes)
-    }
-
-    fn validate_message_specific_fields(&self) -> Result<(), UMessageBuilderError> {
-        match self.message_type {
-            UMessageType::Publish => self.validate_publish(),
-            UMessageType::Notification => self.validate_notification(),
-            UMessageType::Request => self.validate_request(),
-            UMessageType::Response => self.validate_response(),
-        }
-    }
-
-    fn validate_publish(&self) -> Result<(), UMessageBuilderError> {
-        if self.sink.is_some() {
-            return Err(UMessageBuilderError::invalid_attributes(
-                "publish frames must not have a sink URI",
-            ));
-        }
-        if self.token.is_some() || self.permission_level.is_some() || self.commstatus.is_some() {
-            return Err(UMessageBuilderError::invalid_attributes(
-                "publish frames must not carry RPC-only attributes",
-            ));
-        }
-        Ok(())
-    }
-
-    fn validate_notification(&self) -> Result<(), UMessageBuilderError> {
-        if self.sink.is_none() {
-            return Err(UMessageBuilderError::invalid_attributes(
-                "notification frames require a sink URI",
-            ));
-        }
-        if self.token.is_some() || self.permission_level.is_some() || self.commstatus.is_some() {
-            return Err(UMessageBuilderError::invalid_attributes(
-                "notification frames must not carry RPC-only attributes",
-            ));
-        }
-        Ok(())
-    }
-
-    fn validate_request(&self) -> Result<(), UMessageBuilderError> {
-        if self.sink.is_none() {
-            return Err(UMessageBuilderError::invalid_attributes(
-                "request frames require a method sink URI",
-            ));
-        }
-        let ttl = self.ttl.ok_or_else(|| {
-            UMessageBuilderError::invalid_attributes("request frames require a TTL")
-        })?;
-        if ttl == 0 {
-            return Err(UMessageBuilderError::invalid_attributes(
-                "request frame TTL must be greater than 0",
-            ));
-        }
-        if self.priority.value() < UPriority::CS4.value() {
-            return Err(UMessageBuilderError::invalid_attributes(
-                "request frame priority must be CS4 or higher",
-            ));
-        }
-        if self.commstatus.is_some() {
-            return Err(UMessageBuilderError::invalid_attributes(
-                "request frames must not carry communication status",
-            ));
-        }
-        Ok(())
-    }
-
-    fn validate_response(&self) -> Result<(), UMessageBuilderError> {
-        if self.sink.is_none() {
-            return Err(UMessageBuilderError::invalid_attributes(
-                "response frames require a reply-to sink URI",
-            ));
-        }
-        if self.request_id.is_none() {
-            return Err(UMessageBuilderError::invalid_attributes(
-                "response frames require a request ID",
-            ));
-        }
-        if self.priority.value() < UPriority::CS4.value() {
-            return Err(UMessageBuilderError::invalid_attributes(
-                "response frame priority must be CS4 or higher",
-            ));
-        }
-        if self.token.is_some() || self.permission_level.is_some() {
-            return Err(UMessageBuilderError::invalid_attributes(
-                "response frames must not carry request authorization attributes",
-            ));
-        }
-        Ok(())
     }
 }
 
@@ -1262,7 +1239,7 @@ mod tests {
 
         assert!(matches!(
             result,
-            Err(UMessageBuilderError::InvalidAttributes(_))
+            Err(UMessageBuilderError::AttributesValidationError(_))
         ));
     }
 

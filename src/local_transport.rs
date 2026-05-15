@@ -21,7 +21,7 @@ use crate::{
     ComparableOwnedListener, UCode, UOwnedFrame, UOwnedListener, UOwnedTransport, UStatus, UUri,
 };
 
-#[derive(Eq, PartialEq, Hash)]
+#[derive(Clone, Eq, PartialEq, Hash)]
 struct RegisteredOwnedListener {
     source_filter: UUri,
     sink_filter: Option<UUri>,
@@ -58,11 +58,16 @@ pub struct LocalTransport {
 
 impl LocalTransport {
     async fn dispatch_owned(&self, frame: UOwnedFrame) {
-        let listeners = self.owned_listeners.read().await;
-        for listener in listeners.iter() {
-            if listener.matches_frame(&frame) {
-                listener.on_receive(frame.clone()).await;
-            }
+        let listeners = {
+            let listeners = self.owned_listeners.read().await;
+            listeners
+                .iter()
+                .filter(|listener| listener.matches_frame(&frame))
+                .cloned()
+                .collect::<Vec<_>>()
+        };
+        for listener in listeners {
+            listener.on_receive(frame.clone()).await;
         }
     }
 }
@@ -124,31 +129,16 @@ impl UOwnedTransport for LocalTransport {
 mod tests {
     use std::sync::Arc;
 
-    use crate::{
-        local_transport::LocalTransport, UFrameMetadata, UOwnedFrame, UOwnedTransport, UUri,
-    };
+    use crate::{local_transport::LocalTransport, UCode, UOwnedTransport, UUri};
 
     #[tokio::test]
-    async fn receive_owned_uses_registered_listener_path() {
+    async fn receive_owned_defaults_to_unimplemented() {
         let transport = Arc::new(LocalTransport::default());
         let topic = UUri::try_from_parts("vehicle", 0x4210, 1, 0x9000).expect("valid topic");
-        let frame = UOwnedFrame::new(UFrameMetadata::publish(topic.clone()), b"hello".as_slice());
 
-        let receive_task = tokio::spawn({
-            let transport = transport.clone();
-            let topic = topic.clone();
-            async move { transport.receive_owned(&topic, None).await }
-        });
-        tokio::task::yield_now().await;
-        transport
-            .send_owned(frame.clone())
+        assert!(transport
+            .receive_owned(&topic, None)
             .await
-            .expect("send should succeed");
-
-        let received = receive_task
-            .await
-            .expect("receive task should complete")
-            .expect("receive should succeed");
-        assert_eq!(received, frame);
+            .is_err_and(|status| status.get_code() == UCode::UNIMPLEMENTED));
     }
 }

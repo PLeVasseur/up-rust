@@ -71,8 +71,9 @@ Transport implementations should project these fields into their native metadata
 | Generated `UMessageBuilder` | Native `UMessageBuilder` that builds `UOwnedFrame` | Always | The name is retained for familiarity, but the output is a native frame. |
 | `UTransport::send` | `UOwnedTransport::send_owned` or `UZeroCopyTransport::send_zero_copy` | Always | Use `send_zero_copy` only for true loaned-storage transports. |
 | `UTransport::register_listener` | `register_owned_listener` or `register_zero_copy_listener` | Always | Listener type follows transport capability: `UOwnedListener` or `UZeroCopyListener`. |
-| Pull-style receive helpers | `receive_owned` default adapter over `register_owned_listener` where appropriate | Always | The adapter registers a temporary listener and unregisters it before returning. |
+| Pull-style receive helpers | `receive_owned` implemented by transports that truly support pull receive | Always | The default returns `UNIMPLEMENTED`, matching mainline `UTransport`; listener-backed push receive is not hidden behind the pull API. |
 | Protobuf payload helpers | `build_with_protobuf_payload`, `ProtobufWire` | `protobuf-wire` | Protobuf is a payload codec, not the transport envelope. |
+| uSubscription service payloads | Native DTO API with protobuf service payloads | `protobuf-wire` | uSubscription service methods still use their protobuf DTO wire format inside native frames. |
 | `up_rust::*` service DTO imports | Module imports such as `up_rust::usubscription::Subscription` | Always | Service DTOs are grouped under service modules to keep the crate root focused on common frame and transport APIs. |
 | Generated/mock transport test helpers | `test-util` mocks and `test_util::{InMemoryOwnedTransport, InMemoryZeroCopyTransport, RecordingOwnedListener}` | `test-util` | Use automocks for object-safe communication/service traits and in-memory transports for borrowed-filter transport traits. |
 
@@ -216,6 +217,12 @@ Typed frame deserialization checks `UEncoding` before decoding bytes. If a frame
 
 `format_id` and `content_type` must match the selected `WireFormat`. Empty schema references are treated as absent. If the selected `WireFormat` declares a non-empty `schema_ref`, the frame must carry the same `schema_ref`. If the selected `WireFormat` has no `schema_ref`, it is treated as a generic decoder for that matching format and content type, so it can decode frames that carry a more specific schema reference. This keeps Protobuf `Any` and similar schema-ref payloads ergonomic without weakening wrong-codec rejection.
 
+## Metadata Validation
+
+Use `UMessageBuilder` or `UFrameMetadata::try_publish`, `try_notification`, `try_request`, and `try_response` when constructing application frames. These checked paths validate message IDs, URI roles, request TTL, RPC priority, response request IDs, and message-type-specific fields.
+
+The shorter `UFrameMetadata::publish`, `notification`, `request`, and `response` constructors are intentionally unchecked convenience helpers. They are useful in tests, adapters, and low-level code that validates separately with `UAttributes::validate` or `UFrameMetadata::validate`.
+
 ## Protocol Buffers Payloads
 
 Protocol Buffers support is available behind the `protobuf-wire` feature.
@@ -272,9 +279,9 @@ Zero-copy transports should implement `UZeroCopyTransport` only when the transpo
 
 ### Pull Receive On Push-Oriented Transports
 
-`UOwnedTransport::receive_owned` has a default implementation that registers a temporary owned listener and returns the first matching frame. Transports that already implement `register_owned_listener` and `unregister_owned_listener` usually do not need a separate `receive_owned` queue.
+`UOwnedTransport::receive_owned` defaults to `UNIMPLEMENTED`, just like mainline `UTransport::receive`. Transports that truly support pull receive should implement it directly. Push-oriented transports should implement `register_owned_listener` and `unregister_owned_listener` without relying on a hidden listener-backed pull adapter.
 
-This is intentionally not a zero-copy adapter. It is an owned-frame convenience for transports whose natural receive model is callback or subscription based.
+This avoids a cancellation trap: a default listener-backed `receive_owned(&self, ...)` cannot guarantee async unregister cleanup if the waiting future is cancelled.
 
 ### Generic Endpoint Adapters
 

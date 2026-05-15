@@ -17,7 +17,7 @@ The crate needs to be added to the `[dependencies]` section of the `Cargo.toml` 
 
 ```toml
 [dependencies]
-up-rust = { version = "0.9" }
+up-rust = { version = "0.10" }
 ```
 
 Please refer to the [examples](./examples/) for owned-buffer and zero-copy wire-format usage.
@@ -36,9 +36,11 @@ assert_eq!(frame.payload_bytes(), &[0x01, 0x02]);
 # }
 ```
 
-Use `build_with_serializable::<MyWireFormat, _>(&value)` to create frames with custom serializer-neutral payloads. Protocol Buffers remain available as optional payload support through the `protobuf-wire` feature.
+Use `build_with_serializable::<MyWireFormat, _>(&value)` to create frames with custom serializer-neutral payloads. Protocol Buffers remain available as optional payload support through the `protobuf-wire` feature. uSubscription service DTO payloads also use Protocol Buffers when the `protobuf-wire` feature is enabled, while the transport envelope remains a native frame.
 
-Transport implementers can expose push-oriented receives by implementing `register_owned_listener`; the default `receive_owned` implementation uses a temporary listener and does not require a separate transport-specific pull queue. Routing code that needs to work with owned and zero-copy endpoints can use `UTransportEndpoint` to wrap `UOwnedTransport` or true `UZeroCopyTransport` implementations.
+Transport trait defaults match the mainline `UTransport` shape: optional receive/listener methods return `UNIMPLEMENTED` unless a transport implements them. Push-oriented transports should implement listener registration; transports that support true pull receive should implement `receive_owned` directly. Routing code that needs to work with owned and zero-copy endpoints can use `UTransportEndpoint` to wrap `UOwnedTransport` or true `UZeroCopyTransport` implementations.
+
+Use `UMessageBuilder` or `UFrameMetadata::try_*` constructors for checked metadata construction. The shorter `UFrameMetadata::{publish, notification, request, response}` constructors are unchecked convenience helpers for tests, adapters, and cases that validate separately.
 
 Tests can enable the `test-util` feature for supported `mockall` mocks and in-memory owned/zero-copy transport fakes under `up_rust::test_util`.
 

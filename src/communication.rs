@@ -16,19 +16,32 @@
 //! This module intentionally uses [`UOwnedFrame`] and [`UEncoding`] instead of
 //! reintroducing generated transport envelopes.
 
-use std::{error::Error, fmt::Display, sync::Arc};
 #[cfg(feature = "util")]
-use std::{sync::Mutex, time::Duration};
+use std::{
+    collections::{hash_map::Entry, HashMap},
+    ops::Deref,
+    sync::{Mutex, RwLock},
+    time::Duration,
+};
+use std::{error::Error, fmt::Display, sync::Arc};
 
 use async_trait::async_trait;
 use bytes::Bytes;
 #[cfg(feature = "util")]
 use tokio::{sync::oneshot, time::timeout};
 
+#[cfg(all(feature = "util", feature = "protobuf-wire"))]
+use crate::core::usubscription::{State, Update};
+#[cfg(feature = "protobuf-wire")]
+use crate::core::usubscription::{SubscriptionRequest, USubscription, UnsubscribeRequest};
+#[cfg(feature = "protobuf-wire")]
+use crate::ProtobufWire;
+#[cfg(feature = "util")]
+use crate::UMessageBuilder;
 use crate::{
-    LocalUriProvider, RawBytes, UAttributes, UCode, UDeserializer, UEncoding, UFrameMetadata,
-    UMessageType, UOwnedFrame, UOwnedListener, UOwnedTransport, UPriority, USerializer, UStatus,
-    UUri, UWireError, WireFormat, UUID,
+    core::usubscription, LocalUriProvider, RawBytes, UAttributes, UCode, UDeserializer, UEncoding,
+    UFrameMetadata, UMessageType, UOwnedFrame, UOwnedListener, UOwnedTransport, UPriority,
+    USerializer, UStatus, UUri, UWireError, WireFormat, UUID,
 };
 
 /// An error indicating a problem with registering or unregistering a frame listener.
@@ -201,7 +214,7 @@ impl UPayload {
         F: WireFormat,
         T: UDeserializer<'a, F>,
     {
-        if self.encoding != F::encoding() {
+        if !self.encoding.is_compatible_with(&F::encoding()) {
             return Err(UWireError::UnsupportedEncoding(self.encoding.clone()));
         }
         T::deserialize_from(self.payload_bytes())
@@ -313,6 +326,7 @@ pub trait Subscriber: Send + Sync {
         &self,
         topic: &UUri,
         listener: Arc<dyn UOwnedListener>,
+        subscription_change_handler: Option<Arc<dyn SubscriptionChangeHandler>>,
     ) -> Result<(), RegistrationError>;
 
     async fn unsubscribe(
@@ -320,6 +334,12 @@ pub trait Subscriber: Send + Sync {
         topic: &UUri,
         listener: Arc<dyn UOwnedListener>,
     ) -> Result<(), RegistrationError>;
+}
+
+/// Handles subscription status updates for a subscribed topic.
+#[cfg_attr(any(test, feature = "test-util"), mockall::automock)]
+pub trait SubscriptionChangeHandler: Send + Sync {
+    fn on_subscription_change(&self, topic: UUri, status: usubscription::SubscriptionStatus);
 }
 
 /// An error indicating a problem with invoking a service operation.
@@ -480,6 +500,123 @@ pub trait RpcClientExt: RpcClient {
 }
 
 impl<T> RpcClientExt for T where T: RpcClient + ?Sized {}
+
+/// A [`USubscription`] client implemented over the serializer-neutral RPC client.
+#[cfg(feature = "protobuf-wire")]
+pub struct RpcClientUSubscription {
+    rpc_client: Arc<dyn RpcClient>,
+}
+
+#[cfg(feature = "protobuf-wire")]
+impl RpcClientUSubscription {
+    pub fn new(rpc_client: Arc<dyn RpcClient>) -> Self {
+        Self { rpc_client }
+    }
+
+    fn default_call_options() -> CallOptions {
+        CallOptions::for_rpc_request(5_000, None, None, None)
+    }
+
+    async fn invoke<Request, Response>(
+        &self,
+        method_resource_id: u16,
+        request: &Request,
+    ) -> Result<Response, UStatus>
+    where
+        Request: USerializer<ProtobufWire> + Sync,
+        Response: for<'payload> UDeserializer<'payload, ProtobufWire> + Send,
+    {
+        self.rpc_client
+            .invoke_serialized_method::<ProtobufWire, ProtobufWire, _, Response>(
+                usubscription::usubscription_uri(method_resource_id),
+                Self::default_call_options(),
+                request,
+            )
+            .await
+            .map_err(UStatus::from)?
+            .ok_or_else(|| {
+                UStatus::fail_with_code(
+                    UCode::DATA_LOSS,
+                    "uSubscription method returned no response payload",
+                )
+            })
+    }
+}
+
+#[cfg(feature = "protobuf-wire")]
+#[async_trait]
+impl USubscription for RpcClientUSubscription {
+    async fn subscribe(
+        &self,
+        subscription_request: SubscriptionRequest,
+    ) -> Result<usubscription::SubscriptionResponse, UStatus> {
+        self.invoke(usubscription::RESOURCE_ID_SUBSCRIBE, &subscription_request)
+            .await
+    }
+
+    async fn fetch_subscriptions(
+        &self,
+        fetch_subscriptions_request: usubscription::FetchSubscriptionsRequest,
+    ) -> Result<usubscription::FetchSubscriptionsResponse, UStatus> {
+        self.invoke(
+            usubscription::RESOURCE_ID_FETCH_SUBSCRIPTIONS,
+            &fetch_subscriptions_request,
+        )
+        .await
+    }
+
+    async fn unsubscribe(&self, unsubscribe_request: UnsubscribeRequest) -> Result<(), UStatus> {
+        self.invoke::<_, usubscription::UnsubscribeResponse>(
+            usubscription::RESOURCE_ID_UNSUBSCRIBE,
+            &unsubscribe_request,
+        )
+        .await
+        .map(|_| ())
+    }
+
+    async fn register_for_notifications(
+        &self,
+        notifications_register_request: usubscription::NotificationsRequest,
+    ) -> Result<(), UStatus> {
+        self.invoke::<_, usubscription::NotificationsResponse>(
+            usubscription::RESOURCE_ID_REGISTER_FOR_NOTIFICATIONS,
+            &notifications_register_request,
+        )
+        .await
+        .map(|_| ())
+    }
+
+    async fn unregister_for_notifications(
+        &self,
+        notifications_unregister_request: usubscription::NotificationsRequest,
+    ) -> Result<(), UStatus> {
+        self.invoke::<_, usubscription::NotificationsResponse>(
+            usubscription::RESOURCE_ID_UNREGISTER_FOR_NOTIFICATIONS,
+            &notifications_unregister_request,
+        )
+        .await
+        .map(|_| ())
+    }
+
+    async fn fetch_subscribers(
+        &self,
+        fetch_subscribers_request: usubscription::FetchSubscribersRequest,
+    ) -> Result<usubscription::FetchSubscribersResponse, UStatus> {
+        self.invoke(
+            usubscription::RESOURCE_ID_FETCH_SUBSCRIBERS,
+            &fetch_subscribers_request,
+        )
+        .await
+    }
+
+    async fn reset(
+        &self,
+        reset_request: usubscription::ResetRequest,
+    ) -> Result<usubscription::ResetResponse, UStatus> {
+        self.invoke(usubscription::RESOURCE_ID_RESET, &reset_request)
+            .await
+    }
+}
 
 /// A handler for processing incoming RPC requests.
 #[cfg_attr(any(test, feature = "test-util"), mockall::automock)]
@@ -697,21 +834,15 @@ where
         else {
             return;
         };
-        let mut response_attributes = UAttributes::new(
-            UUID::build(),
-            self.method.clone(),
-            Some(reply_to),
-            UMessageType::Response,
-        )
-        .with_priority(UPriority::CS4)
-        .with_request_id(attributes.id().clone());
+        let mut builder =
+            UMessageBuilder::response(reply_to, attributes.id().clone(), self.method.clone());
         if status != UCode::OK {
-            response_attributes = response_attributes.with_commstatus(status);
+            builder.with_commstatus(status);
         }
-        let response = frame_from_payload(
-            UFrameMetadata::new(response_attributes, UEncoding::default()),
-            payload,
-        );
+        let Ok(response_metadata) = builder.build_metadata() else {
+            return;
+        };
+        let response = frame_from_payload(response_metadata, payload);
         let _ = self.transport.send_owned(response).await;
     }
 }
@@ -944,7 +1075,8 @@ where
             UMessageType::Notification,
             UPriority::CS1,
             call_options,
-        );
+        )
+        .map_err(|error| NotificationError::InvalidArgument(error.to_string()))?;
         self.transport
             .send_owned(frame_from_payload(metadata, payload))
             .await
@@ -1025,11 +1157,298 @@ where
             UMessageType::Publish,
             UPriority::CS1,
             call_options,
-        );
+        )
+        .map_err(|error| PubSubError::InvalidArgument(error.to_string()))?;
         self.transport
             .send_owned(frame_from_payload(metadata, payload))
             .await
             .map_err(PubSubError::PublishError)
+    }
+}
+
+#[cfg(all(feature = "util", feature = "protobuf-wire"))]
+#[derive(Clone)]
+struct ComparableSubscriptionChangeHandler {
+    inner: Arc<dyn SubscriptionChangeHandler>,
+}
+
+#[cfg(all(feature = "util", feature = "protobuf-wire"))]
+impl ComparableSubscriptionChangeHandler {
+    fn new(handler: Arc<dyn SubscriptionChangeHandler>) -> Self {
+        Self { inner: handler }
+    }
+}
+
+#[cfg(all(feature = "util", feature = "protobuf-wire"))]
+impl Deref for ComparableSubscriptionChangeHandler {
+    type Target = dyn SubscriptionChangeHandler;
+
+    fn deref(&self) -> &Self::Target {
+        &*self.inner
+    }
+}
+
+#[cfg(all(feature = "util", feature = "protobuf-wire"))]
+impl PartialEq for ComparableSubscriptionChangeHandler {
+    fn eq(&self, other: &Self) -> bool {
+        Arc::ptr_eq(&self.inner, &other.inner)
+    }
+}
+
+#[cfg(all(feature = "util", feature = "protobuf-wire"))]
+impl Eq for ComparableSubscriptionChangeHandler {}
+
+#[cfg(all(feature = "util", feature = "protobuf-wire"))]
+#[derive(Default)]
+struct SubscriptionChangeListener {
+    subscription_change_handlers: RwLock<HashMap<UUri, ComparableSubscriptionChangeHandler>>,
+}
+
+#[cfg(all(feature = "util", feature = "protobuf-wire"))]
+impl SubscriptionChangeListener {
+    fn add_handler(
+        &self,
+        topic: UUri,
+        subscription_change_handler: Arc<dyn SubscriptionChangeHandler>,
+    ) -> Result<(), RegistrationError> {
+        let mut handlers = self.subscription_change_handlers.write().map_err(|_| {
+            RegistrationError::Unknown(UStatus::fail_with_code(
+                UCode::INTERNAL,
+                "failed to acquire write lock for handler map",
+            ))
+        })?;
+        let handler_to_add = ComparableSubscriptionChangeHandler::new(subscription_change_handler);
+        match handlers.entry(topic) {
+            Entry::Vacant(entry) => {
+                entry.insert(handler_to_add);
+                Ok(())
+            }
+            Entry::Occupied(entry) if entry.get() == &handler_to_add => Ok(()),
+            Entry::Occupied(_) => Err(RegistrationError::AlreadyExists),
+        }
+    }
+
+    fn remove_handler(&self, topic: &UUri) -> Result<(), RegistrationError> {
+        let mut handlers = self.subscription_change_handlers.write().map_err(|_| {
+            RegistrationError::Unknown(UStatus::fail_with_code(
+                UCode::INTERNAL,
+                "failed to acquire write lock for handler map",
+            ))
+        })?;
+        handlers.remove(topic);
+        Ok(())
+    }
+
+    fn clear(&self) -> Result<(), RegistrationError> {
+        let mut handlers = self.subscription_change_handlers.write().map_err(|_| {
+            RegistrationError::Unknown(UStatus::fail_with_code(
+                UCode::INTERNAL,
+                "failed to acquire write lock for handler map",
+            ))
+        })?;
+        handlers.clear();
+        Ok(())
+    }
+
+    #[cfg(test)]
+    fn has_handler(&self, topic: &UUri) -> bool {
+        self.subscription_change_handlers
+            .read()
+            .is_ok_and(|handlers| handlers.contains_key(topic))
+    }
+}
+
+#[cfg(all(feature = "util", feature = "protobuf-wire"))]
+#[async_trait]
+impl UOwnedListener for SubscriptionChangeListener {
+    async fn on_receive_owned(&self, frame: UOwnedFrame) {
+        if frame.metadata().attributes().message_type() != UMessageType::Notification {
+            return;
+        }
+        let Some(payload) = payload_from_frame(&frame) else {
+            return;
+        };
+        let Ok(subscription_update) = payload.deserialize::<ProtobufWire, Update>() else {
+            return;
+        };
+        let Some(topic) = subscription_update.topic.as_ref() else {
+            return;
+        };
+        let Some(status) = subscription_update.status.as_ref() else {
+            return;
+        };
+
+        let Ok(handlers) = self.subscription_change_handlers.read() else {
+            return;
+        };
+        if let Some(handler) = handlers.get(topic) {
+            handler.on_subscription_change(topic.to_owned(), status.to_owned());
+        }
+    }
+}
+
+/// A [`Subscriber`] that mirrors main's uSubscription-backed behavior.
+#[cfg(all(feature = "util", feature = "protobuf-wire"))]
+pub struct InMemorySubscriber<T, S, N>
+where
+    T: UOwnedTransport + ?Sized,
+    S: USubscription + ?Sized,
+    N: Notifier + ?Sized,
+{
+    transport: Arc<T>,
+    usubscription: Arc<S>,
+    notifier: Arc<N>,
+    subscription_change_listener: Arc<SubscriptionChangeListener>,
+}
+
+#[cfg(all(feature = "util", feature = "protobuf-wire"))]
+impl<T, P> InMemorySubscriber<T, RpcClientUSubscription, SimpleNotifier<T, P>>
+where
+    T: UOwnedTransport + ?Sized + 'static,
+    P: LocalUriProvider + ?Sized + 'static,
+{
+    pub async fn new(transport: Arc<T>, uri_provider: Arc<P>) -> Result<Self, RegistrationError> {
+        let rpc_client = Arc::new(InMemoryRpcClient::new(
+            transport.clone(),
+            uri_provider.clone(),
+        ));
+        let usubscription = Arc::new(RpcClientUSubscription::new(rpc_client));
+        let notifier = Arc::new(SimpleNotifier::new(transport.clone(), uri_provider));
+        Self::for_clients(transport, usubscription, notifier).await
+    }
+}
+
+#[cfg(all(feature = "util", feature = "protobuf-wire"))]
+impl<T, S, N> InMemorySubscriber<T, S, N>
+where
+    T: UOwnedTransport + ?Sized,
+    S: USubscription + ?Sized,
+    N: Notifier + ?Sized,
+{
+    pub async fn for_clients(
+        transport: Arc<T>,
+        usubscription: Arc<S>,
+        notifier: Arc<N>,
+    ) -> Result<Self, RegistrationError> {
+        let subscription_change_listener = Arc::new(SubscriptionChangeListener::default());
+        notifier
+            .start_listening(
+                &usubscription::usubscription_uri(usubscription::RESOURCE_ID_SUBSCRIPTION_CHANGE),
+                subscription_change_listener.clone(),
+            )
+            .await?;
+        Ok(Self {
+            transport,
+            usubscription,
+            notifier,
+            subscription_change_listener,
+        })
+    }
+
+    pub async fn stop(&self) -> Result<(), RegistrationError> {
+        self.notifier
+            .stop_listening(
+                &usubscription::usubscription_uri(usubscription::RESOURCE_ID_SUBSCRIPTION_CHANGE),
+                self.subscription_change_listener.clone(),
+            )
+            .await
+            .and_then(|_| self.subscription_change_listener.clear())
+    }
+
+    async fn invoke_subscribe(
+        &self,
+        topic: &UUri,
+        subscription_change_handler: Option<Arc<dyn SubscriptionChangeHandler>>,
+    ) -> Result<State, RegistrationError> {
+        let subscription_request = SubscriptionRequest {
+            topic: Some(topic.to_owned()),
+            ..Default::default()
+        };
+        match self.usubscription.subscribe(subscription_request).await {
+            Ok(response) if response.is_state(State::Subscribed) => {
+                if let Some(handler) = subscription_change_handler {
+                    self.subscription_change_listener
+                        .add_handler(topic.to_owned(), handler)?;
+                }
+                Ok(State::Subscribed)
+            }
+            Ok(response) if response.is_state(State::SubscribePending) => {
+                if let Some(handler) = subscription_change_handler {
+                    self.subscription_change_listener
+                        .add_handler(topic.to_owned(), handler)?;
+                }
+                Ok(State::SubscribePending)
+            }
+            Ok(response) => Err(RegistrationError::Unknown(UStatus::fail_with_code(
+                UCode::FAILED_PRECONDITION,
+                response.status.map_or_else(
+                    || "unknown subscription state".to_string(),
+                    |status| status.message,
+                ),
+            ))),
+            Err(_) => Err(RegistrationError::Unknown(UStatus::fail_with_code(
+                UCode::INTERNAL,
+                "failed to invoke USubscription service",
+            ))),
+        }
+    }
+
+    async fn invoke_unsubscribe(&self, topic: &UUri) -> Result<(), RegistrationError> {
+        let request = UnsubscribeRequest {
+            topic: Some(topic.to_owned()),
+        };
+        self.usubscription
+            .unsubscribe(request)
+            .await
+            .map(|_| {
+                let _ = self.subscription_change_listener.remove_handler(topic);
+            })
+            .map_err(|_| {
+                RegistrationError::Unknown(UStatus::fail_with_code(
+                    UCode::INTERNAL,
+                    "failed to invoke USubscription service",
+                ))
+            })
+    }
+
+    #[cfg(test)]
+    fn has_subscription_change_handler(&self, topic: &UUri) -> bool {
+        self.subscription_change_listener.has_handler(topic)
+    }
+}
+
+#[cfg(all(feature = "util", feature = "protobuf-wire"))]
+#[async_trait]
+impl<T, S, N> Subscriber for InMemorySubscriber<T, S, N>
+where
+    T: UOwnedTransport + ?Sized,
+    S: USubscription + ?Sized,
+    N: Notifier + ?Sized,
+{
+    async fn subscribe(
+        &self,
+        topic: &UUri,
+        listener: Arc<dyn UOwnedListener>,
+        subscription_change_handler: Option<Arc<dyn SubscriptionChangeHandler>>,
+    ) -> Result<(), RegistrationError> {
+        self.invoke_subscribe(topic, subscription_change_handler)
+            .await?;
+        self.transport
+            .register_owned_listener(topic, None, listener)
+            .await
+            .map_err(RegistrationError::from)
+    }
+
+    async fn unsubscribe(
+        &self,
+        topic: &UUri,
+        listener: Arc<dyn UOwnedListener>,
+    ) -> Result<(), RegistrationError> {
+        self.invoke_unsubscribe(topic).await?;
+        self.transport
+            .unregister_owned_listener(topic, None, listener)
+            .await
+            .map_err(RegistrationError::from)
     }
 }
 
@@ -1059,6 +1478,7 @@ where
         &self,
         topic: &UUri,
         listener: Arc<dyn UOwnedListener>,
+        _subscription_change_handler: Option<Arc<dyn SubscriptionChangeHandler>>,
     ) -> Result<(), RegistrationError> {
         topic
             .verify_event()
@@ -1090,7 +1510,7 @@ fn metadata_with_options(
     message_type: UMessageType,
     default_priority: UPriority,
     options: CallOptions,
-) -> UFrameMetadata {
+) -> Result<UFrameMetadata, crate::UAttributesError> {
     let id = options.message_id.unwrap_or_else(UUID::build);
     let priority = options.priority.unwrap_or(default_priority);
     let mut attributes = UAttributes::new(id, source, sink, message_type).with_priority(priority);
@@ -1100,7 +1520,9 @@ fn metadata_with_options(
     if let Some(token) = options.token {
         attributes = attributes.with_token(token);
     }
-    UFrameMetadata::new(attributes, UEncoding::default())
+    let metadata = UFrameMetadata::new(attributes, UEncoding::default());
+    metadata.validate()?;
+    Ok(metadata)
 }
 
 #[cfg(feature = "util")]
@@ -1112,25 +1534,17 @@ fn rpc_request_metadata(
     let ttl = options.ttl.ok_or_else(|| {
         ServiceInvocationError::InvalidArgument("RPC request TTL is required".to_string())
     })?;
-    if ttl == 0 {
-        return Err(ServiceInvocationError::InvalidArgument(
-            "RPC request TTL must be greater than 0".to_string(),
-        ));
-    }
     let id = options.message_id.unwrap_or_else(UUID::build);
     let priority = options.priority.unwrap_or(UPriority::CS4);
-    let mut attributes =
-        UAttributes::new(id.clone(), reply_to, Some(method), UMessageType::Request)
-            .with_priority(priority)
-            .with_ttl(ttl);
+    let mut builder = UMessageBuilder::request(method, reply_to, ttl);
+    builder.with_message_id(id.clone()).with_priority(priority);
     if let Some(token) = options.token {
-        attributes = attributes.with_token(token);
+        builder.with_token(token);
     }
-    Ok((
-        UFrameMetadata::new(attributes, UEncoding::default()),
-        id,
-        ttl,
-    ))
+    let metadata = builder
+        .build_metadata()
+        .map_err(|error| ServiceInvocationError::InvalidArgument(error.to_string()))?;
+    Ok((metadata, id, ttl))
 }
 
 #[cfg(feature = "util")]
@@ -1151,5 +1565,107 @@ fn frame_from_payload(metadata: UFrameMetadata, payload: Option<UPayload>) -> UO
         UOwnedFrame::new(metadata.with_encoding(encoding), bytes)
     } else {
         UOwnedFrame::new(metadata, Bytes::new())
+    }
+}
+
+#[cfg(all(test, feature = "util", feature = "protobuf-wire"))]
+mod tests {
+    use super::*;
+    use crate::usubscription::MockUSubscription;
+    use crate::{MockUOwnedListener, MockUOwnedTransport};
+
+    fn subscription_topic() -> UUri {
+        UUri::try_from_parts("vehicle", 0x4210, 0x01, 0x9000).unwrap()
+    }
+
+    fn succeeding_notifier() -> Arc<MockNotifier> {
+        let mut notifier = MockNotifier::new();
+        notifier
+            .expect_start_listening()
+            .once()
+            .return_const(Ok(()));
+        Arc::new(notifier)
+    }
+
+    #[tokio::test]
+    async fn in_memory_subscriber_invokes_usubscription_before_registering_listener() {
+        let topic = subscription_topic();
+        let mut usubscription = MockUSubscription::new();
+        let expected_topic = topic.clone();
+        usubscription
+            .expect_subscribe()
+            .once()
+            .withf(move |request| request.topic.as_ref() == Some(&expected_topic))
+            .returning(|request| {
+                Ok(usubscription::SubscriptionResponse {
+                    status: Some(usubscription::SubscriptionStatus {
+                        state: State::Subscribed,
+                        ..Default::default()
+                    }),
+                    topic: request.topic,
+                    ..Default::default()
+                })
+            });
+
+        let mut transport = MockUOwnedTransport::new();
+        transport
+            .expect_do_register_owned_listener()
+            .once()
+            .return_const(Ok(()));
+
+        let subscriber = InMemorySubscriber::for_clients(
+            Arc::new(transport),
+            Arc::new(usubscription),
+            succeeding_notifier(),
+        )
+        .await
+        .unwrap();
+        let listener = Arc::new(MockUOwnedListener::new());
+        let handler = Arc::new(MockSubscriptionChangeHandler::new());
+
+        subscriber
+            .subscribe(&topic, listener, Some(handler))
+            .await
+            .unwrap();
+
+        assert!(subscriber.has_subscription_change_handler(&topic));
+    }
+
+    #[tokio::test]
+    async fn subscription_change_listener_dispatches_protobuf_update() {
+        let topic = subscription_topic();
+        let status = usubscription::SubscriptionStatus {
+            state: State::Subscribed,
+            message: "ready".to_string(),
+        };
+        let update = Update {
+            topic: Some(topic.clone()),
+            status: Some(status.clone()),
+            ..Default::default()
+        };
+        let payload = UPayload::from_serializable::<ProtobufWire, _>(&update).unwrap();
+        let origin =
+            usubscription::usubscription_uri(usubscription::RESOURCE_ID_SUBSCRIPTION_CHANGE);
+        let destination = UUri::try_from_parts("client", 0x8000, 0x01, 0x0000).unwrap();
+        let frame = frame_from_payload(
+            UFrameMetadata::try_notification(origin, destination).unwrap(),
+            Some(payload),
+        );
+
+        let mut handler = MockSubscriptionChangeHandler::new();
+        let expected_topic = topic.clone();
+        handler
+            .expect_on_subscription_change()
+            .once()
+            .withf(move |actual_topic, actual_status| {
+                actual_topic == &expected_topic && actual_status == &status
+            })
+            .return_const(());
+
+        let listener = SubscriptionChangeListener::default();
+        listener
+            .add_handler(topic, Arc::new(handler))
+            .expect("handler should register");
+        listener.on_receive_owned(frame).await;
     }
 }

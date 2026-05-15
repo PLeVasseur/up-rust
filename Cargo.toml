@@ -16,11 +16,13 @@ categories = ["api-bindings"]
 description = "The Eclipse uProtocol Rust Language Library"
 edition = "2021"
 include = [
+    "/build.rs",
     "/Cargo.toml",
     "/docs/*",
     "/examples/*",
     "/README.md",
     "/src/*",
+    "/up-spec/up-core-api/uprotocol/*",
 ]
 keywords = ["uProtocol", "SDK", "communication"]
 license = "Apache-2.0"
@@ -41,7 +43,6 @@ test-util = ["mockall"]
 async-trait = { version = "0.1" }
 base64 = { version = "0.22" }
 bytes = { version = "1.11.1" }
-futures-channel = { version = "0.3" }
 mediatype = "0.20"
 mockall = { version = "0.13.1", optional = true }
 protobuf = { version = "3.7.2", features = ["with-bytes"], optional = true }
@@ -54,6 +55,10 @@ tokio = { version = "1.45.1", default-features = false, optional = true }
 tracing = { version = "0.1", default-features = false, features = ["log", "std"] }
 uriparse = { version = "0.6" }
 uuid-simd = { version = "0.8", default-features = false, features = ["std", "detect"] }
+
+[build-dependencies]
+protobuf-codegen = { version = "3.7.2" }
+protoc-bin-vendored = { version = "3.2.0" }
 
 [dev-dependencies]
 clap = { version = "4.5.51" }
