@@ -21,18 +21,18 @@ up-rust = { version = "0.10" }
 ```
 
 Please refer to the [examples](./examples/) for owned-buffer and zero-copy wire-format usage.
-The [native frame migration guide](./docs/native-frame-migration.md) explains how to move from generated `UMessage` envelopes to `UOwnedFrame`, `UMessageBuilder`, and serializer-neutral payloads, including a side-by-side owned/zero-copy transport API matrix.
+The [native frame migration guide](./docs/native-frame-migration.md) explains how to move from generated `UMessage` envelopes to `UOwnedFrame`, `UFrameBuilder`, and serializer-neutral payloads, including a side-by-side owned/zero-copy transport API matrix.
 
 The crate root keeps the common native-frame types available for short examples. For larger codebases, prefer the role-focused modules `frame`, `wire`, `transport`, `zero_copy`, and `prelude` to make simple application code and advanced transport code easier to separate.
 
-`UMessageBuilder` provides native builder ergonomics for `UOwnedFrame` construction without reintroducing generated message envelopes:
+`UFrameBuilder` provides native builder ergonomics for `UOwnedFrame` construction without reintroducing generated message envelopes:
 
 ```rust
-use up_rust::{UMessageBuilder, UUri};
+use up_rust::{UFrameBuilder, UUri};
 
 # fn main() -> Result<(), Box<dyn std::error::Error>> {
 let topic = UUri::try_from("//my-vehicle/4210/1/B24D")?;
-let frame = UMessageBuilder::publish(topic).build_with_raw_payload(vec![0x01, 0x02])?;
+let frame = UFrameBuilder::publish(topic).build_with_raw_payload(vec![0x01, 0x02])?;
 assert_eq!(frame.payload_bytes(), &[0x01, 0x02]);
 # Ok(())
 # }
@@ -40,9 +40,9 @@ assert_eq!(frame.payload_bytes(), &[0x01, 0x02]);
 
 Use `build_with_serializable::<MyWireFormat, _>(&value)` to create frames with custom serializer-neutral payloads. Protocol Buffers remain available as optional payload support through the `protobuf-wire` feature. uSubscription service DTO payloads use the generated `up-core-api` protobuf DTOs when the `protobuf-wire` feature is enabled, while the transport envelope remains a native frame.
 
-Transport trait defaults match the mainline `UTransport` shape: optional receive/listener methods return `UNIMPLEMENTED` unless a transport implements them. Push-oriented transports should implement listener registration; transports that support true pull receive should implement `receive_owned` directly. Routing code that needs to work with owned and zero-copy endpoints can use `UTransportEndpoint` to wrap `UOwnedTransport` or true `UZeroCopyTransport` implementations.
+Transport trait defaults match the mainline `UTransport` shape: optional receive/listener methods return `UNIMPLEMENTED` unless a transport implements them. Push-oriented transports should implement listener registration; transports that support true pull receive should implement `receive_owned` directly. Routing code that needs one owned-frame facade over owned and zero-copy transports can use `UOwnedFrameEndpoint`; wrapping a zero-copy transport crosses a copy boundary and is not end-to-end zero-copy forwarding.
 
-Use `UMessageBuilder` or `UFrameMetadata::try_*` constructors for checked metadata construction. The shorter `UFrameMetadata::{publish, notification, request, response}` constructors are unchecked convenience helpers for tests, adapters, and cases that validate separately. Native domain types such as `UUri` and `UUID` keep their fields private; use constructors and accessors instead of struct literals.
+Use `UFrameBuilder` or `UFrameMetadata::try_*` constructors for checked metadata construction. The shorter `UFrameMetadata::{publish, notification, request, response}` constructors are unchecked convenience helpers for tests, adapters, and cases that validate separately. Native domain types such as `UUri` and `UUID` keep their fields private; use constructors and accessors instead of struct literals.
 
 Tests can enable the `test-util` feature for supported `mockall` mocks and in-memory owned/zero-copy transport fakes under `up_rust::test_util`.
 

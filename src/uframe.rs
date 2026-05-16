@@ -313,8 +313,8 @@ pub enum UWireError {
     },
     InvalidPayload(String),
     UnsupportedEncoding {
-        expected: UEncoding,
-        actual: UEncoding,
+        expected: Box<UEncoding>,
+        actual: Box<UEncoding>,
     },
     SerializationError(String),
 }
@@ -366,20 +366,20 @@ impl From<UWireError> for UStatus {
     }
 }
 
-/// Error type used by the native [`UMessageBuilder`].
+/// Error type used by the native [`UFrameBuilder`].
 #[derive(Clone, Debug, Eq, PartialEq)]
-pub enum UMessageBuilderError {
+pub enum UFrameBuilderError {
     AttributesValidationError(UAttributesError),
     Payload(UWireError),
 }
 
-impl UMessageBuilderError {
+impl UFrameBuilderError {
     fn invalid_attributes(message: impl Into<String>) -> Self {
         Self::AttributesValidationError(UAttributesError::validation_error(message))
     }
 }
 
-impl Display for UMessageBuilderError {
+impl Display for UFrameBuilderError {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
             Self::AttributesValidationError(error) => {
@@ -390,15 +390,15 @@ impl Display for UMessageBuilderError {
     }
 }
 
-impl Error for UMessageBuilderError {}
+impl Error for UFrameBuilderError {}
 
-impl From<UWireError> for UMessageBuilderError {
+impl From<UWireError> for UFrameBuilderError {
     fn from(value: UWireError) -> Self {
         Self::Payload(value)
     }
 }
 
-impl From<UAttributesError> for UMessageBuilderError {
+impl From<UAttributesError> for UFrameBuilderError {
     fn from(value: UAttributesError) -> Self {
         Self::AttributesValidationError(value)
     }
@@ -409,7 +409,7 @@ impl From<UAttributesError> for UMessageBuilderError {
 /// `UFrameMetadata` groups native uProtocol [`UAttributes`] with payload
 /// [`UEncoding`]. It is not a generated protocol envelope and it is not a
 /// replacement for `UAttributes`; transports should project these fields into
-/// their own metadata channels where possible. Prefer [`UMessageBuilder`] for
+/// their own metadata channels where possible. Prefer [`UFrameBuilder`] for
 /// constructing application frames because it validates message-type-specific
 /// attribute rules before producing an owned frame.
 #[derive(Clone, Debug, Eq, PartialEq)]
@@ -428,7 +428,7 @@ impl UFrameMetadata {
 
     /// Creates unchecked Publish metadata.
     ///
-    /// Prefer [`Self::try_publish`] or [`UMessageBuilder::publish`] for application frames.
+    /// Prefer [`Self::try_publish`] or [`UFrameBuilder::publish`] for application frames.
     pub fn publish(topic: UUri) -> Self {
         Self::new(
             UAttributes::new(UUID::build(), topic, None, UMessageType::Publish),
@@ -445,7 +445,7 @@ impl UFrameMetadata {
 
     /// Creates unchecked Notification metadata.
     ///
-    /// Prefer [`Self::try_notification`] or [`UMessageBuilder::notification`] for application frames.
+    /// Prefer [`Self::try_notification`] or [`UFrameBuilder::notification`] for application frames.
     pub fn notification(origin: UUri, destination: UUri) -> Self {
         Self::new(
             UAttributes::new(
@@ -467,7 +467,7 @@ impl UFrameMetadata {
 
     /// Creates unchecked RPC Request metadata.
     ///
-    /// Prefer [`Self::try_request`] or [`UMessageBuilder::request`] for application frames.
+    /// Prefer [`Self::try_request`] or [`UFrameBuilder::request`] for application frames.
     pub fn request(method_to_invoke: UUri, reply_to_address: UUri, ttl: u32) -> Self {
         Self::new(
             UAttributes::new(
@@ -495,7 +495,7 @@ impl UFrameMetadata {
 
     /// Creates unchecked RPC Response metadata.
     ///
-    /// Prefer [`Self::try_response`] or [`UMessageBuilder::response`] for application frames.
+    /// Prefer [`Self::try_response`] or [`UFrameBuilder::response`] for application frames.
     pub fn response(reply_to_address: UUri, request_id: UUID, invoked_method: UUri) -> Self {
         Self::new(
             UAttributes::new(
@@ -614,8 +614,8 @@ impl UOwnedFrame {
         let expected = F::encoding();
         if !self.metadata.encoding().is_compatible_with(&expected) {
             return Err(UWireError::UnsupportedEncoding {
-                expected,
-                actual: self.metadata.encoding().clone(),
+                expected: Box::new(expected),
+                actual: Box::new(self.metadata.encoding().clone()),
             });
         }
         T::deserialize_from(self.payload_bytes())
@@ -630,21 +630,21 @@ impl AsRef<[u8]> for UOwnedFrame {
 
 /// Native builder for creating [`UOwnedFrame`]s.
 ///
-/// This restores the old `UMessageBuilder` ergonomics without reintroducing
-/// generated message envelopes. The builder output is a native owned frame.
+/// This keeps the familiar publish/notification/request/response builder
+/// ergonomics without reintroducing generated message envelopes.
 ///
 /// ```
-/// # use up_rust::{UMessageBuilder, UUri};
+/// # use up_rust::{UFrameBuilder, UUri};
 /// # fn build() -> Result<(), Box<dyn std::error::Error>> {
 /// let topic = UUri::try_from("//vehicle/4210/1/B24D")?;
-/// let frame = UMessageBuilder::publish(topic)
+/// let frame = UFrameBuilder::publish(topic)
 ///     .build_with_raw_payload(b"reading".to_vec())?;
 /// assert_eq!(frame.payload_bytes(), b"reading");
 /// # Ok(())
 /// # }
 /// ```
 #[derive(Clone, Debug)]
-pub struct UMessageBuilder {
+pub struct UFrameBuilder {
     commstatus: Option<UCode>,
     encoding: UEncoding,
     message_id: Option<UUID>,
@@ -660,7 +660,7 @@ pub struct UMessageBuilder {
     ttl: Option<u32>,
 }
 
-impl UMessageBuilder {
+impl UFrameBuilder {
     /// Creates a builder for a Publish frame.
     pub fn publish(topic: UUri) -> Self {
         Self {
@@ -771,12 +771,12 @@ impl UMessageBuilder {
     }
 
     /// Builds only the frame metadata.
-    pub fn build_metadata(self) -> Result<UFrameMetadata, UMessageBuilderError> {
+    pub fn build_metadata(self) -> Result<UFrameMetadata, UFrameBuilderError> {
         Ok(UFrameMetadata::new(self.build_attributes()?, self.encoding))
     }
 
     /// Builds an owned frame with the currently configured payload, if any.
-    pub fn build(self) -> Result<UOwnedFrame, UMessageBuilderError> {
+    pub fn build(self) -> Result<UOwnedFrame, UFrameBuilderError> {
         let attributes = self.build_attributes()?;
         Ok(UOwnedFrame::new(
             UFrameMetadata::new(attributes, self.encoding),
@@ -788,7 +788,7 @@ impl UMessageBuilder {
     pub fn build_with_raw_payload<T: Into<Bytes>>(
         self,
         payload: T,
-    ) -> Result<UOwnedFrame, UMessageBuilderError> {
+    ) -> Result<UOwnedFrame, UFrameBuilderError> {
         self.build_with_payload(payload, RawBytes::encoding())
     }
 
@@ -797,7 +797,7 @@ impl UMessageBuilder {
         mut self,
         payload: T,
         encoding: UEncoding,
-    ) -> Result<UOwnedFrame, UMessageBuilderError> {
+    ) -> Result<UOwnedFrame, UFrameBuilderError> {
         self.payload = Some(payload.into());
         self.encoding = encoding;
         self.build()
@@ -807,7 +807,7 @@ impl UMessageBuilder {
     pub fn build_with_serializable<F, T>(
         mut self,
         value: &T,
-    ) -> Result<UOwnedFrame, UMessageBuilderError>
+    ) -> Result<UOwnedFrame, UFrameBuilderError>
     where
         F: WireFormat,
         T: USerializer<F>,
@@ -822,24 +822,24 @@ impl UMessageBuilder {
     pub fn build_with_protobuf_payload<T>(
         self,
         value: &T,
-    ) -> Result<UOwnedFrame, UMessageBuilderError>
+    ) -> Result<UOwnedFrame, UFrameBuilderError>
     where
         T: USerializer<crate::ProtobufWire>,
     {
         self.build_with_serializable::<crate::ProtobufWire, _>(value)
     }
 
-    fn build_attributes(&self) -> Result<UAttributes, UMessageBuilderError> {
+    fn build_attributes(&self) -> Result<UAttributes, UFrameBuilderError> {
         let id = self.message_id.clone().unwrap_or_else(UUID::build);
         if !id.is_uprotocol_uuid() {
-            return Err(UMessageBuilderError::invalid_attributes(
+            return Err(UFrameBuilderError::invalid_attributes(
                 "message ID must be a valid uProtocol UUID",
             ));
         }
         let source = self
             .source
             .clone()
-            .ok_or_else(|| UMessageBuilderError::invalid_attributes("source URI is required"))?;
+            .ok_or_else(|| UFrameBuilderError::invalid_attributes("source URI is required"))?;
         let sink = self.sink.clone();
         let mut attributes =
             UAttributes::new(id, source, sink, self.message_type).with_priority(self.priority);
@@ -866,7 +866,7 @@ impl UMessageBuilder {
     }
 }
 
-impl Default for UMessageBuilder {
+impl Default for UFrameBuilder {
     fn default() -> Self {
         Self {
             commstatus: None,
@@ -1019,8 +1019,8 @@ pub trait UZeroCopyRxFrame {
         let expected = F::encoding();
         if !self.metadata().encoding().is_compatible_with(&expected) {
             return Err(UWireError::UnsupportedEncoding {
-                expected,
-                actual: self.metadata().encoding().clone(),
+                expected: Box::new(expected),
+                actual: Box::new(self.metadata().encoding().clone()),
             });
         }
         T::deserialize_from(self.payload())
@@ -1197,11 +1197,11 @@ mod tests {
     }
 
     #[test]
-    fn message_builder_builds_publish_frame_with_raw_payload() {
+    fn frame_builder_builds_publish_frame_with_raw_payload() {
         let topic = UUri::try_from("//my-vehicle/4210/1/B24D").unwrap();
         let message_id = UUID::build();
         let traceparent = "00-4bf92f3577b34da6a3ce929d0e0e4736-00f067aa0ba902b7-01";
-        let frame = UMessageBuilder::publish(topic.clone())
+        let frame = UFrameBuilder::publish(topic.clone())
             .with_message_id(message_id.clone())
             .with_priority(UPriority::CS2)
             .with_ttl(5_000)
@@ -1222,15 +1222,15 @@ mod tests {
     }
 
     #[test]
-    fn message_builder_builds_response_from_request_attributes() {
+    fn frame_builder_builds_response_from_request_attributes() {
         let method = UUri::try_from("//vehicle/4210/1/0001").unwrap();
         let reply_to = UUri::try_from("//client/ABCD/1/0000").unwrap();
-        let request = UMessageBuilder::request(method.clone(), reply_to.clone(), 5_000)
+        let request = UFrameBuilder::request(method.clone(), reply_to.clone(), 5_000)
             .with_priority(UPriority::CS5)
             .build()
             .unwrap();
         let response_id = UUID::build();
-        let response = UMessageBuilder::response_for_request(request.metadata().attributes())
+        let response = UFrameBuilder::response_for_request(request.metadata().attributes())
             .with_message_id(response_id.clone())
             .with_comm_status(UCode::DEADLINE_EXCEEDED)
             .build()
@@ -1251,23 +1251,23 @@ mod tests {
     }
 
     #[test]
-    fn message_builder_rejects_low_rpc_priority() {
+    fn frame_builder_rejects_low_rpc_priority() {
         let method = UUri::try_from("//vehicle/4210/1/0001").unwrap();
         let reply_to = UUri::try_from("//client/ABCD/1/0000").unwrap();
-        let result = UMessageBuilder::request(method, reply_to, 5_000)
+        let result = UFrameBuilder::request(method, reply_to, 5_000)
             .with_priority(UPriority::CS3)
             .build();
 
         assert!(matches!(
             result,
-            Err(UMessageBuilderError::AttributesValidationError(_))
+            Err(UFrameBuilderError::AttributesValidationError(_))
         ));
     }
 
     #[test]
-    fn message_builder_uses_selected_wire_format_for_typed_payload() {
+    fn frame_builder_uses_selected_wire_format_for_typed_payload() {
         let topic = UUri::try_from("//my-vehicle/4210/1/B24D").unwrap();
-        let frame = UMessageBuilder::publish(topic)
+        let frame = UFrameBuilder::publish(topic)
             .build_with_serializable::<RawBytes, _>(&&[0x0a_u8, 0x0b_u8][..])
             .unwrap();
 

@@ -41,7 +41,7 @@ use crate::core::usubscription::{SubscriptionRequest, USubscription, Unsubscribe
 #[cfg(feature = "protobuf-wire")]
 use crate::ProtobufWire;
 #[cfg(feature = "util")]
-use crate::UMessageBuilder;
+use crate::UFrameBuilder;
 use crate::{
     LocalUriProvider, RawBytes, UAttributes, UCode, UDeserializer, UEncoding, UFrameMetadata,
     UMessageType, UOwnedFrame, UOwnedListener, UOwnedTransport, UPriority, USerializer, UStatus,
@@ -220,8 +220,8 @@ impl UPayload {
     {
         if !self.encoding.is_compatible_with(&F::encoding()) {
             return Err(UWireError::UnsupportedEncoding {
-                expected: F::encoding(),
-                actual: self.encoding.clone(),
+                expected: Box::new(F::encoding()),
+                actual: Box::new(self.encoding.clone()),
             });
         }
         T::deserialize_from(self.payload_bytes())
@@ -826,9 +826,8 @@ where
 
         if let Some(commstatus) = response.metadata().attributes().commstatus() {
             if commstatus != UCode::OK {
-                return Err(ServiceInvocationError::from(UStatus::fail_with_code(
-                    commstatus,
-                    "RPC response indicated failure",
+                return Err(ServiceInvocationError::from(response_error_status(
+                    &response, commstatus,
                 )));
             }
         }
@@ -874,14 +873,28 @@ where
         }
     }
 
-    async fn send_response(&self, request: &UOwnedFrame, payload: Option<UPayload>, status: UCode) {
+    async fn send_response(
+        &self,
+        request: &UOwnedFrame,
+        payload: Option<UPayload>,
+        status: UStatus,
+    ) {
         let attributes = request.metadata().attributes();
-        let mut builder = UMessageBuilder::response_for_request(attributes);
-        if status != UCode::OK {
-            builder = builder.with_comm_status(status);
+        let mut builder = UFrameBuilder::response_for_request(attributes);
+        let status_code = status.get_code();
+        if status_code != UCode::OK {
+            builder = builder.with_comm_status(status_code);
         }
         let Ok(response_metadata) = builder.build_metadata() else {
             return;
+        };
+        let payload = if status_code == UCode::OK {
+            payload
+        } else {
+            payload.or_else(|| {
+                let message = status.get_message();
+                (!message.is_empty()).then(|| UPayload::from_raw(message.into_bytes()))
+            })
         };
         let response = frame_from_payload(response_metadata, payload);
         let _ = self.transport.send_owned(response).await;
@@ -909,12 +922,12 @@ where
             .await
         {
             Ok(response_payload) => {
-                self.send_response(&frame, response_payload, UCode::OK)
+                self.send_response(&frame, response_payload, UStatus::ok())
                     .await
             }
             Err(error) => {
                 let status = UStatus::from(error);
-                self.send_response(&frame, None, status.get_code()).await;
+                self.send_response(&frame, None, status).await;
             }
         }
     }
@@ -1578,7 +1591,7 @@ fn rpc_request_metadata(
     })?;
     let id = options.message_id.unwrap_or_else(UUID::build);
     let priority = options.priority.unwrap_or(UPriority::CS4);
-    let mut builder = UMessageBuilder::request(method, reply_to, ttl)
+    let mut builder = UFrameBuilder::request(method, reply_to, ttl)
         .with_message_id(id.clone())
         .with_priority(priority);
     if let Some(token) = options.token {
@@ -1600,6 +1613,15 @@ fn payload_from_frame(frame: &UOwnedFrame) -> Option<UPayload> {
             frame.metadata().encoding().clone(),
         ))
     }
+}
+
+#[cfg(feature = "util")]
+fn response_error_status(response: &UOwnedFrame, commstatus: UCode) -> UStatus {
+    let message = payload_from_frame(response)
+        .map(|payload| String::from_utf8_lossy(payload.payload_bytes()).into_owned())
+        .filter(|message| !message.is_empty())
+        .unwrap_or_else(|| "RPC response indicated failure".to_string());
+    UStatus::fail_with_code(commstatus, message)
 }
 
 fn frame_from_payload(metadata: UFrameMetadata, payload: Option<UPayload>) -> UOwnedFrame {

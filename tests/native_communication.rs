@@ -28,7 +28,7 @@ use up_rust::{
     },
     local_transport::LocalTransport,
     LocalUriProvider, RawBytes, StaticUriProvider, UAttributes, UDeserializer, UEncoding,
-    UMessageBuilder, UMessageType, UOwnedFrame, UOwnedListener, UOwnedTransport, UPriority,
+    UFrameBuilder, UMessageType, UOwnedFrame, UOwnedListener, UOwnedTransport, UPriority,
     USerializer, UWireError, WireFormat, UUID,
 };
 
@@ -306,7 +306,7 @@ async fn rpc_server_response_preserves_request_metadata() {
         .unwrap();
 
     let request_id = UUID::build();
-    let request = UMessageBuilder::request(method.clone(), reply_to.clone(), 7_000)
+    let request = UFrameBuilder::request(method.clone(), reply_to.clone(), 7_000)
         .with_message_id(request_id.clone())
         .with_priority(UPriority::CS5)
         .with_token("rpc-token")
@@ -352,7 +352,10 @@ async fn in_memory_rpc_maps_handler_errors_to_response_status() {
         )
         .await;
 
-    assert!(matches!(result, Err(ServiceInvocationError::NotFound(_))));
+    assert!(matches!(
+        result,
+        Err(ServiceInvocationError::NotFound(message)) if message == "missing resource"
+    ));
 }
 
 #[tokio::test]

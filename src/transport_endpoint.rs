@@ -25,45 +25,52 @@ use crate::{
 };
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
-pub enum UTransportMode {
+pub enum UOwnedFrameEndpointMode {
     Owned,
     ZeroCopy,
 }
 
+/// Owned-frame routing facade over either owned or zero-copy transport capability.
+///
+/// This adapter is for routers and bridges that operate on [`UOwnedFrame`]. When
+/// wrapping a zero-copy transport, it deliberately crosses the ownership
+/// boundary: receives are copied from zero-copy leases into owned frames, and
+/// sends are copied from owned frames into transmit loans.
 #[derive(Clone)]
-pub struct UTransportEndpoint {
+pub struct UOwnedFrameEndpoint {
     inner: Arc<dyn EndpointOps>,
 }
 
-impl Debug for UTransportEndpoint {
+impl Debug for UOwnedFrameEndpoint {
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
-        f.debug_struct("UTransportEndpoint")
+        f.debug_struct("UOwnedFrameEndpoint")
             .field("mode", &self.mode())
             .finish()
     }
 }
 
-impl UTransportEndpoint {
-    /// Creates an endpoint facade around an owned-frame transport.
+impl UOwnedFrameEndpoint {
+    /// Creates an owned-frame endpoint facade around an owned-frame transport.
     pub fn from_owned(transport: Arc<dyn UOwnedTransport>) -> Self {
         Self {
             inner: Arc::new(OwnedEndpoint { transport }),
         }
     }
 
-    /// Creates an endpoint facade around a zero-copy transport.
+    /// Creates an owned-frame endpoint facade around a zero-copy transport.
     ///
     /// Owned sends are copied into a transmit loan, and zero-copy receives are
-    /// adapted to owned listener callbacks for generic routing code.
+    /// copied into owned listener callbacks for generic routing code. This is an
+    /// adapter boundary, not end-to-end zero-copy forwarding.
     ///
     /// ```no_run
     /// # use std::sync::Arc;
-    /// # use up_rust::{UTransportEndpoint, UZeroCopyTransport};
-    /// # fn wrap<T>(transport: Arc<T>) -> UTransportEndpoint
+    /// # use up_rust::{UOwnedFrameEndpoint, UZeroCopyTransport};
+    /// # fn wrap<T>(transport: Arc<T>) -> UOwnedFrameEndpoint
     /// # where
     /// #     T: UZeroCopyTransport + Send + Sync + 'static,
     /// # {
-    /// let endpoint = UTransportEndpoint::from_zero_copy(transport);
+    /// let endpoint = UOwnedFrameEndpoint::from_zero_copy(transport);
     /// # endpoint
     /// # }
     /// ```
@@ -76,7 +83,7 @@ impl UTransportEndpoint {
         }
     }
 
-    pub fn mode(&self) -> UTransportMode {
+    pub fn mode(&self) -> UOwnedFrameEndpointMode {
         self.inner.mode()
     }
 
@@ -89,7 +96,7 @@ impl UTransportEndpoint {
         source_filter: &UUri,
         sink_filter: Option<&UUri>,
         listener: Arc<dyn UOwnedListener>,
-    ) -> Result<UTransportEndpointRegistration, UStatus> {
+    ) -> Result<UOwnedFrameEndpointRegistration, UStatus> {
         self.inner
             .register_owned_listener(source_filter, sink_filter, listener)
             .await
@@ -97,18 +104,18 @@ impl UTransportEndpoint {
 }
 
 #[derive(Clone)]
-pub struct UTransportEndpointRegistration {
+pub struct UOwnedFrameEndpointRegistration {
     inner: Arc<dyn RegistrationOps>,
 }
 
-impl Debug for UTransportEndpointRegistration {
+impl Debug for UOwnedFrameEndpointRegistration {
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
-        f.debug_struct("UTransportEndpointRegistration")
+        f.debug_struct("UOwnedFrameEndpointRegistration")
             .finish_non_exhaustive()
     }
 }
 
-impl UTransportEndpointRegistration {
+impl UOwnedFrameEndpointRegistration {
     pub async fn unregister(&self) -> Result<(), UStatus> {
         self.inner.unregister().await
     }
@@ -116,14 +123,14 @@ impl UTransportEndpointRegistration {
 
 #[async_trait]
 trait EndpointOps: Send + Sync {
-    fn mode(&self) -> UTransportMode;
+    fn mode(&self) -> UOwnedFrameEndpointMode;
     async fn send_owned(&self, frame: UOwnedFrame) -> Result<(), UStatus>;
     async fn register_owned_listener(
         &self,
         source_filter: &UUri,
         sink_filter: Option<&UUri>,
         listener: Arc<dyn UOwnedListener>,
-    ) -> Result<UTransportEndpointRegistration, UStatus>;
+    ) -> Result<UOwnedFrameEndpointRegistration, UStatus>;
 }
 
 #[async_trait]
@@ -137,8 +144,8 @@ struct OwnedEndpoint {
 
 #[async_trait]
 impl EndpointOps for OwnedEndpoint {
-    fn mode(&self) -> UTransportMode {
-        UTransportMode::Owned
+    fn mode(&self) -> UOwnedFrameEndpointMode {
+        UOwnedFrameEndpointMode::Owned
     }
 
     async fn send_owned(&self, frame: UOwnedFrame) -> Result<(), UStatus> {
@@ -150,11 +157,11 @@ impl EndpointOps for OwnedEndpoint {
         source_filter: &UUri,
         sink_filter: Option<&UUri>,
         listener: Arc<dyn UOwnedListener>,
-    ) -> Result<UTransportEndpointRegistration, UStatus> {
+    ) -> Result<UOwnedFrameEndpointRegistration, UStatus> {
         self.transport
             .register_owned_listener(source_filter, sink_filter, listener.clone())
             .await?;
-        Ok(UTransportEndpointRegistration {
+        Ok(UOwnedFrameEndpointRegistration {
             inner: Arc::new(OwnedRegistration {
                 transport: self.transport.clone(),
                 source_filter: source_filter.clone(),
@@ -194,8 +201,8 @@ impl<T> EndpointOps for ZeroCopyEndpoint<T>
 where
     T: UZeroCopyTransport + Send + Sync + 'static,
 {
-    fn mode(&self) -> UTransportMode {
-        UTransportMode::ZeroCopy
+    fn mode(&self) -> UOwnedFrameEndpointMode {
+        UOwnedFrameEndpointMode::ZeroCopy
     }
 
     async fn send_owned(&self, frame: UOwnedFrame) -> Result<(), UStatus> {
@@ -213,7 +220,7 @@ where
         source_filter: &UUri,
         sink_filter: Option<&UUri>,
         listener: Arc<dyn UOwnedListener>,
-    ) -> Result<UTransportEndpointRegistration, UStatus> {
+    ) -> Result<UOwnedFrameEndpointRegistration, UStatus> {
         let zero_copy_listener: Arc<dyn UZeroCopyListener<T::Rx>> =
             Arc::new(ZeroCopyToOwnedListener::<T::Rx> {
                 listener,
@@ -222,7 +229,7 @@ where
         self.transport
             .register_zero_copy_listener(source_filter, sink_filter, zero_copy_listener.clone())
             .await?;
-        Ok(UTransportEndpointRegistration {
+        Ok(UOwnedFrameEndpointRegistration {
             inner: Arc::new(ZeroCopyRegistration::<T> {
                 transport: self.transport.clone(),
                 source_filter: source_filter.clone(),
@@ -286,8 +293,8 @@ mod tests {
     use async_trait::async_trait;
 
     use crate::{
-        UFrameMetadata, UOwnedFrame, UOwnedListener, UOwnedTransport, UStatus, UTransportEndpoint,
-        UTransportMode, UUri, UVecTxBuffer, UZeroCopyListener, UZeroCopyTransport,
+        UFrameMetadata, UOwnedFrame, UOwnedFrameEndpoint, UOwnedFrameEndpointMode, UOwnedListener,
+        UOwnedTransport, UStatus, UUri, UVecTxBuffer, UZeroCopyListener, UZeroCopyTransport,
     };
 
     #[derive(Default)]
@@ -431,7 +438,7 @@ mod tests {
     #[tokio::test]
     async fn endpoint_delegates_owned_transport_operations() {
         let transport = Arc::new(MemoryOwnedTransport::default());
-        let endpoint = UTransportEndpoint::from_owned(transport.clone());
+        let endpoint = UOwnedFrameEndpoint::from_owned(transport.clone());
         let topic = UUri::try_from_parts("vehicle", 0x4210, 1, 0x9000).expect("valid topic");
         let frame = UOwnedFrame::new(
             UFrameMetadata::publish(topic.clone()),
@@ -451,7 +458,7 @@ mod tests {
         registration.unregister().await.expect("unregister works");
         transport.inject(frame.clone()).await;
 
-        assert_eq!(endpoint.mode(), UTransportMode::Owned);
+        assert_eq!(endpoint.mode(), UOwnedFrameEndpointMode::Owned);
         assert_eq!(transport.sent(), vec![frame.clone()]);
         assert_eq!(
             *listener.0.lock().expect("frames lock poisoned"),
@@ -462,7 +469,7 @@ mod tests {
     #[tokio::test]
     async fn endpoint_sends_owned_frame_through_zero_copy_transport() {
         let transport = Arc::new(MemoryZeroCopyTransport::default());
-        let endpoint = UTransportEndpoint::from_zero_copy(transport.clone());
+        let endpoint = UOwnedFrameEndpoint::from_zero_copy(transport.clone());
         let topic = UUri::try_from_parts("vehicle", 0x4210, 1, 0x9000).expect("valid topic");
         let frame = UOwnedFrame::new(UFrameMetadata::publish(topic), b"payload".as_slice());
 
@@ -471,14 +478,14 @@ mod tests {
             .await
             .expect("send works");
 
-        assert_eq!(endpoint.mode(), UTransportMode::ZeroCopy);
+        assert_eq!(endpoint.mode(), UOwnedFrameEndpointMode::ZeroCopy);
         assert_eq!(transport.sent(), vec![frame]);
     }
 
     #[tokio::test]
     async fn endpoint_adapts_zero_copy_receive_to_owned_listener() {
         let transport = Arc::new(MemoryZeroCopyTransport::default());
-        let endpoint = UTransportEndpoint::from_zero_copy(transport.clone());
+        let endpoint = UOwnedFrameEndpoint::from_zero_copy(transport.clone());
         let topic = UUri::try_from_parts("vehicle", 0x4210, 1, 0x9000).expect("valid topic");
         let frame = UOwnedFrame::new(
             UFrameMetadata::publish(topic.clone()),

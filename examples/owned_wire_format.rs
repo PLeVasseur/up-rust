@@ -14,7 +14,7 @@
 use std::{error::Error, sync::Arc};
 
 use up_rust::{
-    local_transport::LocalTransport, UDeserializer, UEncoding, UMessageBuilder, UOwnedFrame,
+    local_transport::LocalTransport, UDeserializer, UEncoding, UFrameBuilder, UOwnedFrame,
     UOwnedListener, UOwnedTransport, USerializer, UUri, UWireError, WireFormat,
 };
 
@@ -118,7 +118,7 @@ pub async fn main() -> Result<(), Box<dyn Error>> {
         sensor_id: 7,
         milli_celsius: 21_750,
     };
-    let frame = UMessageBuilder::publish(topic.clone())
+    let frame = UFrameBuilder::publish(topic.clone())
         .build_with_serializable::<TemperatureWire, _>(&reading)?;
     transport.send_owned(frame).await?;
 

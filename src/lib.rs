@@ -19,13 +19,13 @@ frames and wire-format metadata without generated message envelopes.
 
 # Common Path
 
-Applications usually start with [`UMessageBuilder`] and [`UOwnedFrame`]: build a
+Applications usually start with [`UFrameBuilder`] and [`UOwnedFrame`]: build a
 Publish, Notification, Request, or Response frame, then send it with an
 [`UOwnedTransport`].
 
 For discoverability, the same public types are grouped by role under [`frame`],
 [`wire`], [`transport`], [`zero_copy`], and [`prelude`]. The crate root keeps the
-most common re-exports for compatibility and short examples.
+most common re-exports for short examples.
 
 # Advanced Paths
 
@@ -33,8 +33,9 @@ Custom payload codecs implement [`WireFormat`], [`USerializer`], and
 [`UDeserializer`]. Shared-memory transports implement [`UZeroCopyTransport`]
 only when they can honestly loan transmit storage and return receive leases.
 Routing code that needs a single owned-frame facade over either capability can
-use [`UTransportEndpoint`]; adapting a zero-copy endpoint to this facade copies
-payload bytes at the boundary.
+use [`UOwnedFrameEndpoint`]. Its name is intentional: adapting a zero-copy
+transport to this facade copies receive leases into owned frames and copies
+owned sends into transmit loans.
 
 # Features
 
@@ -72,8 +73,8 @@ pub mod protobuf_wire;
 
 mod uframe;
 pub use uframe::{
-    RawBytes, UAttributes, UDeserializer, UEncoding, UErasedSerializer, UFrameMetadata,
-    UMessageBuilder, UMessageBuilderError, UMessageType, UOwnedFrame, UPriority, USerializer,
+    RawBytes, UAttributes, UDeserializer, UEncoding, UErasedSerializer, UFrameBuilder,
+    UFrameBuilderError, UFrameMetadata, UMessageType, UOwnedFrame, UPriority, USerializer,
     UTxBuffer, UVecTxBuffer, UWireError, UZeroCopyRxFrame, WireFormat,
 };
 
@@ -90,7 +91,9 @@ mod uri;
 pub use uri::{UUri, UUriError};
 
 mod transport_endpoint;
-pub use transport_endpoint::{UTransportEndpoint, UTransportEndpointRegistration, UTransportMode};
+pub use transport_endpoint::{
+    UOwnedFrameEndpoint, UOwnedFrameEndpointMode, UOwnedFrameEndpointRegistration,
+};
 
 pub mod usubscription;
 
@@ -120,8 +123,8 @@ pub mod up_core_api {
 /// Frame metadata, builders, and owned-frame types for the common path.
 pub mod frame {
     pub use crate::{
-        UAttributes, UFrameMetadata, UMessageBuilder, UMessageBuilderError, UMessageType,
-        UOwnedFrame, UPriority,
+        UAttributes, UFrameBuilder, UFrameBuilderError, UFrameMetadata, UMessageType, UOwnedFrame,
+        UPriority,
     };
 }
 
@@ -136,8 +139,8 @@ pub mod wire {
 pub mod transport {
     pub use crate::{
         verify_filter_criteria, ComparableOwnedListener, LocalUriProvider, StaticUriProvider,
-        UOwnedListener, UOwnedTransport, UOwnedTransportExt, UTransportEndpoint,
-        UTransportEndpointRegistration, UTransportMode,
+        UOwnedFrameEndpoint, UOwnedFrameEndpointMode, UOwnedFrameEndpointRegistration,
+        UOwnedListener, UOwnedTransport, UOwnedTransportExt,
     };
 }
 
@@ -152,7 +155,7 @@ pub mod zero_copy {
 /// Common imports for applications using native owned frames.
 pub mod prelude {
     pub use crate::{
-        frame::{UFrameMetadata, UMessageBuilder, UMessageType, UOwnedFrame, UPriority},
+        frame::{UFrameBuilder, UFrameMetadata, UMessageType, UOwnedFrame, UPriority},
         transport::{UOwnedListener, UOwnedTransport, UOwnedTransportExt},
         wire::{RawBytes, UDeserializer, UEncoding, USerializer, UWireError, WireFormat},
         UCode, UStatus, UUri, UUID,

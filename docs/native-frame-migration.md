@@ -11,7 +11,7 @@ Old generated-envelope path:
 ```rust
 // Conceptual old shape.
 // UMessage contained generated attributes plus serialized payload bytes.
-let message = UMessageBuilder::publish(topic)
+let message = GeneratedUMessageBuilder::publish(topic)
     .build_with_protobuf_payload(&payload)?;
 transport.send(message).await?;
 ```
@@ -19,14 +19,14 @@ transport.send(message).await?;
 Native owned-frame path:
 
 ```rust
-use up_rust::{UMessageBuilder, UOwnedTransport, UUri};
+use up_rust::{UFrameBuilder, UOwnedTransport, UUri};
 
 # async fn send<T>(transport: &T) -> Result<(), Box<dyn std::error::Error>>
 # where
 #     T: UOwnedTransport,
 # {
 let topic = UUri::try_from("//vehicle/4210/1/B24D")?;
-let frame = UMessageBuilder::publish(topic).build_with_raw_payload(vec![0x01, 0x02])?;
+let frame = UFrameBuilder::publish(topic).build_with_raw_payload(vec![0x01, 0x02])?;
 
 transport.send_owned(frame).await?;
 # Ok(())
@@ -68,7 +68,7 @@ Transport implementations should project these fields into their native metadata
 | Generated `UMessage` transport envelope | `UOwnedFrame` or `UZeroCopyRxFrame` receive lease | Always | Transports receive native metadata plus payload bytes, not a generated wrapper. |
 | Generated `UAttributes` payload metadata | Native `UAttributes` inside `UFrameMetadata` | Always | Use accessors and builders instead of generated public fields. |
 | Generated payload-format enum | `UEncoding` | Always | `format_id` and `content_type` identify the codec; `schema_ref` optionally narrows the schema. |
-| Generated `UMessageBuilder` | Native `UMessageBuilder` that builds `UOwnedFrame` | Always | The name is retained for familiarity, but the output is a native frame. |
+| Generated `UMessageBuilder` | Native `UFrameBuilder` that builds `UOwnedFrame` | Always | The new name makes the native frame output explicit. |
 | `UTransport::send` | `UOwnedTransport::send_owned` or `UZeroCopyTransport::reserve` plus `send_zero_copy` | Always | Zero-copy send is intentionally two-phase so serializers can write directly into transport-loaned storage. |
 | `UTransport::register_listener` | `register_owned_listener` or `register_zero_copy_listener` | Always | Listener type follows transport capability: `UOwnedListener` or `UZeroCopyListener`. |
 | Pull-style receive helpers | `receive_owned` or `receive_zero_copy` implemented by transports that truly support pull receive | Always | The default returns `UNIMPLEMENTED`, matching mainline `UTransport`; listener-backed push receive is not hidden behind the pull API. |
@@ -100,7 +100,7 @@ The send mapping is easiest to remember as a buffer-ownership swap:
 
 ```rust
 // Owned path: build the payload bytes first, then hand the whole frame to the transport.
-let frame = UMessageBuilder::publish(topic.clone())
+let frame = UFrameBuilder::publish(topic.clone())
     .build_with_serializable::<TemperatureWire, _>(&reading)?;
 transport.send_owned(frame).await?;
 
@@ -128,13 +128,13 @@ transport.send_zero_copy(loan).await?;
 
 Do not build a `UOwnedFrame` first just to call a zero-copy transport unless you are intentionally crossing an owned/zero-copy adapter boundary. That adds the copy the zero-copy API is designed to avoid.
 
-`UTransportEndpoint` is that adapter boundary. It gives routing code one owned-frame facade over either transport capability. `UTransportEndpoint::from_zero_copy` copies an owned send into a transmit loan and copies a zero-copy receive lease into an owned listener callback. Use it when a generic router needs one type; do not use it to claim end-to-end zero-copy behavior.
+`UOwnedFrameEndpoint` is that adapter boundary. It gives routing code one owned-frame facade over either transport capability. `UOwnedFrameEndpoint::from_zero_copy` copies an owned send into a transmit loan and copies a zero-copy receive lease into an owned listener callback. Use it when a generic router needs one owned-frame type; do not use it to claim end-to-end zero-copy behavior.
 
 The examples mirror the same serializer-neutral contract from different angles. [`owned_wire_format.rs`](../examples/owned_wire_format.rs) shows owned sends and owned listener callbacks. [`zero_copy_wire_format.rs`](../examples/zero_copy_wire_format.rs) shows zero-copy send helpers, pull receive, and borrowed deserialization. The payload examples differ so the zero-copy example can demonstrate borrowed receive views, but the `WireFormat`, `USerializer`, and `UDeserializer` contracts are the same.
 
 ## Builder Entry Points
 
-The native `UMessageBuilder` keeps the common builder ergonomics but returns `UOwnedFrame`:
+The native `UFrameBuilder` builds `UOwnedFrame` values directly:
 
 | Builder | Required fields |
 | --- | --- |
@@ -161,11 +161,11 @@ For response communication status, prefer `with_comm_status(...)`. The older `wi
 Publish:
 
 ```rust
-use up_rust::{UMessageBuilder, UUri};
+use up_rust::{UFrameBuilder, UUri};
 
 # fn build() -> Result<(), Box<dyn std::error::Error>> {
 let topic = UUri::try_from("//vehicle/4210/1/B24D")?;
-let frame = UMessageBuilder::publish(topic).build_with_raw_payload(b"reading".to_vec())?;
+let frame = UFrameBuilder::publish(topic).build_with_raw_payload(b"reading".to_vec())?;
 # let _ = frame;
 # Ok(())
 # }
@@ -174,12 +174,12 @@ let frame = UMessageBuilder::publish(topic).build_with_raw_payload(b"reading".to
 Notification:
 
 ```rust
-use up_rust::{UMessageBuilder, UUri};
+use up_rust::{UFrameBuilder, UUri};
 
 # fn build() -> Result<(), Box<dyn std::error::Error>> {
 let origin = UUri::try_from("//vehicle/4210/1/8001")?;
 let destination = UUri::try_from("//backend/8000/1/0001")?;
-let frame = UMessageBuilder::notification(origin, destination).build()?;
+let frame = UFrameBuilder::notification(origin, destination).build()?;
 # let _ = frame;
 # Ok(())
 # }
@@ -188,12 +188,12 @@ let frame = UMessageBuilder::notification(origin, destination).build()?;
 Request:
 
 ```rust
-use up_rust::{UMessageBuilder, UUri};
+use up_rust::{UFrameBuilder, UUri};
 
 # fn build() -> Result<(), Box<dyn std::error::Error>> {
 let method = UUri::try_from("//vehicle/4210/1/0001")?;
 let reply_to = UUri::try_from("//backend/8000/1/0001")?;
-let frame = UMessageBuilder::request(method, reply_to, 1_000).build()?;
+let frame = UFrameBuilder::request(method, reply_to, 1_000).build()?;
 # let _ = frame;
 # Ok(())
 # }
@@ -202,10 +202,10 @@ let frame = UMessageBuilder::request(method, reply_to, 1_000).build()?;
 Response from request attributes:
 
 ```rust
-use up_rust::{UAttributes, UMessageBuilder};
+use up_rust::{UAttributes, UFrameBuilder};
 
 # fn build(request_attributes: &UAttributes) -> Result<(), Box<dyn std::error::Error>> {
-let frame = UMessageBuilder::response_for_request(request_attributes).build()?;
+let frame = UFrameBuilder::response_for_request(request_attributes).build()?;
 # let _ = frame;
 # Ok(())
 # }
@@ -216,7 +216,7 @@ let frame = UMessageBuilder::response_for_request(request_attributes).build()?;
 Use `WireFormat`, `USerializer`, and `UDeserializer` for non-Protobuf payloads. The same serializer contract works for owned buffers and zero-copy transmit loans.
 
 ```rust
-use up_rust::{UDeserializer, UEncoding, UMessageBuilder, USerializer, UUri, UWireError, WireFormat};
+use up_rust::{UDeserializer, UEncoding, UFrameBuilder, USerializer, UUri, UWireError, WireFormat};
 
 struct TemperatureWire;
 
@@ -263,7 +263,7 @@ impl<'a> UDeserializer<'a, TemperatureWire> for Temperature {
 # fn build() -> Result<(), Box<dyn std::error::Error>> {
 let topic = UUri::try_from("//vehicle/4210/1/B24D")?;
 let value = Temperature { celsius: 23 };
-let frame = UMessageBuilder::publish(topic)
+let frame = UFrameBuilder::publish(topic)
     .build_with_serializable::<TemperatureWire, _>(&value)?;
 # let _ = frame;
 # Ok(())
@@ -276,7 +276,7 @@ Typed frame deserialization checks `UEncoding` before decoding bytes. If a frame
 
 ## Metadata Validation
 
-Use `UMessageBuilder` or `UFrameMetadata::try_publish`, `try_notification`, `try_request`, and `try_response` when constructing application frames. These checked paths validate message IDs, URI roles, request TTL, RPC priority, response request IDs, and message-type-specific fields.
+Use `UFrameBuilder` or `UFrameMetadata::try_publish`, `try_notification`, `try_request`, and `try_response` when constructing application frames. These checked paths validate message IDs, URI roles, request TTL, RPC priority, response request IDs, and message-type-specific fields.
 
 The shorter `UFrameMetadata::publish`, `notification`, `request`, and `response` constructors are intentionally unchecked convenience helpers. They are useful in tests, adapters, and low-level code that validates separately with `UAttributes::validate` or `UFrameMetadata::validate`.
 
@@ -294,14 +294,14 @@ up-rust = { version = "0.10", features = ["protobuf-wire"] }
 With the feature enabled, use `ProtobufWire` or the builder convenience method:
 
 ```rust
-use up_rust::{UMessageBuilder, UUri};
+use up_rust::{UFrameBuilder, UUri};
 
 # fn build<T>(payload: &T) -> Result<(), Box<dyn std::error::Error>>
 # where
 #     T: up_rust::USerializer<up_rust::ProtobufWire>,
 # {
 let topic = UUri::try_from("//vehicle/4210/1/B24D")?;
-let frame = UMessageBuilder::publish(topic).build_with_protobuf_payload(payload)?;
+let frame = UFrameBuilder::publish(topic).build_with_protobuf_payload(payload)?;
 # let _ = frame;
 # Ok(())
 # }
@@ -346,19 +346,19 @@ This avoids a cancellation trap: a default listener-backed `receive_owned(&self,
 
 ### Generic Endpoint Adapters
 
-Use `UTransportEndpoint` when routing code needs one object that can send owned frames through either an owned transport or a true zero-copy transport:
+Use `UOwnedFrameEndpoint` when routing code needs one object that can send owned frames through either an owned transport or a true zero-copy transport:
 
 ```rust
 use std::sync::Arc;
-use up_rust::{UOwnedTransport, UTransportEndpoint};
+use up_rust::{UOwnedTransport, UOwnedFrameEndpoint};
 
 # fn wrap(transport: Arc<dyn UOwnedTransport>) {
-let endpoint = UTransportEndpoint::from_owned(transport);
+let endpoint = UOwnedFrameEndpoint::from_owned(transport);
 # let _ = endpoint;
 # }
 ```
 
-For zero-copy transports, `UTransportEndpoint::from_zero_copy` copies an owned frame payload into a transmit loan for sends and adapts zero-copy receive leases to owned listener callbacks for generic routing. It does not make a network or broker transport zero-copy; only transports that implement true loaned storage should use the zero-copy constructor. Treat the endpoint as an owned-frame facade for routing convenience, not as a zero-copy-preserving abstraction.
+For zero-copy transports, `UOwnedFrameEndpoint::from_zero_copy` copies an owned frame payload into a transmit loan for sends and copies zero-copy receive leases into owned listener callbacks for generic routing. It does not make a network or broker transport zero-copy; only transports that implement true loaned storage should use the zero-copy constructor. Treat the endpoint as an owned-frame facade for routing convenience, not as a zero-copy-preserving abstraction.
 
 ## Test Utilities
 
@@ -369,7 +369,7 @@ Enable the `test-util` feature to get `mockall` mocks for the supported object-s
 up-rust = { version = "0.10", features = ["test-util"] }
 ```
 
-`up_rust::test_util::InMemoryOwnedTransport` implements `UOwnedTransport`. It records sent frames and dispatches cloned owned frames to matching owned listeners. `up_rust::test_util::InMemoryZeroCopyTransport` implements `UZeroCopyTransport` using `UVecTxBuffer` and `UOwnedFrame`, which is useful for unit tests that need to exercise the zero-copy trait shape without launching shared-memory middleware. It records sent frames, queues receive leases for `receive_zero_copy`, and dispatches matching zero-copy listener callbacks. `up_rust::test_util::RecordingOwnedListener` records delivered owned frames for assertions; zero-copy listener assertions should capture `Rx` frames directly or use `UTransportEndpoint` when the code under test intentionally consumes owned callbacks.
+`up_rust::test_util::InMemoryOwnedTransport` implements `UOwnedTransport`. It records sent frames and dispatches cloned owned frames to matching owned listeners. `up_rust::test_util::InMemoryZeroCopyTransport` implements `UZeroCopyTransport` using `UVecTxBuffer` and `UOwnedFrame`, which is useful for unit tests that need to exercise the zero-copy trait shape without launching shared-memory middleware. It records sent frames, queues receive leases for `receive_zero_copy`, and dispatches matching zero-copy listener callbacks. `up_rust::test_util::RecordingOwnedListener` records delivered owned frames for assertions; zero-copy listener assertions should capture `Rx` frames directly or use `UOwnedFrameEndpoint` when the code under test intentionally consumes owned callbacks.
 
 ## Validation Checklist
 
@@ -382,5 +382,5 @@ Use this checklist when migrating an application or transport:
 5. Enable `protobuf-wire` only when Protocol Buffers payload support is needed.
 6. Use `send_owned` for owned transports and `send_zero_copy` only for true loaned-storage transports.
 7. Do not rely on a listener-backed default `receive_owned`; the default returns `UNIMPLEMENTED`, so implement pull receive directly only when the transport truly supports it.
-8. Use `UTransportEndpoint` for generic owned/zero-copy routing boundaries.
+8. Use `UOwnedFrameEndpoint` for generic owned/zero-copy routing boundaries.
 9. Add tests for raw payloads, custom wire formats, optional protobuf payloads, and wrong-wire-format rejection.
