@@ -78,6 +78,19 @@ Transport implementations should project these fields into their native metadata
 | Flat root-only imports | Role-focused modules such as `frame`, `wire`, `transport`, `zero_copy`, and `prelude` | Always | Root re-exports remain for compatibility and short examples; modules make simple application code and advanced transport code easier to separate. |
 | Generated/mock transport test helpers | `test-util` mocks and `test_util::{InMemoryOwnedTransport, InMemoryZeroCopyTransport, RecordingOwnedListener}` | `test-util` | Use mocks for communication/service traits and in-memory transports for borrowed-filter transport traits. |
 
+Removed APIs that do not have a direct replacement are intentionally retired rather than shimmed:
+
+| Removed API or behavior | Replacement or retirement rationale |
+| --- | --- |
+| Generated `UMessage` as the transport argument and listener callback value | Retired from the transport boundary. Use `UOwnedFrame` or a `UZeroCopyRxFrame` receive lease so transports do not have to encode all metadata through Protocol Buffers. |
+| Generated `UPayloadFormat` as the payload identity | Retired from native transport APIs. Use `UEncoding { format_id, content_type, schema_ref }` so new payload formats do not require generated enum changes. |
+| `UTransport`, `UListener`, `ComparableListener`, and `MockTransport` | Replaced by `UOwnedTransport`, `UOwnedListener`, `ComparableOwnedListener`, `MockUOwnedTransport`, and `MockUOwnedListener` for owned-buffer transports. Use `UZeroCopyTransport` and `UZeroCopyListener` only for true loaned-storage transports. |
+| Panic-based builder setters from generated `UMessageBuilder` | Replaced by `UFrameBuilder` terminal methods returning `Result<UOwnedFrame, UFrameBuilderError>`. Invalid metadata is reported as a recoverable construction error. |
+| `build_with_wrapped_protobuf_payload` as a transport-envelope path | Retired. If a protobuf `Any` is the application payload, serialize it with `ProtobufWire` and carry its schema identity in `UEncoding.schema_ref` when needed. |
+| Direct generated `UAttributes` public-field mutation | Replaced by native `UAttributes` accessors, `with_*` modifiers, validators, and checked `UFrameBuilder`/`UFrameMetadata::try_*` constructors. |
+| Generated service DTOs wildcard-exported at crate root | Replaced by module imports such as `up_rust::usubscription::SubscriptionRequest` with `protobuf-wire` enabled. |
+| Listener-backed default pull receive helper | Retired. `receive_owned` and `receive_zero_copy` default to `UNIMPLEMENTED`; push-oriented transports should expose listener registration instead of hiding temporary registrations behind pull receive. |
+
 ## Owned And Zero-Copy Transport Parity
 
 The native Rust API keeps the old `UTransport` operations but splits them by buffer ownership. Compare operations first, then map to the trait that matches the transport capability.
@@ -359,6 +372,30 @@ let endpoint = UOwnedFrameEndpoint::from_owned(transport);
 ```
 
 For zero-copy transports, `UOwnedFrameEndpoint::from_zero_copy` copies an owned frame payload into a transmit loan for sends and copies zero-copy receive leases into owned listener callbacks for generic routing. It does not make a network or broker transport zero-copy; only transports that implement true loaned storage should use the zero-copy constructor. Treat the endpoint as an owned-frame facade for routing convenience, not as a zero-copy-preserving abstraction.
+
+## Downstream Transport Notes
+
+Downstream transport crates should migrate in lockstep with this branch:
+
+| Crate | Native-frame expectation |
+| --- | --- |
+| `up-transport-zenoh-rust` | Implement `UOwnedTransport`. Preserve `UAttributes` and `UEncoding` in Zenoh attachments; payload bytes remain exactly the serializer output. Push-only receive should return `UNIMPLEMENTED` for `receive_owned`. |
+| `up-transport-mqtt5-rust` | Implement `UOwnedTransport`. Preserve `UAttributes` and `UEncoding` in MQTT 5 properties, including non-empty `schema_ref`; payload bytes remain exactly the serializer output. Push-only receive should return `UNIMPLEMENTED` for `receive_owned`. |
+| `up-transport-vsomeip-rust` | Implement `UOwnedTransport`. Preserve frame metadata in the documented native SOME/IP prefix because vsomeip exposes only payload bytes to the language binding. The prefix is transport metadata, not a generated protobuf envelope. |
+| `up-transport-iceoryx2-rust` | Implement `UZeroCopyTransport` for true shared-memory loans and may also implement `UOwnedTransport` as a copying convenience. Preserve variable metadata in the `UFM1` prefix hidden from `payload()`/`payload_mut()`. |
+| `up-streamer-rust` | Route through `UOwnedFrameEndpoint` when one owned-frame routing abstraction is needed. Treat zero-copy endpoints wrapped this way as copy boundaries, not end-to-end zero-copy forwarding. |
+
+## Release And PR Notes
+
+Suggested PR/release wording:
+
+```text
+This branch intentionally changes the Rust transport boundary from generated protobuf UMessage envelopes to native serializer-neutral frames. The break removes mandatory protobuf envelope encoding from transports, makes protobuf an optional payload codec, and adds explicit owned-buffer and zero-copy transport capabilities.
+
+No compatibility shim is provided for the old UTransport/UMessage surface because a shim would either reintroduce the generated envelope as the common transport contract or hide copies at the exact boundary this change is making explicit. Existing applications should migrate to UFrameBuilder, UOwnedFrame, UOwnedTransport, and UEncoding. Transports that cannot loan storage should implement only UOwnedTransport; shared-memory transports that can loan storage should implement UZeroCopyTransport.
+
+Downstream crates must preserve UAttributes, UEncoding.format_id, UEncoding.content_type, and non-empty UEncoding.schema_ref across their transport-specific metadata channel. Application payload bytes must remain exactly the bytes produced by the selected WireFormat serializer.
+```
 
 ## Test Utilities
 

@@ -16,14 +16,15 @@
 //! This module intentionally uses [`UOwnedFrame`] and [`UEncoding`] instead of
 //! reintroducing generated transport envelopes.
 
-#[cfg(feature = "util")]
+#[cfg(all(feature = "util", feature = "protobuf-wire"))]
 use std::{
     collections::{hash_map::Entry, HashMap},
     ops::Deref,
-    sync::{Mutex, RwLock},
-    time::Duration,
+    sync::RwLock,
 };
 use std::{error::Error, fmt::Display, sync::Arc};
+#[cfg(feature = "util")]
+use std::{sync::Mutex, time::Duration};
 
 use async_trait::async_trait;
 use bytes::Bytes;
