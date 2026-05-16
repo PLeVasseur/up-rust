@@ -221,16 +221,33 @@ impl TryFrom<CloudEvent> for UOwnedFrame {
                 .clone()
                 .ok_or(CloudEventError::MissingAttribute("datacontenttype"))?;
             let schema_ref = event.data_schema.clone();
-            let encoding = UEncoding::new(format_id, content_type, schema_ref);
-            Ok(UOwnedFrame::new(
-                UFrameMetadata::new(attributes, encoding),
-                data,
-            ))
+            let encoding = UEncoding::try_new(format_id, content_type, schema_ref)
+                .map_err(|error| CloudEventError::InvalidAttribute(error.to_string()))?;
+            let frame = UOwnedFrame::new(UFrameMetadata::new(attributes, encoding), data);
+            validate_cloud_event_frame(&frame)?;
+            Ok(frame)
         } else {
-            Ok(UOwnedFrame::without_payload(
-                UFrameMetadata::without_payload_encoding(attributes),
-            ))
+            let frame =
+                UOwnedFrame::without_payload(UFrameMetadata::without_payload_encoding(attributes));
+            validate_cloud_event_frame(&frame)?;
+            Ok(frame)
         }
+    }
+}
+
+fn validate_cloud_event_frame(frame: &UOwnedFrame) -> Result<(), CloudEventError> {
+    frame
+        .metadata()
+        .validate()
+        .map_err(|error| CloudEventError::InvalidAttribute(error.to_string()))?;
+    match (frame.has_payload(), frame.metadata().encoding().is_some()) {
+        (true, true) | (false, false) => Ok(()),
+        (true, false) => Err(CloudEventError::InvalidAttribute(
+            "payload is present but payload encoding is absent".to_string(),
+        )),
+        (false, true) => Err(CloudEventError::InvalidAttribute(
+            "payload encoding is present but payload is absent".to_string(),
+        )),
     }
 }
 
@@ -356,6 +373,7 @@ mod tests {
 
     const MESSAGE_ID: &str = "00000000-0001-7000-8010-101010101a1a";
     const SOURCE: &str = "//vehicle/4210/1/8001";
+    const RPC_METHOD: &str = "//vehicle/4210/1/1";
     const SINK: &str = "//vehicle/4210/1/0";
     const TRACEPARENT: &str = "00-4bf92f3577b34da6a3ce929d0e0e4736-00f067aa0ba902b7-00";
 
@@ -363,7 +381,7 @@ mod tests {
     fn owned_frame_round_trips_through_native_cloudevent() {
         let id = MESSAGE_ID.parse::<UUID>().unwrap();
         let request_id = UUID::build();
-        let source = UUri::try_from(SOURCE).unwrap();
+        let source = UUri::try_from(RPC_METHOD).unwrap();
         let sink = UUri::try_from(SINK).unwrap();
         let attributes = UAttributes::new(
             id.clone(),
@@ -375,8 +393,6 @@ mod tests {
         .with_ttl(5_000)
         .with_request_id(request_id.clone())
         .with_traceparent(TRACEPARENT)
-        .with_token("auth-token")
-        .with_permission_level(7)
         .with_comm_status(UCode::UNAVAILABLE);
         let encoding = UEncoding::new(
             "protobuf",
@@ -392,7 +408,7 @@ mod tests {
         assert_eq!(event.spec_version, CLOUDEVENTS_SPEC_VERSION);
         assert_eq!(event.id, MESSAGE_ID);
         assert_eq!(event.type_, "up-res.v1");
-        assert_eq!(event.source, SOURCE);
+        assert_eq!(event.source, RPC_METHOD);
         assert_eq!(
             event.data_content_type.as_deref(),
             Some("application/x-protobuf")
@@ -413,8 +429,6 @@ mod tests {
         assert_eq!(received.ttl(), Some(5_000));
         assert_eq!(received.request_id(), Some(&request_id));
         assert_eq!(received.traceparent(), Some(TRACEPARENT));
-        assert_eq!(received.token(), Some("auth-token"));
-        assert_eq!(received.permission_level(), Some(7));
         assert_eq!(received.commstatus(), Some(UCode::UNAVAILABLE));
         assert_eq!(frame.metadata().encoding(), Some(&encoding));
         assert_eq!(frame.payload_bytes(), b"payload");
@@ -432,6 +446,44 @@ mod tests {
         assert!(matches!(
             UOwnedFrame::try_from(event),
             Err(CloudEventError::UnsupportedSpecVersion(_))
+        ));
+    }
+
+    #[test]
+    fn invalid_cloudevent_payload_encoding_is_rejected_without_panic() {
+        let mut event = CloudEvent::new(
+            MESSAGE_ID.to_string(),
+            "up-pub.v1".to_string(),
+            SOURCE.to_string(),
+        );
+        event.data = Some(Bytes::from_static(b"payload"));
+        event.data_content_type = Some("not a media type".to_string());
+        event.extensions.insert(
+            EXTENSION_NAME_FORMAT_ID.to_string(),
+            CloudEventAttributeValue::String("protobuf".to_string()),
+        );
+
+        assert!(matches!(
+            UOwnedFrame::try_from(event),
+            Err(CloudEventError::InvalidAttribute(_))
+        ));
+    }
+
+    #[test]
+    fn invalid_cloudevent_message_type_metadata_is_rejected() {
+        let mut event = CloudEvent::new(
+            MESSAGE_ID.to_string(),
+            "up-pub.v1".to_string(),
+            SOURCE.to_string(),
+        );
+        event.extensions.insert(
+            EXTENSION_NAME_REQUEST_ID.to_string(),
+            CloudEventAttributeValue::String(UUID::build().to_hyphenated_string()),
+        );
+
+        assert!(matches!(
+            UOwnedFrame::try_from(event),
+            Err(CloudEventError::InvalidAttribute(_))
         ));
     }
 }

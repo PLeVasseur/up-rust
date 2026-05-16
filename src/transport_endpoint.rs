@@ -23,7 +23,7 @@ use crate::{
     utransport::{UZeroCopyListener, UZeroCopyTransport},
     validate_owned_frame_for_transport,
     zero_copy::{UTxBuffer, UZeroCopyRxFrame},
-    UOwnedFrame, UOwnedListener, UOwnedTransport, UStatus, UUri,
+    UCode, UOwnedFrame, UOwnedListener, UOwnedTransport, UStatus, UUri,
 };
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
@@ -214,6 +214,15 @@ where
             .transport
             .reserve(frame.metadata().clone(), payload_len, 1)
             .await?;
+        let reserved_len = buffer.payload_mut().len();
+        if reserved_len != payload_len {
+            return Err(UStatus::fail_with_code(
+                UCode::INTERNAL,
+                format!(
+                    "zero-copy transport reserved payload buffer length {reserved_len}, expected {payload_len}"
+                ),
+            ));
+        }
         buffer.payload_mut().copy_from_slice(frame.payload_bytes());
         self.transport.send_zero_copy(buffer).await
     }
@@ -297,8 +306,8 @@ mod tests {
 
     use crate::{
         transport::{UOwnedFrameEndpoint, UOwnedFrameEndpointMode},
-        zero_copy::{UVecTxBuffer, UZeroCopyListener, UZeroCopyTransport},
-        UFrameMetadata, UOwnedFrame, UOwnedListener, UOwnedTransport, UStatus, UUri,
+        zero_copy::{UTxBuffer, UVecTxBuffer, UZeroCopyListener, UZeroCopyTransport},
+        UCode, UFrameMetadata, UOwnedFrame, UOwnedListener, UOwnedTransport, UStatus, UUri,
     };
 
     #[derive(Default)]
@@ -430,6 +439,71 @@ mod tests {
         }
     }
 
+    struct WrongLengthTxBuffer {
+        metadata: UFrameMetadata,
+        payload: Vec<u8>,
+    }
+
+    impl UTxBuffer for WrongLengthTxBuffer {
+        fn metadata(&self) -> &UFrameMetadata {
+            &self.metadata
+        }
+
+        fn metadata_mut(&mut self) -> &mut UFrameMetadata {
+            &mut self.metadata
+        }
+
+        fn payload(&self) -> &[u8] {
+            &self.payload
+        }
+
+        fn payload_mut(&mut self) -> &mut [u8] {
+            self.payload.as_mut_slice()
+        }
+    }
+
+    struct WrongLengthZeroCopyTransport;
+
+    #[async_trait]
+    impl UZeroCopyTransport for WrongLengthZeroCopyTransport {
+        type Tx = WrongLengthTxBuffer;
+        type Rx = UOwnedFrame;
+
+        async fn reserve(
+            &self,
+            metadata: UFrameMetadata,
+            payload_len: usize,
+            _alignment: usize,
+        ) -> Result<Self::Tx, UStatus> {
+            Ok(WrongLengthTxBuffer {
+                metadata,
+                payload: vec![0_u8; payload_len + 1],
+            })
+        }
+
+        async fn send_zero_copy(&self, _buffer: Self::Tx) -> Result<(), UStatus> {
+            Ok(())
+        }
+
+        async fn register_zero_copy_listener(
+            &self,
+            _source_filter: &UUri,
+            _sink_filter: Option<&UUri>,
+            _listener: Arc<dyn UZeroCopyListener<Self::Rx>>,
+        ) -> Result<(), UStatus> {
+            Ok(())
+        }
+
+        async fn unregister_zero_copy_listener(
+            &self,
+            _source_filter: &UUri,
+            _sink_filter: Option<&UUri>,
+            _listener: Arc<dyn UZeroCopyListener<Self::Rx>>,
+        ) -> Result<(), UStatus> {
+            Ok(())
+        }
+    }
+
     struct CaptureListener(Mutex<Vec<UOwnedFrame>>);
 
     #[async_trait]
@@ -485,6 +559,23 @@ mod tests {
 
         assert_eq!(endpoint.mode(), UOwnedFrameEndpointMode::ZeroCopy);
         assert_eq!(transport.sent(), vec![frame]);
+    }
+
+    #[tokio::test]
+    async fn endpoint_rejects_wrong_length_zero_copy_reservation() {
+        let endpoint = UOwnedFrameEndpoint::from_zero_copy(Arc::new(WrongLengthZeroCopyTransport));
+        let topic = UUri::try_from_parts("vehicle", 0x4210, 1, 0x9000).expect("valid topic");
+        let frame = crate::UFrameBuilder::publish(topic)
+            .build_with_raw_payload(b"payload".as_slice())
+            .unwrap();
+
+        let err = endpoint
+            .send_owned(frame)
+            .await
+            .expect_err("wrong-length reserve must fail");
+
+        assert_eq!(err.get_code(), UCode::INTERNAL);
+        assert!(err.get_message().contains("reserved payload buffer length"));
     }
 
     #[tokio::test]
