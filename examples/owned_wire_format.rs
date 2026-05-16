@@ -14,8 +14,9 @@
 use std::{error::Error, sync::Arc};
 
 use up_rust::{
-    local_transport::LocalTransport, UDeserializer, UEncoding, UFrameBuilder, UOwnedFrame,
-    UOwnedListener, UOwnedTransport, USerializer, UUri, UWireError, WireFormat,
+    local_transport::LocalTransport,
+    wire::{UDeserializer, USerializer, UWireError, WireFormat},
+    UEncoding, UFrameBuilder, UOwnedFrame, UOwnedListener, UOwnedTransport, UUri,
 };
 
 #[derive(Debug, PartialEq)]

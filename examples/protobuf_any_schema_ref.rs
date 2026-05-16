@@ -12,7 +12,7 @@
  ********************************************************************************/
 
 use protobuf::well_known_types::{any::Any, wrappers::StringValue};
-use up_rust::{ProtobufWire, UEncoding, UFrameMetadata, UOwnedFrame, USerializer, UUri};
+use up_rust::{wire::USerializer, ProtobufWire, UEncoding, UFrameMetadata, UOwnedFrame, UUri};
 
 fn main() -> Result<(), Box<dyn std::error::Error>> {
     let topic = UUri::try_from("//vehicle/4210/1/8001")?;
@@ -36,7 +36,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         .expect("unexpected protobuf Any type");
 
     assert_eq!(
-        frame.metadata().encoding().schema_ref(),
+        frame.metadata().encoding().and_then(UEncoding::schema_ref),
         Some(any.type_url.as_str())
     );
     assert_eq!(decoded.value, message.value);

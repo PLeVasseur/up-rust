@@ -18,7 +18,10 @@
 
 use protobuf::{CodedOutputStream, Message};
 
-use crate::{UEncoding, UWireError, WireFormat};
+use crate::{
+    wire::{UDeserializer, USerializer, UWireError, WireFormat},
+    UEncoding,
+};
 
 pub struct ProtobufWire;
 
@@ -32,7 +35,7 @@ impl WireFormat for ProtobufWire {
     }
 }
 
-impl<T> crate::USerializer<ProtobufWire> for T
+impl<T> USerializer<ProtobufWire> for T
 where
     T: Message,
 {
@@ -63,7 +66,7 @@ where
     }
 }
 
-impl<'a, T> crate::UDeserializer<'a, ProtobufWire> for T
+impl<'a, T> UDeserializer<'a, ProtobufWire> for T
 where
     T: Message,
 {
@@ -78,8 +81,9 @@ mod tests {
     use protobuf::well_known_types::wrappers::StringValue;
 
     use crate::{
-        UDeserializer, UFrameMetadata, UOwnedFrame, USerializer, UTxBuffer, UUri, UVecTxBuffer,
-        UZeroCopyRxFrame,
+        wire::{UDeserializer, USerializer},
+        zero_copy::{UTxBuffer, UVecTxBuffer, UZeroCopyRxFrame},
+        UFrameMetadata, UOwnedFrame, UUri,
     };
 
     use super::*;
@@ -102,7 +106,7 @@ mod tests {
         .unwrap();
         let decoded: StringValue = frame.deserialize::<ProtobufWire, _>().unwrap();
 
-        assert_eq!(frame.metadata().encoding(), &ProtobufWire::encoding());
+        assert_eq!(frame.metadata().encoding(), Some(&ProtobufWire::encoding()));
         assert_eq!(decoded.value, input.value);
     }
 
@@ -122,7 +126,7 @@ mod tests {
         let frame = buffer.into_frame();
         let decoded: StringValue = frame.deserialize_borrowed::<ProtobufWire, _>().unwrap();
 
-        assert_eq!(frame.metadata().encoding(), &ProtobufWire::encoding());
+        assert_eq!(frame.metadata().encoding(), Some(&ProtobufWire::encoding()));
         assert_eq!(decoded.value, input.value);
     }
 
@@ -130,6 +134,9 @@ mod tests {
     fn protobuf_deserializer_rejects_invalid_payload() {
         let result = StringValue::deserialize_from(&[0x0a]);
 
-        assert!(matches!(result, Err(crate::UWireError::InvalidPayload(_))));
+        assert!(matches!(
+            result,
+            Err(crate::wire::UWireError::InvalidPayload(_))
+        ));
     }
 }

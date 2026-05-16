@@ -38,9 +38,11 @@ assert_eq!(frame.payload_bytes(), &[0x01, 0x02]);
 # }
 ```
 
-Use `build_with_serializable::<MyWireFormat, _>(&value)` to create frames with custom serializer-neutral payloads. Protocol Buffers remain available as optional payload support through the `protobuf-wire` feature. uSubscription service DTO payloads use the generated `up-core-api` protobuf DTOs when the `protobuf-wire` feature is enabled, while the transport envelope remains a native frame.
+Use `build_with_serializable::<MyWireFormat, _>(&value)` to create frames with custom serializer-neutral payloads. Protocol Buffers remain available as optional payload support through the `protobuf-wire` feature. CloudEvents mapping is available through the optional `cloudevents` feature. uSubscription service DTO payloads use the generated `up-core-api` protobuf DTOs when the `protobuf-wire` feature is enabled, while the transport envelope remains a native frame.
 
-Transport trait defaults match the mainline `UTransport` shape: optional receive/listener methods return `UNIMPLEMENTED` unless a transport implements them. Push-oriented transports should implement listener registration; transports that support true pull receive should implement `receive_owned` directly. Routing code that needs one owned-frame facade over owned and zero-copy transports can use `UOwnedFrameEndpoint`; wrapping a zero-copy transport crosses a copy boundary and is not end-to-end zero-copy forwarding.
+Transport trait defaults match the mainline `UTransport` shape: optional receive/listener methods return `UNIMPLEMENTED` unless a transport implements them. Push-oriented transports should implement listener registration; transports that support true pull receive should implement `receive_owned` directly. Routing code that needs one owned-frame facade over owned and zero-copy transports can use `transport::UOwnedFrameEndpoint`; wrapping a zero-copy transport crosses a copy boundary and is not end-to-end zero-copy forwarding.
+
+Payload presence is explicit: `build()` creates a frame with no payload and no `UEncoding`, while `build_with_raw_payload(Vec::new())` creates a present empty raw payload with raw-byte encoding metadata.
 
 Use `UFrameBuilder` or `UFrameMetadata::try_*` constructors for checked metadata construction. The shorter `UFrameMetadata::{publish, notification, request, response}` constructors are unchecked convenience helpers for tests, adapters, and cases that validate separately. Native domain types such as `UUri` and `UUID` keep their fields private; use constructors and accessors instead of struct literals.
 

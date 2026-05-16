@@ -20,12 +20,13 @@ use std::sync::Arc;
 use async_trait::async_trait;
 
 use crate::{
-    UCode, UFrameMetadata, UOwnedFrame, USerializer, UStatus, UTxBuffer, UUri, UWireError,
-    UZeroCopyRxFrame, WireFormat,
+    wire::{USerializer, UWireError, WireFormat},
+    zero_copy::{UTxBuffer, UZeroCopyRxFrame},
+    UCode, UFrameMetadata, UOwnedFrame, UStatus, UUri,
 };
 
 #[cfg(any(test, feature = "test-util"))]
-use crate::UVecTxBuffer;
+use crate::zero_copy::UVecTxBuffer;
 
 /// Verifies that given UUris can be used as source and sink filter UUris.
 pub fn verify_filter_criteria(
@@ -68,6 +69,47 @@ pub fn verify_filter_criteria(
             "source filter must either have the wildcard resource ID or a resource ID from topic range, if sink filter is empty"));
     }
     Ok(())
+}
+
+/// Validates frame metadata before transport send or application delivery.
+pub fn validate_frame_metadata_for_transport(metadata: &UFrameMetadata) -> Result<(), UStatus> {
+    metadata.validate().map_err(|err| {
+        UStatus::fail_with_code(
+            UCode::INVALID_ARGUMENT,
+            format!("invalid frame metadata: {err}"),
+        )
+    })?;
+    if metadata.attributes().is_expired() {
+        return Err(UStatus::fail_with_code(
+            UCode::DEADLINE_EXCEEDED,
+            "message has expired",
+        ));
+    }
+    Ok(())
+}
+
+/// Validates frame metadata together with explicit payload presence.
+pub fn validate_frame_metadata_for_payload(
+    metadata: &UFrameMetadata,
+    has_payload: bool,
+) -> Result<(), UStatus> {
+    validate_frame_metadata_for_transport(metadata)?;
+    match (has_payload, metadata.encoding().is_some()) {
+        (true, true) | (false, false) => Ok(()),
+        (true, false) => Err(UStatus::fail_with_code(
+            UCode::INVALID_ARGUMENT,
+            "message payload is present but payload encoding is absent",
+        )),
+        (false, true) => Err(UStatus::fail_with_code(
+            UCode::INVALID_ARGUMENT,
+            "payload encoding is present but message payload is absent",
+        )),
+    }
+}
+
+/// Validates an owned frame before transport send or application delivery.
+pub fn validate_owned_frame_for_transport(frame: &UOwnedFrame) -> Result<(), UStatus> {
+    validate_frame_metadata_for_payload(frame.metadata(), frame.has_payload())
 }
 
 /// A factory for URIs representing this uEntity's resources.
@@ -213,6 +255,7 @@ pub trait UOwnedTransportExt: UOwnedTransport {
         F: WireFormat + Send + Sync,
         T: USerializer<F> + Sync,
     {
+        validate_frame_metadata_for_transport(&metadata)?;
         let frame =
             UOwnedFrame::from_serializable::<F, T>(metadata, value).map_err(UStatus::from)?;
         self.send_owned(frame).await
@@ -242,7 +285,7 @@ where
 ///
 /// ```no_run
 /// # use async_trait::async_trait;
-/// # use up_rust::{UFrameMetadata, UOwnedFrame, UStatus, UUri, UVecTxBuffer, UZeroCopyTransport};
+/// # use up_rust::{zero_copy::{UVecTxBuffer, UZeroCopyTransport}, UFrameMetadata, UOwnedFrame, UStatus, UUri};
 /// struct SharedMemoryTransport;
 ///
 /// #[async_trait]
@@ -327,6 +370,7 @@ pub trait UZeroCopyTransportExt: UZeroCopyTransport {
         F: WireFormat + Send + Sync,
         T: USerializer<F> + Sync,
     {
+        validate_frame_metadata_for_transport(&metadata)?;
         let payload_len = value.encoded_len();
         let mut buffer = self
             .reserve(
@@ -562,7 +606,9 @@ mod tests {
     #[tokio::test]
     async fn mock_owned_transport_delegates_send() {
         let topic = UUri::try_from_parts("vehicle", 0x4210, 0x01, 0x9000).unwrap();
-        let frame = UOwnedFrame::new(UFrameMetadata::publish(topic), Vec::<u8>::new());
+        let frame = crate::UFrameBuilder::publish(topic)
+            .build_with_raw_payload(Vec::<u8>::new())
+            .unwrap();
         let expected = frame.clone();
         let mut transport = MockUOwnedTransport::new();
         transport
@@ -572,5 +618,49 @@ mod tests {
             .return_const(Ok(()));
 
         transport.send_owned(frame).await.unwrap();
+    }
+
+    #[test]
+    fn validate_owned_frame_accepts_absent_payload_without_encoding() {
+        let topic = UUri::try_from_parts("vehicle", 0x4210, 0x01, 0x9000).unwrap();
+        let frame = crate::UFrameBuilder::publish(topic).build().unwrap();
+
+        validate_owned_frame_for_transport(&frame).unwrap();
+    }
+
+    #[test]
+    fn validate_owned_frame_accepts_present_empty_payload_with_encoding() {
+        let topic = UUri::try_from_parts("vehicle", 0x4210, 0x01, 0x9000).unwrap();
+        let frame = crate::UFrameBuilder::publish(topic)
+            .build_with_raw_payload(Vec::<u8>::new())
+            .unwrap();
+
+        validate_owned_frame_for_transport(&frame).unwrap();
+    }
+
+    #[test]
+    fn validate_owned_frame_rejects_payload_without_encoding() {
+        let topic = UUri::try_from_parts("vehicle", 0x4210, 0x01, 0x9000).unwrap();
+        let frame = UOwnedFrame::new(UFrameMetadata::publish(topic), Vec::<u8>::new());
+        let status = validate_owned_frame_for_transport(&frame).unwrap_err();
+
+        assert_eq!(status.get_code(), UCode::INVALID_ARGUMENT);
+        assert!(status.get_message().contains("payload encoding is absent"));
+    }
+
+    #[test]
+    fn validate_frame_metadata_rejects_expired_frames() {
+        let topic = UUri::try_from_parts("vehicle", 0x4210, 0x01, 0x9000).unwrap();
+        let attributes = crate::UAttributes::new(
+            crate::UUID::build_for_timestamp_millis(1),
+            topic,
+            None,
+            crate::UMessageType::Publish,
+        )
+        .with_ttl(1);
+        let metadata = UFrameMetadata::without_payload_encoding(attributes);
+        let status = validate_frame_metadata_for_transport(&metadata).unwrap_err();
+
+        assert_eq!(status.get_code(), UCode::DEADLINE_EXCEEDED);
     }
 }

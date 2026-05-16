@@ -11,10 +11,11 @@
  * SPDX-License-Identifier: Apache-2.0
  ********************************************************************************/
 
-//! Native uProtocol core service contracts.
+//! Native uProtocol core service identities and generated service payload bindings.
 //!
-//! These modules replace the generated protobuf-backed core exports with native
-//! Rust types that can be carried by any selected [`crate::WireFormat`].
+//! Service DTOs are protobuf-defined payload contracts. Native frames carry those
+//! DTO bytes when the relevant payload codec feature is enabled; they do not
+//! replace service DTOs with partial native public-field structs.
 
 pub mod udiscovery;
 pub mod usubscription;

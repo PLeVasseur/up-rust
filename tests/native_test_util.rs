@@ -19,7 +19,8 @@ use up_rust::{
         MockSubscriber,
     },
     test_util::{InMemoryOwnedTransport, InMemoryZeroCopyTransport, RecordingOwnedListener},
-    MockLocalUriProvider, MockUOwnedListener, MockUOwnedTransport, MockUZeroCopyTransport,
+    zero_copy::MockUZeroCopyTransport,
+    MockLocalUriProvider, MockUOwnedListener, MockUOwnedTransport,
 };
 
 #[test]

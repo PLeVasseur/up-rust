@@ -45,10 +45,14 @@ pub trait UZeroCopyRxFrame {
         T: UDeserializer<'a, F>,
     {
         let expected = F::encoding();
-        if !self.metadata().encoding().is_compatible_with(&expected) {
+        let actual = self
+            .metadata()
+            .encoding()
+            .ok_or(UWireError::MissingEncoding)?;
+        if !actual.is_compatible_with(&expected) {
             return Err(UWireError::UnsupportedEncoding {
                 expected: Box::new(expected),
-                actual: Box::new(self.metadata().encoding().clone()),
+                actual: Box::new(actual.clone()),
             });
         }
         T::deserialize_from(self.payload())

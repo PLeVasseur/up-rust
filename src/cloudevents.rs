@@ -97,19 +97,24 @@ impl TryFrom<UOwnedFrame> for CloudEvent {
     type Error = CloudEventError;
 
     fn try_from(frame: UOwnedFrame) -> Result<Self, Self::Error> {
-        let header = frame.metadata();
+        let header = frame.metadata().clone();
         let attributes = header.attributes();
         let mut event = Self::new(
             attributes.id().to_hyphenated_string(),
             message_type_to_cloud_event_type(attributes.message_type()).to_string(),
             attributes.source().to_uri(false),
         );
-        event.data_content_type = Some(header.encoding().content_type().to_string());
-        event.data_schema = header.encoding().schema_ref().map(str::to_string);
-        event.extensions.insert(
-            EXTENSION_NAME_FORMAT_ID.to_string(),
-            CloudEventAttributeValue::String(header.encoding().format_id().to_string()),
-        );
+        if frame.has_payload() {
+            let encoding = header
+                .encoding()
+                .ok_or(CloudEventError::MissingAttribute("payload encoding"))?;
+            event.data_content_type = Some(encoding.content_type().to_string());
+            event.data_schema = encoding.schema_ref().map(str::to_string);
+            event.extensions.insert(
+                EXTENSION_NAME_FORMAT_ID.to_string(),
+                CloudEventAttributeValue::String(encoding.format_id().to_string()),
+            );
+        }
         if let Some(sink) = attributes.sink() {
             event.extensions.insert(
                 EXTENSION_NAME_SINK.to_string(),
@@ -160,7 +165,7 @@ impl TryFrom<UOwnedFrame> for CloudEvent {
                 CloudEventAttributeValue::Integer(i64::from(commstatus.as_u8())),
             );
         }
-        event.data = Some(frame.into_payload());
+        event.data = frame.into_payload();
         Ok(event)
     }
 }
@@ -209,15 +214,23 @@ impl TryFrom<CloudEvent> for UOwnedFrame {
             attributes = attributes.with_comm_status(commstatus);
         }
 
-        let format_id = required_string_extension(&event, EXTENSION_NAME_FORMAT_ID)?;
-        let content_type = event
-            .data_content_type
-            .ok_or(CloudEventError::MissingAttribute("datacontenttype"))?;
-        let encoding = UEncoding::new(format_id, content_type, event.data_schema);
-        Ok(UOwnedFrame::new(
-            UFrameMetadata::new(attributes, encoding),
-            event.data.unwrap_or_default(),
-        ))
+        if let Some(data) = event.data.clone() {
+            let format_id = required_string_extension(&event, EXTENSION_NAME_FORMAT_ID)?;
+            let content_type = event
+                .data_content_type
+                .clone()
+                .ok_or(CloudEventError::MissingAttribute("datacontenttype"))?;
+            let schema_ref = event.data_schema.clone();
+            let encoding = UEncoding::new(format_id, content_type, schema_ref);
+            Ok(UOwnedFrame::new(
+                UFrameMetadata::new(attributes, encoding),
+                data,
+            ))
+        } else {
+            Ok(UOwnedFrame::without_payload(
+                UFrameMetadata::without_payload_encoding(attributes),
+            ))
+        }
     }
 }
 
@@ -403,7 +416,7 @@ mod tests {
         assert_eq!(received.token(), Some("auth-token"));
         assert_eq!(received.permission_level(), Some(7));
         assert_eq!(received.commstatus(), Some(UCode::UNAVAILABLE));
-        assert_eq!(frame.metadata().encoding(), &encoding);
+        assert_eq!(frame.metadata().encoding(), Some(&encoding));
         assert_eq!(frame.payload_bytes(), b"payload");
     }
 

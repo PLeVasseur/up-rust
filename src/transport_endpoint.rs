@@ -20,8 +20,10 @@ use std::{
 use async_trait::async_trait;
 
 use crate::{
-    UOwnedFrame, UOwnedListener, UOwnedTransport, UStatus, UTxBuffer, UUri, UZeroCopyListener,
-    UZeroCopyRxFrame, UZeroCopyTransport,
+    utransport::{UZeroCopyListener, UZeroCopyTransport},
+    validate_owned_frame_for_transport,
+    zero_copy::{UTxBuffer, UZeroCopyRxFrame},
+    UOwnedFrame, UOwnedListener, UOwnedTransport, UStatus, UUri,
 };
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
@@ -65,7 +67,7 @@ impl UOwnedFrameEndpoint {
     ///
     /// ```no_run
     /// # use std::sync::Arc;
-    /// # use up_rust::{UOwnedFrameEndpoint, UZeroCopyTransport};
+    /// # use up_rust::{transport::UOwnedFrameEndpoint, zero_copy::UZeroCopyTransport};
     /// # fn wrap<T>(transport: Arc<T>) -> UOwnedFrameEndpoint
     /// # where
     /// #     T: UZeroCopyTransport + Send + Sync + 'static,
@@ -88,6 +90,7 @@ impl UOwnedFrameEndpoint {
     }
 
     pub async fn send_owned(&self, frame: UOwnedFrame) -> Result<(), UStatus> {
+        validate_owned_frame_for_transport(&frame)?;
         self.inner.send_owned(frame).await
     }
 
@@ -206,12 +209,12 @@ where
     }
 
     async fn send_owned(&self, frame: UOwnedFrame) -> Result<(), UStatus> {
-        let payload_len = frame.payload().len();
+        let payload_len = frame.payload_bytes().len();
         let mut buffer = self
             .transport
             .reserve(frame.metadata().clone(), payload_len, 1)
             .await?;
-        buffer.payload_mut().copy_from_slice(frame.payload());
+        buffer.payload_mut().copy_from_slice(frame.payload_bytes());
         self.transport.send_zero_copy(buffer).await
     }
 
@@ -293,8 +296,9 @@ mod tests {
     use async_trait::async_trait;
 
     use crate::{
-        UFrameMetadata, UOwnedFrame, UOwnedFrameEndpoint, UOwnedFrameEndpointMode, UOwnedListener,
-        UOwnedTransport, UStatus, UUri, UVecTxBuffer, UZeroCopyListener, UZeroCopyTransport,
+        transport::{UOwnedFrameEndpoint, UOwnedFrameEndpointMode},
+        zero_copy::{UVecTxBuffer, UZeroCopyListener, UZeroCopyTransport},
+        UFrameMetadata, UOwnedFrame, UOwnedListener, UOwnedTransport, UStatus, UUri,
     };
 
     #[derive(Default)]
@@ -440,10 +444,9 @@ mod tests {
         let transport = Arc::new(MemoryOwnedTransport::default());
         let endpoint = UOwnedFrameEndpoint::from_owned(transport.clone());
         let topic = UUri::try_from_parts("vehicle", 0x4210, 1, 0x9000).expect("valid topic");
-        let frame = UOwnedFrame::new(
-            UFrameMetadata::publish(topic.clone()),
-            b"payload".as_slice(),
-        );
+        let frame = crate::UFrameBuilder::publish(topic.clone())
+            .build_with_raw_payload(b"payload".as_slice())
+            .unwrap();
         let listener = Arc::new(CaptureListener(Mutex::new(Vec::new())));
 
         endpoint
@@ -471,7 +474,9 @@ mod tests {
         let transport = Arc::new(MemoryZeroCopyTransport::default());
         let endpoint = UOwnedFrameEndpoint::from_zero_copy(transport.clone());
         let topic = UUri::try_from_parts("vehicle", 0x4210, 1, 0x9000).expect("valid topic");
-        let frame = UOwnedFrame::new(UFrameMetadata::publish(topic), b"payload".as_slice());
+        let frame = crate::UFrameBuilder::publish(topic)
+            .build_with_raw_payload(b"payload".as_slice())
+            .unwrap();
 
         endpoint
             .send_owned(frame.clone())
@@ -487,10 +492,9 @@ mod tests {
         let transport = Arc::new(MemoryZeroCopyTransport::default());
         let endpoint = UOwnedFrameEndpoint::from_zero_copy(transport.clone());
         let topic = UUri::try_from_parts("vehicle", 0x4210, 1, 0x9000).expect("valid topic");
-        let frame = UOwnedFrame::new(
-            UFrameMetadata::publish(topic.clone()),
-            b"payload".as_slice(),
-        );
+        let frame = crate::UFrameBuilder::publish(topic.clone())
+            .build_with_raw_payload(b"payload".as_slice())
+            .unwrap();
         let listener = Arc::new(CaptureListener(Mutex::new(Vec::new())));
 
         let registration = endpoint

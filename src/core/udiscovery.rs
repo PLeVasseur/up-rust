@@ -11,9 +11,7 @@
  * SPDX-License-Identifier: Apache-2.0
  ********************************************************************************/
 
-use async_trait::async_trait;
-
-use crate::{UStatus, UUri};
+use crate::UUri;
 
 /// The uEntity type identifier of the uDiscovery service.
 pub const UDISCOVERY_TYPE_ID: u32 = 0x0000_0001;
@@ -33,53 +31,6 @@ pub fn udiscovery_uri(resource_id: u16) -> UUri {
         resource_id,
     )
     .expect("native uDiscovery constants must form a valid UUri")
-}
-
-/// Request for finding services matching a URI pattern.
-#[derive(Clone, Debug, Eq, PartialEq)]
-pub struct FindServicesRequest {
-    pub uri_pattern: UUri,
-    pub recursive: bool,
-}
-
-/// Response containing service URIs matching a discovery request.
-#[derive(Clone, Debug, Default, Eq, PartialEq)]
-pub struct FindServicesResponse {
-    pub services: Vec<UUri>,
-}
-
-/// Request for topic information matching a URI pattern.
-#[derive(Clone, Debug, Eq, PartialEq)]
-pub struct GetServiceTopicsRequest {
-    pub topic_pattern: UUri,
-    pub recursive: bool,
-}
-
-/// Native topic information published by a service.
-#[derive(Clone, Debug, Eq, PartialEq)]
-pub struct ServiceTopicInfo {
-    pub topic: UUri,
-    pub publisher: Option<UUri>,
-}
-
-/// Response containing service topic information.
-#[derive(Clone, Debug, Default, Eq, PartialEq)]
-pub struct GetServiceTopicsResponse {
-    pub topics: Vec<ServiceTopicInfo>,
-}
-
-/// Native uDiscovery client contract.
-#[async_trait]
-pub trait UDiscovery: Send + Sync {
-    async fn find_services(
-        &self,
-        request: FindServicesRequest,
-    ) -> Result<FindServicesResponse, UStatus>;
-
-    async fn get_service_topics(
-        &self,
-        request: GetServiceTopicsRequest,
-    ) -> Result<GetServiceTopicsResponse, UStatus>;
 }
 
 #[cfg(test)]

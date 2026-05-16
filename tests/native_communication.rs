@@ -27,9 +27,9 @@ use up_rust::{
         SimplePublisher, UPayload,
     },
     local_transport::LocalTransport,
-    LocalUriProvider, RawBytes, StaticUriProvider, UAttributes, UDeserializer, UEncoding,
-    UFrameBuilder, UMessageType, UOwnedFrame, UOwnedListener, UOwnedTransport, UPriority,
-    USerializer, UWireError, WireFormat, UUID,
+    wire::{RawBytes, UDeserializer, USerializer, UWireError, WireFormat},
+    LocalUriProvider, StaticUriProvider, UAttributes, UEncoding, UFrameBuilder, UMessageType,
+    UOwnedFrame, UOwnedListener, UOwnedTransport, UPriority, UUID,
 };
 
 #[derive(Debug, Eq, PartialEq)]
@@ -208,7 +208,7 @@ async fn simple_publisher_sends_native_owned_frame() {
     assert_eq!(attributes.sink(), None);
     assert_eq!(attributes.ttl(), Some(5_000));
     assert_eq!(attributes.priority(), UPriority::CS3);
-    assert_eq!(frame.metadata().encoding(), &RawBytes::encoding());
+    assert_eq!(frame.metadata().encoding(), Some(&RawBytes::encoding()));
     assert_eq!(frame.payload_bytes(), &[0x01, 0x02, 0x03]);
 }
 

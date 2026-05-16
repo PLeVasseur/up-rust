@@ -78,7 +78,7 @@ impl From<UAttributesError> for UFrameBuilderError {
 #[derive(Clone, Debug)]
 pub struct UFrameBuilder {
     commstatus: Option<UCode>,
-    encoding: UEncoding,
+    encoding: Option<UEncoding>,
     message_id: Option<UUID>,
     message_type: UMessageType,
     payload: Option<Bytes>,
@@ -198,7 +198,7 @@ impl UFrameBuilder {
 
     /// Sets explicit payload encoding metadata for subsequent [`Self::build`] calls.
     pub fn with_encoding(mut self, encoding: UEncoding) -> Self {
-        self.encoding = encoding;
+        self.encoding = Some(encoding);
         self
     }
 
@@ -210,10 +210,11 @@ impl UFrameBuilder {
     /// Builds an owned frame with the currently configured payload, if any.
     pub fn build(self) -> Result<UOwnedFrame, UFrameBuilderError> {
         let attributes = self.build_attributes()?;
-        Ok(UOwnedFrame::new(
-            UFrameMetadata::new(attributes, self.encoding),
-            self.payload.unwrap_or_default(),
-        ))
+        let metadata = UFrameMetadata::new(attributes, self.encoding);
+        Ok(match self.payload {
+            Some(payload) => UOwnedFrame::with_payload(metadata, payload),
+            None => UOwnedFrame::without_payload(metadata),
+        })
     }
 
     /// Builds an owned frame with raw bytes.
@@ -231,7 +232,7 @@ impl UFrameBuilder {
         encoding: UEncoding,
     ) -> Result<UOwnedFrame, UFrameBuilderError> {
         self.payload = Some(payload.into());
-        self.encoding = encoding;
+        self.encoding = Some(encoding);
         self.build()
     }
 
@@ -245,7 +246,7 @@ impl UFrameBuilder {
         T: USerializer<F>,
     {
         self.payload = Some(value.serialize_owned()?);
-        self.encoding = F::encoding();
+        self.encoding = Some(F::encoding());
         self.build()
     }
 
@@ -302,7 +303,7 @@ impl Default for UFrameBuilder {
     fn default() -> Self {
         Self {
             commstatus: None,
-            encoding: UEncoding::default(),
+            encoding: None,
             message_id: None,
             message_type: UMessageType::Publish,
             payload: None,

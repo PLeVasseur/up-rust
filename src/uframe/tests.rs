@@ -52,10 +52,45 @@ fn owned_serializer_rejects_mismatched_written_length() {
 }
 
 #[test]
+fn owned_frame_distinguishes_absent_payload_from_empty_payload() {
+    let topic = UUri::try_from("//my-vehicle/4210/1/B24D").unwrap();
+    let absent = UFrameBuilder::publish(topic.clone()).build().unwrap();
+    let empty = UFrameBuilder::publish(topic)
+        .build_with_raw_payload(Vec::<u8>::new())
+        .unwrap();
+
+    assert!(!absent.has_payload());
+    assert_eq!(absent.metadata().encoding(), None);
+    assert_eq!(absent.payload(), None);
+    assert_eq!(absent.payload_bytes(), b"");
+    assert!(empty.has_payload());
+    assert_eq!(empty.metadata().encoding(), Some(&RawBytes::encoding()));
+    assert_eq!(empty.payload_bytes(), b"");
+}
+
+#[test]
+fn owned_frame_deserialize_rejects_absent_payload() {
+    let topic = UUri::try_from("//my-vehicle/4210/1/B24D").unwrap();
+    let frame = UFrameBuilder::publish(topic).build().unwrap();
+
+    assert!(matches!(
+        frame.deserialize::<RawBytes, &[u8]>(),
+        Err(UWireError::MissingPayload)
+    ));
+}
+
+#[test]
 fn encoding_treats_empty_schema_ref_as_absent() {
     let encoding = UEncoding::new("json", "application/json", Some(""));
 
     assert_eq!(encoding.schema_ref(), None);
+}
+
+#[test]
+fn encoding_rejects_invalid_content_type() {
+    let error = UEncoding::try_new("json", "not a media type", None::<String>).unwrap_err();
+
+    assert!(matches!(error, UEncodingError::InvalidContentType(_)));
 }
 
 #[test]
@@ -67,7 +102,7 @@ fn owned_frame_uses_selected_wire_format() {
     )
     .unwrap();
 
-    assert_eq!(frame.metadata().encoding(), &RawBytes::encoding());
+    assert_eq!(frame.metadata().encoding(), Some(&RawBytes::encoding()));
     assert_eq!(frame.payload_bytes(), &[0x0a_u8, 0x0b_u8]);
 }
 
@@ -183,7 +218,7 @@ fn frame_builder_builds_publish_frame_with_raw_payload() {
     assert_eq!(attributes.sink(), None);
     assert_eq!(attributes.ttl(), Some(5_000));
     assert_eq!(attributes.traceparent(), Some(traceparent));
-    assert_eq!(frame.metadata().encoding(), &RawBytes::encoding());
+    assert_eq!(frame.metadata().encoding(), Some(&RawBytes::encoding()));
     assert_eq!(frame.payload_bytes(), &[0x01, 0x02]);
 }
 
@@ -237,6 +272,6 @@ fn frame_builder_uses_selected_wire_format_for_typed_payload() {
         .build_with_serializable::<RawBytes, _>(&&[0x0a_u8, 0x0b_u8][..])
         .unwrap();
 
-    assert_eq!(frame.metadata().encoding(), &RawBytes::encoding());
+    assert_eq!(frame.metadata().encoding(), Some(&RawBytes::encoding()));
     assert_eq!(frame.payload_bytes(), &[0x0a_u8, 0x0b_u8]);
 }

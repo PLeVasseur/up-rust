@@ -18,7 +18,8 @@ use std::{collections::HashSet, sync::Arc};
 use tokio::sync::RwLock;
 
 use crate::{
-    ComparableOwnedListener, UCode, UOwnedFrame, UOwnedListener, UOwnedTransport, UStatus, UUri,
+    transport::ComparableOwnedListener, validate_owned_frame_for_transport, UCode, UOwnedFrame,
+    UOwnedListener, UOwnedTransport, UStatus, UUri,
 };
 
 #[derive(Clone, Eq, PartialEq, Hash)]
@@ -75,6 +76,7 @@ impl LocalTransport {
 #[async_trait::async_trait]
 impl UOwnedTransport for LocalTransport {
     async fn send_owned(&self, frame: UOwnedFrame) -> Result<(), UStatus> {
+        validate_owned_frame_for_transport(&frame)?;
         self.dispatch_owned(frame).await;
         Ok(())
     }

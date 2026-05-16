@@ -27,6 +27,8 @@ pub enum UWireError {
         actual: usize,
     },
     InvalidPayload(String),
+    MissingEncoding,
+    MissingPayload,
     UnsupportedEncoding {
         expected: Box<UEncoding>,
         actual: Box<UEncoding>,
@@ -55,6 +57,8 @@ impl Display for UWireError {
                 "buffer too small: expected at least {expected} bytes, got {actual} bytes"
             )),
             Self::InvalidPayload(message) => f.write_fmt(format_args!("invalid payload: {message}")),
+            Self::MissingEncoding => f.write_str("frame payload has no encoding metadata"),
+            Self::MissingPayload => f.write_str("frame has no payload"),
             Self::UnsupportedEncoding { expected, actual } => f.write_fmt(format_args!(
                 "unsupported encoding: expected format_id={}, content_type={}, schema_ref={:?}; got format_id={}, content_type={}, schema_ref={:?}",
                 expected.format_id(),
@@ -82,7 +86,7 @@ impl From<UWireError> for UStatus {
 /// Compile-time identity for a payload wire representation.
 ///
 /// ```
-/// # use up_rust::{UEncoding, WireFormat};
+/// # use up_rust::{wire::WireFormat, UEncoding};
 /// struct JsonTelemetry;
 ///
 /// impl WireFormat for JsonTelemetry {

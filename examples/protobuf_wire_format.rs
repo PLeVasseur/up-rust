@@ -12,7 +12,10 @@
  ********************************************************************************/
 
 use protobuf::well_known_types::wrappers::StringValue;
-use up_rust::{ProtobufWire, UDeserializer, UFrameMetadata, UOwnedFrame, UUri, WireFormat};
+use up_rust::{
+    wire::{UDeserializer, WireFormat},
+    ProtobufWire, UFrameMetadata, UOwnedFrame, UUri,
+};
 
 fn main() -> Result<(), Box<dyn std::error::Error>> {
     let mut message = StringValue::new();
@@ -25,7 +28,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     )?;
     let decoded = StringValue::deserialize_from(frame.payload_bytes())?;
 
-    assert_eq!(frame.metadata().encoding(), &ProtobufWire::encoding());
+    assert_eq!(frame.metadata().encoding(), Some(&ProtobufWire::encoding()));
     assert_eq!(decoded.value, "hello protobuf payload");
     println!(
         "protobuf payload encoded as {:?}",

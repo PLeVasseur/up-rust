@@ -13,7 +13,7 @@
 
 //! Native uProtocol communication-layer APIs built on owned frames.
 //!
-//! This module intentionally uses [`UOwnedFrame`] and [`UEncoding`] instead of
+//! This module intentionally uses [`UOwnedFrame`] and [`crate::UEncoding`] instead of
 //! reintroducing generated transport envelopes.
 
 #[cfg(all(feature = "util", feature = "protobuf-wire"))]
@@ -27,7 +27,6 @@ use std::{error::Error, fmt::Display, sync::Arc};
 use std::{sync::Mutex, time::Duration};
 
 use async_trait::async_trait;
-use bytes::Bytes;
 #[cfg(feature = "util")]
 use tokio::{sync::oneshot, time::timeout};
 
@@ -44,10 +43,13 @@ use crate::ProtobufWire;
 #[cfg(feature = "util")]
 use crate::UFrameBuilder;
 use crate::{
-    LocalUriProvider, RawBytes, UAttributes, UCode, UDeserializer, UEncoding, UFrameMetadata,
-    UMessageType, UOwnedFrame, UOwnedListener, UOwnedTransport, UPriority, USerializer, UStatus,
-    UUri, UWireError, WireFormat, UUID,
+    wire::{UDeserializer, USerializer, WireFormat},
+    LocalUriProvider, UAttributes, UCode, UFrameMetadata, UMessageType, UOwnedFrame,
+    UOwnedListener, UOwnedTransport, UPriority, UStatus, UUri, UUID,
 };
+
+mod payload;
+pub use payload::UPayload;
 
 /// An error indicating a problem with registering or unregistering a frame listener.
 #[derive(Clone, Debug, Eq, PartialEq)]
@@ -180,72 +182,6 @@ impl CallOptions {
     /// Gets the frame priority to use, if configured.
     pub fn priority(&self) -> Option<UPriority> {
         self.priority
-    }
-}
-
-/// Native payload bytes plus their serializer-neutral encoding metadata.
-#[derive(Clone, Debug, Default, Eq, PartialEq)]
-pub struct UPayload {
-    encoding: UEncoding,
-    payload: Bytes,
-}
-
-impl UPayload {
-    /// Creates a payload from bytes and explicit encoding metadata.
-    pub fn new<T: Into<Bytes>>(payload: T, encoding: UEncoding) -> Self {
-        Self {
-            encoding,
-            payload: payload.into(),
-        }
-    }
-
-    /// Creates a raw byte payload.
-    pub fn from_raw<T: Into<Bytes>>(payload: T) -> Self {
-        Self::new(payload, RawBytes::encoding())
-    }
-
-    /// Serializes a typed payload into its wire format.
-    pub fn from_serializable<F, T>(value: &T) -> Result<Self, UWireError>
-    where
-        F: WireFormat,
-        T: USerializer<F>,
-    {
-        Ok(Self::new(value.serialize_owned()?, F::encoding()))
-    }
-
-    /// Deserializes the payload using a selected wire format.
-    pub fn deserialize<'a, F, T>(&'a self) -> Result<T, UWireError>
-    where
-        F: WireFormat,
-        T: UDeserializer<'a, F>,
-    {
-        if !self.encoding.is_compatible_with(&F::encoding()) {
-            return Err(UWireError::UnsupportedEncoding {
-                expected: Box::new(F::encoding()),
-                actual: Box::new(self.encoding.clone()),
-            });
-        }
-        T::deserialize_from(self.payload_bytes())
-    }
-
-    /// Gets the payload encoding metadata.
-    pub fn encoding(&self) -> &UEncoding {
-        &self.encoding
-    }
-
-    /// Gets the payload bytes.
-    pub fn payload_bytes(&self) -> &[u8] {
-        self.payload.as_ref()
-    }
-
-    /// Consumes this payload and returns its bytes.
-    pub fn payload(self) -> Bytes {
-        self.payload
-    }
-
-    /// Consumes this payload and returns encoding metadata and bytes.
-    pub fn into_parts(self) -> (UEncoding, Bytes) {
-        (self.encoding, self.payload)
     }
 }
 
@@ -980,7 +916,7 @@ where
         let source_filter = origin_filter
             .cloned()
             .unwrap_or_else(|| UUri::any_with_resource_id(0));
-        crate::verify_filter_criteria(&source_filter, Some(&method))
+        crate::transport::verify_filter_criteria(&source_filter, Some(&method))
             .map_err(RegistrationError::from)?;
         Ok((source_filter, method))
     }
@@ -1576,7 +1512,7 @@ fn metadata_with_options(
     if let Some(token) = options.token {
         attributes = attributes.with_token(token);
     }
-    let metadata = UFrameMetadata::new(attributes, UEncoding::default());
+    let metadata = UFrameMetadata::without_payload_encoding(attributes);
     metadata.validate()?;
     Ok(metadata)
 }
@@ -1606,14 +1542,14 @@ fn rpc_request_metadata(
 
 #[cfg(feature = "util")]
 fn payload_from_frame(frame: &UOwnedFrame) -> Option<UPayload> {
-    if frame.payload_bytes().is_empty() {
-        None
-    } else {
-        Some(UPayload::new(
-            frame.payload().clone(),
-            frame.metadata().encoding().clone(),
-        ))
-    }
+    frame.payload().map(|payload| {
+        let encoding = frame
+            .metadata()
+            .encoding()
+            .expect("validated payload frame must carry encoding")
+            .clone();
+        UPayload::new(payload.clone(), encoding)
+    })
 }
 
 #[cfg(feature = "util")]
@@ -1630,7 +1566,7 @@ fn frame_from_payload(metadata: UFrameMetadata, payload: Option<UPayload>) -> UO
         let (encoding, bytes) = payload.into_parts();
         UOwnedFrame::new(metadata.with_encoding(encoding), bytes)
     } else {
-        UOwnedFrame::new(metadata, Bytes::new())
+        UOwnedFrame::without_payload(metadata)
     }
 }
 

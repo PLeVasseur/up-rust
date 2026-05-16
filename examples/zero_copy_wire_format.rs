@@ -15,9 +15,9 @@ use std::{collections::VecDeque, error::Error};
 
 use tokio::sync::Mutex;
 use up_rust::{
-    UCode, UDeserializer, UEncoding, UFrameMetadata, UOwnedFrame, USerializer, UStatus, UUri,
-    UVecTxBuffer, UWireError, UZeroCopyRxFrame, UZeroCopyTransport, UZeroCopyTransportExt,
-    WireFormat,
+    wire::{UDeserializer, USerializer, UWireError, WireFormat},
+    zero_copy::{UVecTxBuffer, UZeroCopyRxFrame, UZeroCopyTransport, UZeroCopyTransportExt},
+    UCode, UEncoding, UFrameMetadata, UOwnedFrame, UStatus, UUri,
 };
 
 #[derive(Debug, PartialEq)]

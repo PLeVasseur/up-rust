@@ -21,7 +21,7 @@ include = [
     "/docs/*",
     "/examples/*",
     "/README.md",
-    "/src/*",
+    "/src/**",
     "/up-spec/up-core-api/uprotocol/*",
 ]
 keywords = ["uProtocol", "SDK", "communication"]
@@ -34,6 +34,7 @@ version = "0.10.0-SNAPSHOT"
 
 [features]
 default = ["util"]
+cloudevents = []
 protobuf-wire = ["dep:protobuf", "dep:protobuf-codegen", "dep:protoc-bin-vendored"]
 symphony = ["util", "dep:serde", "dep:serde_json", "dep:symphony"]
 util = ["tokio/sync", "tokio/time"]

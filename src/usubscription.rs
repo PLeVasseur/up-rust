@@ -135,7 +135,10 @@ pub trait USubscription: Send + Sync {
 #[cfg(all(test, feature = "protobuf-wire"))]
 mod tests {
     use super::*;
-    use crate::{ProtobufWire, UDeserializer, USerializer, UUri};
+    use crate::{
+        wire::{UDeserializer, USerializer},
+        ProtobufWire, UUri,
+    };
 
     #[test]
     fn subscription_request_round_trips_as_protobuf_payload() {

@@ -11,6 +11,8 @@
  * SPDX-License-Identifier: Apache-2.0
  ********************************************************************************/
 
+use std::{error::Error, fmt::Display};
+
 use bytes::Bytes;
 
 use crate::{UAttributesError, UAttributesValidators, UCode, UUri, UUID};
@@ -226,9 +228,66 @@ pub struct UEncoding {
     schema_ref: Option<String>,
 }
 
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub enum UEncodingError {
+    EmptyFormatId,
+    EmptyContentType,
+    InvalidContentType(String),
+}
+
+impl Display for UEncodingError {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            Self::EmptyFormatId => f.write_str("encoding format_id must not be empty"),
+            Self::EmptyContentType => f.write_str("encoding content_type must not be empty"),
+            Self::InvalidContentType(error) => {
+                f.write_fmt(format_args!("encoding content_type is not valid: {error}"))
+            }
+        }
+    }
+}
+
+impl Error for UEncodingError {}
+
 impl UEncoding {
-    /// Creates encoding metadata from all fields.
+    /// Creates encoding metadata from all fields, panicking if static inputs are invalid.
+    ///
+    /// Use [`Self::try_new`] for runtime input and transport decode paths.
     pub fn new(
+        format_id: impl Into<String>,
+        content_type: impl Into<String>,
+        schema_ref: Option<impl Into<String>>,
+    ) -> Self {
+        Self::try_new(format_id, content_type, schema_ref)
+            .expect("UEncoding::new requires non-empty format_id and content_type")
+    }
+
+    /// Creates encoding metadata from runtime input.
+    pub fn try_new(
+        format_id: impl Into<String>,
+        content_type: impl Into<String>,
+        schema_ref: Option<impl Into<String>>,
+    ) -> Result<Self, UEncodingError> {
+        let format_id = format_id.into();
+        if format_id.is_empty() {
+            return Err(UEncodingError::EmptyFormatId);
+        }
+        let content_type = content_type.into();
+        if content_type.is_empty() {
+            return Err(UEncodingError::EmptyContentType);
+        }
+        content_type
+            .parse::<mediatype::MediaTypeBuf>()
+            .map_err(|error| UEncodingError::InvalidContentType(error.to_string()))?;
+        Ok(Self::new_unchecked(format_id, content_type, schema_ref))
+    }
+
+    /// Creates encoding metadata without validation.
+    ///
+    /// This is for low-level adapters that must preserve wire-level values before
+    /// explicit validation. Application code should prefer [`Self::new`] or
+    /// [`Self::try_new`].
+    pub fn new_unchecked(
         format_id: impl Into<String>,
         content_type: impl Into<String>,
         schema_ref: Option<impl Into<String>>,
@@ -304,8 +363,8 @@ impl Default for UEncoding {
 
 /// Native frame metadata used by transport APIs.
 ///
-/// `UFrameMetadata` groups native uProtocol [`UAttributes`] with payload
-/// [`UEncoding`]. It is not a generated protocol envelope and it is not a
+/// `UFrameMetadata` groups native uProtocol [`UAttributes`] with optional
+/// payload [`UEncoding`]. It is not a generated protocol envelope and it is not a
 /// replacement for `UAttributes`; transports should project these fields into
 /// their own metadata channels where possible. Prefer [`crate::UFrameBuilder`]
 /// for constructing application frames because it validates message-type-specific
@@ -313,15 +372,19 @@ impl Default for UEncoding {
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub struct UFrameMetadata {
     attributes: UAttributes,
-    encoding: UEncoding,
+    encoding: Option<UEncoding>,
 }
 
 impl UFrameMetadata {
-    pub fn new(attributes: UAttributes, encoding: UEncoding) -> Self {
+    pub fn new(attributes: UAttributes, encoding: impl Into<Option<UEncoding>>) -> Self {
         Self {
             attributes,
-            encoding,
+            encoding: encoding.into(),
         }
+    }
+
+    pub fn without_payload_encoding(attributes: UAttributes) -> Self {
+        Self::new(attributes, None::<UEncoding>)
     }
 
     /// Creates unchecked Publish metadata.
@@ -330,7 +393,7 @@ impl UFrameMetadata {
     pub fn publish(topic: UUri) -> Self {
         Self::new(
             UAttributes::new(UUID::build(), topic, None, UMessageType::Publish),
-            UEncoding::default(),
+            None::<UEncoding>,
         )
     }
 
@@ -352,7 +415,7 @@ impl UFrameMetadata {
                 Some(destination),
                 UMessageType::Notification,
             ),
-            UEncoding::default(),
+            None::<UEncoding>,
         )
     }
 
@@ -376,7 +439,7 @@ impl UFrameMetadata {
             )
             .with_priority(UPriority::CS4)
             .with_ttl(ttl),
-            UEncoding::default(),
+            None::<UEncoding>,
         )
     }
 
@@ -404,7 +467,7 @@ impl UFrameMetadata {
             )
             .with_priority(UPriority::CS4)
             .with_request_id(request_id),
-            UEncoding::default(),
+            None::<UEncoding>,
         )
     }
 
@@ -429,10 +492,6 @@ impl UFrameMetadata {
         &self.attributes
     }
 
-    pub fn attributes_mut(&mut self) -> &mut UAttributes {
-        &mut self.attributes
-    }
-
     pub fn source(&self) -> &UUri {
         self.attributes.source()
     }
@@ -441,17 +500,19 @@ impl UFrameMetadata {
         self.attributes.sink()
     }
 
-    pub fn encoding(&self) -> &UEncoding {
-        &self.encoding
-    }
-
-    pub fn encoding_mut(&mut self) -> &mut UEncoding {
-        &mut self.encoding
+    pub fn encoding(&self) -> Option<&UEncoding> {
+        self.encoding.as_ref()
     }
 
     #[must_use]
     pub fn with_encoding(mut self, encoding: UEncoding) -> Self {
-        self.encoding = encoding;
+        self.encoding = Some(encoding);
+        self
+    }
+
+    #[must_use]
+    pub fn without_encoding(mut self) -> Self {
+        self.encoding = None;
         self
     }
 }
@@ -460,14 +521,25 @@ impl UFrameMetadata {
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub struct UOwnedFrame {
     metadata: UFrameMetadata,
-    payload: Bytes,
+    payload: Option<Bytes>,
 }
 
 impl UOwnedFrame {
     pub fn new(metadata: UFrameMetadata, payload: impl Into<Bytes>) -> Self {
+        Self::with_payload(metadata, payload)
+    }
+
+    pub fn with_payload(metadata: UFrameMetadata, payload: impl Into<Bytes>) -> Self {
         Self {
             metadata,
-            payload: payload.into(),
+            payload: Some(payload.into()),
+        }
+    }
+
+    pub fn without_payload(metadata: UFrameMetadata) -> Self {
+        Self {
+            metadata: metadata.without_encoding(),
+            payload: None,
         }
     }
 
@@ -488,19 +560,28 @@ impl UOwnedFrame {
         &mut self.metadata
     }
 
-    pub fn payload(&self) -> &Bytes {
-        &self.payload
+    /// Gets the payload bytes if the frame carries a payload.
+    pub fn payload(&self) -> Option<&Bytes> {
+        self.payload.as_ref()
     }
 
+    /// Gets the payload bytes, or an empty slice when the frame has no payload.
+    ///
+    /// Use [`Self::payload`] when payload presence matters, for example to
+    /// distinguish an absent payload from a present but empty payload.
     pub fn payload_bytes(&self) -> &[u8] {
-        self.payload.as_ref()
+        self.payload.as_deref().unwrap_or_default()
+    }
+
+    pub fn has_payload(&self) -> bool {
+        self.payload.is_some()
     }
 
     pub fn into_metadata(self) -> UFrameMetadata {
         self.metadata
     }
 
-    pub fn into_payload(self) -> Bytes {
+    pub fn into_payload(self) -> Option<Bytes> {
         self.payload
     }
 
@@ -510,13 +591,18 @@ impl UOwnedFrame {
         T: UDeserializer<'a, F>,
     {
         let expected = F::encoding();
-        if !self.metadata.encoding().is_compatible_with(&expected) {
+        let payload = self.payload.as_deref().ok_or(UWireError::MissingPayload)?;
+        let actual = self
+            .metadata
+            .encoding()
+            .ok_or(UWireError::MissingEncoding)?;
+        if !actual.is_compatible_with(&expected) {
             return Err(UWireError::UnsupportedEncoding {
                 expected: Box::new(expected),
-                actual: Box::new(self.metadata.encoding().clone()),
+                actual: Box::new(actual.clone()),
             });
         }
-        T::deserialize_from(self.payload_bytes())
+        T::deserialize_from(payload)
     }
 }
 

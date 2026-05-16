@@ -19,7 +19,9 @@ mod wire;
 mod zero_copy;
 
 pub use builder::{UFrameBuilder, UFrameBuilderError};
-pub use frame::{UAttributes, UEncoding, UFrameMetadata, UMessageType, UOwnedFrame, UPriority};
+pub use frame::{
+    UAttributes, UEncoding, UEncodingError, UFrameMetadata, UMessageType, UOwnedFrame, UPriority,
+};
 pub use wire::{RawBytes, UDeserializer, UErasedSerializer, USerializer, UWireError, WireFormat};
 pub use zero_copy::{UTxBuffer, UVecTxBuffer, UZeroCopyRxFrame};
 

@@ -29,13 +29,13 @@ most common re-exports for short examples.
 
 # Advanced Paths
 
-Custom payload codecs implement [`WireFormat`], [`USerializer`], and
-[`UDeserializer`]. Shared-memory transports implement [`UZeroCopyTransport`]
-only when they can honestly loan transmit storage and return receive leases.
-Routing code that needs a single owned-frame facade over either capability can
-use [`UOwnedFrameEndpoint`]. Its name is intentional: adapting a zero-copy
-transport to this facade copies receive leases into owned frames and copies
-owned sends into transmit loans.
+Custom payload codecs implement [`wire::WireFormat`], [`wire::USerializer`], and
+[`wire::UDeserializer`]. Shared-memory transports implement
+[`zero_copy::UZeroCopyTransport`] only when they can honestly loan transmit
+storage and return receive leases. Routing code that needs a single owned-frame
+facade over either capability can use [`transport::UOwnedFrameEndpoint`]. Its
+name is intentional: adapting a zero-copy transport to this facade copies receive
+leases into owned frames and copies owned sends into transmit loans.
 
 # Features
 
@@ -45,6 +45,9 @@ owned sends into transmit loans.
   Protocol Buffers remain payload bytes only; they are not used as the frame
   envelope. uSubscription service DTO payloads use this feature for their
   protobuf-defined service wire format.
+* `cloudevents` enables native-frame mapping to and from CloudEvents. It is
+  optional, matching mainline behavior, because most applications and transport
+  bindings do not need CloudEvents support in the common path.
 * `symphony` enables Symphony deployment-target helpers.
 * `test-util` enables `mockall` mocks for supported public traits and in-memory
   transport fakes under [`test_util`].
@@ -56,7 +59,11 @@ Service-specific data transfer objects are grouped under modules such as
 #[cfg(feature = "util")]
 pub mod local_transport;
 
+#[cfg(feature = "cloudevents")]
 pub mod cloudevents;
+
+#[cfg(feature = "cloudevents")]
+pub use cloudevents::{CloudEvent, CloudEventAttributeValue, CloudEventError};
 
 pub mod communication;
 
@@ -73,9 +80,8 @@ pub mod protobuf_wire;
 
 mod uframe;
 pub use uframe::{
-    RawBytes, UAttributes, UDeserializer, UEncoding, UErasedSerializer, UFrameBuilder,
-    UFrameBuilderError, UFrameMetadata, UMessageType, UOwnedFrame, UPriority, USerializer,
-    UTxBuffer, UVecTxBuffer, UWireError, UZeroCopyRxFrame, WireFormat,
+    UAttributes, UEncoding, UEncodingError, UFrameBuilder, UFrameBuilderError, UFrameMetadata,
+    UMessageType, UOwnedFrame, UPriority,
 };
 
 mod uattributes;
@@ -91,9 +97,6 @@ mod uri;
 pub use uri::{UUri, UUriError};
 
 mod transport_endpoint;
-pub use transport_endpoint::{
-    UOwnedFrameEndpoint, UOwnedFrameEndpointMode, UOwnedFrameEndpointRegistration,
-};
 
 pub mod usubscription;
 
@@ -102,15 +105,13 @@ pub use ustatus::{UCode, UStatus};
 
 mod utransport;
 pub use utransport::{
-    verify_filter_criteria, ComparableOwnedListener, LocalUriProvider, StaticUriProvider,
-    UOwnedListener, UOwnedTransport, UOwnedTransportExt, UZeroCopyListener, UZeroCopyTransport,
-    UZeroCopyTransportExt,
+    validate_frame_metadata_for_payload, validate_frame_metadata_for_transport,
+    validate_owned_frame_for_transport, LocalUriProvider, StaticUriProvider, UOwnedListener,
+    UOwnedTransport, UOwnedTransportExt,
 };
 
 #[cfg(any(test, feature = "test-util"))]
-pub use utransport::{
-    MockLocalUriProvider, MockUOwnedListener, MockUOwnedTransport, MockUZeroCopyTransport,
-};
+pub use utransport::{MockLocalUriProvider, MockUOwnedListener, MockUOwnedTransport};
 
 mod uuid;
 pub use uuid::UUID;
@@ -130,26 +131,31 @@ pub mod frame {
 
 /// Serializer-neutral payload wire-format contracts and helpers.
 pub mod wire {
-    pub use crate::{
-        RawBytes, UDeserializer, UEncoding, UErasedSerializer, USerializer, UWireError, WireFormat,
+    pub use crate::uframe::{
+        RawBytes, UDeserializer, UEncoding, UEncodingError, UErasedSerializer, USerializer,
+        UWireError, WireFormat,
     };
 }
 
 /// Owned-buffer transport APIs and endpoint adapters.
 pub mod transport {
-    pub use crate::{
-        verify_filter_criteria, ComparableOwnedListener, LocalUriProvider, StaticUriProvider,
+    pub use crate::transport_endpoint::{
         UOwnedFrameEndpoint, UOwnedFrameEndpointMode, UOwnedFrameEndpointRegistration,
-        UOwnedListener, UOwnedTransport, UOwnedTransportExt,
+    };
+    pub use crate::utransport::{
+        validate_frame_metadata_for_payload, validate_frame_metadata_for_transport,
+        validate_owned_frame_for_transport, verify_filter_criteria, ComparableOwnedListener,
+        LocalUriProvider, StaticUriProvider, UOwnedListener, UOwnedTransport, UOwnedTransportExt,
     };
 }
 
 /// Zero-copy transport capability APIs.
 pub mod zero_copy {
-    pub use crate::{
-        UTxBuffer, UVecTxBuffer, UZeroCopyListener, UZeroCopyRxFrame, UZeroCopyTransport,
-        UZeroCopyTransportExt,
-    };
+    pub use crate::uframe::{UTxBuffer, UVecTxBuffer, UZeroCopyRxFrame};
+    pub use crate::utransport::{UZeroCopyListener, UZeroCopyTransport, UZeroCopyTransportExt};
+
+    #[cfg(any(test, feature = "test-util"))]
+    pub use crate::utransport::MockUZeroCopyTransport;
 }
 
 /// Common imports for applications using native owned frames.

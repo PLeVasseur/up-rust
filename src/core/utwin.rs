@@ -11,17 +11,5 @@
  * SPDX-License-Identifier: Apache-2.0
  ********************************************************************************/
 
-use crate::{UOwnedFrame, UUri};
-
-/// Native response entry for a uTwin last-message lookup.
-#[derive(Clone, Debug, PartialEq)]
-pub struct MessageResponse {
-    pub topic: UUri,
-    pub frame: Option<UOwnedFrame>,
-}
-
-/// Native response containing last known frames for requested topics.
-#[derive(Clone, Debug, Default, PartialEq)]
-pub struct GetLastMessagesResponse {
-    pub messages: Vec<MessageResponse>,
-}
+//! uTwin service identity constants will live here when the protobuf service
+//! payload contract is generated for this branch.
