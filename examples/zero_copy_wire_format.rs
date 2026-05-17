@@ -16,7 +16,9 @@ use std::{collections::VecDeque, error::Error};
 use tokio::sync::Mutex;
 use up_rust::{
     wire::{UDeserializer, USerializer, UWireError, WireFormat},
-    zero_copy::{UVecTxBuffer, UZeroCopyRxFrame, UZeroCopyTransport, UZeroCopyTransportExt},
+    zero_copy::{
+        UContiguousZeroCopyRxFrame, UVecTxBuffer, UZeroCopyTransport, UZeroCopyTransportExt,
+    },
     UCode, UEncoding, UFrameMetadata, UOwnedFrame, UStatus, UUri,
 };
 
