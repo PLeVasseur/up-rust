@@ -263,12 +263,12 @@ where
     Rx: UZeroCopyRxFrame + Send + 'static,
 {
     async fn on_receive_zero_copy(&self, frame: Rx) {
-        self.listener
-            .on_receive_owned(UOwnedFrame::new(
-                frame.metadata().clone(),
-                frame.payload().to_vec(),
-            ))
-            .await;
+        let owned = if frame.metadata().encoding().is_some() {
+            UOwnedFrame::new(frame.metadata().clone(), frame.payload_to_vec())
+        } else {
+            UOwnedFrame::without_payload(frame.metadata().clone())
+        };
+        self.listener.on_receive_owned(owned).await;
     }
 }
 

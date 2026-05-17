@@ -37,7 +37,65 @@ pub trait UTxBuffer {
 /// Receive-side zero-copy frame lease.
 pub trait UZeroCopyRxFrame {
     fn metadata(&self) -> &UFrameMetadata;
+
+    /// Returns the payload as one contiguous byte slice.
+    ///
+    /// This is the ergonomic fast path for transports whose receive loans are
+    /// naturally contiguous. Transports that can receive segmented payloads
+    /// should override [`Self::payload_contiguous`], [`Self::payload_len`], and
+    /// [`Self::for_each_payload_slice`] so generic adapters do not accidentally
+    /// force a coalescing copy.
     fn payload(&self) -> &[u8];
+
+    fn payload_len(&self) -> usize {
+        self.payload().len()
+    }
+
+    fn payload_contiguous(&self) -> Option<&[u8]> {
+        Some(self.payload())
+    }
+
+    fn for_each_payload_slice(&self, visitor: &mut dyn FnMut(&[u8])) {
+        visitor(self.payload());
+    }
+
+    fn copy_payload_to(&self, dst: &mut [u8]) -> Result<usize, UWireError> {
+        let expected = self.payload_len();
+        if dst.len() < expected {
+            return Err(UWireError::buffer_too_small(expected, dst.len()));
+        }
+
+        let mut written = 0_usize;
+        let mut copy_result = Ok(());
+        self.for_each_payload_slice(&mut |slice| {
+            if copy_result.is_err() {
+                return;
+            }
+            let Some(end) = written.checked_add(slice.len()) else {
+                copy_result = Err(UWireError::invalid_payload("payload length overflow"));
+                return;
+            };
+            let Some(target) = dst.get_mut(written..end) else {
+                copy_result = Err(UWireError::buffer_too_small(expected, dst.len()));
+                return;
+            };
+            target.copy_from_slice(slice);
+            written = end;
+        });
+        copy_result?;
+        if written != expected {
+            return Err(UWireError::invalid_payload(format!(
+                "payload slices yielded {written} bytes but payload_len returned {expected} bytes"
+            )));
+        }
+        Ok(written)
+    }
+
+    fn payload_to_vec(&self) -> Vec<u8> {
+        let mut payload = Vec::with_capacity(self.payload_len());
+        self.for_each_payload_slice(&mut |slice| payload.extend_from_slice(slice));
+        payload
+    }
 
     fn deserialize_borrowed<'a, F, T>(&'a self) -> Result<T, UWireError>
     where
@@ -55,7 +113,12 @@ pub trait UZeroCopyRxFrame {
                 actual: Box::new(actual.clone()),
             });
         }
-        T::deserialize_from(self.payload())
+        let payload = self.payload_contiguous().ok_or_else(|| {
+            UWireError::invalid_payload(
+                "borrowed deserialization requires a contiguous receive payload",
+            )
+        })?;
+        T::deserialize_from(payload)
     }
 }
 
