@@ -16,10 +16,12 @@
 //! This module deliberately models Protocol Buffers as a payload [`WireFormat`].
 //! It does not reintroduce generated transport envelopes.
 
+use std::io::Read;
+
 use protobuf::{CodedOutputStream, Message};
 
 use crate::{
-    wire::{UDeserializer, USerializer, UWireError, WireFormat},
+    wire::{UDeserializer, UReadDeserializer, USerializer, UWireError, WireFormat},
     UEncoding,
 };
 
@@ -76,13 +78,26 @@ where
     }
 }
 
+impl<T> UReadDeserializer<ProtobufWire> for T
+where
+    T: Message,
+{
+    fn deserialize_from_reader<R: Read>(
+        mut reader: R,
+        _payload_len: usize,
+    ) -> Result<Self, UWireError> {
+        protobuf::Message::parse_from_reader(&mut reader)
+            .map_err(|error| UWireError::invalid_payload(error.to_string()))
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use protobuf::well_known_types::wrappers::StringValue;
 
     use crate::{
         wire::{UDeserializer, USerializer},
-        zero_copy::{UTxBuffer, UVecTxBuffer, UZeroCopyRxFrame},
+        zero_copy::{UContiguousZeroCopyRxFrame, UTxBuffer, UVecTxBuffer, UZeroCopyRxFrame},
         UFrameMetadata, UOwnedFrame, UUri,
     };
 
@@ -125,9 +140,12 @@ mod tests {
 
         let frame = buffer.into_frame();
         let decoded: StringValue = frame.deserialize_borrowed::<ProtobufWire, _>().unwrap();
+        let decoded_from_reader: StringValue =
+            frame.deserialize_from_reader::<ProtobufWire, _>().unwrap();
 
         assert_eq!(frame.metadata().encoding(), Some(&ProtobufWire::encoding()));
         assert_eq!(decoded.value, input.value);
+        assert_eq!(decoded_from_reader.value, input.value);
     }
 
     #[test]

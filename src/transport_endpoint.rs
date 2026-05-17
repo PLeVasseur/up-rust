@@ -22,7 +22,7 @@ use async_trait::async_trait;
 use crate::{
     utransport::{UZeroCopyListener, UZeroCopyTransport},
     validate_owned_frame_for_transport,
-    zero_copy::{UTxBuffer, UZeroCopyRxFrame},
+    zero_copy::{UTxBuffer, UZeroCopyPayloadCopyExt, UZeroCopyRxFrame},
     UCode, UOwnedFrame, UOwnedListener, UOwnedTransport, UStatus, UUri,
 };
 

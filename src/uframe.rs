@@ -22,8 +22,13 @@ pub use builder::{UFrameBuilder, UFrameBuilderError};
 pub use frame::{
     UAttributes, UEncoding, UEncodingError, UFrameMetadata, UMessageType, UOwnedFrame, UPriority,
 };
-pub use wire::{RawBytes, UDeserializer, UErasedSerializer, USerializer, UWireError, WireFormat};
-pub use zero_copy::{UTxBuffer, UVecTxBuffer, UZeroCopyRxFrame};
+pub use wire::{
+    RawBytes, UDeserializer, UErasedSerializer, UReadDeserializer, USerializer, UWireError,
+    WireFormat,
+};
+pub use zero_copy::{
+    UContiguousZeroCopyRxFrame, UTxBuffer, UVecTxBuffer, UZeroCopyPayloadCopyExt, UZeroCopyRxFrame,
+};
 
 #[cfg(test)]
 mod tests;

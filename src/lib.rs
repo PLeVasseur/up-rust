@@ -132,8 +132,8 @@ pub mod frame {
 /// Serializer-neutral payload wire-format contracts and helpers.
 pub mod wire {
     pub use crate::uframe::{
-        RawBytes, UDeserializer, UEncoding, UEncodingError, UErasedSerializer, USerializer,
-        UWireError, WireFormat,
+        RawBytes, UDeserializer, UEncoding, UEncodingError, UErasedSerializer, UReadDeserializer,
+        USerializer, UWireError, WireFormat,
     };
 }
 
@@ -151,7 +151,10 @@ pub mod transport {
 
 /// Zero-copy transport capability APIs.
 pub mod zero_copy {
-    pub use crate::uframe::{UTxBuffer, UVecTxBuffer, UZeroCopyRxFrame};
+    pub use crate::uframe::{
+        UContiguousZeroCopyRxFrame, UTxBuffer, UVecTxBuffer, UZeroCopyPayloadCopyExt,
+        UZeroCopyRxFrame,
+    };
     pub use crate::utransport::{UZeroCopyListener, UZeroCopyTransport, UZeroCopyTransportExt};
 
     #[cfg(any(test, feature = "test-util"))]
@@ -163,7 +166,10 @@ pub mod prelude {
     pub use crate::{
         frame::{UFrameBuilder, UFrameMetadata, UMessageType, UOwnedFrame, UPriority},
         transport::{UOwnedListener, UOwnedTransport, UOwnedTransportExt},
-        wire::{RawBytes, UDeserializer, UEncoding, USerializer, UWireError, WireFormat},
+        wire::{
+            RawBytes, UDeserializer, UEncoding, UReadDeserializer, USerializer, UWireError,
+            WireFormat,
+        },
         UCode, UStatus, UUri, UUID,
     };
 }

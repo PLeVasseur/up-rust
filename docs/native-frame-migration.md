@@ -105,7 +105,7 @@ Use `UOwnedTransport` for the normal network, brokered, and in-process path. Use
 | Register listener | `register_owned_listener(...)` | `register_zero_copy_listener(...)` | Same filter semantics; listener type follows frame ownership. |
 | Unregister listener | `unregister_owned_listener(...)` | `unregister_zero_copy_listener(...)` | Same registration identity semantics. |
 | Typed send helper | `UOwnedTransportExt::send_serialized::<Wire, _>(...)` | `UZeroCopyTransportExt::send_serialized_zero_copy::<Wire, _>(...)` | Same `WireFormat` and `USerializer` contract; the zero-copy helper reserves a loan and serializes into it. |
-| Typed receive decode | `UOwnedFrame::deserialize::<Wire, T>()` | `UZeroCopyRxFrame::deserialize_borrowed::<Wire, T>()` | Both check `UEncoding` before decoding. The zero-copy path can return borrowed views into the receive lease. |
+| Typed receive decode | `UOwnedFrame::deserialize::<Wire, T>()` | `UZeroCopyRxFrame::deserialize_from_reader::<Wire, T>()` or `UContiguousZeroCopyRxFrame::deserialize_borrowed::<Wire, T>()` | All check `UEncoding` before decoding. Reader decode works for segmented receive leases; borrowed decode requires an explicit contiguous receive capability. |
 | Test fakes | `test_util::InMemoryOwnedTransport` | `test_util::InMemoryZeroCopyTransport` | The zero-copy fake uses `zero_copy::UVecTxBuffer` and `UOwnedFrame` to exercise the trait shape without shared-memory middleware. |
 | Trait mocks | `MockUOwnedTransport`, `MockUOwnedListener`, communication mocks such as `communication::MockRpcServer` | `zero_copy::MockUZeroCopyTransport` | Enabled by `test-util`; mock the trait shape you are depending on. |
 
@@ -382,7 +382,7 @@ Downstream transport crates should migrate in lockstep with this branch:
 | `up-transport-zenoh-rust` | Implement `UOwnedTransport`. Preserve `UAttributes` and `UEncoding` in Zenoh attachments; payload bytes remain exactly the serializer output. Push-only receive should return `UNIMPLEMENTED` for `receive_owned`. |
 | `up-transport-mqtt5-rust` | Implement `UOwnedTransport`. Preserve `UAttributes` and `UEncoding` in MQTT 5 properties, including non-empty `schema_ref`; payload bytes remain exactly the serializer output. Push-only receive should return `UNIMPLEMENTED` for `receive_owned`. |
 | `up-transport-vsomeip-rust` | Implement `UOwnedTransport`. Preserve frame metadata in the documented native SOME/IP prefix because vsomeip exposes only payload bytes to the language binding. The prefix is transport metadata, not a generated protobuf envelope. |
-| `up-transport-iceoryx2-rust` | Implement `UZeroCopyTransport` for true shared-memory loans and may also implement `UOwnedTransport` as a copying convenience. Preserve variable metadata in the `UFM1` prefix hidden from `payload()`/`payload_mut()`. |
+| `up-transport-iceoryx2-rust` | Implement `UZeroCopyTransport` for true shared-memory loans and may also implement `UOwnedTransport` as a copying convenience. Preserve variable metadata in the `UFM1` prefix hidden from the application payload view exposed by `payload_mut()` and `contiguous_payload()`. |
 | `up-streamer-rust` | Route through `UOwnedFrameEndpoint` when one owned-frame routing abstraction is needed. Treat zero-copy endpoints wrapped this way as copy boundaries, not end-to-end zero-copy forwarding. |
 
 ## Release And PR Notes

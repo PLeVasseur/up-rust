@@ -11,17 +11,46 @@
  * SPDX-License-Identifier: Apache-2.0
  ********************************************************************************/
 
+use std::io::{Cursor, Read};
+
 use super::{
     frame::{UFrameMetadata, UOwnedFrame},
-    wire::{UDeserializer, UWireError, WireFormat},
+    wire::{UDeserializer, UReadDeserializer, UWireError, WireFormat},
 };
 
 impl UZeroCopyRxFrame for UOwnedFrame {
+    type PayloadReader<'a>
+        = Cursor<&'a [u8]>
+    where
+        Self: 'a;
+    type PayloadSlices<'a>
+        = std::iter::Once<&'a [u8]>
+    where
+        Self: 'a;
+
     fn metadata(&self) -> &UFrameMetadata {
         self.metadata()
     }
 
-    fn payload(&self) -> &[u8] {
+    fn payload_len(&self) -> usize {
+        self.payload_bytes().len()
+    }
+
+    fn payload_reader(&self) -> Self::PayloadReader<'_> {
+        Cursor::new(self.payload_bytes())
+    }
+
+    fn payload_slices(&self) -> Self::PayloadSlices<'_> {
+        std::iter::once(self.payload_bytes())
+    }
+
+    fn try_contiguous_payload(&self) -> Option<&[u8]> {
+        Some(self.payload_bytes())
+    }
+}
+
+impl UContiguousZeroCopyRxFrame for UOwnedFrame {
+    fn contiguous_payload(&self) -> &[u8] {
         self.payload_bytes()
     }
 }
@@ -36,66 +65,45 @@ pub trait UTxBuffer {
 
 /// Receive-side zero-copy frame lease.
 pub trait UZeroCopyRxFrame {
+    type PayloadReader<'a>: Read + 'a
+    where
+        Self: 'a;
+    type PayloadSlices<'a>: Iterator<Item = &'a [u8]> + 'a
+    where
+        Self: 'a;
+
     fn metadata(&self) -> &UFrameMetadata;
+    fn payload_len(&self) -> usize;
+    fn payload_reader(&self) -> Self::PayloadReader<'_>;
+    fn payload_slices(&self) -> Self::PayloadSlices<'_>;
 
-    /// Returns the payload as one contiguous byte slice.
-    ///
-    /// This is the ergonomic fast path for transports whose receive loans are
-    /// naturally contiguous. Transports that can receive segmented payloads
-    /// should override [`Self::payload_contiguous`], [`Self::payload_len`], and
-    /// [`Self::for_each_payload_slice`] so generic adapters do not accidentally
-    /// force a coalescing copy.
-    fn payload(&self) -> &[u8];
-
-    fn payload_len(&self) -> usize {
-        self.payload().len()
+    fn try_contiguous_payload(&self) -> Option<&[u8]> {
+        None
     }
 
-    fn payload_contiguous(&self) -> Option<&[u8]> {
-        Some(self.payload())
-    }
-
-    fn for_each_payload_slice(&self, visitor: &mut dyn FnMut(&[u8])) {
-        visitor(self.payload());
-    }
-
-    fn copy_payload_to(&self, dst: &mut [u8]) -> Result<usize, UWireError> {
-        let expected = self.payload_len();
-        if dst.len() < expected {
-            return Err(UWireError::buffer_too_small(expected, dst.len()));
+    fn deserialize_from_reader<F, T>(&self) -> Result<T, UWireError>
+    where
+        F: WireFormat,
+        T: UReadDeserializer<F>,
+    {
+        let expected = F::encoding();
+        let actual = self
+            .metadata()
+            .encoding()
+            .ok_or(UWireError::MissingEncoding)?;
+        if !actual.is_compatible_with(&expected) {
+            return Err(UWireError::UnsupportedEncoding {
+                expected: Box::new(expected),
+                actual: Box::new(actual.clone()),
+            });
         }
-
-        let mut written = 0_usize;
-        let mut copy_result = Ok(());
-        self.for_each_payload_slice(&mut |slice| {
-            if copy_result.is_err() {
-                return;
-            }
-            let Some(end) = written.checked_add(slice.len()) else {
-                copy_result = Err(UWireError::invalid_payload("payload length overflow"));
-                return;
-            };
-            let Some(target) = dst.get_mut(written..end) else {
-                copy_result = Err(UWireError::buffer_too_small(expected, dst.len()));
-                return;
-            };
-            target.copy_from_slice(slice);
-            written = end;
-        });
-        copy_result?;
-        if written != expected {
-            return Err(UWireError::invalid_payload(format!(
-                "payload slices yielded {written} bytes but payload_len returned {expected} bytes"
-            )));
-        }
-        Ok(written)
+        T::deserialize_from_reader(self.payload_reader(), self.payload_len())
     }
+}
 
-    fn payload_to_vec(&self) -> Vec<u8> {
-        let mut payload = Vec::with_capacity(self.payload_len());
-        self.for_each_payload_slice(&mut |slice| payload.extend_from_slice(slice));
-        payload
-    }
+/// Receive-side frame lease with a guaranteed contiguous payload view.
+pub trait UContiguousZeroCopyRxFrame: UZeroCopyRxFrame {
+    fn contiguous_payload(&self) -> &[u8];
 
     fn deserialize_borrowed<'a, F, T>(&'a self) -> Result<T, UWireError>
     where
@@ -113,14 +121,54 @@ pub trait UZeroCopyRxFrame {
                 actual: Box::new(actual.clone()),
             });
         }
-        let payload = self.payload_contiguous().ok_or_else(|| {
-            UWireError::invalid_payload(
-                "borrowed deserialization requires a contiguous receive payload",
-            )
-        })?;
-        T::deserialize_from(payload)
+        T::deserialize_from(self.contiguous_payload())
     }
 }
+
+/// Explicit helpers for crossing from zero-copy receive leases into owned bytes.
+pub trait UZeroCopyPayloadCopyExt: UZeroCopyRxFrame {
+    fn copy_payload_to(&self, dst: &mut [u8]) -> Result<usize, UWireError> {
+        let expected = self.payload_len();
+        if dst.len() < expected {
+            return Err(UWireError::buffer_too_small(expected, dst.len()));
+        }
+
+        let mut written = 0_usize;
+        let mut copy_result = Ok(());
+        for slice in self.payload_slices() {
+            if copy_result.is_err() {
+                break;
+            }
+            let Some(end) = written.checked_add(slice.len()) else {
+                copy_result = Err(UWireError::invalid_payload("payload length overflow"));
+                break;
+            };
+            let Some(target) = dst.get_mut(written..end) else {
+                copy_result = Err(UWireError::buffer_too_small(expected, dst.len()));
+                break;
+            };
+            target.copy_from_slice(slice);
+            written = end;
+        }
+        copy_result?;
+        if written != expected {
+            return Err(UWireError::invalid_payload(format!(
+                "payload slices yielded {written} bytes but payload_len returned {expected} bytes"
+            )));
+        }
+        Ok(written)
+    }
+
+    fn payload_to_vec(&self) -> Vec<u8> {
+        let mut payload = Vec::with_capacity(self.payload_len());
+        for slice in self.payload_slices() {
+            payload.extend_from_slice(slice);
+        }
+        payload
+    }
+}
+
+impl<T> UZeroCopyPayloadCopyExt for T where T: UZeroCopyRxFrame + ?Sized {}
 
 /// Owned buffer useful for tests, examples, and adapters that emulate a transmit loan.
 #[derive(Clone, Debug, Eq, PartialEq)]

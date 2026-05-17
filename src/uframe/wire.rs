@@ -11,7 +11,7 @@
  * SPDX-License-Identifier: Apache-2.0
  ********************************************************************************/
 
-use std::{error::Error, fmt::Display};
+use std::{error::Error, fmt::Display, io::Read};
 
 use bytes::Bytes;
 
@@ -137,6 +137,11 @@ pub trait UDeserializer<'a, F: WireFormat>: Sized {
     fn deserialize_from(src: &'a [u8]) -> Result<Self, UWireError>;
 }
 
+/// Deserializes a value from an ordered payload byte stream.
+pub trait UReadDeserializer<F: WireFormat>: Sized {
+    fn deserialize_from_reader<R: Read>(reader: R, payload_len: usize) -> Result<Self, UWireError>;
+}
+
 /// Object-safe serializer for runtime-selected codecs.
 pub trait UErasedSerializer {
     fn encoding(&self) -> UEncoding;
@@ -188,5 +193,30 @@ impl USerializer<RawBytes> for Bytes {
 impl<'a> UDeserializer<'a, RawBytes> for &'a [u8] {
     fn deserialize_from(src: &'a [u8]) -> Result<Self, UWireError> {
         Ok(src)
+    }
+}
+
+impl UReadDeserializer<RawBytes> for Vec<u8> {
+    fn deserialize_from_reader<R: Read>(
+        mut reader: R,
+        payload_len: usize,
+    ) -> Result<Self, UWireError> {
+        let mut bytes = Vec::with_capacity(payload_len);
+        reader
+            .read_to_end(&mut bytes)
+            .map_err(|error| UWireError::invalid_payload(error.to_string()))?;
+        if bytes.len() != payload_len {
+            return Err(UWireError::invalid_payload(format!(
+                "payload reader yielded {} bytes but payload_len returned {payload_len} bytes",
+                bytes.len()
+            )));
+        }
+        Ok(bytes)
+    }
+}
+
+impl UReadDeserializer<RawBytes> for Bytes {
+    fn deserialize_from_reader<R: Read>(reader: R, payload_len: usize) -> Result<Self, UWireError> {
+        Vec::<u8>::deserialize_from_reader(reader, payload_len).map(Bytes::from)
     }
 }
