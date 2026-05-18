@@ -56,6 +56,8 @@ Service-specific data transfer objects are grouped under modules such as
 [`usubscription`] instead of being wildcard-exported at the crate root.
 */
 
+#![warn(rustdoc::bare_urls, rustdoc::broken_intra_doc_links)]
+
 #[cfg(feature = "util")]
 pub mod local_transport;
 

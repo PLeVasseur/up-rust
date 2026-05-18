@@ -265,11 +265,16 @@ pub trait UOwnedTransportExt: UOwnedTransport {
 impl<T> UOwnedTransportExt for T where T: UOwnedTransport + ?Sized {}
 
 /// A handler for processing zero-copy receive leases.
+///
+/// The listener receives the transport-specific lease type. Any borrowed payload
+/// views derived from `frame` must not outlive the callback unless the callback
+/// explicitly copies the payload into owned storage.
 #[async_trait]
 pub trait UZeroCopyListener<Rx>: Send + Sync
 where
     Rx: UZeroCopyRxFrame + Send + 'static,
 {
+    /// Handles one received zero-copy frame lease.
     async fn on_receive_zero_copy(&self, frame: Rx);
 }
 
@@ -310,9 +315,19 @@ where
 /// ```
 #[async_trait]
 pub trait UZeroCopyTransport: Send + Sync {
+    /// Transport-specific transmit loan type returned by [`Self::reserve`].
     type Tx: UTxBuffer + Send;
+
+    /// Transport-specific receive lease type returned by pull receive and
+    /// delivered to zero-copy listeners.
     type Rx: UZeroCopyRxFrame + Send + 'static;
 
+    /// Reserves transmit storage for a frame with `metadata` and payload layout.
+    ///
+    /// `payload_len` is the number of application payload bytes the serializer
+    /// will write. `alignment` is the serializer's required payload alignment.
+    /// Implementations must either honor the requested alignment or return an
+    /// error before handing the loan to the caller.
     async fn reserve(
         &self,
         metadata: UFrameMetadata,
@@ -320,8 +335,19 @@ pub trait UZeroCopyTransport: Send + Sync {
         alignment: usize,
     ) -> Result<Self::Tx, UStatus>;
 
+    /// Commits a previously reserved transmit loan.
+    ///
+    /// After this method returns, callers must treat `buffer` as consumed. The
+    /// transport may reclaim, publish, or otherwise invalidate the underlying
+    /// storage.
     async fn send_zero_copy(&self, buffer: Self::Tx) -> Result<(), UStatus>;
 
+    /// Receives one matching zero-copy frame from transports that support pull
+    /// receive.
+    ///
+    /// The default implementation returns [`UCode::UNIMPLEMENTED`]. Push-oriented
+    /// zero-copy transports should implement listener registration instead of
+    /// hiding a temporary listener-backed receive adapter.
     async fn receive_zero_copy(
         &self,
         _source_filter: &UUri,
@@ -333,6 +359,12 @@ pub trait UZeroCopyTransport: Send + Sync {
         ))
     }
 
+    /// Registers a listener for matching zero-copy receive leases.
+    ///
+    /// The listener receives the transport-specific [`Self::Rx`] lease type. If
+    /// the transport's receive lease is consumed by one subscriber, the
+    /// implementation must create independent subscriber state for independent
+    /// listener registrations or explicitly copy for secondary listeners.
     async fn register_zero_copy_listener(
         &self,
         _source_filter: &UUri,
@@ -345,6 +377,8 @@ pub trait UZeroCopyTransport: Send + Sync {
         ))
     }
 
+    /// Unregisters a listener previously registered with
+    /// [`Self::register_zero_copy_listener`].
     async fn unregister_zero_copy_listener(
         &self,
         _source_filter: &UUri,
@@ -361,6 +395,12 @@ pub trait UZeroCopyTransport: Send + Sync {
 /// Convenience methods for zero-copy transports.
 #[async_trait]
 pub trait UZeroCopyTransportExt: UZeroCopyTransport {
+    /// Serializes `value` directly into a transport transmit loan and sends it.
+    ///
+    /// This helper sets `metadata.encoding()` from the selected [`WireFormat`],
+    /// reserves a loan of `value.encoded_len()` bytes using the serializer's
+    /// alignment, writes into [`UTxBuffer::payload_mut`], and commits with
+    /// [`UZeroCopyTransport::send_zero_copy`].
     async fn send_serialized_zero_copy<F, T>(
         &self,
         metadata: UFrameMetadata,

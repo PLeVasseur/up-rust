@@ -28,7 +28,11 @@ use crate::{
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub enum UOwnedFrameEndpointMode {
+    /// The endpoint delegates owned-frame sends and listener registration to an
+    /// [`UOwnedTransport`].
     Owned,
+    /// The endpoint adapts an owned-frame routing API to a true
+    /// [`UZeroCopyTransport`], copying at the adapter boundary.
     ZeroCopy,
 }
 
@@ -53,6 +57,9 @@ impl Debug for UOwnedFrameEndpoint {
 
 impl UOwnedFrameEndpoint {
     /// Creates an owned-frame endpoint facade around an owned-frame transport.
+    ///
+    /// Sends and listener registration are delegated to the supplied
+    /// [`UOwnedTransport`] without changing frame ownership.
     pub fn from_owned(transport: Arc<dyn UOwnedTransport>) -> Self {
         Self {
             inner: Arc::new(OwnedEndpoint { transport }),
@@ -85,15 +92,40 @@ impl UOwnedFrameEndpoint {
         }
     }
 
+    /// Returns whether this endpoint is backed by an owned or zero-copy
+    /// transport capability.
     pub fn mode(&self) -> UOwnedFrameEndpointMode {
         self.inner.mode()
     }
 
+    /// Sends an owned frame through the wrapped transport capability.
+    ///
+    /// For [`UOwnedFrameEndpointMode::Owned`], this delegates to
+    /// [`UOwnedTransport::send_owned`]. For [`UOwnedFrameEndpointMode::ZeroCopy`],
+    /// this reserves a transmit loan, copies the owned payload into that loan, and
+    /// commits it with [`UZeroCopyTransport::send_zero_copy`].
+    ///
+    /// # Errors
+    ///
+    /// Returns transport validation errors, allocation errors from zero-copy
+    /// reserve, or send errors from the wrapped transport.
     pub async fn send_owned(&self, frame: UOwnedFrame) -> Result<(), UStatus> {
         validate_owned_frame_for_transport(&frame)?;
         self.inner.send_owned(frame).await
     }
 
+    /// Registers an owned-frame listener through the wrapped transport
+    /// capability.
+    ///
+    /// For owned transports, the listener is registered directly. For zero-copy
+    /// transports, the adapter registers a zero-copy listener internally and
+    /// copies each received lease into an owned frame before invoking `listener`.
+    /// The returned registration must be retained if the caller wants to
+    /// unregister later.
+    ///
+    /// # Errors
+    ///
+    /// Returns validation or registration errors from the wrapped transport.
     pub async fn register_owned_listener(
         &self,
         source_filter: &UUri,
@@ -106,6 +138,10 @@ impl UOwnedFrameEndpoint {
     }
 }
 
+/// Registration handle returned by [`UOwnedFrameEndpoint::register_owned_listener`].
+///
+/// Dropping this value does not unregister automatically. Call [`Self::unregister`]
+/// to remove the underlying owned or adapted zero-copy listener registration.
 #[derive(Clone)]
 pub struct UOwnedFrameEndpointRegistration {
     inner: Arc<dyn RegistrationOps>,
@@ -119,6 +155,11 @@ impl Debug for UOwnedFrameEndpointRegistration {
 }
 
 impl UOwnedFrameEndpointRegistration {
+    /// Unregisters the listener associated with this registration handle.
+    ///
+    /// The method is idempotent only if the wrapped transport's unregister
+    /// operation is idempotent; most transport implementations report an error
+    /// when unregistering a listener that is no longer registered.
     pub async fn unregister(&self) -> Result<(), UStatus> {
         self.inner.unregister().await
     }
