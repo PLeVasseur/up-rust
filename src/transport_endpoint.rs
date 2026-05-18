@@ -490,10 +490,6 @@ mod tests {
             &self.metadata
         }
 
-        fn metadata_mut(&mut self) -> &mut UFrameMetadata {
-            &mut self.metadata
-        }
-
         fn payload(&self) -> &[u8] {
             &self.payload
         }

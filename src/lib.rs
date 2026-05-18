@@ -35,10 +35,11 @@ Whole-frame wire formats implement [`frame_wire::UFrameWireFormat`]. Custom
 payload codecs implement [`payload::PayloadFormat`], [`payload::USerializer`],
 and [`payload::UDeserializer`]. Shared-memory transports implement
 [`zero_copy::UZeroCopyTransport`] only when they can honestly loan transmit
-storage and return receive leases. Routing code that needs a single owned-frame
-facade over either capability can use [`transport::UOwnedFrameEndpoint`]. Its
-name is intentional: adapting a zero-copy transport to this facade copies receive
-leases into owned frames and copies owned sends into transmit loans.
+storage and return receive leases. Zero-copy metadata is fixed at reserve time;
+payload bytes are the mutable loaned storage. Routing code that needs a single
+owned-frame facade over either capability can use [`transport::UOwnedFrameEndpoint`].
+Its name is intentional: adapting a zero-copy transport to this facade copies
+receive leases into owned frames and copies owned sends into transmit loans.
 
 # Features
 

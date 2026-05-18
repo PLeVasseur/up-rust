@@ -283,6 +283,12 @@ where
 /// Implement this trait only when the transport can loan transmit storage or
 /// deliver receive leases without hiding transport-owned copies.
 ///
+/// The metadata passed to [`Self::reserve`] is final for that transmit loan.
+/// Implementations may encode metadata into native transport headers, side-band
+/// properties, or hidden prefixes before returning the loan. Callers must choose
+/// payload encoding, routing attributes, and other metadata before reserving so
+/// [`UTxBuffer::payload_mut`] remains the only mutable zero-copy surface.
+///
 /// This is the zero-copy sibling of [`UOwnedTransport`]. Pull receive and
 /// listener registration map one-to-one to the owned API, while send is
 /// intentionally split into [`Self::reserve`] plus [`Self::send_zero_copy`] so
@@ -327,7 +333,9 @@ pub trait UZeroCopyTransport: Send + Sync {
     /// `payload_len` is the number of application payload bytes the serializer
     /// will write. `alignment` is the serializer's required payload alignment.
     /// Implementations must either honor the requested alignment or return an
-    /// error before handing the loan to the caller.
+    /// error before handing the loan to the caller. Metadata is immutable after
+    /// this call; transports may use it to compute payload layout and native
+    /// transport representation before exposing the payload storage.
     async fn reserve(
         &self,
         metadata: UFrameMetadata,

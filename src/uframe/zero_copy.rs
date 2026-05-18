@@ -59,16 +59,15 @@ impl UContiguousZeroCopyRxFrame for UOwnedFrame {
 ///
 /// A transmit buffer is owned by the transport until it is committed with
 /// [`UZeroCopyTransport::send_zero_copy`](crate::zero_copy::UZeroCopyTransport::send_zero_copy).
+/// Frame metadata is fixed when the loan is reserved. Transports may use that
+/// metadata to choose routes, encode native headers, compute payload offsets, or
+/// allocate backing storage before handing the loan to the caller.
 /// Serializers should write directly into [`Self::payload_mut`] so the payload
 /// does not first have to be materialized as an owned [`Vec<u8>`] or
 /// [`bytes::Bytes`].
 pub trait UTxBuffer {
-    /// Returns the frame metadata associated with this transmit loan.
+    /// Returns the immutable frame metadata associated with this transmit loan.
     fn metadata(&self) -> &UFrameMetadata;
-
-    /// Returns mutable frame metadata for serializers or adapters that need to
-    /// adjust encoding metadata before the loan is sent.
-    fn metadata_mut(&mut self) -> &mut UFrameMetadata;
 
     /// Returns the current payload bytes in the transmit loan.
     ///
@@ -272,7 +271,11 @@ impl UVecTxBuffer {
 
     /// Converts the buffer into an owned frame, consuming the emulated loan.
     pub fn into_frame(self) -> UOwnedFrame {
-        UOwnedFrame::new(self.metadata, self.payload)
+        if self.metadata.encoding().is_some() {
+            UOwnedFrame::new(self.metadata, self.payload)
+        } else {
+            UOwnedFrame::without_payload(self.metadata)
+        }
     }
 }
 
@@ -285,10 +288,6 @@ impl AsRef<[u8]> for UVecTxBuffer {
 impl UTxBuffer for UVecTxBuffer {
     fn metadata(&self) -> &UFrameMetadata {
         &self.metadata
-    }
-
-    fn metadata_mut(&mut self) -> &mut UFrameMetadata {
-        &mut self.metadata
     }
 
     fn payload(&self) -> &[u8] {

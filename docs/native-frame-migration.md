@@ -99,7 +99,7 @@ Use `UOwnedTransport` for the normal network, brokered, and in-process path. Use
 
 | Operation | Owned-buffer API | Zero-copy API | Parity note |
 | --- | --- | --- | --- |
-| Send one frame | `send_owned(UOwnedFrame)` | `reserve(UFrameMetadata, payload_len, alignment)` then `send_zero_copy(Tx)` | This is the one intentional shape difference. The serializer writes into `Tx::payload_mut()` before the loan is sent. |
+| Send one frame | `send_owned(UOwnedFrame)` | `reserve(UFrameMetadata, payload_len, alignment)` then `send_zero_copy(Tx)` | This is the one intentional shape difference. Metadata is final at `reserve`; the serializer writes only into `Tx::payload_mut()` before the loan is sent. |
 | Pull receive | `receive_owned(&UUri, Option<&UUri>) -> UOwnedFrame` | `receive_zero_copy(&UUri, Option<&UUri>) -> Rx` | Both default to `UNIMPLEMENTED`; implement only for transports that truly support pull receive. |
 | Push callback | `UOwnedListener::on_receive_owned(UOwnedFrame)` | `UZeroCopyListener<Rx>::on_receive_zero_copy(Rx)` | The zero-copy `Rx` value is the receive lease and should release transport resources when dropped. |
 | Register listener | `register_owned_listener(...)` | `register_zero_copy_listener(...)` | Same filter semantics; listener type follows frame ownership. |
@@ -349,7 +349,7 @@ impl UOwnedTransport for MyTransport {
 }
 ```
 
-Zero-copy transports should implement `UZeroCopyTransport` only when the transport can honestly loan transmit storage and return receive leases. Network and broker transports should not fake zero-copy by copying into hidden buffers. The owned `send_owned(frame)` operation maps to `reserve(metadata, payload_len, alignment)`, serializer writes into the returned `Tx` buffer, and `send_zero_copy(tx)` publishes the loan.
+Zero-copy transports should implement `UZeroCopyTransport` only when the transport can honestly loan transmit storage and return receive leases. Network and broker transports should not fake zero-copy by copying into hidden buffers. The owned `send_owned(frame)` operation maps to `reserve(metadata, payload_len, alignment)`, serializer writes into the returned `Tx` buffer, and `send_zero_copy(tx)` publishes the loan. Metadata is intentionally fixed at reserve time so transports can compute native headers, hidden prefixes, payload offsets, and allocation sizes before exposing the payload loan.
 
 ### Pull Receive On Push-Oriented Transports
 
