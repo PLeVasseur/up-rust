@@ -15,7 +15,7 @@ use std::{collections::VecDeque, error::Error};
 
 use tokio::sync::Mutex;
 use up_rust::{
-    wire::{UDeserializer, USerializer, UWireError, WireFormat},
+    payload::{PayloadFormat, UDeserializer, USerializer, UWireError},
     zero_copy::{
         UContiguousZeroCopyRxFrame, UVecTxBuffer, UZeroCopyTransport, UZeroCopyTransportExt,
     },
@@ -29,9 +29,9 @@ struct ImageView<'a> {
     pixels: &'a [u8],
 }
 
-struct ImageWire;
+struct ImagePayload;
 
-impl WireFormat for ImageWire {
+impl PayloadFormat for ImagePayload {
     fn name() -> &'static str {
         "demo-image-v1"
     }
@@ -45,7 +45,7 @@ impl WireFormat for ImageWire {
     }
 }
 
-impl USerializer<ImageWire> for ImageView<'_> {
+impl USerializer<ImagePayload> for ImageView<'_> {
     fn encoded_len(&self) -> usize {
         4 + self.pixels.len()
     }
@@ -65,7 +65,7 @@ impl USerializer<ImageWire> for ImageView<'_> {
     }
 }
 
-impl<'a> UDeserializer<'a, ImageWire> for ImageView<'a> {
+impl<'a> UDeserializer<'a, ImagePayload> for ImageView<'a> {
     fn deserialize_from(src: &'a [u8]) -> Result<Self, UWireError> {
         let header = src
             .get(..4)
@@ -144,11 +144,14 @@ pub async fn main() -> Result<(), Box<dyn Error>> {
     };
 
     transport
-        .send_serialized_zero_copy::<ImageWire, _>(UFrameMetadata::publish(topic.clone()), &image)
+        .send_serialized_zero_copy::<ImagePayload, _>(
+            UFrameMetadata::publish(topic.clone()),
+            &image,
+        )
         .await?;
 
     let rx = transport.receive_zero_copy(&topic, None).await?;
-    let decoded: ImageView<'_> = rx.deserialize_borrowed::<ImageWire, _>()?;
+    let decoded: ImageView<'_> = rx.deserialize_borrowed::<ImagePayload, _>()?;
     assert_eq!(decoded, image);
     println!(
         "received {}x{} image with {} borrowed bytes",

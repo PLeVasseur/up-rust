@@ -72,10 +72,10 @@ Transport implementations should project these fields into their native metadata
 | `UTransport::send` | `UOwnedTransport::send_owned` or `UZeroCopyTransport::reserve` plus `send_zero_copy` | Always | Zero-copy send is intentionally two-phase so serializers can write directly into transport-loaned storage. |
 | `UTransport::register_listener` | `register_owned_listener` or `register_zero_copy_listener` | Always | Listener type follows transport capability: `UOwnedListener` or `UZeroCopyListener`. |
 | Pull-style receive helpers | `receive_owned` or `receive_zero_copy` implemented by transports that truly support pull receive | Always | The default returns `UNIMPLEMENTED`, matching mainline `UTransport`; listener-backed push receive is not hidden behind the pull API. |
-| Protobuf payload helpers | `build_with_protobuf_payload`, `ProtobufWire` | `protobuf-wire` | Protobuf is a payload codec, not the transport envelope. |
+| Protobuf payload helpers | `build_with_protobuf_payload`, `ProtobufPayload` | `protobuf-wire` | Protobuf is a payload codec, not the transport envelope. |
 | uSubscription service payloads | Generated `up-core-api` protobuf DTOs | `protobuf-wire` | uSubscription service methods use their full-fidelity protobuf service DTOs inside native frames. |
 | `up_rust::*` service DTO imports | Module imports such as `up_rust::usubscription::Subscription` | Always | Service DTOs are grouped under service modules to keep the crate root focused on common frame and transport APIs. |
-| Flat root-only imports | Role-focused modules such as `frame`, `wire`, `transport`, `zero_copy`, and `prelude` | Always | Root re-exports remain focused on common owned-frame application code; advanced endpoint and zero-copy types live under their role modules. |
+| Flat root-only imports | Role-focused modules such as `frame`, `payload`, `frame_wire`, `transport`, `zero_copy`, and `prelude` | Always | Root re-exports remain focused on common owned-frame application code; advanced endpoint and zero-copy types live under their role modules. |
 | Generated/mock transport test helpers | `test-util` mocks and `test_util::{InMemoryOwnedTransport, InMemoryZeroCopyTransport, RecordingOwnedListener}` | `test-util` | Use mocks for communication/service traits and in-memory transports for borrowed-filter transport traits. |
 
 Removed APIs that do not have a direct replacement are intentionally retired rather than shimmed:
@@ -86,7 +86,7 @@ Removed APIs that do not have a direct replacement are intentionally retired rat
 | Generated `UPayloadFormat` as the payload identity | Retired from native transport APIs. Use `UEncoding { format_id, content_type, schema_ref }` so new payload formats do not require generated enum changes. |
 | `UTransport`, `UListener`, `ComparableListener`, and `MockTransport` | Replaced by `UOwnedTransport`, `UOwnedListener`, `transport::ComparableOwnedListener`, `MockUOwnedTransport`, and `MockUOwnedListener` for owned-buffer transports. Use `zero_copy::UZeroCopyTransport` and `zero_copy::UZeroCopyListener` only for true loaned-storage transports. |
 | Panic-based builder setters from generated `UMessageBuilder` | Replaced by `UFrameBuilder` terminal methods returning `Result<UOwnedFrame, UFrameBuilderError>`. Invalid metadata is reported as a recoverable construction error. |
-| `build_with_wrapped_protobuf_payload` as a transport-envelope path | Retired. If a protobuf `Any` is the application payload, serialize it with `ProtobufWire` and carry its schema identity in `UEncoding.schema_ref` when needed. |
+| `build_with_wrapped_protobuf_payload` as a transport-envelope path | Retired. If a protobuf `Any` is the application payload, serialize it with `ProtobufPayload` and carry its schema identity in `UEncoding.schema_ref` when needed. |
 | Direct generated `UAttributes` public-field mutation | Replaced by native `UAttributes` accessors, `with_*` modifiers, validators, and checked `UFrameBuilder`/`UFrameMetadata::try_*` constructors. |
 | Generated service DTOs wildcard-exported at crate root | Replaced by module imports such as `up_rust::usubscription::SubscriptionRequest` with `protobuf-wire` enabled. |
 | Listener-backed default pull receive helper | Retired. `receive_owned` and `receive_zero_copy` default to `UNIMPLEMENTED`; push-oriented transports should expose listener registration instead of hiding temporary registrations behind pull receive. |
@@ -104,8 +104,8 @@ Use `UOwnedTransport` for the normal network, brokered, and in-process path. Use
 | Push callback | `UOwnedListener::on_receive_owned(UOwnedFrame)` | `UZeroCopyListener<Rx>::on_receive_zero_copy(Rx)` | The zero-copy `Rx` value is the receive lease and should release transport resources when dropped. |
 | Register listener | `register_owned_listener(...)` | `register_zero_copy_listener(...)` | Same filter semantics; listener type follows frame ownership. |
 | Unregister listener | `unregister_owned_listener(...)` | `unregister_zero_copy_listener(...)` | Same registration identity semantics. |
-| Typed send helper | `UOwnedTransportExt::send_serialized::<Wire, _>(...)` | `UZeroCopyTransportExt::send_serialized_zero_copy::<Wire, _>(...)` | Same `WireFormat` and `USerializer` contract; the zero-copy helper reserves a loan and serializes into it. |
-| Typed receive decode | `UOwnedFrame::deserialize::<Wire, T>()` | `UZeroCopyRxFrame::deserialize_from_reader::<Wire, T>()` or `UContiguousZeroCopyRxFrame::deserialize_borrowed::<Wire, T>()` | All check `UEncoding` before decoding. Reader decode works for segmented receive leases; borrowed decode requires an explicit contiguous receive capability. |
+| Typed send helper | `UOwnedTransportExt::send_serialized::<Codec, _>(...)` | `UZeroCopyTransportExt::send_serialized_zero_copy::<Codec, _>(...)` | Same `PayloadFormat` and `USerializer` contract; the zero-copy helper reserves a loan and serializes into it. |
+| Typed receive decode | `UOwnedFrame::deserialize::<Codec, T>()` | `UZeroCopyRxFrame::deserialize_from_reader::<Codec, T>()` or `UContiguousZeroCopyRxFrame::deserialize_borrowed::<Codec, T>()` | All check `UEncoding` before decoding. Reader decode works for segmented receive leases; borrowed decode requires an explicit contiguous receive capability. |
 | Test fakes | `test_util::InMemoryOwnedTransport` | `test_util::InMemoryZeroCopyTransport` | The zero-copy fake uses `zero_copy::UVecTxBuffer` and `UOwnedFrame` to exercise the trait shape without shared-memory middleware. |
 | Trait mocks | `MockUOwnedTransport`, `MockUOwnedListener`, communication mocks such as `communication::MockRpcServer` | `zero_copy::MockUZeroCopyTransport` | Enabled by `test-util`; mock the trait shape you are depending on. |
 
@@ -114,13 +114,13 @@ The send mapping is easiest to remember as a buffer-ownership swap:
 ```rust
 // Owned path: build the payload bytes first, then hand the whole frame to the transport.
 let frame = UFrameBuilder::publish(topic.clone())
-    .build_with_serializable::<TemperatureWire, _>(&reading)?;
+    .build_with_serializable::<TemperaturePayload, _>(&reading)?;
 transport.send_owned(frame).await?;
 
 // Zero-copy path: hand metadata to the transport first, then serialize into its loan.
 let metadata = UFrameMetadata::try_publish(topic)?;
 transport
-    .send_serialized_zero_copy::<TemperatureWire, _>(metadata, &reading)
+    .send_serialized_zero_copy::<TemperaturePayload, _>(metadata, &reading)
     .await?;
 ```
 
@@ -130,9 +130,9 @@ The lower-level zero-copy equivalent is:
 let payload_len = reading.encoded_len();
 let mut loan = transport
     .reserve(
-        metadata.with_encoding(TemperatureWire::encoding()),
+        metadata.with_encoding(TemperaturePayload::encoding()),
         payload_len,
-        <TemperatureReading as USerializer<TemperatureWire>>::ALIGNMENT,
+        <TemperatureReading as USerializer<TemperaturePayload>>::ALIGNMENT,
     )
     .await?;
 reading.serialize_into(loan.payload_mut())?;
@@ -143,7 +143,7 @@ Do not build a `UOwnedFrame` first just to call a zero-copy transport unless you
 
 `UOwnedFrameEndpoint` is that adapter boundary. It gives routing code one owned-frame facade over either transport capability. `UOwnedFrameEndpoint::from_zero_copy` copies an owned send into a transmit loan and copies a zero-copy receive lease into an owned listener callback. Use it when a generic router needs one owned-frame type; do not use it to claim end-to-end zero-copy behavior.
 
-The examples mirror the same serializer-neutral contract from different angles. [`owned_wire_format.rs`](../examples/owned_wire_format.rs) shows owned sends and owned listener callbacks. [`zero_copy_wire_format.rs`](../examples/zero_copy_wire_format.rs) shows zero-copy send helpers, pull receive, and borrowed deserialization. The payload examples differ so the zero-copy example can demonstrate borrowed receive views, but the `WireFormat`, `USerializer`, and `UDeserializer` contracts are the same.
+The examples mirror the same serializer-neutral contract from different angles. [`owned_payload_codec.rs`](../examples/owned_payload_codec.rs) shows owned sends and owned listener callbacks. [`zero_copy_payload_codec.rs`](../examples/zero_copy_payload_codec.rs) shows zero-copy send helpers, pull receive, and borrowed deserialization. The payload examples differ so the zero-copy example can demonstrate borrowed receive views, but the `PayloadFormat`, `USerializer`, and `UDeserializer` contracts are the same.
 
 ## Builder Entry Points
 
@@ -164,7 +164,7 @@ Payload helpers set `UEncoding` and payload bytes in one step when a payload is 
 | `build()` | No payload and no payload encoding |
 | `build_with_raw_payload(...)` | Already-encoded opaque bytes |
 | `build_with_payload(payload, encoding)` | Explicit `UEncoding` and bytes |
-| `build_with_serializable::<Wire, _>(...)` | Serializer-neutral typed payload |
+| `build_with_serializable::<Codec, _>(...)` | Serializer-neutral typed payload |
 | `build_with_protobuf_payload(...)` | Protobuf payload, only with `protobuf-wire` |
 
 For response communication status, prefer `with_comm_status(...)`. The older `with_commstatus(...)` spelling remains available for code that mirrors the wire-field name.
@@ -224,20 +224,20 @@ let frame = UFrameBuilder::response_for_request(request_attributes).build()?;
 # }
 ```
 
-## Custom Wire Formats
+## Custom Payload Codecs
 
-Use `WireFormat`, `USerializer`, and `UDeserializer` for non-Protobuf payloads. The same serializer contract works for owned buffers and zero-copy transmit loans.
+Use `PayloadFormat`, `USerializer`, and `UDeserializer` for non-Protobuf payloads. The same serializer contract works for owned buffers and zero-copy transmit loans.
 
 ```rust
-use up_rust::{UDeserializer, UEncoding, UFrameBuilder, USerializer, UUri, UWireError, WireFormat};
+use up_rust::{PayloadFormat, UDeserializer, UEncoding, UFrameBuilder, USerializer, UUri, UWireError};
 
-struct TemperatureWire;
+struct TemperaturePayload;
 
 struct Temperature {
     celsius: i16,
 }
 
-impl WireFormat for TemperatureWire {
+impl PayloadFormat for TemperaturePayload {
     fn name() -> &'static str {
         "temperature-v1"
     }
@@ -247,7 +247,7 @@ impl WireFormat for TemperatureWire {
     }
 }
 
-impl USerializer<TemperatureWire> for Temperature {
+impl USerializer<TemperaturePayload> for Temperature {
     fn encoded_len(&self) -> usize {
         2
     }
@@ -261,7 +261,7 @@ impl USerializer<TemperatureWire> for Temperature {
     }
 }
 
-impl<'a> UDeserializer<'a, TemperatureWire> for Temperature {
+impl<'a> UDeserializer<'a, TemperaturePayload> for Temperature {
     fn deserialize_from(src: &'a [u8]) -> Result<Self, UWireError> {
         let bytes = src
             .get(..2)
@@ -277,15 +277,15 @@ impl<'a> UDeserializer<'a, TemperatureWire> for Temperature {
 let topic = UUri::try_from("//vehicle/4210/1/B24D")?;
 let value = Temperature { celsius: 23 };
 let frame = UFrameBuilder::publish(topic)
-    .build_with_serializable::<TemperatureWire, _>(&value)?;
+    .build_with_serializable::<TemperaturePayload, _>(&value)?;
 # let _ = frame;
 # Ok(())
 # }
 ```
 
-Typed frame deserialization checks `UEncoding` before decoding bytes. If a frame says it contains one wire format and the caller asks for another, deserialization fails instead of handing bytes to the wrong decoder.
+Typed frame deserialization checks `UEncoding` before decoding bytes. If a frame says it contains one payload codec and the caller asks for another, deserialization fails instead of handing bytes to the wrong decoder.
 
-`format_id` and `content_type` must match the selected `WireFormat`. Empty schema references are treated as absent. If the selected `WireFormat` declares a non-empty `schema_ref`, the frame must carry the same `schema_ref`. If the selected `WireFormat` has no `schema_ref`, it is treated as a generic decoder for that matching format and content type, so it can decode frames that carry a more specific schema reference. This keeps Protobuf `Any` and similar schema-ref payloads ergonomic without weakening wrong-codec rejection.
+`format_id` and `content_type` must match the selected `PayloadFormat`. Empty schema references are treated as absent. If the selected `PayloadFormat` declares a non-empty `schema_ref`, the frame must carry the same `schema_ref`. If the selected `PayloadFormat` has no `schema_ref`, it is treated as a generic decoder for that matching format and content type, so it can decode frames that carry a more specific schema reference. This keeps Protobuf `Any` and similar schema-ref payloads ergonomic without weakening wrong-codec rejection.
 
 ## Metadata Validation
 
@@ -304,14 +304,14 @@ Protocol Buffers support is available behind the `protobuf-wire` feature. Enabli
 up-rust = { version = "0.10", features = ["protobuf-wire"] }
 ```
 
-With the feature enabled, use `ProtobufWire` or the builder convenience method:
+With the feature enabled, use `ProtobufPayload` or the builder convenience method:
 
 ```rust
 use up_rust::{UFrameBuilder, UUri};
 
 # fn build<T>(payload: &T) -> Result<(), Box<dyn std::error::Error>>
 # where
-#     T: up_rust::USerializer<up_rust::ProtobufWire>,
+#     T: up_rust::USerializer<up_rust::ProtobufPayload>,
 # {
 let topic = UUri::try_from("//vehicle/4210/1/B24D")?;
 let frame = UFrameBuilder::publish(topic).build_with_protobuf_payload(payload)?;
@@ -394,7 +394,7 @@ This branch intentionally changes the Rust transport boundary from generated pro
 
 No compatibility shim is provided for the old UTransport/UMessage surface because a shim would either reintroduce the generated envelope as the common transport contract or hide copies at the exact boundary this change is making explicit. Existing applications should migrate to UFrameBuilder, UOwnedFrame, UOwnedTransport, and UEncoding. Transports that cannot loan storage should implement only UOwnedTransport; shared-memory transports that can loan storage should implement UZeroCopyTransport.
 
-Downstream crates must preserve UAttributes and, when payload is present, UEncoding.format_id, UEncoding.content_type, and non-empty UEncoding.schema_ref across their transport-specific metadata channel. Application payload bytes must remain exactly the bytes produced by the selected WireFormat serializer. Frames without payload must not synthesize payload encoding metadata.
+Downstream crates must preserve UAttributes and, when payload is present, UEncoding.format_id, UEncoding.content_type, and non-empty UEncoding.schema_ref across their transport-specific metadata channel. Application payload bytes must remain exactly the bytes produced by the selected PayloadFormat serializer. Frames without payload must not synthesize payload encoding metadata.
 ```
 
 ## Test Utilities
@@ -415,9 +415,9 @@ Use this checklist when migrating an application or transport:
 1. Replace generated `UMessage` transport envelopes with `UOwnedFrame` or zero-copy frame leases.
 2. Keep `UAttributes` native and project fields into transport metadata instead of serializing a generated attributes blob by default.
 3. Preserve `UEncoding` across the transport boundary.
-4. Use `WireFormat` serializers for typed payloads.
+4. Use `PayloadFormat` serializers for typed payloads.
 5. Enable `protobuf-wire` only when Protocol Buffers payload support is needed.
 6. Use `send_owned` for owned transports and `send_zero_copy` only for true loaned-storage transports.
 7. Do not rely on a listener-backed default `receive_owned`; the default returns `UNIMPLEMENTED`, so implement pull receive directly only when the transport truly supports it.
 8. Use `UOwnedFrameEndpoint` for generic owned/zero-copy routing boundaries.
-9. Add tests for raw payloads, custom wire formats, optional protobuf payloads, and wrong-wire-format rejection.
+9. Add tests for raw payloads, custom payload codecs, optional protobuf payloads, and wrong-payload-codec rejection.

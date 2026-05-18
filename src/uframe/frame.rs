@@ -17,7 +17,7 @@ use bytes::Bytes;
 
 use crate::{UAttributesError, UAttributesValidators, UCode, UUri, UUID};
 
-use super::wire::{RawBytes, UDeserializer, USerializer, UWireError, WireFormat};
+use super::payload::{PayloadFormat, RawBytes, UDeserializer, USerializer, UWireError};
 
 /// Native uProtocol message kind carried in a frame metadata.
 #[derive(Clone, Copy, Debug, Eq, Hash, PartialEq)]
@@ -545,7 +545,7 @@ impl UOwnedFrame {
 
     pub fn from_serializable<F, T>(metadata: UFrameMetadata, value: &T) -> Result<Self, UWireError>
     where
-        F: WireFormat,
+        F: PayloadFormat,
         T: USerializer<F>,
     {
         let payload = value.serialize_owned()?;
@@ -587,7 +587,7 @@ impl UOwnedFrame {
 
     pub fn deserialize<'a, F, T>(&'a self) -> Result<T, UWireError>
     where
-        F: WireFormat,
+        F: PayloadFormat,
         T: UDeserializer<'a, F>,
     {
         let expected = F::encoding();

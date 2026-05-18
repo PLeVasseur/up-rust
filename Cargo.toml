@@ -89,7 +89,7 @@ skip_optional_dependencies = true
 max_combination_size = 3
 
 [[example]]
-name = "owned_wire_format"
+name = "owned_payload_codec"
 required-features = ["util"]
 
 [[example]]
@@ -109,15 +109,19 @@ name = "symphony_target"
 required-features = ["symphony"]
 
 [[example]]
-name = "zero_copy_wire_format"
+name = "zero_copy_payload_codec"
 required-features = ["util"]
 
 [[example]]
-name = "protobuf_wire_format"
+name = "protobuf_payload_codec"
 required-features = ["protobuf-wire", "util"]
 
 [[example]]
 name = "protobuf_any_schema_ref"
+required-features = ["protobuf-wire", "util"]
+
+[[example]]
+name = "frame_wire_layers"
 required-features = ["protobuf-wire", "util"]
 
 

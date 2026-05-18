@@ -15,7 +15,7 @@ use std::{error::Error, sync::Arc};
 
 use up_rust::{
     local_transport::LocalTransport,
-    wire::{UDeserializer, USerializer, UWireError, WireFormat},
+    payload::{PayloadFormat, UDeserializer, USerializer, UWireError},
     UEncoding, UFrameBuilder, UOwnedFrame, UOwnedListener, UOwnedTransport, UUri,
 };
 
@@ -25,9 +25,9 @@ struct TemperatureReading {
     milli_celsius: i32,
 }
 
-struct TemperatureWire;
+struct TemperaturePayload;
 
-impl WireFormat for TemperatureWire {
+impl PayloadFormat for TemperaturePayload {
     fn name() -> &'static str {
         "demo-temperature-v1"
     }
@@ -45,7 +45,7 @@ impl TemperatureReading {
     const WIRE_LEN: usize = 6;
 }
 
-impl USerializer<TemperatureWire> for TemperatureReading {
+impl USerializer<TemperaturePayload> for TemperatureReading {
     fn encoded_len(&self) -> usize {
         Self::WIRE_LEN
     }
@@ -63,7 +63,7 @@ impl USerializer<TemperatureWire> for TemperatureReading {
     }
 }
 
-impl<'a> UDeserializer<'a, TemperatureWire> for TemperatureReading {
+impl<'a> UDeserializer<'a, TemperaturePayload> for TemperatureReading {
     fn deserialize_from(src: &'a [u8]) -> Result<Self, UWireError> {
         if src.len() != Self::WIRE_LEN {
             return Err(UWireError::invalid_payload(format!(
@@ -96,7 +96,7 @@ struct ConsolePrinter;
 #[async_trait::async_trait]
 impl UOwnedListener for ConsolePrinter {
     async fn on_receive_owned(&self, frame: UOwnedFrame) {
-        if let Ok(reading) = frame.deserialize::<TemperatureWire, TemperatureReading>() {
+        if let Ok(reading) = frame.deserialize::<TemperaturePayload, TemperatureReading>() {
             println!(
                 "received sensor {}: {} mC",
                 reading.sensor_id, reading.milli_celsius
@@ -120,7 +120,7 @@ pub async fn main() -> Result<(), Box<dyn Error>> {
         milli_celsius: 21_750,
     };
     let frame = UFrameBuilder::publish(topic.clone())
-        .build_with_serializable::<TemperatureWire, _>(&reading)?;
+        .build_with_serializable::<TemperaturePayload, _>(&reading)?;
     transport.send_owned(frame).await?;
 
     transport

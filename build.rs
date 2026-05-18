@@ -32,7 +32,11 @@ fn generate_up_core_api() -> Result<(), Box<dyn std::error::Error>> {
         .include(UPROTOCOL_BASE_URI)
         .inputs([
             format!("{UPROTOCOL_BASE_URI}uprotocol/uoptions.proto"),
+            format!("{UPROTOCOL_BASE_URI}uprotocol/v1/ucode.proto"),
+            format!("{UPROTOCOL_BASE_URI}uprotocol/v1/uuid.proto"),
             format!("{UPROTOCOL_BASE_URI}uprotocol/v1/uri.proto"),
+            format!("{UPROTOCOL_BASE_URI}uprotocol/v1/uattributes.proto"),
+            format!("{UPROTOCOL_BASE_URI}uprotocol/v1/umessage.proto"),
             format!("{UPROTOCOL_BASE_URI}uprotocol/core/usubscription/v3/usubscription.proto"),
         ])
         .cargo_out_dir("uprotocol")

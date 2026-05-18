@@ -12,7 +12,9 @@
  ********************************************************************************/
 
 use protobuf::well_known_types::{any::Any, wrappers::StringValue};
-use up_rust::{wire::USerializer, ProtobufWire, UEncoding, UFrameMetadata, UOwnedFrame, UUri};
+use up_rust::{
+    payload::USerializer, ProtobufPayload, UEncoding, UFrameMetadata, UOwnedFrame, UUri,
+};
 
 fn main() -> Result<(), Box<dyn std::error::Error>> {
     let topic = UUri::try_from("//vehicle/4210/1/8001")?;
@@ -20,7 +22,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     message.value = "protobuf Any payload with schema_ref".to_string();
     let any = Any::pack(&message)?;
 
-    let payload = <Any as USerializer<ProtobufWire>>::serialize_owned(&any)?;
+    let payload = <Any as USerializer<ProtobufPayload>>::serialize_owned(&any)?;
     let frame = UOwnedFrame::new(
         UFrameMetadata::publish(topic).with_encoding(UEncoding::with_schema_ref(
             "protobuf",
@@ -30,7 +32,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         payload,
     );
 
-    let decoded_any: Any = frame.deserialize::<ProtobufWire, _>()?;
+    let decoded_any: Any = frame.deserialize::<ProtobufPayload, _>()?;
     let decoded = decoded_any
         .unpack::<StringValue>()?
         .expect("unexpected protobuf Any type");

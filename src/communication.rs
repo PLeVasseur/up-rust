@@ -39,11 +39,11 @@ use crate::core::usubscription::{from_proto_uri, to_proto_uri, State, Update};
 #[cfg(feature = "protobuf-wire")]
 use crate::core::usubscription::{SubscriptionRequest, USubscription, UnsubscribeRequest};
 #[cfg(feature = "protobuf-wire")]
-use crate::ProtobufWire;
+use crate::ProtobufPayload;
 #[cfg(feature = "util")]
 use crate::UFrameBuilder;
 use crate::{
-    wire::{UDeserializer, USerializer, WireFormat},
+    payload::{PayloadFormat, UDeserializer, USerializer},
     LocalUriProvider, UAttributes, UCode, UFrameMetadata, UMessageType, UOwnedFrame,
     UOwnedListener, UOwnedTransport, UPriority, UStatus, UUri, UUID,
 };
@@ -431,8 +431,8 @@ pub trait RpcClientExt: RpcClient {
         request: &Request,
     ) -> Result<Option<Response>, ServiceInvocationError>
     where
-        RequestFormat: WireFormat + Send + Sync,
-        ResponseFormat: WireFormat + Send + Sync,
+        RequestFormat: PayloadFormat + Send + Sync,
+        ResponseFormat: PayloadFormat + Send + Sync,
         Request: USerializer<RequestFormat> + Sync,
         Response: for<'payload> UDeserializer<'payload, ResponseFormat> + Send,
     {
@@ -475,11 +475,11 @@ impl RpcClientUSubscription {
         request: &Request,
     ) -> Result<Response, UStatus>
     where
-        Request: USerializer<ProtobufWire> + Sync,
-        Response: for<'payload> UDeserializer<'payload, ProtobufWire> + Send,
+        Request: USerializer<ProtobufPayload> + Sync,
+        Response: for<'payload> UDeserializer<'payload, ProtobufPayload> + Send,
     {
         self.rpc_client
-            .invoke_serialized_method::<ProtobufWire, ProtobufWire, _, Response>(
+            .invoke_serialized_method::<ProtobufPayload, ProtobufPayload, _, Response>(
                 usubscription::usubscription_uri(method_resource_id),
                 Self::default_call_options(),
                 request,
@@ -1259,7 +1259,7 @@ impl UOwnedListener for SubscriptionChangeListener {
         let Some(payload) = payload_from_frame(&frame) else {
             return;
         };
-        let Ok(subscription_update) = payload.deserialize::<ProtobufWire, Update>() else {
+        let Ok(subscription_update) = payload.deserialize::<ProtobufPayload, Update>() else {
             return;
         };
         let Some(topic) = subscription_update.topic.as_ref().map(from_proto_uri) else {
@@ -1643,7 +1643,7 @@ mod tests {
             status: Some(status.clone()).into(),
             ..Default::default()
         };
-        let payload = UPayload::from_serializable::<ProtobufWire, _>(&update).unwrap();
+        let payload = UPayload::from_serializable::<ProtobufPayload, _>(&update).unwrap();
         let origin =
             usubscription::usubscription_uri(usubscription::RESOURCE_ID_SUBSCRIPTION_CHANGE);
         let destination = UUri::try_from_parts("client", 0x8000, 0x01, 0x0000).unwrap();

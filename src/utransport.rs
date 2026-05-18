@@ -20,7 +20,7 @@ use std::sync::Arc;
 use async_trait::async_trait;
 
 use crate::{
-    wire::{USerializer, UWireError, WireFormat},
+    payload::{PayloadFormat, USerializer, UWireError},
     zero_copy::{UTxBuffer, UZeroCopyRxFrame},
     UCode, UFrameMetadata, UOwnedFrame, UStatus, UUri,
 };
@@ -252,7 +252,7 @@ pub trait UOwnedTransportExt: UOwnedTransport {
         value: &T,
     ) -> Result<(), UStatus>
     where
-        F: WireFormat + Send + Sync,
+        F: PayloadFormat + Send + Sync,
         T: USerializer<F> + Sync,
     {
         validate_frame_metadata_for_transport(&metadata)?;
@@ -397,7 +397,7 @@ pub trait UZeroCopyTransport: Send + Sync {
 pub trait UZeroCopyTransportExt: UZeroCopyTransport {
     /// Serializes `value` directly into a transport transmit loan and sends it.
     ///
-    /// This helper sets `metadata.encoding()` from the selected [`WireFormat`],
+    /// This helper sets `metadata.encoding()` from the selected [`PayloadFormat`],
     /// reserves a loan of `value.encoded_len()` bytes using the serializer's
     /// alignment, writes into [`UTxBuffer::payload_mut`], and commits with
     /// [`UZeroCopyTransport::send_zero_copy`].
@@ -407,7 +407,7 @@ pub trait UZeroCopyTransportExt: UZeroCopyTransport {
         value: &T,
     ) -> Result<(), UStatus>
     where
-        F: WireFormat + Send + Sync,
+        F: PayloadFormat + Send + Sync,
         T: USerializer<F> + Sync,
     {
         validate_frame_metadata_for_transport(&metadata)?;

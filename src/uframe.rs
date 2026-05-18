@@ -11,20 +11,22 @@
  * SPDX-License-Identifier: Apache-2.0
  ********************************************************************************/
 
-//! Serialization-neutral frame and wire-format primitives.
+//! Serialization-neutral frame, frame-wire, and payload-codec primitives.
 
 mod builder;
 mod frame;
-mod wire;
+mod frame_wire;
+mod payload;
 mod zero_copy;
 
 pub use builder::{UFrameBuilder, UFrameBuilderError};
 pub use frame::{
     UAttributes, UEncoding, UEncodingError, UFrameMetadata, UMessageType, UOwnedFrame, UPriority,
 };
-pub use wire::{
-    RawBytes, UDeserializer, UErasedSerializer, UReadDeserializer, USerializer, UWireError,
-    WireFormat,
+pub use frame_wire::{UFrameWireError, UFrameWireFormat};
+pub use payload::{
+    PayloadFormat, RawBytes, UDeserializer, UErasedSerializer, UReadDeserializer, USerializer,
+    UWireError,
 };
 pub use zero_copy::{
     UContiguousZeroCopyRxFrame, UTxBuffer, UVecTxBuffer, UZeroCopyPayloadCopyExt, UZeroCopyRxFrame,

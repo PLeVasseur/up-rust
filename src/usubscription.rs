@@ -136,8 +136,8 @@ pub trait USubscription: Send + Sync {
 mod tests {
     use super::*;
     use crate::{
-        wire::{UDeserializer, USerializer},
-        ProtobufWire, UUri,
+        payload::{UDeserializer, USerializer},
+        ProtobufPayload, UUri,
     };
 
     #[test]
@@ -172,8 +172,8 @@ mod tests {
             ..Default::default()
         };
 
-        let bytes = <Update as USerializer<ProtobufWire>>::serialize_owned(&update).unwrap();
-        let decoded = <Update as UDeserializer<ProtobufWire>>::deserialize_from(&bytes).unwrap();
+        let bytes = <Update as USerializer<ProtobufPayload>>::serialize_owned(&update).unwrap();
+        let decoded = <Update as UDeserializer<ProtobufPayload>>::deserialize_from(&bytes).unwrap();
 
         assert_eq!(decoded, update);
     }

@@ -83,13 +83,13 @@ impl From<UWireError> for UStatus {
     }
 }
 
-/// Compile-time identity for a payload wire representation.
+/// Compile-time identity for an application payload codec.
 ///
 /// ```
-/// # use up_rust::{wire::WireFormat, UEncoding};
+/// # use up_rust::{payload::PayloadFormat, UEncoding};
 /// struct JsonTelemetry;
 ///
-/// impl WireFormat for JsonTelemetry {
+/// impl PayloadFormat for JsonTelemetry {
 ///     fn name() -> &'static str {
 ///         "json-telemetry-v1"
 ///     }
@@ -103,7 +103,7 @@ impl From<UWireError> for UStatus {
 ///     }
 /// }
 /// ```
-pub trait WireFormat {
+pub trait PayloadFormat {
     fn name() -> &'static str;
     fn encoding() -> UEncoding;
 }
@@ -113,7 +113,7 @@ pub trait WireFormat {
 /// `encoded_len` must return the number of bytes required by `serialize_into`.
 /// If the supplied buffer is too small, implementations should return
 /// [`UWireError::BufferTooSmall`] instead of writing a partial payload.
-pub trait USerializer<F: WireFormat> {
+pub trait USerializer<F: PayloadFormat> {
     const ALIGNMENT: usize = 1;
     fn encoded_len(&self) -> usize;
     fn serialize_into(&self, dst: &mut [u8]) -> Result<usize, UWireError>;
@@ -133,12 +133,12 @@ pub trait USerializer<F: WireFormat> {
 }
 
 /// Deserializes a value from bytes.
-pub trait UDeserializer<'a, F: WireFormat>: Sized {
+pub trait UDeserializer<'a, F: PayloadFormat>: Sized {
     fn deserialize_from(src: &'a [u8]) -> Result<Self, UWireError>;
 }
 
 /// Deserializes a value from an ordered payload byte stream.
-pub trait UReadDeserializer<F: WireFormat>: Sized {
+pub trait UReadDeserializer<F: PayloadFormat>: Sized {
     fn deserialize_from_reader<R: Read>(reader: R, payload_len: usize) -> Result<Self, UWireError>;
 }
 
@@ -152,10 +152,16 @@ pub trait UErasedSerializer {
     fn serialize_into(&self, dst: &mut [u8]) -> Result<usize, UWireError>;
 }
 
-/// Built-in raw byte wire format.
+/// Built-in raw byte payload codec.
 pub struct RawBytes;
 
-impl WireFormat for RawBytes {
+impl RawBytes {
+    pub fn encoding() -> UEncoding {
+        <Self as PayloadFormat>::encoding()
+    }
+}
+
+impl PayloadFormat for RawBytes {
     fn name() -> &'static str {
         "raw-bytes"
     }

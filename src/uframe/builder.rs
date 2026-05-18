@@ -19,7 +19,7 @@ use crate::{UAttributesError, UCode, UUri, UUID};
 
 use super::{
     frame::{UAttributes, UEncoding, UFrameMetadata, UMessageType, UOwnedFrame, UPriority},
-    wire::{RawBytes, USerializer, UWireError, WireFormat},
+    payload::{PayloadFormat, RawBytes, USerializer, UWireError},
 };
 
 /// Error type used by the native [`UFrameBuilder`].
@@ -236,13 +236,13 @@ impl UFrameBuilder {
         self.build()
     }
 
-    /// Serializes a typed payload and builds an owned frame using the selected wire format.
+    /// Serializes a typed payload and builds an owned frame using the selected payload codec.
     pub fn build_with_serializable<F, T>(
         mut self,
         value: &T,
     ) -> Result<UOwnedFrame, UFrameBuilderError>
     where
-        F: WireFormat,
+        F: PayloadFormat,
         T: USerializer<F>,
     {
         self.payload = Some(value.serialize_owned()?);
@@ -257,9 +257,9 @@ impl UFrameBuilder {
         value: &T,
     ) -> Result<UOwnedFrame, UFrameBuilderError>
     where
-        T: USerializer<crate::ProtobufWire>,
+        T: USerializer<crate::ProtobufPayload>,
     {
-        self.build_with_serializable::<crate::ProtobufWire, _>(value)
+        self.build_with_serializable::<crate::ProtobufPayload, _>(value)
     }
 
     fn build_attributes(&self) -> Result<UAttributes, UFrameBuilderError> {

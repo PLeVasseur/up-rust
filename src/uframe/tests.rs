@@ -94,7 +94,7 @@ fn encoding_rejects_invalid_content_type() {
 }
 
 #[test]
-fn owned_frame_uses_selected_wire_format() {
+fn owned_frame_uses_selected_payload_codec() {
     let topic = UUri::try_from("//my-vehicle/4210/1/B24D").unwrap();
     let frame = UOwnedFrame::from_serializable::<RawBytes, _>(
         UFrameMetadata::publish(topic),
@@ -106,9 +106,9 @@ fn owned_frame_uses_selected_wire_format() {
     assert_eq!(frame.payload_bytes(), &[0x0a_u8, 0x0b_u8]);
 }
 
-struct OtherWire;
+struct OtherPayload;
 
-impl WireFormat for OtherWire {
+impl PayloadFormat for OtherPayload {
     fn name() -> &'static str {
         "other"
     }
@@ -118,15 +118,15 @@ impl WireFormat for OtherWire {
     }
 }
 
-impl<'a> UDeserializer<'a, OtherWire> for &'a [u8] {
+impl<'a> UDeserializer<'a, OtherPayload> for &'a [u8] {
     fn deserialize_from(src: &'a [u8]) -> Result<Self, UWireError> {
         Ok(src)
     }
 }
 
-struct OtherSchemaWire;
+struct OtherSchemaPayload;
 
-impl WireFormat for OtherSchemaWire {
+impl PayloadFormat for OtherSchemaPayload {
     fn name() -> &'static str {
         "raw-other-schema"
     }
@@ -140,14 +140,14 @@ impl WireFormat for OtherSchemaWire {
     }
 }
 
-impl<'a> UDeserializer<'a, OtherSchemaWire> for &'a [u8] {
+impl<'a> UDeserializer<'a, OtherSchemaPayload> for &'a [u8] {
     fn deserialize_from(src: &'a [u8]) -> Result<Self, UWireError> {
         Ok(src)
     }
 }
 
 #[test]
-fn owned_frame_deserialize_rejects_wrong_wire_format() {
+fn owned_frame_deserialize_rejects_wrong_payload_codec() {
     let topic = UUri::try_from("//my-vehicle/4210/1/B24D").unwrap();
     let frame = UOwnedFrame::from_serializable::<RawBytes, _>(
         UFrameMetadata::publish(topic),
@@ -156,7 +156,7 @@ fn owned_frame_deserialize_rejects_wrong_wire_format() {
     .unwrap();
 
     assert!(matches!(
-        frame.deserialize::<OtherWire, &[u8]>(),
+        frame.deserialize::<OtherPayload, &[u8]>(),
         Err(UWireError::UnsupportedEncoding { .. })
     ));
 }
@@ -192,7 +192,7 @@ fn owned_frame_deserialize_rejects_wrong_schema_ref() {
     );
 
     assert!(matches!(
-        frame.deserialize::<OtherSchemaWire, &[u8]>(),
+        frame.deserialize::<OtherSchemaPayload, &[u8]>(),
         Err(UWireError::UnsupportedEncoding { .. })
     ));
 }
@@ -266,7 +266,7 @@ fn frame_builder_rejects_low_rpc_priority() {
 }
 
 #[test]
-fn frame_builder_uses_selected_wire_format_for_typed_payload() {
+fn frame_builder_uses_selected_payload_codec_for_typed_payload() {
     let topic = UUri::try_from("//my-vehicle/4210/1/B24D").unwrap();
     let frame = UFrameBuilder::publish(topic)
         .build_with_serializable::<RawBytes, _>(&&[0x0a_u8, 0x0b_u8][..])

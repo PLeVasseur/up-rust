@@ -20,10 +20,10 @@ The crate needs to be added to the `[dependencies]` section of the `Cargo.toml` 
 up-rust = { version = "0.10" }
 ```
 
-Please refer to the [examples](./examples/) for owned-buffer and zero-copy wire-format usage.
+Please refer to the [examples](./examples/) for owned-buffer and zero-copy payload-codec usage.
 The [native frame migration guide](./docs/native-frame-migration.md) explains how to move from generated `UMessage` envelopes to `UOwnedFrame`, `UFrameBuilder`, and serializer-neutral payloads, including a side-by-side owned/zero-copy transport API matrix.
 
-The crate root keeps the common native-frame types available for short examples. For larger codebases, prefer the role-focused modules `frame`, `wire`, `transport`, `zero_copy`, and `prelude` to make simple application code and advanced transport code easier to separate.
+The crate root keeps the common native-frame types available for short examples. For larger codebases, prefer the role-focused modules `frame`, `payload`, `frame_wire`, `transport`, `zero_copy`, and `prelude` to make simple application code and advanced transport code easier to separate.
 
 `UFrameBuilder` provides native builder ergonomics for `UOwnedFrame` construction without reintroducing generated message envelopes:
 
@@ -38,7 +38,7 @@ assert_eq!(frame.payload_bytes(), &[0x01, 0x02]);
 # }
 ```
 
-Use `build_with_serializable::<MyWireFormat, _>(&value)` to create frames with custom serializer-neutral payloads. Protocol Buffers remain available as optional payload support through the `protobuf-wire` feature. CloudEvents mapping is available through the optional `cloudevents` feature. uSubscription service DTO payloads use the generated `up-core-api` protobuf DTOs when the `protobuf-wire` feature is enabled, while the transport envelope remains a native frame.
+Use `build_with_serializable::<MyPayloadCodec, _>(&value)` to create frames with custom serializer-neutral payloads. Protocol Buffers remain available as optional payload support through the `protobuf-wire` feature. CloudEvents mapping is available through the optional `cloudevents` feature. uSubscription service DTO payloads use the generated `up-core-api` protobuf DTOs when the `protobuf-wire` feature is enabled, while the transport envelope remains a native frame.
 
 Transport trait defaults match the mainline `UTransport` shape: optional receive/listener methods return `UNIMPLEMENTED` unless a transport implements them. Push-oriented transports should implement listener registration; transports that support true pull receive should implement `receive_owned` directly. Routing code that needs one owned-frame facade over owned and zero-copy transports can use `transport::UOwnedFrameEndpoint`; wrapping a zero-copy transport crosses a copy boundary and is not end-to-end zero-copy forwarding.
 

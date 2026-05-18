@@ -14,8 +14,10 @@
 /*!
 up-rust is the Eclipse uProtocol Rust language library.
 
-The public API is native Rust and serializer-neutral. Transports exchange
-frames and wire-format metadata without generated message envelopes.
+The public API separates whole-frame wire formats from application payload
+codecs. Transports exchange frames without requiring generated message
+envelopes, but bindings can still choose a generated `UMessage` frame wire
+format when interoperability calls for it.
 
 # Common Path
 
@@ -24,13 +26,14 @@ Publish, Notification, Request, or Response frame, then send it with an
 [`UOwnedTransport`].
 
 For discoverability, the same public types are grouped by role under [`frame`],
-[`wire`], [`transport`], [`zero_copy`], and [`prelude`]. The crate root keeps the
-most common re-exports for short examples.
+[`frame_wire`], [`payload`], [`transport`], [`zero_copy`], and [`prelude`]. The
+crate root keeps the most common re-exports for short examples.
 
 # Advanced Paths
 
-Custom payload codecs implement [`wire::WireFormat`], [`wire::USerializer`], and
-[`wire::UDeserializer`]. Shared-memory transports implement
+Whole-frame wire formats implement [`frame_wire::UFrameWireFormat`]. Custom
+payload codecs implement [`payload::PayloadFormat`], [`payload::USerializer`],
+and [`payload::UDeserializer`]. Shared-memory transports implement
 [`zero_copy::UZeroCopyTransport`] only when they can honestly loan transmit
 storage and return receive leases. Routing code that needs a single owned-frame
 facade over either capability can use [`transport::UOwnedFrameEndpoint`]. Its
@@ -41,10 +44,8 @@ leases into owned frames and copies owned sends into transmit loans.
 
 * `util` enables in-crate utility implementations such as the local transport
   and communication-layer helpers. It is enabled by default.
-* `protobuf-wire` enables optional Protocol Buffers payload codec support.
-  Protocol Buffers remain payload bytes only; they are not used as the frame
-  envelope. uSubscription service DTO payloads use this feature for their
-  protobuf-defined service wire format.
+* `protobuf-wire` enables optional Protocol Buffers support for both the
+  generated `UMessage` frame wire format and Protocol Buffers payload codec.
 * `cloudevents` enables native-frame mapping to and from CloudEvents. It is
   optional, matching mainline behavior, because most applications and transport
   bindings do not need CloudEvents support in the common path.
@@ -78,12 +79,12 @@ pub mod test_util;
 pub mod symphony;
 
 #[cfg(feature = "protobuf-wire")]
-pub mod protobuf_wire;
+pub mod protobuf;
 
 mod uframe;
 pub use uframe::{
     UAttributes, UEncoding, UEncodingError, UFrameBuilder, UFrameBuilderError, UFrameMetadata,
-    UMessageType, UOwnedFrame, UPriority,
+    UFrameWireError, UFrameWireFormat, UMessageType, UOwnedFrame, UPriority,
 };
 
 mod uattributes;
@@ -93,7 +94,7 @@ pub use uattributes::{
 };
 
 #[cfg(feature = "protobuf-wire")]
-pub use protobuf_wire::ProtobufWire;
+pub use protobuf::{ProtobufPayload, ProtobufUMessageFrame};
 
 mod uri;
 pub use uri::{UUri, UUriError};
@@ -131,12 +132,23 @@ pub mod frame {
     };
 }
 
-/// Serializer-neutral payload wire-format contracts and helpers.
-pub mod wire {
+/// Whole-frame wire-format contracts.
+pub mod frame_wire {
+    pub use crate::uframe::{UFrameWireError, UFrameWireFormat};
+
+    #[cfg(feature = "protobuf-wire")]
+    pub use crate::protobuf::ProtobufUMessageFrame;
+}
+
+/// Application payload codec contracts and helpers.
+pub mod payload {
     pub use crate::uframe::{
-        RawBytes, UDeserializer, UEncoding, UEncodingError, UErasedSerializer, UReadDeserializer,
-        USerializer, UWireError, WireFormat,
+        PayloadFormat, RawBytes, UDeserializer, UEncoding, UEncodingError, UErasedSerializer,
+        UReadDeserializer, USerializer, UWireError,
     };
+
+    #[cfg(feature = "protobuf-wire")]
+    pub use crate::protobuf::ProtobufPayload;
 }
 
 /// Owned-buffer transport APIs and endpoint adapters.
@@ -167,11 +179,15 @@ pub mod zero_copy {
 pub mod prelude {
     pub use crate::{
         frame::{UFrameBuilder, UFrameMetadata, UMessageType, UOwnedFrame, UPriority},
-        transport::{UOwnedListener, UOwnedTransport, UOwnedTransportExt},
-        wire::{
-            RawBytes, UDeserializer, UEncoding, UReadDeserializer, USerializer, UWireError,
-            WireFormat,
+        frame_wire::{UFrameWireError, UFrameWireFormat},
+        payload::{
+            PayloadFormat, RawBytes, UDeserializer, UEncoding, UReadDeserializer, USerializer,
+            UWireError,
         },
+        transport::{UOwnedListener, UOwnedTransport, UOwnedTransportExt},
         UCode, UStatus, UUri, UUID,
     };
+
+    #[cfg(feature = "protobuf-wire")]
+    pub use crate::frame_wire::ProtobufUMessageFrame;
 }

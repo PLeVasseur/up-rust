@@ -19,7 +19,7 @@ use std::sync::{Arc, Mutex};
 use protobuf::well_known_types::wrappers::StringValue;
 use tokio::sync::oneshot;
 #[cfg(feature = "protobuf-wire")]
-use up_rust::ProtobufWire;
+use up_rust::ProtobufPayload;
 use up_rust::{
     communication::{
         CallOptions, InMemoryRpcClient, InMemoryRpcServer, Notifier, Publisher, RequestHandler,
@@ -27,7 +27,7 @@ use up_rust::{
         SimplePublisher, UPayload,
     },
     local_transport::LocalTransport,
-    wire::{RawBytes, UDeserializer, USerializer, UWireError, WireFormat},
+    payload::{PayloadFormat, RawBytes, UDeserializer, USerializer, UWireError},
     LocalUriProvider, StaticUriProvider, UAttributes, UEncoding, UFrameBuilder, UMessageType,
     UOwnedFrame, UOwnedListener, UOwnedTransport, UPriority, UUID,
 };
@@ -35,9 +35,9 @@ use up_rust::{
 #[derive(Debug, Eq, PartialEq)]
 struct Reading(u16);
 
-struct ReadingWire;
+struct ReadingPayload;
 
-impl WireFormat for ReadingWire {
+impl PayloadFormat for ReadingPayload {
     fn name() -> &'static str {
         "reading"
     }
@@ -51,7 +51,7 @@ impl WireFormat for ReadingWire {
     }
 }
 
-impl USerializer<ReadingWire> for Reading {
+impl USerializer<ReadingPayload> for Reading {
     fn encoded_len(&self) -> usize {
         2
     }
@@ -66,7 +66,7 @@ impl USerializer<ReadingWire> for Reading {
     }
 }
 
-impl<'a> UDeserializer<'a, ReadingWire> for Reading {
+impl<'a> UDeserializer<'a, ReadingPayload> for Reading {
     fn deserialize_from(src: &'a [u8]) -> Result<Self, UWireError> {
         let bytes: [u8; 2] = src
             .try_into()
@@ -143,10 +143,10 @@ impl RequestHandler for IncrementReadingHandler {
             ServiceInvocationError::InvalidArgument("missing reading payload".to_string())
         })?;
         let reading: Reading = request_payload
-            .deserialize::<ReadingWire, _>()
+            .deserialize::<ReadingPayload, _>()
             .map_err(|error| ServiceInvocationError::InvalidArgument(error.to_string()))?;
         let response = Reading(reading.0 + 1);
-        UPayload::from_serializable::<ReadingWire, _>(&response)
+        UPayload::from_serializable::<ReadingPayload, _>(&response)
             .map(Some)
             .map_err(|error| ServiceInvocationError::InvalidArgument(error.to_string()))
     }
@@ -168,11 +168,11 @@ impl RequestHandler for ProtobufGreetingHandler {
             ServiceInvocationError::InvalidArgument("missing protobuf payload".to_string())
         })?;
         let request: StringValue = request_payload
-            .deserialize::<ProtobufWire, _>()
+            .deserialize::<ProtobufPayload, _>()
             .map_err(|error| ServiceInvocationError::InvalidArgument(error.to_string()))?;
         let mut response = StringValue::new();
         response.value = format!("hello, {}", request.value);
-        UPayload::from_serializable::<ProtobufWire, _>(&response)
+        UPayload::from_serializable::<ProtobufPayload, _>(&response)
             .map(Some)
             .map_err(|error| ServiceInvocationError::InvalidArgument(error.to_string()))
     }
@@ -359,7 +359,7 @@ async fn in_memory_rpc_maps_handler_errors_to_response_status() {
 }
 
 #[tokio::test]
-async fn rpc_client_ext_invokes_typed_wire_format() {
+async fn rpc_client_ext_invokes_typed_payload_codec() {
     let transport = Arc::new(LocalTransport::default());
     let uri_provider = Arc::new(StaticUriProvider::new("", 0x0005, 0x02));
     let server = InMemoryRpcServer::new(transport.clone(), uri_provider.clone());
@@ -371,7 +371,7 @@ async fn rpc_client_ext_invokes_typed_wire_format() {
         .unwrap();
 
     let response: Option<Reading> = client
-        .invoke_serialized_method::<ReadingWire, ReadingWire, _, Reading>(
+        .invoke_serialized_method::<ReadingPayload, ReadingPayload, _, Reading>(
             uri_provider.get_resource_uri(0x0002),
             CallOptions::for_rpc_request(5_000, None, None, None),
             &Reading(41),
@@ -399,7 +399,7 @@ async fn rpc_client_ext_invokes_typed_protobuf_payload() {
     request.value = "protobuf rpc".to_string();
 
     let response: Option<StringValue> = client
-        .invoke_serialized_method::<ProtobufWire, ProtobufWire, _, StringValue>(
+        .invoke_serialized_method::<ProtobufPayload, ProtobufPayload, _, StringValue>(
             uri_provider.get_resource_uri(0x0003),
             CallOptions::for_rpc_request(5_000, None, None, None),
             &request,

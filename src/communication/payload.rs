@@ -14,7 +14,7 @@
 use bytes::Bytes;
 
 use crate::{
-    wire::{RawBytes, UDeserializer, USerializer, UWireError, WireFormat},
+    payload::{PayloadFormat, RawBytes, UDeserializer, USerializer, UWireError},
     UEncoding,
 };
 
@@ -39,19 +39,19 @@ impl UPayload {
         Self::new(payload, RawBytes::encoding())
     }
 
-    /// Serializes a typed payload into its wire format.
+    /// Serializes a typed payload with the selected payload codec.
     pub fn from_serializable<F, T>(value: &T) -> Result<Self, UWireError>
     where
-        F: WireFormat,
+        F: PayloadFormat,
         T: USerializer<F>,
     {
         Ok(Self::new(value.serialize_owned()?, F::encoding()))
     }
 
-    /// Deserializes the payload using a selected wire format.
+    /// Deserializes the payload using a selected payload codec.
     pub fn deserialize<'a, F, T>(&'a self) -> Result<T, UWireError>
     where
-        F: WireFormat,
+        F: PayloadFormat,
         T: UDeserializer<'a, F>,
     {
         if !self.encoding.is_compatible_with(&F::encoding()) {

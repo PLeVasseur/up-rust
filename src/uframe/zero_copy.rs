@@ -15,7 +15,7 @@ use std::io::{Cursor, Read};
 
 use super::{
     frame::{UFrameMetadata, UOwnedFrame},
-    wire::{UDeserializer, UReadDeserializer, UWireError, WireFormat},
+    payload::{PayloadFormat, UDeserializer, UReadDeserializer, UWireError},
 };
 
 impl UZeroCopyRxFrame for UOwnedFrame {
@@ -135,12 +135,12 @@ pub trait UZeroCopyRxFrame {
     /// Deserializes this receive lease from its ordered payload reader.
     ///
     /// The method verifies the frame's [`UEncoding`](crate::UEncoding) against
-    /// the selected [`WireFormat`] before invoking the reader-based deserializer.
+    /// the selected [`PayloadFormat`] before invoking the reader-based deserializer.
     /// Use [`UContiguousZeroCopyRxFrame::deserialize_borrowed`] when the decoded
     /// value needs to borrow directly from a guaranteed contiguous payload.
     fn deserialize_from_reader<F, T>(&self) -> Result<T, UWireError>
     where
-        F: WireFormat,
+        F: PayloadFormat,
         T: UReadDeserializer<F>,
     {
         let expected = F::encoding();
@@ -174,10 +174,10 @@ pub trait UContiguousZeroCopyRxFrame: UZeroCopyRxFrame {
     /// Deserializes a value that may borrow directly from the contiguous payload.
     ///
     /// The method verifies the frame's [`UEncoding`](crate::UEncoding) against
-    /// the selected [`WireFormat`] before invoking the borrowed deserializer.
+    /// the selected [`PayloadFormat`] before invoking the borrowed deserializer.
     fn deserialize_borrowed<'a, F, T>(&'a self) -> Result<T, UWireError>
     where
-        F: WireFormat,
+        F: PayloadFormat,
         T: UDeserializer<'a, F>,
     {
         let expected = F::encoding();
