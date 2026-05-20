@@ -82,6 +82,7 @@ codegen-units = 1
 
 [package.metadata.docs.rs]
 all-features = true
+rustdoc-args = ["--cfg", "docsrs"]
 
 [package.metadata.cargo-all-features]
 # optional dependencies are activated by means of features only
@@ -128,7 +129,7 @@ required-features = ["protobuf-wire", "util"]
 [lints.rust]
 # this prevents cargo from complaining about code blocks
 # excluded from tarpaulin coverage checks
-unexpected_cfgs = { level = "warn", check-cfg = ['cfg(tarpaulin_include)'] }
+unexpected_cfgs = { level = "warn", check-cfg = ['cfg(docsrs)', 'cfg(tarpaulin_include)'] }
 
 [lints.clippy]
 # see https://corrode.dev/blog/defensive-programming/#clippy-lints-for-defensive-programming

@@ -229,7 +229,10 @@ let frame = UFrameBuilder::response_for_request(request_attributes).build()?;
 Use `PayloadFormat`, `USerializer`, and `UDeserializer` for non-Protobuf payloads. The same serializer contract works for owned buffers and zero-copy transmit loans.
 
 ```rust
-use up_rust::{PayloadFormat, UDeserializer, UEncoding, UFrameBuilder, USerializer, UUri, UWireError};
+use up_rust::{
+    payload::{PayloadFormat, UDeserializer, USerializer, UWireError},
+    UEncoding, UFrameBuilder, UUri,
+};
 
 struct TemperaturePayload;
 

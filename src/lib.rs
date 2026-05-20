@@ -59,14 +59,18 @@ Service-specific data transfer objects are grouped under modules such as
 */
 
 #![warn(rustdoc::bare_urls, rustdoc::broken_intra_doc_links)]
+#![cfg_attr(docsrs, feature(doc_cfg))]
 
 #[cfg(feature = "util")]
+#[cfg_attr(docsrs, doc(cfg(feature = "util")))]
 pub mod local_transport;
 
 #[cfg(feature = "cloudevents")]
+#[cfg_attr(docsrs, doc(cfg(feature = "cloudevents")))]
 pub mod cloudevents;
 
 #[cfg(feature = "cloudevents")]
+#[cfg_attr(docsrs, doc(cfg(feature = "cloudevents")))]
 pub use cloudevents::{CloudEvent, CloudEventAttributeValue, CloudEventError};
 
 pub mod communication;
@@ -74,12 +78,15 @@ pub mod communication;
 pub mod core;
 
 #[cfg(any(test, feature = "test-util"))]
+#[cfg_attr(docsrs, doc(cfg(feature = "test-util")))]
 pub mod test_util;
 
 #[cfg(feature = "symphony")]
+#[cfg_attr(docsrs, doc(cfg(feature = "symphony")))]
 pub mod symphony;
 
 #[cfg(feature = "protobuf-wire")]
+#[cfg_attr(docsrs, doc(cfg(feature = "protobuf-wire")))]
 pub mod protobuf;
 
 mod uframe;
@@ -95,6 +102,7 @@ pub use uattributes::{
 };
 
 #[cfg(feature = "protobuf-wire")]
+#[cfg_attr(docsrs, doc(cfg(feature = "protobuf-wire")))]
 pub use protobuf::{ProtobufPayload, ProtobufUMessageFrame};
 
 mod uri;
@@ -121,6 +129,7 @@ mod uuid;
 pub use uuid::UUID;
 
 #[cfg(feature = "protobuf-wire")]
+#[cfg_attr(docsrs, doc(cfg(feature = "protobuf-wire")))]
 pub mod up_core_api {
     include!(concat!(env!("OUT_DIR"), "/uprotocol/mod.rs"));
 }
@@ -138,6 +147,7 @@ pub mod frame_wire {
     pub use crate::uframe::{UFrameWireError, UFrameWireFormat};
 
     #[cfg(feature = "protobuf-wire")]
+    #[cfg_attr(docsrs, doc(cfg(feature = "protobuf-wire")))]
     pub use crate::protobuf::ProtobufUMessageFrame;
 }
 
@@ -149,6 +159,7 @@ pub mod payload {
     };
 
     #[cfg(feature = "protobuf-wire")]
+    #[cfg_attr(docsrs, doc(cfg(feature = "protobuf-wire")))]
     pub use crate::protobuf::ProtobufPayload;
 }
 
@@ -173,6 +184,7 @@ pub mod zero_copy {
     pub use crate::utransport::{UZeroCopyListener, UZeroCopyTransport, UZeroCopyTransportExt};
 
     #[cfg(any(test, feature = "test-util"))]
+    #[cfg_attr(docsrs, doc(cfg(feature = "test-util")))]
     pub use crate::utransport::MockUZeroCopyTransport;
 }
 
@@ -190,5 +202,6 @@ pub mod prelude {
     };
 
     #[cfg(feature = "protobuf-wire")]
+    #[cfg_attr(docsrs, doc(cfg(feature = "protobuf-wire")))]
     pub use crate::frame_wire::ProtobufUMessageFrame;
 }

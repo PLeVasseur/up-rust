@@ -251,9 +251,11 @@ impl<T> UZeroCopyPayloadCopyExt for T where T: UZeroCopyRxFrame + ?Sized {}
 
 /// Owned buffer useful for tests, examples, and adapters that emulate a transmit loan.
 ///
-/// `UVecTxBuffer` implements both transmit and receive-side zero-copy traits over
-/// an owned `Vec<u8>`. It is intended for test fakes and examples; production
-/// shared-memory transports should expose their own loan or lease type.
+/// `UVecTxBuffer` implements [`UTxBuffer`] over an owned `Vec<u8>`. It is
+/// intended for test fakes and examples; production shared-memory transports
+/// should expose their own transport-specific loan type. Use [`UOwnedFrame`] as a
+/// simple receive-side fake because it implements the zero-copy receive traits
+/// over its owned payload bytes.
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub struct UVecTxBuffer {
     metadata: UFrameMetadata,

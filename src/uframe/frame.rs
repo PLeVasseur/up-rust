@@ -22,22 +22,33 @@ use super::payload::{PayloadFormat, RawBytes, UDeserializer, USerializer, UWireE
 /// Native uProtocol message kind carried in a frame metadata.
 #[derive(Clone, Copy, Debug, Eq, Hash, PartialEq)]
 pub enum UMessageType {
+    /// Publish message sent to a topic URI.
     Publish,
+    /// Notification message sent from an origin URI to a destination URI.
     Notification,
+    /// RPC request sent to a method URI with a reply-to URI.
     Request,
+    /// RPC response sent back to a requester's reply-to URI.
     Response,
 }
 
 /// Native uProtocol priority class.
 #[derive(Clone, Copy, Debug, Default, Eq, Hash, PartialEq)]
 pub enum UPriority {
+    /// Lowest priority class.
     CS0,
+    /// Default priority class.
     #[default]
     CS1,
+    /// Priority class 2.
     CS2,
+    /// Priority class 3.
     CS3,
+    /// RPC priority class used by request/response helpers.
     CS4,
+    /// Priority class 5.
     CS5,
+    /// Highest priority class.
     CS6,
 }
 
@@ -73,6 +84,10 @@ pub struct UAttributes {
 }
 
 impl UAttributes {
+    /// Creates native uProtocol attributes with default priority and no optional fields.
+    ///
+    /// Prefer [`crate::UFrameBuilder`] or checked [`UFrameMetadata`] constructors
+    /// for application frames so message-type-specific invariants are validated.
     pub fn new(id: UUID, source: UUri, sink: Option<UUri>, message_type: UMessageType) -> Self {
         Self {
             id,
@@ -89,46 +104,60 @@ impl UAttributes {
         }
     }
 
+    /// Returns the frame identifier.
     pub fn id(&self) -> &UUID {
         &self.id
     }
 
+    /// Returns the source URI.
     pub fn source(&self) -> &UUri {
         &self.source
     }
 
+    /// Returns the optional sink URI.
+    ///
+    /// Publish frames normally have no sink. Notifications, requests, and
+    /// responses carry a sink according to their message type.
     pub fn sink(&self) -> Option<&UUri> {
         self.sink.as_ref()
     }
 
+    /// Returns the message kind these attributes describe.
     pub fn message_type(&self) -> UMessageType {
         self.message_type
     }
 
+    /// Returns the uProtocol priority class.
     pub fn priority(&self) -> UPriority {
         self.priority
     }
 
+    /// Returns the optional time-to-live in milliseconds.
     pub fn ttl(&self) -> Option<u32> {
         self.ttl
     }
 
+    /// Returns the request identifier for response frames.
     pub fn request_id(&self) -> Option<&UUID> {
         self.request_id.as_ref()
     }
 
+    /// Returns the optional trace context parent value.
     pub fn traceparent(&self) -> Option<&str> {
         self.traceparent.as_deref()
     }
 
+    /// Returns the optional authorization token.
     pub fn token(&self) -> Option<&str> {
         self.token.as_deref()
     }
 
+    /// Returns the optional permission level.
     pub fn permission_level(&self) -> Option<u32> {
         self.permission_level
     }
 
+    /// Returns the optional communication status for response frames.
     pub fn commstatus(&self) -> Option<UCode> {
         self.commstatus
     }
@@ -138,42 +167,49 @@ impl UAttributes {
         UAttributesValidators::get_validator_for_attributes(self).validate(self)
     }
 
+    /// Returns a copy of these attributes with `priority` set.
     #[must_use]
     pub fn with_priority(mut self, priority: UPriority) -> Self {
         self.priority = priority;
         self
     }
 
+    /// Returns a copy of these attributes with a time-to-live in milliseconds.
     #[must_use]
     pub fn with_ttl(mut self, ttl: u32) -> Self {
         self.ttl = Some(ttl);
         self
     }
 
+    /// Returns a copy of these attributes with an RPC request identifier.
     #[must_use]
     pub fn with_request_id(mut self, request_id: UUID) -> Self {
         self.request_id = Some(request_id);
         self
     }
 
+    /// Returns a copy of these attributes with a trace context parent value.
     #[must_use]
     pub fn with_traceparent(mut self, traceparent: impl Into<String>) -> Self {
         self.traceparent = Some(traceparent.into());
         self
     }
 
+    /// Returns a copy of these attributes with an authorization token.
     #[must_use]
     pub fn with_token(mut self, token: impl Into<String>) -> Self {
         self.token = Some(token.into());
         self
     }
 
+    /// Returns a copy of these attributes with a permission level.
     #[must_use]
     pub fn with_permission_level(mut self, permission_level: u32) -> Self {
         self.permission_level = Some(permission_level);
         self
     }
 
+    /// Returns a copy of these attributes with a communication status.
     #[must_use]
     pub fn with_commstatus(mut self, commstatus: UCode) -> Self {
         self.commstatus = Some(commstatus);
@@ -230,8 +266,11 @@ pub struct UEncoding {
 
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub enum UEncodingError {
+    /// The `format_id` field was empty.
     EmptyFormatId,
+    /// The `content_type` field was empty.
     EmptyContentType,
+    /// The `content_type` field was not a valid media type.
     InvalidContentType(String),
 }
 
@@ -319,19 +358,26 @@ impl UEncoding {
         Self::new(format_id, content_type, Some(schema_ref))
     }
 
+    /// Creates encoding metadata whose `format_id` and `content_type` are the same value.
+    ///
+    /// This is useful when a media type alone is sufficient to identify the
+    /// payload representation.
     pub fn from_content_type(content_type: impl Into<String>) -> Self {
         let content_type = content_type.into();
         Self::without_schema_ref(content_type.clone(), content_type)
     }
 
+    /// Returns the codec family identifier.
     pub fn format_id(&self) -> &str {
         &self.format_id
     }
 
+    /// Returns the payload media type.
     pub fn content_type(&self) -> &str {
         &self.content_type
     }
 
+    /// Returns the optional schema reference used to narrow the codec family.
     pub fn schema_ref(&self) -> Option<&str> {
         self.schema_ref.as_deref()
     }
@@ -376,6 +422,10 @@ pub struct UFrameMetadata {
 }
 
 impl UFrameMetadata {
+    /// Creates frame metadata from native attributes and optional payload encoding.
+    ///
+    /// The encoding must be `Some` exactly when the corresponding frame carries a
+    /// payload. Use [`Self::without_payload_encoding`] for no-payload frames.
     pub fn new(attributes: UAttributes, encoding: impl Into<Option<UEncoding>>) -> Self {
         Self {
             attributes,
@@ -383,6 +433,7 @@ impl UFrameMetadata {
         }
     }
 
+    /// Creates metadata for a frame with no payload bytes.
     pub fn without_payload_encoding(attributes: UAttributes) -> Self {
         Self::new(attributes, None::<UEncoding>)
     }
@@ -488,28 +539,37 @@ impl UFrameMetadata {
             .validate(&self.attributes)
     }
 
+    /// Returns the native uProtocol attributes.
     pub fn attributes(&self) -> &UAttributes {
         &self.attributes
     }
 
+    /// Returns the source URI from the contained attributes.
     pub fn source(&self) -> &UUri {
         self.attributes.source()
     }
 
+    /// Returns the optional sink URI from the contained attributes.
     pub fn sink(&self) -> Option<&UUri> {
         self.attributes.sink()
     }
 
+    /// Returns the payload encoding metadata when this metadata describes a payload frame.
     pub fn encoding(&self) -> Option<&UEncoding> {
         self.encoding.as_ref()
     }
 
+    /// Returns metadata with payload encoding set to `encoding`.
     #[must_use]
     pub fn with_encoding(mut self, encoding: UEncoding) -> Self {
         self.encoding = Some(encoding);
         self
     }
 
+    /// Returns metadata with payload encoding removed.
+    ///
+    /// Use this when constructing a no-payload frame from metadata that may have
+    /// been cloned from a payload-bearing frame.
     #[must_use]
     pub fn without_encoding(mut self) -> Self {
         self.encoding = None;
@@ -518,6 +578,11 @@ impl UFrameMetadata {
 }
 
 /// Owned, serialization-neutral uProtocol frame.
+///
+/// `UOwnedFrame` carries native frame metadata plus optional owned payload bytes.
+/// Payload bytes are never interpreted by the frame itself; typed send/receive
+/// helpers use [`PayloadFormat`] implementations to set or verify [`UEncoding`]
+/// before serializing or deserializing application values.
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub struct UOwnedFrame {
     metadata: UFrameMetadata,
@@ -525,10 +590,16 @@ pub struct UOwnedFrame {
 }
 
 impl UOwnedFrame {
+    /// Creates a payload-bearing frame.
+    ///
+    /// `metadata.encoding()` should be `Some` for frames created with this
+    /// constructor. Use [`Self::from_serializable`] or [`crate::UFrameBuilder`]
+    /// when the payload codec should set the encoding automatically.
     pub fn new(metadata: UFrameMetadata, payload: impl Into<Bytes>) -> Self {
         Self::with_payload(metadata, payload)
     }
 
+    /// Creates a payload-bearing frame from metadata and payload bytes.
     pub fn with_payload(metadata: UFrameMetadata, payload: impl Into<Bytes>) -> Self {
         Self {
             metadata,
@@ -536,6 +607,10 @@ impl UOwnedFrame {
         }
     }
 
+    /// Creates a frame with no payload and no payload encoding.
+    ///
+    /// Any encoding present in `metadata` is removed so payload presence and
+    /// payload encoding remain consistent.
     pub fn without_payload(metadata: UFrameMetadata) -> Self {
         Self {
             metadata: metadata.without_encoding(),
@@ -543,6 +618,10 @@ impl UOwnedFrame {
         }
     }
 
+    /// Serializes `value` with payload codec `F` and returns an owned frame.
+    ///
+    /// The returned frame carries `F::encoding()` in its metadata. Serialization
+    /// errors are reported as [`UWireError`] values.
     pub fn from_serializable<F, T>(metadata: UFrameMetadata, value: &T) -> Result<Self, UWireError>
     where
         F: PayloadFormat,
@@ -552,10 +631,15 @@ impl UOwnedFrame {
         Ok(Self::new(metadata.with_encoding(F::encoding()), payload))
     }
 
+    /// Returns frame metadata.
     pub fn metadata(&self) -> &UFrameMetadata {
         &self.metadata
     }
 
+    /// Returns mutable frame metadata for owned-frame adapters.
+    ///
+    /// Keep payload presence and `metadata.encoding()` consistent before sending
+    /// or delivering a mutated frame.
     pub fn metadata_mut(&mut self) -> &mut UFrameMetadata {
         &mut self.metadata
     }
@@ -573,18 +657,26 @@ impl UOwnedFrame {
         self.payload.as_deref().unwrap_or_default()
     }
 
+    /// Returns whether the frame carries a payload, including a present empty payload.
     pub fn has_payload(&self) -> bool {
         self.payload.is_some()
     }
 
+    /// Consumes the frame and returns its metadata.
     pub fn into_metadata(self) -> UFrameMetadata {
         self.metadata
     }
 
+    /// Consumes the frame and returns its optional payload bytes.
     pub fn into_payload(self) -> Option<Bytes> {
         self.payload
     }
 
+    /// Deserializes the payload with codec `F` after verifying encoding metadata.
+    ///
+    /// The frame must carry a payload and a compatible [`UEncoding`]. A decoder
+    /// with no schema reference accepts a frame with a more specific schema
+    /// reference as long as `format_id` and `content_type` match.
     pub fn deserialize<'a, F, T>(&'a self) -> Result<T, UWireError>
     where
         F: PayloadFormat,

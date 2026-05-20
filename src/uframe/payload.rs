@@ -22,29 +22,42 @@ use super::frame::UEncoding;
 /// Error type used by serialization-neutral frame helpers.
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub enum UWireError {
+    /// A caller-provided output buffer is too small for the serialized payload.
     BufferTooSmall {
+        /// Required output size in bytes.
         expected: usize,
+        /// Provided output size in bytes.
         actual: usize,
     },
+    /// Payload bytes are malformed for the selected decoder.
     InvalidPayload(String),
+    /// A typed decode was requested, but the frame has no payload encoding.
     MissingEncoding,
+    /// A typed decode was requested, but the frame has no payload bytes.
     MissingPayload,
+    /// The frame's encoding is not compatible with the selected payload codec.
     UnsupportedEncoding {
+        /// Encoding declared by the requested [`PayloadFormat`].
         expected: Box<UEncoding>,
+        /// Encoding carried by the frame being decoded.
         actual: Box<UEncoding>,
     },
+    /// Serializer or deserializer implementation failed.
     SerializationError(String),
 }
 
 impl UWireError {
+    /// Creates a [`UWireError::BufferTooSmall`] value.
     pub fn buffer_too_small(expected: usize, actual: usize) -> Self {
         Self::BufferTooSmall { expected, actual }
     }
 
+    /// Creates a [`UWireError::InvalidPayload`] value.
     pub fn invalid_payload(message: impl Into<String>) -> Self {
         Self::InvalidPayload(message.into())
     }
 
+    /// Creates a [`UWireError::SerializationError`] value.
     pub fn serialization_error(message: impl Into<String>) -> Self {
         Self::SerializationError(message.into())
     }
@@ -104,7 +117,10 @@ impl From<UWireError> for UStatus {
 /// }
 /// ```
 pub trait PayloadFormat {
+    /// Stable codec name for logs, diagnostics, and configuration.
     fn name() -> &'static str;
+
+    /// Payload encoding metadata written into frames that use this codec.
     fn encoding() -> UEncoding;
 }
 
@@ -114,10 +130,16 @@ pub trait PayloadFormat {
 /// If the supplied buffer is too small, implementations should return
 /// [`UWireError::BufferTooSmall`] instead of writing a partial payload.
 pub trait USerializer<F: PayloadFormat> {
+    /// Required alignment for a zero-copy payload buffer.
     const ALIGNMENT: usize = 1;
+
+    /// Returns the exact number of bytes [`Self::serialize_into`] will write.
     fn encoded_len(&self) -> usize;
+
+    /// Serializes this value into `dst` and returns the number of bytes written.
     fn serialize_into(&self, dst: &mut [u8]) -> Result<usize, UWireError>;
 
+    /// Serializes this value into an owned byte buffer.
     fn serialize_owned(&self) -> Result<Bytes, UWireError> {
         let expected = self.encoded_len();
         let mut bytes = vec![0_u8; expected];
@@ -134,21 +156,30 @@ pub trait USerializer<F: PayloadFormat> {
 
 /// Deserializes a value from bytes.
 pub trait UDeserializer<'a, F: PayloadFormat>: Sized {
+    /// Decodes `Self` from one contiguous payload byte slice.
     fn deserialize_from(src: &'a [u8]) -> Result<Self, UWireError>;
 }
 
 /// Deserializes a value from an ordered payload byte stream.
 pub trait UReadDeserializer<F: PayloadFormat>: Sized {
+    /// Decodes `Self` from a reader over `payload_len` bytes.
     fn deserialize_from_reader<R: Read>(reader: R, payload_len: usize) -> Result<Self, UWireError>;
 }
 
 /// Object-safe serializer for runtime-selected codecs.
 pub trait UErasedSerializer {
+    /// Encoding metadata produced by this runtime-selected serializer.
     fn encoding(&self) -> UEncoding;
+
+    /// Required payload alignment for zero-copy transmit loans.
     fn alignment(&self) -> usize {
         1
     }
+
+    /// Returns the exact number of bytes [`Self::serialize_into`] will write.
     fn encoded_len(&self) -> usize;
+
+    /// Serializes this value into `dst` and returns the number of bytes written.
     fn serialize_into(&self, dst: &mut [u8]) -> Result<usize, UWireError>;
 }
 
@@ -156,6 +187,7 @@ pub trait UErasedSerializer {
 pub struct RawBytes;
 
 impl RawBytes {
+    /// Returns the raw-byte payload encoding metadata.
     pub fn encoding() -> UEncoding {
         <Self as PayloadFormat>::encoding()
     }

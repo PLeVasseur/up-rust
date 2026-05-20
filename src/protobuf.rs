@@ -31,9 +31,17 @@ use crate::{
     UOwnedFrame, UPriority, UUri, UUID,
 };
 
+/// Protocol Buffers application payload codec.
+///
+/// `ProtobufPayload` serializes and deserializes only the application payload
+/// bytes using the `protobuf` crate's [`Message`] trait. It does not wrap a
+/// complete uProtocol frame and does not serialize [`UAttributes`] or transport
+/// metadata. Use [`ProtobufUMessageFrame`] only when an entire frame must be
+/// encoded as a generated `UMessage` envelope.
 pub struct ProtobufPayload;
 
 impl ProtobufPayload {
+    /// Returns the generic Protocol Buffers payload encoding metadata.
     pub fn encoding() -> UEncoding {
         <Self as PayloadFormat>::encoding()
     }
@@ -109,6 +117,14 @@ where
 /// [`UAttributes`], the legacy `payload_format` field, and optional payload
 /// bytes. It is distinct from [`ProtobufPayload`], which serializes only an
 /// application payload value.
+///
+/// The generated `UMessage` schema has only the legacy `payload_format` enum for
+/// payload identity. Because native [`UEncoding`] can carry arbitrary
+/// `format_id`, `content_type`, and `schema_ref` values, this wire format accepts
+/// only encodings that can be represented by that enum. It rejects schema-specific
+/// encodings and unknown content types with
+/// [`UFrameWireError::UnsupportedPayloadEncoding`] rather than silently dropping
+/// metadata.
 pub struct ProtobufUMessageFrame;
 
 impl UFrameWireFormat for ProtobufUMessageFrame {

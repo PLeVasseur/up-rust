@@ -246,6 +246,14 @@ pub trait UOwnedTransport: Send + Sync {
 /// Convenience methods for owned transports.
 #[async_trait]
 pub trait UOwnedTransportExt: UOwnedTransport {
+    /// Serializes `value` into owned bytes and sends it as a native frame.
+    ///
+    /// This helper validates transport metadata, sets `metadata.encoding()` from
+    /// the selected [`PayloadFormat`], serializes `value` into an owned buffer,
+    /// and calls [`UOwnedTransport::send_owned`]. Use
+    /// [`UZeroCopyTransportExt::send_serialized_zero_copy`] instead when the
+    /// transport can loan payload storage and the caller wants to avoid building
+    /// an intermediate owned payload buffer.
     async fn send_serialized<F, T>(
         &self,
         metadata: UFrameMetadata,
