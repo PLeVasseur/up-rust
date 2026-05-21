@@ -28,7 +28,7 @@ use up_rust::{
     },
     local_transport::LocalTransport,
     payload::{PayloadFormat, RawBytes, UDeserializer, USerializer, UWireError},
-    LocalUriProvider, StaticUriProvider, UAttributes, UEncoding, UFrameBuilder, UMessageType,
+    LocalUriProvider, PayloadEncoding, StaticUriProvider, UAttributes, UFrameBuilder, UMessageType,
     UOwnedFrame, UOwnedListener, UOwnedTransport, UPriority, UUID,
 };
 
@@ -42,12 +42,8 @@ impl PayloadFormat for ReadingPayload {
         "reading"
     }
 
-    fn encoding() -> UEncoding {
-        UEncoding::new(
-            "reading",
-            "application/x-up-rust-test-reading",
-            None::<String>,
-        )
+    fn encoding() -> PayloadEncoding {
+        PayloadEncoding::custom("reading", "application/x-up-rust-test-reading")
     }
 }
 

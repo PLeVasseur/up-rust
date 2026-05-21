@@ -23,7 +23,7 @@ use up_rust::{
     communication::{CallOptions, InMemoryRpcClient, InMemoryRpcServer, RpcClient, UPayload},
     local_transport::LocalTransport,
     symphony::DeploymentTarget,
-    StaticUriProvider, UEncoding, UUri,
+    PayloadEncoding, StaticUriProvider, UPayloadFormat, UUri,
 };
 
 struct ExampleDeploymentTarget(Arc<Notify>, Arc<Notify>, Arc<Notify>);
@@ -60,8 +60,8 @@ impl DeploymentTarget for ExampleDeploymentTarget {
     }
 }
 
-fn json_encoding() -> UEncoding {
-    UEncoding::without_schema_ref("json", "application/json")
+fn json_encoding() -> PayloadEncoding {
+    PayloadEncoding::standard(UPayloadFormat::Json)
 }
 
 #[tokio::main]

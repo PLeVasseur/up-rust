@@ -18,7 +18,7 @@ use bytes::Bytes;
 use crate::{UAttributesError, UCode, UUri, UUID};
 
 use super::{
-    frame::{UAttributes, UEncoding, UFrameMetadata, UMessageType, UOwnedFrame, UPriority},
+    frame::{PayloadEncoding, UAttributes, UFrameMetadata, UMessageType, UOwnedFrame, UPriority},
     payload::{PayloadFormat, RawBytes, USerializer, UWireError},
 };
 
@@ -78,7 +78,7 @@ impl From<UAttributesError> for UFrameBuilderError {
 #[derive(Clone, Debug)]
 pub struct UFrameBuilder {
     commstatus: Option<UCode>,
-    encoding: Option<UEncoding>,
+    encoding: Option<PayloadEncoding>,
     message_id: Option<UUID>,
     message_type: UMessageType,
     payload: Option<Bytes>,
@@ -197,7 +197,7 @@ impl UFrameBuilder {
     }
 
     /// Sets explicit payload encoding metadata for subsequent [`Self::build`] calls.
-    pub fn with_encoding(mut self, encoding: UEncoding) -> Self {
+    pub fn with_encoding(mut self, encoding: PayloadEncoding) -> Self {
         self.encoding = Some(encoding);
         self
     }
@@ -229,7 +229,7 @@ impl UFrameBuilder {
     pub fn build_with_payload<T: Into<Bytes>>(
         mut self,
         payload: T,
-        encoding: UEncoding,
+        encoding: PayloadEncoding,
     ) -> Result<UOwnedFrame, UFrameBuilderError> {
         self.payload = Some(payload.into());
         self.encoding = Some(encoding);
@@ -260,6 +260,20 @@ impl UFrameBuilder {
         T: USerializer<crate::ProtobufPayload>,
     {
         self.build_with_serializable::<crate::ProtobufPayload, _>(value)
+    }
+
+    /// Packs a Protocol Buffers value into `google.protobuf.Any` and builds an owned frame.
+    #[cfg(feature = "protobuf-wire")]
+    pub fn build_with_protobuf_any_payload<T>(
+        self,
+        value: &T,
+    ) -> Result<UOwnedFrame, UFrameBuilderError>
+    where
+        T: ::protobuf::MessageFull,
+    {
+        let any = ::protobuf::well_known_types::any::Any::pack(value)
+            .map_err(|error| UWireError::serialization_error(error.to_string()))?;
+        self.build_with_serializable::<crate::ProtobufAnyPayload, _>(&any)
     }
 
     fn build_attributes(&self) -> Result<UAttributes, UFrameBuilderError> {

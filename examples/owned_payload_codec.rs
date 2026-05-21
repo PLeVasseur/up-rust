@@ -16,7 +16,7 @@ use std::{error::Error, sync::Arc};
 use up_rust::{
     local_transport::LocalTransport,
     payload::{PayloadFormat, UDeserializer, USerializer, UWireError},
-    UEncoding, UFrameBuilder, UOwnedFrame, UOwnedListener, UOwnedTransport, UUri,
+    PayloadEncoding, UFrameBuilder, UOwnedFrame, UOwnedListener, UOwnedTransport, UUri,
 };
 
 #[derive(Debug, PartialEq)]
@@ -32,12 +32,8 @@ impl PayloadFormat for TemperaturePayload {
         "demo-temperature-v1"
     }
 
-    fn encoding() -> UEncoding {
-        UEncoding::with_schema_ref(
-            Self::name(),
-            "application/x.demo.temperature",
-            "urn:demo:TemperatureReading:v1",
-        )
+    fn encoding() -> PayloadEncoding {
+        PayloadEncoding::custom(Self::name(), "application/x.demo.temperature")
     }
 }
 

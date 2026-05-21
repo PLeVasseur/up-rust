@@ -15,19 +15,19 @@ use bytes::Bytes;
 
 use crate::{
     payload::{PayloadFormat, RawBytes, UDeserializer, USerializer, UWireError},
-    UEncoding,
+    PayloadEncoding,
 };
 
 /// Native payload bytes plus their serializer-neutral encoding metadata.
 #[derive(Clone, Debug, Default, Eq, PartialEq)]
 pub struct UPayload {
-    encoding: UEncoding,
+    encoding: PayloadEncoding,
     payload: Bytes,
 }
 
 impl UPayload {
     /// Creates a payload from bytes and explicit encoding metadata.
-    pub fn new<T: Into<Bytes>>(payload: T, encoding: UEncoding) -> Self {
+    pub fn new<T: Into<Bytes>>(payload: T, encoding: PayloadEncoding) -> Self {
         Self {
             encoding,
             payload: payload.into(),
@@ -64,7 +64,7 @@ impl UPayload {
     }
 
     /// Gets the payload encoding metadata.
-    pub fn encoding(&self) -> &UEncoding {
+    pub fn encoding(&self) -> &PayloadEncoding {
         &self.encoding
     }
 
@@ -79,7 +79,7 @@ impl UPayload {
     }
 
     /// Consumes this payload and returns encoding metadata and bytes.
-    pub fn into_parts(self) -> (UEncoding, Bytes) {
+    pub fn into_parts(self) -> (PayloadEncoding, Bytes) {
         (self.encoding, self.payload)
     }
 }

@@ -133,7 +133,7 @@ pub trait UZeroCopyRxFrame {
 
     /// Deserializes this receive lease from its ordered payload reader.
     ///
-    /// The method verifies the frame's [`UEncoding`](crate::UEncoding) against
+    /// The method verifies the frame's [`PayloadEncoding`](crate::PayloadEncoding) against
     /// the selected [`PayloadFormat`] before invoking the reader-based deserializer.
     /// Use [`UContiguousZeroCopyRxFrame::deserialize_borrowed`] when the decoded
     /// value needs to borrow directly from a guaranteed contiguous payload.
@@ -172,7 +172,7 @@ pub trait UContiguousZeroCopyRxFrame: UZeroCopyRxFrame {
 
     /// Deserializes a value that may borrow directly from the contiguous payload.
     ///
-    /// The method verifies the frame's [`UEncoding`](crate::UEncoding) against
+    /// The method verifies the frame's [`PayloadEncoding`](crate::PayloadEncoding) against
     /// the selected [`PayloadFormat`] before invoking the borrowed deserializer.
     fn deserialize_borrowed<'a, F, T>(&'a self) -> Result<T, UWireError>
     where

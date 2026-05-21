@@ -19,7 +19,7 @@
 
 use std::io::Read;
 
-use ::protobuf::{CodedOutputStream, EnumOrUnknown, Message};
+use ::protobuf::{well_known_types::any::Any, CodedOutputStream, EnumOrUnknown, Message};
 use bytes::Bytes;
 
 use crate::{
@@ -27,8 +27,8 @@ use crate::{
     up_core_api::{
         uattributes as proto_attributes, ucode as proto_ucode, umessage as proto_message,
     },
-    UAttributes, UCode, UEncoding, UFrameMetadata, UFrameWireError, UFrameWireFormat, UMessageType,
-    UOwnedFrame, UPriority, UUri, UUID,
+    PayloadEncoding, UAttributes, UCode, UFrameMetadata, UFrameWireError, UFrameWireFormat,
+    UMessageType, UOwnedFrame, UPayloadFormat, UPriority, UUri, UUID,
 };
 
 /// Protocol Buffers application payload codec.
@@ -42,7 +42,7 @@ pub struct ProtobufPayload;
 
 impl ProtobufPayload {
     /// Returns the generic Protocol Buffers payload encoding metadata.
-    pub fn encoding() -> UEncoding {
+    pub fn encoding() -> PayloadEncoding {
         <Self as PayloadFormat>::encoding()
     }
 }
@@ -52,8 +52,77 @@ impl PayloadFormat for ProtobufPayload {
         "protobuf"
     }
 
-    fn encoding() -> UEncoding {
-        UEncoding::without_schema_ref("protobuf", "application/x-protobuf")
+    fn encoding() -> PayloadEncoding {
+        PayloadEncoding::standard(UPayloadFormat::Protobuf)
+    }
+}
+
+/// Protocol Buffers `google.protobuf.Any` application payload codec.
+///
+/// This codec is for payload bytes that are already a serialized
+/// `google.protobuf.Any`, matching upstream `UPAYLOAD_FORMAT_PROTOBUF_WRAPPED_IN_ANY`.
+/// Use [`ProtobufPayload`] for ordinary protobuf message bytes.
+pub struct ProtobufAnyPayload;
+
+impl ProtobufAnyPayload {
+    /// Returns the protobuf-Any payload encoding metadata.
+    pub fn encoding() -> PayloadEncoding {
+        <Self as PayloadFormat>::encoding()
+    }
+}
+
+impl PayloadFormat for ProtobufAnyPayload {
+    fn name() -> &'static str {
+        "protobuf-any"
+    }
+
+    fn encoding() -> PayloadEncoding {
+        PayloadEncoding::standard(UPayloadFormat::ProtobufWrappedInAny)
+    }
+}
+
+impl USerializer<ProtobufAnyPayload> for Any {
+    fn encoded_len(&self) -> usize {
+        self.compute_size() as usize
+    }
+
+    fn serialize_into(&self, dst: &mut [u8]) -> Result<usize, UWireError> {
+        let expected = self.compute_size() as usize;
+        let actual = dst.len();
+        let out = dst
+            .get_mut(..expected)
+            .ok_or_else(|| UWireError::buffer_too_small(expected, actual))?;
+        let mut output = CodedOutputStream::bytes(out);
+        self.write_to(&mut output)
+            .map_err(|error| UWireError::serialization_error(error.to_string()))?;
+        output
+            .flush()
+            .map_err(|error| UWireError::serialization_error(error.to_string()))?;
+        let written = usize::try_from(output.total_bytes_written())
+            .map_err(|error| UWireError::serialization_error(error.to_string()))?;
+        if written != expected {
+            return Err(UWireError::invalid_payload(format!(
+                "protobuf Any writer wrote {written} bytes but encoded_len returned {expected} bytes"
+            )));
+        }
+        Ok(written)
+    }
+}
+
+impl<'a> UDeserializer<'a, ProtobufAnyPayload> for Any {
+    fn deserialize_from(src: &'a [u8]) -> Result<Self, UWireError> {
+        ::protobuf::Message::parse_from_bytes(src)
+            .map_err(|error| UWireError::invalid_payload(error.to_string()))
+    }
+}
+
+impl UReadDeserializer<ProtobufAnyPayload> for Any {
+    fn deserialize_from_reader<R: Read>(
+        mut reader: R,
+        _payload_len: usize,
+    ) -> Result<Self, UWireError> {
+        ::protobuf::Message::parse_from_reader(&mut reader)
+            .map_err(|error| UWireError::invalid_payload(error.to_string()))
     }
 }
 
@@ -119,10 +188,8 @@ where
 /// application payload value.
 ///
 /// The generated `UMessage` schema has only the legacy `payload_format` enum for
-/// payload identity. Because native [`UEncoding`] can carry arbitrary
-/// `format_id`, `content_type`, and `schema_ref` values, this wire format accepts
-/// only encodings that can be represented by that enum. It rejects schema-specific
-/// encodings and unknown content types with
+/// payload identity. This wire format accepts standard [`UPayloadFormat`] values
+/// and rejects native-only custom [`PayloadEncoding`] values with
 /// [`UFrameWireError::UnsupportedPayloadEncoding`] rather than silently dropping
 /// metadata.
 pub struct ProtobufUMessageFrame;
@@ -189,11 +256,6 @@ fn umessage_to_frame(message: &proto_message::UMessage) -> Result<UOwnedFrame, U
     let metadata = match (&message.payload, payload_format) {
         (None, proto_attributes::UPayloadFormat::UPAYLOAD_FORMAT_UNSPECIFIED) => {
             UFrameMetadata::without_payload_encoding(native_attributes)
-        }
-        (Some(_), proto_attributes::UPayloadFormat::UPAYLOAD_FORMAT_UNSPECIFIED) => {
-            return Err(UFrameWireError::invalid_frame(
-                "UMessage payload is present but payload_format is unspecified",
-            ));
         }
         (None, _) => {
             return Err(UFrameWireError::invalid_frame(
@@ -398,73 +460,52 @@ fn proto_code_to_native(code: proto_ucode::UCode) -> UCode {
 }
 
 fn payload_encoding_to_proto(
-    encoding: &UEncoding,
+    encoding: &PayloadEncoding,
 ) -> Result<proto_attributes::UPayloadFormat, UFrameWireError> {
-    if encoding.schema_ref().is_some() {
-        return Err(UFrameWireError::unsupported_payload_encoding(
-            "generated UMessage payload_format cannot preserve schema_ref",
-        ));
+    match encoding {
+        PayloadEncoding::Standard(format) => Ok(native_payload_format_to_proto(*format)),
+        PayloadEncoding::Custom(custom) => Err(UFrameWireError::unsupported_payload_encoding(
+            format!("custom payload encoding id={} cannot be represented by generated UMessage payload_format", custom.id()),
+        )),
     }
-    match (encoding.format_id(), encoding.content_type()) {
-        ("raw-bytes", "application/octet-stream") => {
-            Ok(proto_attributes::UPayloadFormat::UPAYLOAD_FORMAT_RAW)
+}
+
+fn native_payload_format_to_proto(format: UPayloadFormat) -> proto_attributes::UPayloadFormat {
+    match format {
+        UPayloadFormat::Unspecified => {
+            proto_attributes::UPayloadFormat::UPAYLOAD_FORMAT_UNSPECIFIED
         }
-        ("protobuf", "application/x-protobuf") => {
-            Ok(proto_attributes::UPayloadFormat::UPAYLOAD_FORMAT_PROTOBUF_WRAPPED_IN_ANY)
+        UPayloadFormat::ProtobufWrappedInAny => {
+            proto_attributes::UPayloadFormat::UPAYLOAD_FORMAT_PROTOBUF_WRAPPED_IN_ANY
         }
-        ("protobuf", "application/protobuf") => {
-            Ok(proto_attributes::UPayloadFormat::UPAYLOAD_FORMAT_PROTOBUF)
-        }
-        ("json", "application/json") => Ok(proto_attributes::UPayloadFormat::UPAYLOAD_FORMAT_JSON),
-        ("text", "text/plain") => Ok(proto_attributes::UPayloadFormat::UPAYLOAD_FORMAT_TEXT),
-        ("someip", "application/x-someip") => {
-            Ok(proto_attributes::UPayloadFormat::UPAYLOAD_FORMAT_SOMEIP)
-        }
-        ("someip-tlv", "application/x-someip_tlv") => {
-            Ok(proto_attributes::UPayloadFormat::UPAYLOAD_FORMAT_SOMEIP_TLV)
-        }
-        ("shm", "application/x-shm") => Ok(proto_attributes::UPayloadFormat::UPAYLOAD_FORMAT_SHM),
-        _ => Err(UFrameWireError::unsupported_payload_encoding(format!(
-            "format_id={}, content_type={}",
-            encoding.format_id(),
-            encoding.content_type()
-        ))),
+        UPayloadFormat::Protobuf => proto_attributes::UPayloadFormat::UPAYLOAD_FORMAT_PROTOBUF,
+        UPayloadFormat::Json => proto_attributes::UPayloadFormat::UPAYLOAD_FORMAT_JSON,
+        UPayloadFormat::SomeIp => proto_attributes::UPayloadFormat::UPAYLOAD_FORMAT_SOMEIP,
+        UPayloadFormat::SomeIpTlv => proto_attributes::UPayloadFormat::UPAYLOAD_FORMAT_SOMEIP_TLV,
+        UPayloadFormat::Raw => proto_attributes::UPayloadFormat::UPAYLOAD_FORMAT_RAW,
+        UPayloadFormat::Text => proto_attributes::UPayloadFormat::UPAYLOAD_FORMAT_TEXT,
+        UPayloadFormat::Shm => proto_attributes::UPayloadFormat::UPAYLOAD_FORMAT_SHM,
     }
 }
 
 fn proto_payload_format_to_encoding(
     payload_format: proto_attributes::UPayloadFormat,
-) -> Result<UEncoding, UFrameWireError> {
-    match payload_format {
-        proto_attributes::UPayloadFormat::UPAYLOAD_FORMAT_UNSPECIFIED => Err(
-            UFrameWireError::invalid_frame("payload_format is unspecified"),
-        ),
-        proto_attributes::UPayloadFormat::UPAYLOAD_FORMAT_PROTOBUF_WRAPPED_IN_ANY => Ok(
-            UEncoding::without_schema_ref("protobuf", "application/x-protobuf"),
-        ),
-        proto_attributes::UPayloadFormat::UPAYLOAD_FORMAT_PROTOBUF => Ok(
-            UEncoding::without_schema_ref("protobuf", "application/protobuf"),
-        ),
-        proto_attributes::UPayloadFormat::UPAYLOAD_FORMAT_JSON => {
-            Ok(UEncoding::without_schema_ref("json", "application/json"))
+) -> Result<PayloadEncoding, UFrameWireError> {
+    Ok(PayloadEncoding::standard(match payload_format {
+        proto_attributes::UPayloadFormat::UPAYLOAD_FORMAT_UNSPECIFIED => {
+            UPayloadFormat::Unspecified
         }
-        proto_attributes::UPayloadFormat::UPAYLOAD_FORMAT_SOMEIP => Ok(
-            UEncoding::without_schema_ref("someip", "application/x-someip"),
-        ),
-        proto_attributes::UPayloadFormat::UPAYLOAD_FORMAT_SOMEIP_TLV => Ok(
-            UEncoding::without_schema_ref("someip-tlv", "application/x-someip_tlv"),
-        ),
-        proto_attributes::UPayloadFormat::UPAYLOAD_FORMAT_RAW => Ok(UEncoding::without_schema_ref(
-            "raw-bytes",
-            "application/octet-stream",
-        )),
-        proto_attributes::UPayloadFormat::UPAYLOAD_FORMAT_TEXT => {
-            Ok(UEncoding::without_schema_ref("text", "text/plain"))
+        proto_attributes::UPayloadFormat::UPAYLOAD_FORMAT_PROTOBUF_WRAPPED_IN_ANY => {
+            UPayloadFormat::ProtobufWrappedInAny
         }
-        proto_attributes::UPayloadFormat::UPAYLOAD_FORMAT_SHM => {
-            Ok(UEncoding::without_schema_ref("shm", "application/x-shm"))
-        }
-    }
+        proto_attributes::UPayloadFormat::UPAYLOAD_FORMAT_PROTOBUF => UPayloadFormat::Protobuf,
+        proto_attributes::UPayloadFormat::UPAYLOAD_FORMAT_JSON => UPayloadFormat::Json,
+        proto_attributes::UPayloadFormat::UPAYLOAD_FORMAT_SOMEIP => UPayloadFormat::SomeIp,
+        proto_attributes::UPayloadFormat::UPAYLOAD_FORMAT_SOMEIP_TLV => UPayloadFormat::SomeIpTlv,
+        proto_attributes::UPayloadFormat::UPAYLOAD_FORMAT_RAW => UPayloadFormat::Raw,
+        proto_attributes::UPayloadFormat::UPAYLOAD_FORMAT_TEXT => UPayloadFormat::Text,
+        proto_attributes::UPayloadFormat::UPAYLOAD_FORMAT_SHM => UPayloadFormat::Shm,
+    }))
 }
 
 #[cfg(test)]
@@ -475,7 +516,7 @@ mod tests {
         frame_wire::UFrameWireFormat,
         payload::{RawBytes, UDeserializer, USerializer, UWireError},
         zero_copy::{UContiguousZeroCopyRxFrame, UTxBuffer, UVecTxBuffer, UZeroCopyRxFrame},
-        UEncoding, UFrameMetadata, UOwnedFrame, UUri,
+        PayloadEncoding, UFrameMetadata, UOwnedFrame, UPayloadFormat, UUri,
     };
 
     use super::*;
@@ -641,15 +682,37 @@ mod tests {
     }
 
     #[test]
-    fn protobuf_umessage_frame_rejects_unrepresentable_payload_encoding() {
+    fn protobuf_umessage_frame_round_trips_protobuf_any_payload() {
+        let topic = UUri::try_from("//vehicle/4210/1/8001").unwrap();
+        let input = message("protobuf Any payload inside protobuf UMessage frame");
+        let any = Any::pack(&input).unwrap();
+        let frame = UOwnedFrame::from_serializable::<ProtobufAnyPayload, _>(
+            UFrameMetadata::publish(topic),
+            &any,
+        )
+        .unwrap();
+
+        let encoded = ProtobufUMessageFrame::serialize_frame(&frame).unwrap();
+        let decoded = ProtobufUMessageFrame::deserialize_frame(&encoded).unwrap();
+        let decoded_any: Any = decoded.deserialize::<ProtobufAnyPayload, _>().unwrap();
+        let decoded_payload = decoded_any.unpack::<StringValue>().unwrap().unwrap();
+
+        assert_eq!(
+            decoded.metadata().encoding(),
+            Some(&ProtobufAnyPayload::encoding())
+        );
+        assert_eq!(decoded_payload.value, input.value);
+    }
+
+    #[test]
+    fn protobuf_umessage_frame_rejects_custom_payload_encoding() {
         let topic = UUri::try_from("//vehicle/4210/1/8001").unwrap();
         let frame = UOwnedFrame::new(
-            UFrameMetadata::publish(topic).with_encoding(UEncoding::with_schema_ref(
-                "raw-bytes",
-                "application/octet-stream",
-                "urn:example:Schema:v1",
+            UFrameMetadata::publish(topic).with_encoding(PayloadEncoding::custom(
+                "com.example.native-bytes-v1",
+                "application/vnd.example.native-bytes",
             )),
-            b"schema payload".as_slice(),
+            b"native payload".as_slice(),
         );
 
         let error = ProtobufUMessageFrame::serialize_frame(&frame).unwrap_err();
@@ -657,8 +720,24 @@ mod tests {
         assert!(matches!(
             error,
             crate::UFrameWireError::UnsupportedPayloadEncoding(message)
-                if message.contains("schema_ref")
+                if message.contains("custom payload encoding")
         ));
+    }
+
+    #[test]
+    fn protobuf_umessage_frame_round_trips_unspecified_payload_format() {
+        let topic = UUri::try_from("//vehicle/4210/1/8001").unwrap();
+        let frame = UOwnedFrame::new(
+            UFrameMetadata::publish(topic)
+                .with_encoding(PayloadEncoding::standard(UPayloadFormat::Unspecified)),
+            b"out-of-band".as_slice(),
+        );
+
+        let encoded = ProtobufUMessageFrame::serialize_frame(&frame).unwrap();
+        let decoded = ProtobufUMessageFrame::deserialize_frame(&encoded).unwrap();
+
+        assert_eq!(decoded.metadata().encoding(), frame.metadata().encoding());
+        assert_eq!(decoded.payload_bytes(), b"out-of-band");
     }
 
     #[test]

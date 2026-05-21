@@ -237,180 +237,289 @@ impl UAttributes {
     }
 }
 
-/// Identifies the payload representation carried by a frame.
+/// Standard payload formats defined by the uProtocol data model.
 ///
-/// `format_id` and `content_type` identify the codec family. `schema_ref`
-/// narrows that codec to a concrete schema when the decoder requires one.
-/// Empty schema references are normalized to absent.
-/// Decoders with no schema requirement can still accept matching format and
-/// content type when a frame carries a schema reference.
-///
-/// ```
-/// # use up_rust::UEncoding;
-/// let generic_json = UEncoding::without_schema_ref("json", "application/json");
-/// let typed_json = UEncoding::with_schema_ref(
-///     "json",
-///     "application/json",
-///     "urn:example:Telemetry:v1",
-/// );
-///
-/// assert!(typed_json.is_compatible_with(&generic_json));
-/// assert!(typed_json.is_compatible_with(&typed_json));
-/// ```
+/// These variants mirror upstream `UPayloadFormat`. Native frames can carry one
+/// of these standard formats or a transport/native-only custom encoding through
+/// [`PayloadEncoding`].
+#[derive(Clone, Copy, Debug, Default, Eq, Hash, PartialEq)]
+pub enum UPayloadFormat {
+    /// Payload format is unknown and must be understood out of band.
+    #[default]
+    Unspecified,
+    /// Payload is a serialized `google.protobuf.Any`.
+    ProtobufWrappedInAny,
+    /// Payload is a serialized protobuf message.
+    Protobuf,
+    /// Payload is UTF-8 JSON.
+    Json,
+    /// Payload is SOME/IP payload data.
+    SomeIp,
+    /// Payload is SOME/IP TLV payload data.
+    SomeIpTlv,
+    /// Payload is uninterpreted bytes.
+    Raw,
+    /// Payload is UTF-8 text.
+    Text,
+    /// Payload is a shared-memory reference.
+    Shm,
+}
+
+impl UPayloadFormat {
+    pub const UPAYLOAD_FORMAT_UNSPECIFIED: Self = Self::Unspecified;
+    pub const UPAYLOAD_FORMAT_PROTOBUF_WRAPPED_IN_ANY: Self = Self::ProtobufWrappedInAny;
+    pub const UPAYLOAD_FORMAT_PROTOBUF: Self = Self::Protobuf;
+    pub const UPAYLOAD_FORMAT_JSON: Self = Self::Json;
+    pub const UPAYLOAD_FORMAT_SOMEIP: Self = Self::SomeIp;
+    pub const UPAYLOAD_FORMAT_SOMEIP_TLV: Self = Self::SomeIpTlv;
+    pub const UPAYLOAD_FORMAT_RAW: Self = Self::Raw;
+    pub const UPAYLOAD_FORMAT_TEXT: Self = Self::Text;
+    pub const UPAYLOAD_FORMAT_SHM: Self = Self::Shm;
+
+    /// Returns the upstream enum numeric value.
+    pub fn value(self) -> u8 {
+        match self {
+            Self::Unspecified => 0,
+            Self::ProtobufWrappedInAny => 1,
+            Self::Protobuf => 2,
+            Self::Json => 3,
+            Self::SomeIp => 4,
+            Self::SomeIpTlv => 5,
+            Self::Raw => 6,
+            Self::Text => 7,
+            Self::Shm => 8,
+        }
+    }
+
+    /// Returns the standard payload format for an upstream enum numeric value.
+    pub fn from_u8(value: u8) -> Option<Self> {
+        match value {
+            0 => Some(Self::Unspecified),
+            1 => Some(Self::ProtobufWrappedInAny),
+            2 => Some(Self::Protobuf),
+            3 => Some(Self::Json),
+            4 => Some(Self::SomeIp),
+            5 => Some(Self::SomeIpTlv),
+            6 => Some(Self::Raw),
+            7 => Some(Self::Text),
+            8 => Some(Self::Shm),
+            _ => None,
+        }
+    }
+
+    /// Returns the standard media type, if this format has one.
+    pub fn content_type(self) -> Option<&'static str> {
+        match self {
+            Self::Unspecified => None,
+            Self::ProtobufWrappedInAny => Some("application/x-protobuf"),
+            Self::Protobuf => Some("application/protobuf"),
+            Self::Json => Some("application/json"),
+            Self::SomeIp => Some("application/x-someip"),
+            Self::SomeIpTlv => Some("application/x-someip_tlv"),
+            Self::Raw => Some("application/octet-stream"),
+            Self::Text => Some("text/plain"),
+            Self::Shm => Some("application/x-shm"),
+        }
+    }
+
+    /// Finds a standard payload format for a media type, ignoring parameters.
+    pub fn from_content_type(content_type: &str) -> Option<Self> {
+        let requested = mediatype::MediaType::parse(content_type).ok()?;
+        [
+            Self::ProtobufWrappedInAny,
+            Self::Protobuf,
+            Self::Json,
+            Self::SomeIp,
+            Self::SomeIpTlv,
+            Self::Raw,
+            Self::Text,
+            Self::Shm,
+        ]
+        .into_iter()
+        .find(|format| {
+            format.content_type().is_some_and(|candidate| {
+                mediatype::MediaType::parse(candidate).is_ok_and(|candidate| {
+                    candidate.ty == requested.ty && candidate.subty == requested.subty
+                })
+            })
+        })
+    }
+}
+
+/// Native-only payload encoding identity for byte-compatible payload layouts.
 #[derive(Clone, Debug, Eq, Hash, PartialEq)]
-pub struct UEncoding {
-    format_id: String,
+pub struct CustomPayloadEncoding {
+    id: String,
     content_type: String,
-    schema_ref: Option<String>,
 }
 
 #[derive(Clone, Debug, Eq, PartialEq)]
-pub enum UEncodingError {
-    /// The `format_id` field was empty.
-    EmptyFormatId,
-    /// The `content_type` field was empty.
+pub enum PayloadEncodingError {
+    /// The custom encoding identifier was empty.
+    EmptyCustomId,
+    /// The custom encoding media type was empty.
     EmptyContentType,
-    /// The `content_type` field was not a valid media type.
+    /// The custom encoding media type was not valid.
     InvalidContentType(String),
 }
 
-impl Display for UEncodingError {
+impl Display for PayloadEncodingError {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
-            Self::EmptyFormatId => f.write_str("encoding format_id must not be empty"),
-            Self::EmptyContentType => f.write_str("encoding content_type must not be empty"),
-            Self::InvalidContentType(error) => {
-                f.write_fmt(format_args!("encoding content_type is not valid: {error}"))
+            Self::EmptyCustomId => f.write_str("custom payload encoding id must not be empty"),
+            Self::EmptyContentType => {
+                f.write_str("custom payload encoding content_type must not be empty")
             }
+            Self::InvalidContentType(error) => f.write_fmt(format_args!(
+                "custom payload encoding content_type is not valid: {error}"
+            )),
         }
     }
 }
 
-impl Error for UEncodingError {}
+impl Error for PayloadEncodingError {}
 
-impl UEncoding {
-    /// Creates encoding metadata from all fields, panicking if static inputs are invalid.
-    ///
-    /// Use [`Self::try_new`] for runtime input and transport decode paths.
-    pub fn new(
-        format_id: impl Into<String>,
-        content_type: impl Into<String>,
-        schema_ref: Option<impl Into<String>>,
-    ) -> Self {
-        Self::try_new(format_id, content_type, schema_ref)
-            .expect("UEncoding::new requires non-empty format_id and content_type")
+impl CustomPayloadEncoding {
+    /// Creates a custom encoding, panicking if static inputs are invalid.
+    pub fn new(id: impl Into<String>, content_type: impl Into<String>) -> Self {
+        Self::try_new(id, content_type)
+            .expect("custom payload encoding requires non-empty id and valid content_type")
     }
 
-    /// Creates encoding metadata from runtime input.
+    /// Creates a custom encoding from runtime input.
     pub fn try_new(
-        format_id: impl Into<String>,
+        id: impl Into<String>,
         content_type: impl Into<String>,
-        schema_ref: Option<impl Into<String>>,
-    ) -> Result<Self, UEncodingError> {
-        let format_id = format_id.into();
-        if format_id.is_empty() {
-            return Err(UEncodingError::EmptyFormatId);
+    ) -> Result<Self, PayloadEncodingError> {
+        let id = id.into();
+        if id.is_empty() {
+            return Err(PayloadEncodingError::EmptyCustomId);
         }
         let content_type = content_type.into();
         if content_type.is_empty() {
-            return Err(UEncodingError::EmptyContentType);
+            return Err(PayloadEncodingError::EmptyContentType);
         }
         content_type
             .parse::<mediatype::MediaTypeBuf>()
-            .map_err(|error| UEncodingError::InvalidContentType(error.to_string()))?;
-        Ok(Self::new_unchecked(format_id, content_type, schema_ref))
+            .map_err(|error| PayloadEncodingError::InvalidContentType(error.to_string()))?;
+        Ok(Self::new_unchecked(id, content_type))
     }
 
-    /// Creates encoding metadata without validation.
-    ///
-    /// This is for low-level adapters that must preserve wire-level values before
-    /// explicit validation. Application code should prefer [`Self::new`] or
-    /// [`Self::try_new`].
-    pub fn new_unchecked(
-        format_id: impl Into<String>,
-        content_type: impl Into<String>,
-        schema_ref: Option<impl Into<String>>,
-    ) -> Self {
+    /// Creates a custom encoding without validation.
+    pub fn new_unchecked(id: impl Into<String>, content_type: impl Into<String>) -> Self {
         Self {
-            format_id: format_id.into(),
+            id: id.into(),
             content_type: content_type.into(),
-            schema_ref: schema_ref.and_then(|schema_ref| {
-                let schema_ref = schema_ref.into();
-                (!schema_ref.is_empty()).then_some(schema_ref)
-            }),
         }
     }
 
-    /// Creates encoding metadata without a schema reference.
-    pub fn without_schema_ref(
-        format_id: impl Into<String>,
-        content_type: impl Into<String>,
-    ) -> Self {
-        Self::new(format_id, content_type, None::<String>)
+    /// Returns the native-only custom encoding identifier.
+    pub fn id(&self) -> &str {
+        &self.id
     }
 
-    /// Creates encoding metadata with a schema reference.
-    pub fn with_schema_ref(
-        format_id: impl Into<String>,
-        content_type: impl Into<String>,
-        schema_ref: impl Into<String>,
-    ) -> Self {
-        Self::new(format_id, content_type, Some(schema_ref))
-    }
-
-    /// Creates encoding metadata whose `format_id` and `content_type` are the same value.
-    ///
-    /// This is useful when a media type alone is sufficient to identify the
-    /// payload representation.
-    pub fn from_content_type(content_type: impl Into<String>) -> Self {
-        let content_type = content_type.into();
-        Self::without_schema_ref(content_type.clone(), content_type)
-    }
-
-    /// Returns the codec family identifier.
-    pub fn format_id(&self) -> &str {
-        &self.format_id
-    }
-
-    /// Returns the payload media type.
+    /// Returns the custom encoding media type.
     pub fn content_type(&self) -> &str {
         &self.content_type
     }
+}
 
-    /// Returns the optional schema reference used to narrow the codec family.
-    pub fn schema_ref(&self) -> Option<&str> {
-        self.schema_ref.as_deref()
+/// Identifies the payload representation carried by a native frame.
+///
+/// Standard encodings are the upstream `UPayloadFormat` values and can be
+/// represented by generated `UMessage` envelopes. Custom encodings are native
+/// frame metadata for byte-compatible layouts, such as shared-memory/zero-copy
+/// structs that applications read without protobuf or JSON serialization. Custom
+/// encodings are not representable by the legacy protobuf envelope.
+#[derive(Clone, Debug, Eq, Hash, PartialEq)]
+pub enum PayloadEncoding {
+    /// Upstream-compatible payload format.
+    Standard(UPayloadFormat),
+    /// Native-only custom payload representation.
+    Custom(CustomPayloadEncoding),
+}
+
+impl PayloadEncoding {
+    /// Creates a standard payload encoding.
+    pub fn standard(format: UPayloadFormat) -> Self {
+        Self::Standard(format)
+    }
+
+    /// Creates a custom payload encoding, panicking if static inputs are invalid.
+    pub fn custom(id: impl Into<String>, content_type: impl Into<String>) -> Self {
+        Self::Custom(CustomPayloadEncoding::new(id, content_type))
+    }
+
+    /// Creates a custom payload encoding from runtime input.
+    pub fn try_custom(
+        id: impl Into<String>,
+        content_type: impl Into<String>,
+    ) -> Result<Self, PayloadEncodingError> {
+        CustomPayloadEncoding::try_new(id, content_type).map(Self::Custom)
+    }
+
+    /// Creates a custom payload encoding without validation.
+    pub fn custom_unchecked(id: impl Into<String>, content_type: impl Into<String>) -> Self {
+        Self::Custom(CustomPayloadEncoding::new_unchecked(id, content_type))
+    }
+
+    /// Creates a standard encoding if the content type is known, otherwise a
+    /// custom encoding whose id is the content type.
+    pub fn from_content_type(content_type: impl Into<String>) -> Self {
+        let content_type = content_type.into();
+        UPayloadFormat::from_content_type(&content_type).map_or_else(
+            || Self::custom(content_type.clone(), content_type),
+            Self::Standard,
+        )
+    }
+
+    /// Returns the upstream payload format when this is a standard encoding.
+    pub fn standard_format(&self) -> Option<UPayloadFormat> {
+        match self {
+            Self::Standard(format) => Some(*format),
+            Self::Custom(_) => None,
+        }
+    }
+
+    /// Returns the native-only custom encoding when present.
+    pub fn custom_encoding(&self) -> Option<&CustomPayloadEncoding> {
+        match self {
+            Self::Standard(_) => None,
+            Self::Custom(encoding) => Some(encoding),
+        }
+    }
+
+    /// Returns the media type when one is known.
+    pub fn content_type(&self) -> Option<&str> {
+        match self {
+            Self::Standard(format) => format.content_type(),
+            Self::Custom(encoding) => Some(encoding.content_type()),
+        }
     }
 
     /// Returns whether this actual frame encoding can be decoded by a decoder
     /// that declares `expected`.
-    ///
-    /// `format_id` and `content_type` must match exactly. If `expected` carries
-    /// a schema reference, the frame must carry the same schema reference. If
-    /// `expected` has no schema reference, the decoder is treated as generic for
-    /// the matching format/content-type pair.
     pub fn is_compatible_with(&self, expected: &Self) -> bool {
-        self.format_id == expected.format_id
-            && self.content_type == expected.content_type
-            && expected
-                .schema_ref
-                .as_ref()
-                .is_none_or(|expected_schema_ref| {
-                    self.schema_ref.as_ref() == Some(expected_schema_ref)
-                })
+        self == expected
     }
 }
 
-impl Default for UEncoding {
+impl Default for PayloadEncoding {
     fn default() -> Self {
         RawBytes::encoding()
     }
 }
 
+/// Deprecated compatibility alias for the native payload encoding type.
+pub type UEncoding = PayloadEncoding;
+
+/// Deprecated compatibility alias for custom payload encoding validation errors.
+pub type UEncodingError = PayloadEncodingError;
+
 /// Native frame metadata used by transport APIs.
 ///
 /// `UFrameMetadata` groups native uProtocol [`UAttributes`] with optional
-/// payload [`UEncoding`]. It is not a generated protocol envelope and it is not a
+/// payload [`PayloadEncoding`]. It is not a generated protocol envelope and it is not a
 /// replacement for `UAttributes`; transports should project these fields into
 /// their own metadata channels where possible. Prefer [`crate::UFrameBuilder`]
 /// for constructing application frames because it validates message-type-specific
@@ -418,7 +527,7 @@ impl Default for UEncoding {
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub struct UFrameMetadata {
     attributes: UAttributes,
-    encoding: Option<UEncoding>,
+    encoding: Option<PayloadEncoding>,
 }
 
 impl UFrameMetadata {
@@ -426,7 +535,7 @@ impl UFrameMetadata {
     ///
     /// The encoding must be `Some` exactly when the corresponding frame carries a
     /// payload. Use [`Self::without_payload_encoding`] for no-payload frames.
-    pub fn new(attributes: UAttributes, encoding: impl Into<Option<UEncoding>>) -> Self {
+    pub fn new(attributes: UAttributes, encoding: impl Into<Option<PayloadEncoding>>) -> Self {
         Self {
             attributes,
             encoding: encoding.into(),
@@ -435,7 +544,7 @@ impl UFrameMetadata {
 
     /// Creates metadata for a frame with no payload bytes.
     pub fn without_payload_encoding(attributes: UAttributes) -> Self {
-        Self::new(attributes, None::<UEncoding>)
+        Self::new(attributes, None::<PayloadEncoding>)
     }
 
     /// Creates unchecked Publish metadata.
@@ -444,7 +553,7 @@ impl UFrameMetadata {
     pub fn publish(topic: UUri) -> Self {
         Self::new(
             UAttributes::new(UUID::build(), topic, None, UMessageType::Publish),
-            None::<UEncoding>,
+            None::<PayloadEncoding>,
         )
     }
 
@@ -466,7 +575,7 @@ impl UFrameMetadata {
                 Some(destination),
                 UMessageType::Notification,
             ),
-            None::<UEncoding>,
+            None::<PayloadEncoding>,
         )
     }
 
@@ -490,7 +599,7 @@ impl UFrameMetadata {
             )
             .with_priority(UPriority::CS4)
             .with_ttl(ttl),
-            None::<UEncoding>,
+            None::<PayloadEncoding>,
         )
     }
 
@@ -518,7 +627,7 @@ impl UFrameMetadata {
             )
             .with_priority(UPriority::CS4)
             .with_request_id(request_id),
-            None::<UEncoding>,
+            None::<PayloadEncoding>,
         )
     }
 
@@ -555,13 +664,13 @@ impl UFrameMetadata {
     }
 
     /// Returns the payload encoding metadata when this metadata describes a payload frame.
-    pub fn encoding(&self) -> Option<&UEncoding> {
+    pub fn encoding(&self) -> Option<&PayloadEncoding> {
         self.encoding.as_ref()
     }
 
     /// Returns metadata with payload encoding set to `encoding`.
     #[must_use]
-    pub fn with_encoding(mut self, encoding: UEncoding) -> Self {
+    pub fn with_encoding(mut self, encoding: PayloadEncoding) -> Self {
         self.encoding = Some(encoding);
         self
     }
@@ -581,7 +690,7 @@ impl UFrameMetadata {
 ///
 /// `UOwnedFrame` carries native frame metadata plus optional owned payload bytes.
 /// Payload bytes are never interpreted by the frame itself; typed send/receive
-/// helpers use [`PayloadFormat`] implementations to set or verify [`UEncoding`]
+/// helpers use [`PayloadFormat`] implementations to set or verify [`PayloadEncoding`]
 /// before serializing or deserializing application values.
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub struct UOwnedFrame {
@@ -674,9 +783,7 @@ impl UOwnedFrame {
 
     /// Deserializes the payload with codec `F` after verifying encoding metadata.
     ///
-    /// The frame must carry a payload and a compatible [`UEncoding`]. A decoder
-    /// with no schema reference accepts a frame with a more specific schema
-    /// reference as long as `format_id` and `content_type` match.
+    /// The frame must carry a payload and a compatible [`PayloadEncoding`].
     pub fn deserialize<'a, F, T>(&'a self) -> Result<T, UWireError>
     where
         F: PayloadFormat,

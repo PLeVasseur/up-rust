@@ -118,7 +118,7 @@ name = "protobuf_payload_codec"
 required-features = ["protobuf-wire", "util"]
 
 [[example]]
-name = "protobuf_any_schema_ref"
+name = "protobuf_any_payload"
 required-features = ["protobuf-wire", "util"]
 
 [[example]]

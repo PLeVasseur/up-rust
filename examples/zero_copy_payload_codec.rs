@@ -19,7 +19,7 @@ use up_rust::{
     zero_copy::{
         UContiguousZeroCopyRxFrame, UVecTxBuffer, UZeroCopyTransport, UZeroCopyTransportExt,
     },
-    UCode, UEncoding, UFrameMetadata, UOwnedFrame, UStatus, UUri,
+    PayloadEncoding, UCode, UFrameMetadata, UOwnedFrame, UStatus, UUri,
 };
 
 #[derive(Debug, PartialEq)]
@@ -36,12 +36,8 @@ impl PayloadFormat for ImagePayload {
         "demo-image-v1"
     }
 
-    fn encoding() -> UEncoding {
-        UEncoding::with_schema_ref(
-            Self::name(),
-            "application/x.demo.image",
-            "urn:demo:ImageView:v1",
-        )
+    fn encoding() -> PayloadEncoding {
+        PayloadEncoding::custom(Self::name(), "application/x.demo.image")
     }
 }
 

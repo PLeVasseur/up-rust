@@ -80,17 +80,18 @@ fn owned_frame_deserialize_rejects_absent_payload() {
 }
 
 #[test]
-fn encoding_treats_empty_schema_ref_as_absent() {
-    let encoding = UEncoding::new("json", "application/json", Some(""));
+fn encoding_rejects_invalid_content_type() {
+    let error = PayloadEncoding::try_custom("json", "not a media type").unwrap_err();
 
-    assert_eq!(encoding.schema_ref(), None);
+    assert!(matches!(error, PayloadEncodingError::InvalidContentType(_)));
 }
 
 #[test]
-fn encoding_rejects_invalid_content_type() {
-    let error = UEncoding::try_new("json", "not a media type", None::<String>).unwrap_err();
-
-    assert!(matches!(error, UEncodingError::InvalidContentType(_)));
+fn standard_encoding_maps_known_content_type() {
+    assert_eq!(
+        PayloadEncoding::from_content_type("application/json; charset=utf-8"),
+        PayloadEncoding::standard(UPayloadFormat::Json)
+    );
 }
 
 #[test]
@@ -113,8 +114,8 @@ impl PayloadFormat for OtherPayload {
         "other"
     }
 
-    fn encoding() -> UEncoding {
-        UEncoding::new(Self::name(), "application/x-other", None::<String>)
+    fn encoding() -> PayloadEncoding {
+        PayloadEncoding::custom(Self::name(), "application/x-other")
     }
 }
 
@@ -124,23 +125,37 @@ impl<'a> UDeserializer<'a, OtherPayload> for &'a [u8] {
     }
 }
 
-struct OtherSchemaPayload;
+struct NativeBytesPayload;
 
-impl PayloadFormat for OtherSchemaPayload {
+impl PayloadFormat for NativeBytesPayload {
     fn name() -> &'static str {
-        "raw-other-schema"
+        "native-bytes-v1"
     }
 
-    fn encoding() -> UEncoding {
-        UEncoding::with_schema_ref(
-            "raw-bytes",
-            "application/octet-stream",
-            "urn:example:Other:v1",
-        )
+    fn encoding() -> PayloadEncoding {
+        PayloadEncoding::custom(Self::name(), "application/vnd.example.native-bytes")
     }
 }
 
-impl<'a> UDeserializer<'a, OtherSchemaPayload> for &'a [u8] {
+impl<'a> UDeserializer<'a, NativeBytesPayload> for &'a [u8] {
+    fn deserialize_from(src: &'a [u8]) -> Result<Self, UWireError> {
+        Ok(src)
+    }
+}
+
+struct OtherNativeBytesPayload;
+
+impl PayloadFormat for OtherNativeBytesPayload {
+    fn name() -> &'static str {
+        "other-native-bytes-v1"
+    }
+
+    fn encoding() -> PayloadEncoding {
+        PayloadEncoding::custom(Self::name(), "application/vnd.example.native-bytes")
+    }
+}
+
+impl<'a> UDeserializer<'a, OtherNativeBytesPayload> for &'a [u8] {
     fn deserialize_from(src: &'a [u8]) -> Result<Self, UWireError> {
         Ok(src)
     }
@@ -162,37 +177,43 @@ fn owned_frame_deserialize_rejects_wrong_payload_codec() {
 }
 
 #[test]
-fn owned_frame_deserialize_allows_generic_decoder_for_schema_ref() {
+fn owned_frame_deserialize_accepts_matching_custom_encoding() {
     let topic = UUri::try_from("//my-vehicle/4210/1/B24D").unwrap();
     let frame = UOwnedFrame::new(
-        UFrameMetadata::publish(topic).with_encoding(UEncoding::with_schema_ref(
-            "raw-bytes",
-            "application/octet-stream",
-            "urn:example:Bytes:v1",
-        )),
+        UFrameMetadata::publish(topic).with_encoding(NativeBytesPayload::encoding()),
         vec![0x0a_u8, 0x0b_u8],
     );
 
     assert_eq!(
-        frame.deserialize::<RawBytes, &[u8]>().unwrap(),
+        frame.deserialize::<NativeBytesPayload, &[u8]>().unwrap(),
         &[0x0a_u8, 0x0b_u8]
     );
 }
 
 #[test]
-fn owned_frame_deserialize_rejects_wrong_schema_ref() {
+fn owned_frame_deserialize_rejects_wrong_custom_encoding() {
     let topic = UUri::try_from("//my-vehicle/4210/1/B24D").unwrap();
     let frame = UOwnedFrame::new(
-        UFrameMetadata::publish(topic).with_encoding(UEncoding::with_schema_ref(
-            "raw-bytes",
-            "application/octet-stream",
-            "urn:example:Bytes:v1",
-        )),
+        UFrameMetadata::publish(topic).with_encoding(NativeBytesPayload::encoding()),
         vec![0x0a_u8, 0x0b_u8],
     );
 
     assert!(matches!(
-        frame.deserialize::<OtherSchemaPayload, &[u8]>(),
+        frame.deserialize::<OtherNativeBytesPayload, &[u8]>(),
+        Err(UWireError::UnsupportedEncoding { .. })
+    ));
+}
+
+#[test]
+fn owned_frame_deserialize_rejects_custom_encoding_for_standard_decoder() {
+    let topic = UUri::try_from("//my-vehicle/4210/1/B24D").unwrap();
+    let frame = UOwnedFrame::new(
+        UFrameMetadata::publish(topic).with_encoding(NativeBytesPayload::encoding()),
+        vec![0x0a_u8, 0x0b_u8],
+    );
+
+    assert!(matches!(
+        frame.deserialize::<RawBytes, &[u8]>(),
         Err(UWireError::UnsupportedEncoding { .. })
     ));
 }

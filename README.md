@@ -42,7 +42,7 @@ Use `build_with_serializable::<MyPayloadCodec, _>(&value)` to create frames with
 
 Transport trait defaults match the mainline `UTransport` shape: optional receive/listener methods return `UNIMPLEMENTED` unless a transport implements them. Push-oriented transports should implement listener registration; transports that support true pull receive should implement `receive_owned` directly. Zero-copy transmit metadata is fixed when a loan is reserved, leaving the payload bytes as the mutable zero-copy surface. Routing code that needs one owned-frame facade over owned and zero-copy transports can use `transport::UOwnedFrameEndpoint`; wrapping a zero-copy transport crosses a copy boundary and is not end-to-end zero-copy forwarding.
 
-Payload presence is explicit: `build()` creates a frame with no payload and no `UEncoding`, while `build_with_raw_payload(Vec::new())` creates a present empty raw payload with raw-byte encoding metadata.
+Payload presence is explicit: `build()` creates a frame with no payload and no `PayloadEncoding`, while `build_with_raw_payload(Vec::new())` creates a present empty raw payload with standard raw-byte encoding metadata.
 
 Use `UFrameBuilder` or `UFrameMetadata::try_*` constructors for checked metadata construction. The shorter `UFrameMetadata::{publish, notification, request, response}` constructors are unchecked convenience helpers for tests, adapters, and cases that validate separately. Native domain types such as `UUri` and `UUID` keep their fields private; use constructors and accessors instead of struct literals.
 

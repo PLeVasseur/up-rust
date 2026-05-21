@@ -13,7 +13,7 @@
 
 //! Native uProtocol communication-layer APIs built on owned frames.
 //!
-//! This module intentionally uses [`UOwnedFrame`] and [`crate::UEncoding`] instead of
+//! This module intentionally uses [`UOwnedFrame`] and [`crate::PayloadEncoding`] instead of
 //! reintroducing generated transport envelopes.
 
 #[cfg(all(feature = "util", feature = "protobuf-wire"))]

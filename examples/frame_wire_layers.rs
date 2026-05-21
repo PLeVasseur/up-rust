@@ -13,8 +13,8 @@
 
 use up_rust::{
     frame_wire::{ProtobufUMessageFrame, UFrameWireFormat},
-    payload::{PayloadFormat, UDeserializer, UEncoding, USerializer, UWireError},
-    UFrameBuilder, UUri,
+    payload::{PayloadEncoding, PayloadFormat, UDeserializer, USerializer, UWireError},
+    UFrameBuilder, UPayloadFormat, UUri,
 };
 
 struct JsonPayload;
@@ -24,8 +24,8 @@ impl PayloadFormat for JsonPayload {
         "json"
     }
 
-    fn encoding() -> UEncoding {
-        UEncoding::without_schema_ref(Self::name(), "application/json")
+    fn encoding() -> PayloadEncoding {
+        PayloadEncoding::standard(UPayloadFormat::Json)
     }
 }
 
@@ -68,11 +68,14 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     let json_payload = json_decoded.deserialize::<JsonPayload, String>()?;
     assert_eq!(json_payload, json);
 
-    let schema_specific = UFrameBuilder::publish(topic).build_with_payload(
-        b"schema-specific".as_slice(),
-        UEncoding::with_schema_ref("json", "application/json", "urn:example:Temperature:v1"),
+    let native_only = UFrameBuilder::publish(topic).build_with_payload(
+        b"native-layout".as_slice(),
+        PayloadEncoding::custom(
+            "com.example.temperature.native-v1",
+            "application/vnd.example.temperature.native",
+        ),
     )?;
-    assert!(ProtobufUMessageFrame::serialize_frame(&schema_specific).is_err());
+    assert!(ProtobufUMessageFrame::serialize_frame(&native_only).is_err());
 
     Ok(())
 }

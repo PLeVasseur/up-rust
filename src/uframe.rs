@@ -21,7 +21,8 @@ mod zero_copy;
 
 pub use builder::{UFrameBuilder, UFrameBuilderError};
 pub use frame::{
-    UAttributes, UEncoding, UEncodingError, UFrameMetadata, UMessageType, UOwnedFrame, UPriority,
+    CustomPayloadEncoding, PayloadEncoding, PayloadEncodingError, UAttributes, UEncoding,
+    UEncodingError, UFrameMetadata, UMessageType, UOwnedFrame, UPayloadFormat, UPriority,
 };
 pub use frame_wire::{UFrameWireError, UFrameWireFormat};
 pub use payload::{

@@ -91,8 +91,9 @@ pub mod protobuf;
 
 mod uframe;
 pub use uframe::{
-    UAttributes, UEncoding, UEncodingError, UFrameBuilder, UFrameBuilderError, UFrameMetadata,
-    UFrameWireError, UFrameWireFormat, UMessageType, UOwnedFrame, UPriority,
+    CustomPayloadEncoding, PayloadEncoding, PayloadEncodingError, UAttributes, UEncoding,
+    UEncodingError, UFrameBuilder, UFrameBuilderError, UFrameMetadata, UFrameWireError,
+    UFrameWireFormat, UMessageType, UOwnedFrame, UPayloadFormat, UPriority,
 };
 
 mod uattributes;
@@ -103,7 +104,7 @@ pub use uattributes::{
 
 #[cfg(feature = "protobuf-wire")]
 #[cfg_attr(docsrs, doc(cfg(feature = "protobuf-wire")))]
-pub use protobuf::{ProtobufPayload, ProtobufUMessageFrame};
+pub use protobuf::{ProtobufAnyPayload, ProtobufPayload, ProtobufUMessageFrame};
 
 mod uri;
 pub use uri::{UUri, UUriError};
@@ -137,8 +138,8 @@ pub mod up_core_api {
 /// Frame metadata, builders, and owned-frame types for the common path.
 pub mod frame {
     pub use crate::{
-        UAttributes, UFrameBuilder, UFrameBuilderError, UFrameMetadata, UMessageType, UOwnedFrame,
-        UPriority,
+        CustomPayloadEncoding, PayloadEncoding, PayloadEncodingError, UAttributes, UFrameBuilder,
+        UFrameBuilderError, UFrameMetadata, UMessageType, UOwnedFrame, UPayloadFormat, UPriority,
     };
 }
 
@@ -154,13 +155,14 @@ pub mod frame_wire {
 /// Application payload codec contracts and helpers.
 pub mod payload {
     pub use crate::uframe::{
-        PayloadFormat, RawBytes, UDeserializer, UEncoding, UEncodingError, UErasedSerializer,
+        CustomPayloadEncoding, PayloadEncoding, PayloadEncodingError, PayloadFormat, RawBytes,
+        UDeserializer, UEncoding, UEncodingError, UErasedSerializer, UPayloadFormat,
         UReadDeserializer, USerializer, UWireError,
     };
 
     #[cfg(feature = "protobuf-wire")]
     #[cfg_attr(docsrs, doc(cfg(feature = "protobuf-wire")))]
-    pub use crate::protobuf::ProtobufPayload;
+    pub use crate::protobuf::{ProtobufAnyPayload, ProtobufPayload};
 }
 
 /// Owned-buffer transport APIs and endpoint adapters.
@@ -194,8 +196,8 @@ pub mod prelude {
         frame::{UFrameBuilder, UFrameMetadata, UMessageType, UOwnedFrame, UPriority},
         frame_wire::{UFrameWireError, UFrameWireFormat},
         payload::{
-            PayloadFormat, RawBytes, UDeserializer, UEncoding, UReadDeserializer, USerializer,
-            UWireError,
+            PayloadEncoding, PayloadFormat, RawBytes, UDeserializer, UPayloadFormat,
+            UReadDeserializer, USerializer, UWireError,
         },
         transport::{UOwnedListener, UOwnedTransport, UOwnedTransportExt},
         UCode, UStatus, UUri, UUID,

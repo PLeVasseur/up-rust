@@ -23,7 +23,7 @@ use tracing::{debug, error, trace, warn, Level};
 
 use crate::{
     communication::{RequestHandler, RpcServer, ServiceInvocationError, UPayload},
-    UAttributes, UEncoding,
+    PayloadEncoding, UAttributes, UPayloadFormat,
 };
 
 pub const METHOD_GET_RESOURCE_ID: u16 = 0x0001;
@@ -95,17 +95,16 @@ pub trait DeploymentTarget: Send + Sync {
     ) -> Result<HashMap<String, ComponentResultSpec>, DeploymentError>;
 }
 
-fn json_encoding() -> UEncoding {
-    UEncoding::without_schema_ref("json", "application/json")
+fn json_encoding() -> PayloadEncoding {
+    PayloadEncoding::standard(UPayloadFormat::Json)
 }
 
 fn extract_request_data(
     request_payload: Option<UPayload>,
 ) -> Result<Value, ServiceInvocationError> {
-    let Some(req_payload) = request_payload.filter(|req_payload| {
-        req_payload.encoding().format_id() == "json"
-            || req_payload.encoding().content_type() == "application/json"
-    }) else {
+    let Some(req_payload) =
+        request_payload.filter(|req_payload| req_payload.encoding() == &json_encoding())
+    else {
         return Err(ServiceInvocationError::InvalidArgument(
             "request has no JSON payload".to_string(),
         ));

@@ -24,7 +24,7 @@ pub enum UFrameWireError {
     /// invariants such as payload/payload-encoding consistency.
     InvalidFrame(String),
     /// The selected wire format cannot faithfully represent the frame payload's
-    /// [`UEncoding`](crate::UEncoding).
+    /// [`PayloadEncoding`](crate::PayloadEncoding).
     UnsupportedPayloadEncoding(String),
     /// The wire format encoder or decoder failed while converting bytes.
     SerializationError(String),

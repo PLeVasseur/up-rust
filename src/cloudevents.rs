@@ -18,15 +18,17 @@ use std::{collections::BTreeMap, error::Error, fmt::Display, str::FromStr};
 use bytes::Bytes;
 
 use crate::{
-    UAttributes, UCode, UEncoding, UFrameMetadata, UMessageType, UOwnedFrame, UPriority, UUri, UUID,
+    PayloadEncoding, UAttributes, UCode, UFrameMetadata, UMessageType, UOwnedFrame, UPayloadFormat,
+    UPriority, UUri, UUID,
 };
 
 pub const CLOUDEVENTS_SPEC_VERSION: &str = "1.0";
 pub const CONTENT_TYPE_CLOUDEVENTS_JSON: &str = "application/cloudevents+json";
 
 const EXTENSION_NAME_COMMSTATUS: &str = "commstatus";
-const EXTENSION_NAME_FORMAT_ID: &str = "uformatid";
+const EXTENSION_NAME_CUSTOM_ENCODING_ID: &str = "uencodingid";
 const EXTENSION_NAME_PERMISSION_LEVEL: &str = "plevel";
+const EXTENSION_NAME_PAYLOAD_FORMAT: &str = "pformat";
 const EXTENSION_NAME_PRIORITY: &str = "priority";
 const EXTENSION_NAME_REQUEST_ID: &str = "reqid";
 const EXTENSION_NAME_SINK: &str = "sink";
@@ -108,12 +110,22 @@ impl TryFrom<UOwnedFrame> for CloudEvent {
             let encoding = header
                 .encoding()
                 .ok_or(CloudEventError::MissingAttribute("payload encoding"))?;
-            event.data_content_type = Some(encoding.content_type().to_string());
-            event.data_schema = encoding.schema_ref().map(str::to_string);
-            event.extensions.insert(
-                EXTENSION_NAME_FORMAT_ID.to_string(),
-                CloudEventAttributeValue::String(encoding.format_id().to_string()),
-            );
+            match encoding {
+                PayloadEncoding::Standard(format) => {
+                    event.data_content_type = format.content_type().map(str::to_string);
+                    event.extensions.insert(
+                        EXTENSION_NAME_PAYLOAD_FORMAT.to_string(),
+                        CloudEventAttributeValue::Integer(i64::from(format.value())),
+                    );
+                }
+                PayloadEncoding::Custom(custom) => {
+                    event.data_content_type = Some(custom.content_type().to_string());
+                    event.extensions.insert(
+                        EXTENSION_NAME_CUSTOM_ENCODING_ID.to_string(),
+                        CloudEventAttributeValue::String(custom.id().to_string()),
+                    );
+                }
+            }
         }
         if let Some(sink) = attributes.sink() {
             event.extensions.insert(
@@ -215,14 +227,36 @@ impl TryFrom<CloudEvent> for UOwnedFrame {
         }
 
         if let Some(data) = event.data.clone() {
-            let format_id = required_string_extension(&event, EXTENSION_NAME_FORMAT_ID)?;
-            let content_type = event
-                .data_content_type
-                .clone()
-                .ok_or(CloudEventError::MissingAttribute("datacontenttype"))?;
-            let schema_ref = event.data_schema.clone();
-            let encoding = UEncoding::try_new(format_id, content_type, schema_ref)
-                .map_err(|error| CloudEventError::InvalidAttribute(error.to_string()))?;
+            let payload_format = optional_u8_extension(&event, EXTENSION_NAME_PAYLOAD_FORMAT)?
+                .map(|value| {
+                    UPayloadFormat::from_u8(value).ok_or_else(|| {
+                        CloudEventError::InvalidAttribute(format!(
+                            "unsupported payload format {value}"
+                        ))
+                    })
+                })
+                .transpose()?;
+            let custom_id = optional_string_extension(&event, EXTENSION_NAME_CUSTOM_ENCODING_ID)?;
+            let encoding = match (payload_format, custom_id, event.data_content_type.clone()) {
+                (Some(format), None, _) => PayloadEncoding::standard(format),
+                (None, Some(id), Some(content_type)) => {
+                    PayloadEncoding::try_custom(id, content_type)
+                        .map_err(|error| CloudEventError::InvalidAttribute(error.to_string()))?
+                }
+                (None, None, Some(content_type)) => {
+                    PayloadEncoding::from_content_type(content_type)
+                }
+                (None, None, None) => PayloadEncoding::standard(UPayloadFormat::Unspecified),
+                (Some(_), Some(_), _) => {
+                    return Err(CloudEventError::InvalidAttribute(
+                        "payload format and custom encoding id must not both be present"
+                            .to_string(),
+                    ))
+                }
+                (None, Some(_), None) => {
+                    return Err(CloudEventError::MissingAttribute("datacontenttype"))
+                }
+            };
             let frame = UOwnedFrame::new(UFrameMetadata::new(attributes, encoding), data);
             validate_cloud_event_frame(&frame)?;
             Ok(frame)
@@ -394,10 +428,9 @@ mod tests {
         .with_request_id(request_id.clone())
         .with_traceparent(TRACEPARENT)
         .with_comm_status(UCode::UNAVAILABLE);
-        let encoding = UEncoding::new(
-            "protobuf",
-            "application/x-protobuf",
-            Some("type.googleapis.com/google.protobuf.StringValue"),
+        let encoding = PayloadEncoding::custom(
+            "com.example.native-string-v1",
+            "application/vnd.example.native-string",
         );
         let frame = UOwnedFrame::new(
             UFrameMetadata::new(attributes, encoding.clone()),
@@ -411,11 +444,13 @@ mod tests {
         assert_eq!(event.source, RPC_METHOD);
         assert_eq!(
             event.data_content_type.as_deref(),
-            Some("application/x-protobuf")
+            Some("application/vnd.example.native-string")
         );
         assert_eq!(
-            event.data_schema.as_deref(),
-            Some("type.googleapis.com/google.protobuf.StringValue")
+            event.extensions.get(EXTENSION_NAME_CUSTOM_ENCODING_ID),
+            Some(&CloudEventAttributeValue::String(
+                "com.example.native-string-v1".to_string()
+            ))
         );
 
         let frame = UOwnedFrame::try_from(event).unwrap();
@@ -459,8 +494,8 @@ mod tests {
         event.data = Some(Bytes::from_static(b"payload"));
         event.data_content_type = Some("not a media type".to_string());
         event.extensions.insert(
-            EXTENSION_NAME_FORMAT_ID.to_string(),
-            CloudEventAttributeValue::String("protobuf".to_string()),
+            EXTENSION_NAME_CUSTOM_ENCODING_ID.to_string(),
+            CloudEventAttributeValue::String("custom".to_string()),
         );
 
         assert!(matches!(

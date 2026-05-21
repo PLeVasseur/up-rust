@@ -17,7 +17,7 @@ use bytes::Bytes;
 
 use crate::{UCode, UStatus};
 
-use super::frame::UEncoding;
+use super::frame::{PayloadEncoding, UPayloadFormat};
 
 /// Error type used by serialization-neutral frame helpers.
 #[derive(Clone, Debug, Eq, PartialEq)]
@@ -38,9 +38,9 @@ pub enum UWireError {
     /// The frame's encoding is not compatible with the selected payload codec.
     UnsupportedEncoding {
         /// Encoding declared by the requested [`PayloadFormat`].
-        expected: Box<UEncoding>,
+        expected: Box<PayloadEncoding>,
         /// Encoding carried by the frame being decoded.
-        actual: Box<UEncoding>,
+        actual: Box<PayloadEncoding>,
     },
     /// Serializer or deserializer implementation failed.
     SerializationError(String),
@@ -69,17 +69,13 @@ impl Display for UWireError {
             Self::BufferTooSmall { expected, actual } => f.write_fmt(format_args!(
                 "buffer too small: expected at least {expected} bytes, got {actual} bytes"
             )),
-            Self::InvalidPayload(message) => f.write_fmt(format_args!("invalid payload: {message}")),
+            Self::InvalidPayload(message) => {
+                f.write_fmt(format_args!("invalid payload: {message}"))
+            }
             Self::MissingEncoding => f.write_str("frame payload has no encoding metadata"),
             Self::MissingPayload => f.write_str("frame has no payload"),
             Self::UnsupportedEncoding { expected, actual } => f.write_fmt(format_args!(
-                "unsupported encoding: expected format_id={}, content_type={}, schema_ref={:?}; got format_id={}, content_type={}, schema_ref={:?}",
-                expected.format_id(),
-                expected.content_type(),
-                expected.schema_ref(),
-                actual.format_id(),
-                actual.content_type(),
-                actual.schema_ref(),
+                "unsupported payload encoding: expected {expected:?}; got {actual:?}",
             )),
             Self::SerializationError(message) => {
                 f.write_fmt(format_args!("serialization error: {message}"))
@@ -99,7 +95,7 @@ impl From<UWireError> for UStatus {
 /// Compile-time identity for an application payload codec.
 ///
 /// ```
-/// # use up_rust::{payload::PayloadFormat, UEncoding};
+/// # use up_rust::{payload::PayloadFormat, PayloadEncoding};
 /// struct JsonTelemetry;
 ///
 /// impl PayloadFormat for JsonTelemetry {
@@ -107,11 +103,10 @@ impl From<UWireError> for UStatus {
 ///         "json-telemetry-v1"
 ///     }
 ///
-///     fn encoding() -> UEncoding {
-///         UEncoding::with_schema_ref(
+///     fn encoding() -> PayloadEncoding {
+///         PayloadEncoding::custom(
 ///             Self::name(),
 ///             "application/json",
-///             "urn:example:Telemetry:v1",
 ///         )
 ///     }
 /// }
@@ -121,7 +116,7 @@ pub trait PayloadFormat {
     fn name() -> &'static str;
 
     /// Payload encoding metadata written into frames that use this codec.
-    fn encoding() -> UEncoding;
+    fn encoding() -> PayloadEncoding;
 }
 
 /// Serializes a value into caller-provided storage.
@@ -169,7 +164,7 @@ pub trait UReadDeserializer<F: PayloadFormat>: Sized {
 /// Object-safe serializer for runtime-selected codecs.
 pub trait UErasedSerializer {
     /// Encoding metadata produced by this runtime-selected serializer.
-    fn encoding(&self) -> UEncoding;
+    fn encoding(&self) -> PayloadEncoding;
 
     /// Required payload alignment for zero-copy transmit loans.
     fn alignment(&self) -> usize {
@@ -188,7 +183,7 @@ pub struct RawBytes;
 
 impl RawBytes {
     /// Returns the raw-byte payload encoding metadata.
-    pub fn encoding() -> UEncoding {
+    pub fn encoding() -> PayloadEncoding {
         <Self as PayloadFormat>::encoding()
     }
 }
@@ -198,8 +193,8 @@ impl PayloadFormat for RawBytes {
         "raw-bytes"
     }
 
-    fn encoding() -> UEncoding {
-        UEncoding::without_schema_ref("raw-bytes", "application/octet-stream")
+    fn encoding() -> PayloadEncoding {
+        PayloadEncoding::standard(UPayloadFormat::Raw)
     }
 }
 
