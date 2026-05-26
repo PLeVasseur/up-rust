@@ -1,0 +1,13 @@
+error[E0277]: the trait bound `StableContainerPayload<PaddedTx>: EncodePayload<PaddedTx>` is not satisfied
+  --> tests/ui/stable_payload/safe_padded_stable_tx.rs:13:14
+   |
+13 |     let _ = <StableContainerPayload<PaddedTx> as EncodePayload<PaddedTx>>::payload_layout(&value);
+   |              ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ the trait `EncodePayload<PaddedTx>` is not implemented for `StableContainerPayload<PaddedTx>`
+   |
+help: the trait `EncodePayload<T>` is implemented for `StableContainerPayload<T>`
+  --> src/uframe/payload.rs
+   |
+   | / impl<T> EncodePayload<T> for StableContainerPayload<T>
+   | | where
+   | |     T: ByteBackedStablePayload,
+   | |_______________________________^

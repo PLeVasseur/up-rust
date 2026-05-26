@@ -22,9 +22,198 @@ use async_trait::async_trait;
 use std::sync::Mutex;
 
 use crate::{
-    zero_copy::{UVecTxBuffer, UZeroCopyListener, UZeroCopyTransport},
-    UCode, UFrameMetadata, UOwnedFrame, UOwnedListener, UOwnedTransport, UStatus, UUri,
+    payload::{BorrowPayload, PayloadCodec, StableContainerPayload, StablePayload, UWireError},
+    zero_copy::{
+        verify_loaned_rx_payload_layout, verify_tx_buffer_payload_layout,
+        verify_uninit_tx_buffer_payload_layout, ULoanedContiguousZeroCopyRxFrame, UTxBuffer,
+        UUninitTxBuffer, UVecTxBuffer, UVecUninitTxBuffer, UZeroCopyListener, UZeroCopyTransport,
+    },
+    PayloadEncoding, UCode, UFrameMetadata, UOwnedFrame, UOwnedListener, UOwnedTransport, UStatus,
+    UUri, UZeroCopyUninitTransport,
 };
+
+/// Reusable zero-copy transport conformance checks for downstream transport tests.
+pub mod zero_copy_conformance {
+    use super::*;
+
+    /// Verifies a TX loan exposes the exact visible payload length and alignment.
+    pub fn verify_tx_payload_layout(
+        buffer: &mut impl UTxBuffer,
+        payload_len: usize,
+        alignment: usize,
+    ) -> Result<(), UWireError> {
+        verify_tx_buffer_payload_layout(buffer, payload_len, alignment)
+    }
+
+    /// Verifies an uninitialized TX loan exposes the exact visible payload length and alignment.
+    pub fn verify_uninit_tx_payload_layout(
+        buffer: &mut impl UUninitTxBuffer,
+        payload_len: usize,
+        alignment: usize,
+    ) -> Result<(), UWireError> {
+        verify_uninit_tx_buffer_payload_layout(buffer, payload_len, alignment)
+    }
+
+    /// Verifies a loan-backed RX frame exposes the exact payload length and alignment.
+    pub fn verify_loaned_rx_payload_layout_for(
+        frame: &(impl ULoanedContiguousZeroCopyRxFrame + ?Sized),
+        payload_len: usize,
+        alignment: usize,
+    ) -> Result<(), UWireError> {
+        verify_loaned_rx_payload_layout(frame, payload_len, alignment)
+    }
+
+    /// Verifies and borrows a typed value from loan-backed RX storage.
+    pub fn borrow_loaned_payload_as<C, T>(
+        frame: &(impl ULoanedContiguousZeroCopyRxFrame + ?Sized),
+    ) -> Result<&T, UWireError>
+    where
+        C: PayloadCodec + BorrowPayload<T>,
+        T: ?Sized,
+    {
+        frame.borrow_loaned_payload_as::<C, T>()
+    }
+
+    /// Builds stable-container metadata for a fixed-size stable payload type.
+    pub fn stable_container_encoding_for<T: StablePayload>(
+        type_name: &str,
+        variant: &str,
+        size: usize,
+        align: usize,
+    ) -> PayloadEncoding {
+        PayloadEncoding::custom(
+            StableContainerPayload::<T>::ENCODING_ID,
+            format!(
+                "application/vnd.uprotocol.stable-container;type=\"{type_name}\";variant={variant};size={size};align={align}"
+            ),
+        )
+    }
+
+    /// Verifies that the canonical stable-container metadata for `T` is accepted.
+    pub fn verify_stable_container_encoding<T: StablePayload>() -> Result<(), UWireError> {
+        StableContainerPayload::<T>::verify_encoding(Some(&StableContainerPayload::<T>::encoding()))
+    }
+
+    /// Verifies that a wrong stable type name is rejected for `T`.
+    pub fn verify_stable_container_rejects_wrong_type_name<T: StablePayload>(
+        wrong_type_name: &str,
+    ) -> Result<(), UWireError> {
+        let encoding = stable_container_encoding_for::<T>(
+            wrong_type_name,
+            "fixed",
+            core::mem::size_of::<T>(),
+            core::mem::align_of::<T>(),
+        );
+        expect_incompatible_stable_payload(StableContainerPayload::<T>::verify_encoding(Some(
+            &encoding,
+        )))
+    }
+
+    /// Verifies that a wrong advertised stable payload variant is rejected for `T`.
+    pub fn verify_stable_container_rejects_wrong_variant<T: StablePayload>(
+        wrong_variant: &str,
+    ) -> Result<(), UWireError> {
+        let encoding = stable_container_encoding_for::<T>(
+            T::stable_type_name(),
+            wrong_variant,
+            core::mem::size_of::<T>(),
+            core::mem::align_of::<T>(),
+        );
+        expect_incompatible_stable_payload(StableContainerPayload::<T>::verify_encoding(Some(
+            &encoding,
+        )))
+    }
+
+    /// Verifies that a wrong advertised stable payload size is rejected for `T`.
+    pub fn verify_stable_container_rejects_wrong_size<T: StablePayload>() -> Result<(), UWireError>
+    {
+        let encoding = stable_container_encoding_for::<T>(
+            T::stable_type_name(),
+            "fixed",
+            core::mem::size_of::<T>().saturating_add(1),
+            core::mem::align_of::<T>(),
+        );
+        expect_incompatible_stable_payload(StableContainerPayload::<T>::verify_encoding(Some(
+            &encoding,
+        )))
+    }
+
+    /// Verifies that insufficient advertised stable payload alignment is rejected for `T`.
+    pub fn verify_stable_container_rejects_insufficient_alignment<T: StablePayload>(
+    ) -> Result<(), UWireError> {
+        let encoding = stable_container_encoding_for::<T>(
+            T::stable_type_name(),
+            "fixed",
+            core::mem::size_of::<T>(),
+            core::mem::align_of::<T>().saturating_sub(1),
+        );
+        expect_incompatible_stable_payload(StableContainerPayload::<T>::verify_encoding(Some(
+            &encoding,
+        )))
+    }
+
+    /// Verifies that the typed stable-container borrow rejects actual pointer misalignment.
+    pub fn verify_stable_container_rejects_actual_misalignment<T: StablePayload>(
+    ) -> Result<(), UWireError> {
+        let alignment = core::mem::align_of::<T>();
+        let size = core::mem::size_of::<T>();
+        if alignment <= 1 || size == 0 {
+            return Err(UWireError::invalid_payload(
+                "stable-container misalignment check requires a non-zero payload with alignment > 1",
+            ));
+        }
+
+        let storage = vec![0_u8; size + alignment];
+        let base = storage.as_ptr() as usize;
+        let Some(offset) = (1..alignment).find(|offset| (base + offset) % alignment != 0) else {
+            return Err(UWireError::invalid_payload(
+                "failed to construct a misaligned stable-container payload view",
+            ));
+        };
+        let payload = storage
+            .get(offset..offset + size)
+            .ok_or_else(|| UWireError::invalid_payload("misaligned payload view out of bounds"))?;
+
+        match <StableContainerPayload<T> as BorrowPayload<T>>::borrow_payload(payload) {
+            Err(UWireError::InvalidPayloadAlignment { expected, .. }) if expected == alignment => {
+                Ok(())
+            }
+            Ok(_) => Err(UWireError::invalid_payload(
+                "stable-container borrow unexpectedly accepted misaligned payload bytes",
+            )),
+            Err(error) => Err(error),
+        }
+    }
+
+    /// Verifies that copied or owned receive storage is not treated as loan-backed typed RX.
+    pub fn verify_loaned_rx_rejects_copied_fallback_as<C, T>(
+        frame: &(impl ULoanedContiguousZeroCopyRxFrame + ?Sized),
+    ) -> Result<(), UWireError>
+    where
+        C: PayloadCodec + BorrowPayload<T>,
+        T: ?Sized,
+    {
+        match frame.borrow_loaned_payload_as::<C, T>() {
+            Err(UWireError::NotLoanBacked) => Ok(()),
+            Ok(_) => Err(UWireError::invalid_payload(
+                "loan-backed typed borrow unexpectedly accepted copied payload storage",
+            )),
+            Err(error) => Err(error),
+        }
+    }
+
+    fn expect_incompatible_stable_payload(
+        result: Result<(), UWireError>,
+    ) -> Result<(), UWireError> {
+        match result {
+            Err(UWireError::IncompatibleStablePayload { .. }) => Ok(()),
+            Ok(()) => Err(UWireError::invalid_payload(
+                "stable-container compatibility check unexpectedly succeeded",
+            )),
+            Err(error) => Err(error),
+        }
+    }
+}
 
 /// Listener that records received owned frames for assertions.
 #[derive(Default)]
@@ -254,9 +443,9 @@ impl UZeroCopyTransport for InMemoryZeroCopyTransport {
         &self,
         metadata: UFrameMetadata,
         payload_len: usize,
-        _alignment: usize,
+        alignment: usize,
     ) -> Result<Self::Tx, UStatus> {
-        Ok(UVecTxBuffer::new(metadata, payload_len))
+        UVecTxBuffer::with_alignment(metadata, payload_len, alignment).map_err(UStatus::from)
     }
 
     async fn send_zero_copy(&self, buffer: Self::Tx) -> Result<(), UStatus> {
@@ -315,5 +504,19 @@ impl UZeroCopyTransport for InMemoryZeroCopyTransport {
         };
         listeners.remove(index);
         Ok(())
+    }
+}
+
+#[async_trait]
+impl UZeroCopyUninitTransport for InMemoryZeroCopyTransport {
+    type UninitTx = UVecUninitTxBuffer;
+
+    async fn reserve_uninit(
+        &self,
+        metadata: UFrameMetadata,
+        payload_len: usize,
+        alignment: usize,
+    ) -> Result<Self::UninitTx, UStatus> {
+        UVecUninitTxBuffer::with_alignment(metadata, payload_len, alignment).map_err(UStatus::from)
     }
 }

@@ -18,12 +18,25 @@ use std::ops::Deref;
 use std::sync::Arc;
 
 use async_trait::async_trait;
+use bytes::Bytes;
 
 use crate::{
-    payload::{PayloadFormat, USerializer, UWireError},
-    zero_copy::{UTxBuffer, UZeroCopyRxFrame},
+    payload::{
+        BytePayloadCodec, EncodePayload, EncodedPayload, LoanPayload, LoanUninitPayload,
+        LoanedInitPayload, PayloadCodec, PayloadFormat, PayloadLayout, USerializer, UWireError,
+    },
+    zero_copy::{
+        verify_tx_buffer_payload_layout, verify_uninit_tx_buffer_payload_layout,
+        LoanedUninitByteWriter, UTxBuffer, UUninitTxBuffer, UZeroCopyRxFrame,
+    },
     UCode, UFrameMetadata, UOwnedFrame, UStatus, UUri,
 };
+
+#[cfg(any(
+    feature = "unsafe-stable-payload-tx",
+    feature = "expert-unsafe-payloads"
+))]
+use crate::payload::{StableContainerPayload, StablePayload, UnsafeStablePayloadTxSlot};
 
 #[cfg(any(test, feature = "test-util"))]
 use crate::zero_copy::UVecTxBuffer;
@@ -263,9 +276,47 @@ pub trait UOwnedTransportExt: UOwnedTransport {
         F: PayloadFormat + Send + Sync,
         T: USerializer<F> + Sync,
     {
+        self.send_payload_as::<F, T>(metadata, value).await
+    }
+
+    /// Encodes `value` with payload codec `C` into owned bytes and sends it.
+    async fn send_payload_as<C, T>(
+        &self,
+        metadata: UFrameMetadata,
+        value: &T,
+    ) -> Result<(), UStatus>
+    where
+        C: PayloadCodec + EncodePayload<T> + Send + Sync,
+        T: ?Sized + Sync,
+    {
+        validate_frame_metadata_for_transport(&metadata)?;
+        let frame = UOwnedFrame::from_payload_as::<C, T>(metadata, value).map_err(UStatus::from)?;
+        self.send_owned(frame).await
+    }
+
+    /// Sends bytes that are already encoded for byte-oriented codec `C`.
+    async fn send_bytes_as<C, B>(&self, metadata: UFrameMetadata, payload: B) -> Result<(), UStatus>
+    where
+        C: PayloadCodec + BytePayloadCodec + Send + Sync,
+        B: Into<Bytes> + Send,
+    {
         validate_frame_metadata_for_transport(&metadata)?;
         let frame =
-            UOwnedFrame::from_serializable::<F, T>(metadata, value).map_err(UStatus::from)?;
+            UOwnedFrame::from_encoded_payload(metadata, EncodedPayload::<C>::from_bytes(payload));
+        self.send_owned(frame).await
+    }
+
+    /// Sends bytes that are already encoded and tagged for codec `C`.
+    async fn send_encoded_payload<C>(
+        &self,
+        metadata: UFrameMetadata,
+        payload: EncodedPayload<C>,
+    ) -> Result<(), UStatus>
+    where
+        C: PayloadCodec + Send + Sync,
+    {
+        validate_frame_metadata_for_transport(&metadata)?;
+        let frame = UOwnedFrame::from_encoded_payload(metadata, payload);
         self.send_owned(frame).await
     }
 }
@@ -408,6 +459,56 @@ pub trait UZeroCopyTransport: Send + Sync {
     }
 }
 
+/// Optional zero-copy capability for transports that can expose uninitialized TX payload storage.
+///
+/// This is deliberately separate from [`UZeroCopyTransport::reserve`], whose
+/// [`UTxBuffer`] result exposes initialized byte slices. Implementations must
+/// initialize any transport-owned bytes before returning the uninitialized loan;
+/// callers initialize only the visible application payload bytes.
+#[async_trait]
+pub trait UZeroCopyUninitTransport: UZeroCopyTransport {
+    /// Transport-specific uninitialized transmit loan type.
+    type UninitTx: UUninitTxBuffer<Initialized = Self::Tx> + Send;
+
+    /// Reserves uninitialized transmit storage for a frame payload.
+    async fn reserve_uninit(
+        &self,
+        metadata: UFrameMetadata,
+        payload_len: usize,
+        alignment: usize,
+    ) -> Result<Self::UninitTx, UStatus>;
+}
+
+fn validate_payload_layout_request(
+    payload_len: usize,
+    alignment: usize,
+) -> Result<PayloadLayout, UStatus> {
+    PayloadLayout::new(payload_len, alignment).map_err(UStatus::from)
+}
+
+fn bad_reserved_payload_layout(error: UWireError) -> UStatus {
+    UStatus::fail_with_code(
+        UCode::INTERNAL,
+        format!("transport returned a TX loan with invalid payload layout: {error}"),
+    )
+}
+
+fn verify_reserved_tx_payload_layout(
+    buffer: &mut impl UTxBuffer,
+    layout: PayloadLayout,
+) -> Result<(), UStatus> {
+    verify_tx_buffer_payload_layout(buffer, layout.len(), layout.align())
+        .map_err(bad_reserved_payload_layout)
+}
+
+fn verify_reserved_uninit_payload_layout(
+    buffer: &mut impl UUninitTxBuffer,
+    layout: PayloadLayout,
+) -> Result<(), UStatus> {
+    verify_uninit_tx_buffer_payload_layout(buffer, layout.len(), layout.align())
+        .map_err(bad_reserved_payload_layout)
+}
+
 /// Convenience methods for zero-copy transports.
 #[async_trait]
 pub trait UZeroCopyTransportExt: UZeroCopyTransport {
@@ -426,28 +527,221 @@ pub trait UZeroCopyTransportExt: UZeroCopyTransport {
         F: PayloadFormat + Send + Sync,
         T: USerializer<F> + Sync,
     {
+        self.send_encoded_payload_as::<F, T>(metadata, value).await
+    }
+
+    /// Encodes `value` directly into a transport transmit loan and sends it.
+    ///
+    /// This avoids an intermediate owned payload buffer, but it still performs
+    /// serialization/copying from `value` into the loan. Use
+    /// [`Self::send_loaned_payload_as`] when the payload should be initialized
+    /// directly in loaned storage.
+    async fn send_encoded_payload_as<C, T>(
+        &self,
+        metadata: UFrameMetadata,
+        value: &T,
+    ) -> Result<(), UStatus>
+    where
+        C: PayloadCodec + EncodePayload<T> + Send + Sync,
+        T: ?Sized + Sync,
+    {
         validate_frame_metadata_for_transport(&metadata)?;
-        let payload_len = value.encoded_len();
+        let layout = C::payload_layout(value).map_err(UStatus::from)?;
         let mut buffer = self
             .reserve(
-                metadata.with_encoding(F::encoding()),
-                payload_len,
-                T::ALIGNMENT,
+                metadata.with_encoding(C::payload_encoding()),
+                layout.len(),
+                layout.align(),
             )
             .await?;
-        let written = value
-            .serialize_into(buffer.payload_mut())
-            .map_err(UStatus::from)?;
-        if written != payload_len {
-            return Err(UStatus::from(UWireError::invalid_payload(format!(
-                "serializer wrote {written} bytes but encoded_len returned {payload_len} bytes"
-            ))));
+        verify_reserved_tx_payload_layout(&mut buffer, layout)?;
+        C::encode_payload(value, buffer.payload_mut()).map_err(UStatus::from)?;
+        self.send_zero_copy(buffer).await
+    }
+
+    /// Compatibility alias for [`Self::send_encoded_payload_as`].
+    async fn send_payload_as<C, T>(
+        &self,
+        metadata: UFrameMetadata,
+        value: &T,
+    ) -> Result<(), UStatus>
+    where
+        C: PayloadCodec + EncodePayload<T> + Send + Sync,
+        T: ?Sized + Sync,
+    {
+        self.send_encoded_payload_as::<C, T>(metadata, value).await
+    }
+
+    /// Copies already encoded payload bytes directly into a transport transmit loan.
+    async fn send_encoded_payload<C>(
+        &self,
+        metadata: UFrameMetadata,
+        payload: EncodedPayload<C>,
+    ) -> Result<(), UStatus>
+    where
+        C: PayloadCodec + Send + Sync,
+    {
+        validate_frame_metadata_for_transport(&metadata)?;
+        let payload = payload.into_bytes();
+        let layout = validate_payload_layout_request(payload.len(), 1)?;
+        let mut buffer = self
+            .reserve(
+                metadata.with_encoding(C::payload_encoding()),
+                layout.len(),
+                layout.align(),
+            )
+            .await?;
+        verify_reserved_tx_payload_layout(&mut buffer, layout)?;
+        buffer
+            .loaned_payload_mut()
+            .copy_from_slice(payload.as_ref());
+        self.send_zero_copy(buffer).await
+    }
+
+    /// Initializes a typed payload directly in a transmit loan and sends it.
+    async fn send_loaned_payload_as<C, T>(
+        &self,
+        metadata: UFrameMetadata,
+        init: impl for<'payload> FnOnce(&'payload mut T) + Send,
+    ) -> Result<(), UStatus>
+    where
+        C: PayloadCodec + LoanPayload<T> + Send + Sync,
+    {
+        validate_frame_metadata_for_transport(&metadata)?;
+        let layout = C::loan_layout().map_err(UStatus::from)?;
+        let mut buffer = self
+            .reserve(
+                metadata.with_encoding(C::payload_encoding()),
+                layout.len(),
+                layout.align(),
+            )
+            .await?;
+        verify_reserved_tx_payload_layout(&mut buffer, layout)?;
+        {
+            let mut loaned_payload = buffer.loaned_payload_mut();
+            let payload = C::loan_payload(loaned_payload.as_mut_bytes()).map_err(UStatus::from)?;
+            init(payload);
         }
         self.send_zero_copy(buffer).await
     }
 }
 
 impl<T> UZeroCopyTransportExt for T where T: UZeroCopyTransport + ?Sized {}
+
+/// Convenience methods for zero-copy transports with uninitialized TX storage.
+#[async_trait]
+pub trait UZeroCopyUninitTransportExt: UZeroCopyUninitTransport {
+    /// Constructs a typed payload directly in uninitialized transmit storage and sends it.
+    async fn send_uninit_loaned_payload_as<C, T>(
+        &self,
+        metadata: UFrameMetadata,
+        init: impl for<'payload> FnOnce(
+                crate::payload::LoanedUninitPayload<'payload, T>,
+            ) -> Result<LoanedInitPayload<'payload, T>, UWireError>
+            + Send,
+    ) -> Result<(), UStatus>
+    where
+        C: PayloadCodec + LoanUninitPayload<T> + Send + Sync,
+        T: Send,
+    {
+        validate_frame_metadata_for_transport(&metadata)?;
+        let layout = C::loan_uninit_layout().map_err(UStatus::from)?;
+        let mut buffer = self
+            .reserve_uninit(
+                metadata.with_encoding(C::payload_encoding()),
+                layout.len(),
+                layout.align(),
+            )
+            .await?;
+        verify_reserved_uninit_payload_layout(&mut buffer, layout)?;
+        {
+            let loaned_payload = buffer.payload_uninit_mut();
+            let payload = C::loan_uninit_payload(loaned_payload).map_err(UStatus::from)?;
+            let _initialized = init(payload).map_err(UStatus::from)?;
+        }
+        let buffer = unsafe { buffer.assume_payload_init() };
+        self.send_zero_copy(buffer).await
+    }
+
+    /// Generates already-encoded bytes directly into uninitialized transmit storage.
+    async fn send_uninit_loaned_bytes_as<C>(
+        &self,
+        metadata: UFrameMetadata,
+        payload_len: usize,
+        alignment: usize,
+        write: impl for<'payload> FnOnce(
+                LoanedUninitByteWriter<'payload>,
+            )
+                -> Result<LoanedUninitByteWriter<'payload>, UWireError>
+            + Send,
+    ) -> Result<(), UStatus>
+    where
+        C: PayloadCodec + BytePayloadCodec + Send + Sync,
+    {
+        validate_frame_metadata_for_transport(&metadata)?;
+        let layout = validate_payload_layout_request(payload_len, alignment)?;
+        let mut buffer = self
+            .reserve_uninit(
+                metadata.with_encoding(C::payload_encoding()),
+                layout.len(),
+                layout.align(),
+            )
+            .await?;
+        verify_reserved_uninit_payload_layout(&mut buffer, layout)?;
+        {
+            let writer = buffer.payload_uninit_mut().into_writer();
+            let writer = write(writer).map_err(UStatus::from)?;
+            let _initialized = writer.finish().map_err(UStatus::from)?;
+        }
+        let buffer = unsafe { buffer.assume_payload_init() };
+        self.send_zero_copy(buffer).await
+    }
+
+    /// Expert hatch for sending a stable-container payload whose bytes cannot be
+    /// proven byte-backed by the safe API.
+    ///
+    /// # Safety
+    ///
+    /// `init` must initialize every transported byte in the slot, including
+    /// implicit padding, before returning an initialized marker. Returning an
+    /// initialized marker before the full byte range contains one valid `T` is
+    /// undefined behavior for receivers that borrow the stable payload.
+    #[cfg(any(
+        feature = "unsafe-stable-payload-tx",
+        feature = "expert-unsafe-payloads"
+    ))]
+    async unsafe fn send_uninit_stable_payload_unchecked<T>(
+        &self,
+        metadata: UFrameMetadata,
+        init: impl for<'payload> FnOnce(
+                UnsafeStablePayloadTxSlot<'payload, T>,
+            ) -> Result<LoanedInitPayload<'payload, T>, UWireError>
+            + Send,
+    ) -> Result<(), UStatus>
+    where
+        T: StablePayload + Send,
+    {
+        validate_frame_metadata_for_transport(&metadata)?;
+        let layout = PayloadLayout::for_type::<T>();
+        let mut buffer = self
+            .reserve_uninit(
+                metadata.with_encoding(StableContainerPayload::<T>::encoding()),
+                layout.len(),
+                layout.align(),
+            )
+            .await?;
+        verify_reserved_uninit_payload_layout(&mut buffer, layout)?;
+        {
+            let slot = UnsafeStablePayloadTxSlot::new(buffer.payload_uninit_mut())
+                .map_err(UStatus::from)?;
+            let _initialized = init(slot).map_err(UStatus::from)?;
+        }
+        let buffer = unsafe { buffer.assume_payload_init() };
+        self.send_zero_copy(buffer).await
+    }
+}
+
+impl<T> UZeroCopyUninitTransportExt for T where T: UZeroCopyUninitTransport + ?Sized {}
 
 #[cfg(not(tarpaulin_include))]
 #[cfg(any(test, feature = "test-util"))]
@@ -610,7 +904,13 @@ impl Debug for ComparableOwnedListener {
 
 #[cfg(test)]
 mod tests {
-    use std::str::FromStr;
+    use std::{str::FromStr, sync::Mutex};
+
+    use crate::{
+        payload::RawBytes,
+        test_util::{InMemoryOwnedTransport, InMemoryZeroCopyTransport},
+        zero_copy::UVecUninitTxBuffer,
+    };
 
     use super::*;
 
@@ -674,6 +974,179 @@ mod tests {
             .return_const(Ok(()));
 
         transport.send_owned(frame).await.unwrap();
+    }
+
+    #[tokio::test]
+    async fn owned_transport_ext_sends_payload_as_codec() {
+        let topic = UUri::try_from_parts("vehicle", 0x4210, 0x01, 0x9000).unwrap();
+        let transport = InMemoryOwnedTransport::default();
+
+        transport
+            .send_payload_as::<RawBytes, [u8]>(UFrameMetadata::publish(topic), b"payload")
+            .await
+            .unwrap();
+
+        let sent = transport.sent_frames();
+        let frame = sent.first().unwrap();
+        assert_eq!(frame.metadata().encoding(), Some(&RawBytes::encoding()));
+        assert_eq!(frame.payload_bytes(), b"payload");
+    }
+
+    #[tokio::test]
+    async fn zero_copy_transport_ext_sends_payload_as_codec() {
+        let topic = UUri::try_from_parts("vehicle", 0x4210, 0x01, 0x9000).unwrap();
+        let transport = InMemoryZeroCopyTransport::default();
+
+        transport
+            .send_payload_as::<RawBytes, [u8]>(UFrameMetadata::publish(topic), b"payload")
+            .await
+            .unwrap();
+
+        let sent = transport.sent_frames();
+        let frame = sent.first().unwrap();
+        assert_eq!(frame.metadata().encoding(), Some(&RawBytes::encoding()));
+        assert_eq!(frame.payload_bytes(), b"payload");
+    }
+
+    #[tokio::test]
+    async fn zero_copy_transport_ext_sends_encoded_payload() {
+        let topic = UUri::try_from_parts("vehicle", 0x4210, 0x01, 0x9000).unwrap();
+        let transport = InMemoryZeroCopyTransport::default();
+        let payload = EncodedPayload::<RawBytes>::from_bytes(bytes::Bytes::from_static(b"payload"));
+
+        UZeroCopyTransportExt::send_encoded_payload(
+            &transport,
+            UFrameMetadata::publish(topic),
+            payload,
+        )
+        .await
+        .unwrap();
+
+        let sent = transport.sent_frames();
+        let frame = sent.first().unwrap();
+        assert_eq!(frame.metadata().encoding(), Some(&RawBytes::encoding()));
+        assert_eq!(frame.payload_bytes(), b"payload");
+    }
+
+    #[derive(Default)]
+    struct OversizedTxLoanTransport {
+        send_count: Mutex<usize>,
+    }
+
+    #[async_trait]
+    impl UZeroCopyTransport for OversizedTxLoanTransport {
+        type Tx = UVecTxBuffer;
+        type Rx = UOwnedFrame;
+
+        async fn reserve(
+            &self,
+            metadata: UFrameMetadata,
+            payload_len: usize,
+            alignment: usize,
+        ) -> Result<Self::Tx, UStatus> {
+            UVecTxBuffer::with_alignment(metadata, payload_len + 1, alignment)
+                .map_err(UStatus::from)
+        }
+
+        async fn send_zero_copy(&self, _buffer: Self::Tx) -> Result<(), UStatus> {
+            *self.send_count.lock().expect("send count lock poisoned") += 1;
+            Ok(())
+        }
+    }
+
+    #[tokio::test]
+    async fn zero_copy_ext_rejects_bad_tx_loan_layout_without_send() {
+        let topic = UUri::try_from_parts("vehicle", 0x4210, 0x01, 0x9000).unwrap();
+        let transport = OversizedTxLoanTransport::default();
+
+        let status = transport
+            .send_payload_as::<RawBytes, [u8]>(UFrameMetadata::publish(topic), b"payload")
+            .await
+            .expect_err("bad transport loan must fail before send");
+
+        assert_eq!(status.get_code(), UCode::INTERNAL);
+        assert_eq!(*transport.send_count.lock().unwrap(), 0);
+    }
+
+    #[derive(Default)]
+    struct OversizedUninitTxLoanTransport {
+        send_count: Mutex<usize>,
+    }
+
+    #[async_trait]
+    impl UZeroCopyTransport for OversizedUninitTxLoanTransport {
+        type Tx = UVecTxBuffer;
+        type Rx = UOwnedFrame;
+
+        async fn reserve(
+            &self,
+            metadata: UFrameMetadata,
+            payload_len: usize,
+            alignment: usize,
+        ) -> Result<Self::Tx, UStatus> {
+            UVecTxBuffer::with_alignment(metadata, payload_len, alignment).map_err(UStatus::from)
+        }
+
+        async fn send_zero_copy(&self, _buffer: Self::Tx) -> Result<(), UStatus> {
+            *self.send_count.lock().expect("send count lock poisoned") += 1;
+            Ok(())
+        }
+    }
+
+    #[async_trait]
+    impl UZeroCopyUninitTransport for OversizedUninitTxLoanTransport {
+        type UninitTx = UVecUninitTxBuffer;
+
+        async fn reserve_uninit(
+            &self,
+            metadata: UFrameMetadata,
+            payload_len: usize,
+            alignment: usize,
+        ) -> Result<Self::UninitTx, UStatus> {
+            UVecUninitTxBuffer::with_alignment(metadata, payload_len + 1, alignment)
+                .map_err(UStatus::from)
+        }
+    }
+
+    #[tokio::test]
+    async fn zero_copy_uninit_ext_rejects_bad_uninit_loan_layout_without_send() {
+        let topic = UUri::try_from_parts("vehicle", 0x4210, 0x01, 0x9000).unwrap();
+        let transport = OversizedUninitTxLoanTransport::default();
+
+        let status = transport
+            .send_uninit_loaned_bytes_as::<RawBytes>(
+                UFrameMetadata::publish(topic),
+                3,
+                1,
+                |mut writer| {
+                    writer.write_all(b"abc")?;
+                    Ok(writer)
+                },
+            )
+            .await
+            .expect_err("bad uninit transport loan must fail before send");
+
+        assert_eq!(status.get_code(), UCode::INTERNAL);
+        assert_eq!(*transport.send_count.lock().unwrap(), 0);
+    }
+
+    #[tokio::test]
+    async fn zero_copy_uninit_ext_rejects_invalid_requested_layout_as_invalid_argument() {
+        let topic = UUri::try_from_parts("vehicle", 0x4210, 0x01, 0x9000).unwrap();
+        let transport = InMemoryZeroCopyTransport::default();
+
+        let status = transport
+            .send_uninit_loaned_bytes_as::<RawBytes>(
+                UFrameMetadata::publish(topic),
+                3,
+                3,
+                |writer| Ok(writer),
+            )
+            .await
+            .expect_err("non-power-of-two requested alignment must be invalid argument");
+
+        assert_eq!(status.get_code(), UCode::INVALID_ARGUMENT);
+        assert!(transport.sent_frames().is_empty());
     }
 
     #[test]

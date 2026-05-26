@@ -32,14 +32,35 @@ crate root keeps the most common re-exports for short examples.
 # Advanced Paths
 
 Whole-frame wire formats implement [`frame_wire::UFrameWireFormat`]. Custom
-payload codecs implement [`payload::PayloadFormat`], [`payload::USerializer`],
-and [`payload::UDeserializer`]. Shared-memory transports implement
+payload codecs implement [`payload::PayloadCodec`] and whichever encode/decode
+capability traits they support. Shared-memory transports implement
 [`zero_copy::UZeroCopyTransport`] only when they can honestly loan transmit
 storage and return receive leases. Zero-copy metadata is fixed at reserve time;
-payload bytes are the mutable loaned storage. Routing code that needs a single
-owned-frame facade over either capability can use [`transport::UOwnedFrameEndpoint`].
-Its name is intentional: adapting a zero-copy transport to this facade copies
-receive leases into owned frames and copies owned sends into transmit loans.
+payload bytes are the mutable loaned storage. Payload-level typed zero-copy
+receive is represented by [`zero_copy::ULoanedContiguousZeroCopyRxFrame`]; a
+merely contiguous payload is not automatically loan-backed. Routing code that
+needs a single owned-frame facade over either capability can use
+[`transport::UOwnedFrameEndpoint`]. Its name is intentional: adapting a zero-copy
+transport to this facade copies receive leases into owned frames and copies owned
+sends into transmit loans.
+
+# Stable Payloads
+
+[`payload::StableContainerPayload`] is the fixed-size typed zero-copy payload
+codec. A [`payload::StablePayload`] type follows the iceoryx2 `ZeroCopySend`
+safety model: the stable type name is the cross-process identity, and runtime
+compatibility uses the type name, `variant=fixed`, exact size, and sufficient
+advertised alignment. The core stable-container path does not use layout hashes,
+field descriptors, or fingerprints. Transports must preserve custom encoding
+metadata and payload bytes, but they must not parse stable-container type-detail
+parameters.
+
+The `StablePayload` derive macro owns the matching `ZeroCopySend` implementation.
+Use `#[stable_payload(type_name = "...")]` on `#[repr(C)]` or
+`#[repr(transparent)]` fixed-size payload structs. Add
+`ByteBackedStablePayload` derive for payloads used with safe stable-container TX
+or encode. Runtime-length slice payloads are reserved for a future API; this
+release only emits and accepts `variant=fixed`.
 
 # Features
 
@@ -52,14 +73,25 @@ receive leases into owned frames and copies owned sends into transmit loans.
   bindings do not need CloudEvents support in the common path.
 * `symphony` enables Symphony deployment-target helpers.
 * `test-util` enables `mockall` mocks for supported public traits and in-memory
-  transport fakes under [`test_util`].
+  transport fakes under `test_util`.
+* `unsafe-stable-payload-tx`, `unsafe-stable-payload-init`, and
+  `unsafe-uninit-payload-bytes` expose expert payload APIs with caller-side
+  initialization proof obligations. Direct manual `ByteBackedStablePayload`
+  impls are ordinary unsafe impls; prefer the checked derive unless an expert
+  FFI/codegen boundary owns the byte-level proof. `expert-unsafe-payloads`
+  enables all unsafe payload features.
 
 Service-specific data transfer objects are grouped under modules such as
 [`usubscription`] instead of being wildcard-exported at the crate root.
 */
 
 #![warn(rustdoc::bare_urls, rustdoc::broken_intra_doc_links)]
+#![deny(unsafe_op_in_unsafe_fn)]
 #![cfg_attr(docsrs, feature(doc_cfg))]
+
+extern crate self as up_rust;
+
+pub use up_rust_macros::{ByteBackedStablePayload, StablePayload};
 
 #[cfg(feature = "util")]
 #[cfg_attr(docsrs, doc(cfg(feature = "util")))]
@@ -91,10 +123,21 @@ pub mod protobuf;
 
 mod uframe;
 pub use uframe::{
-    CustomPayloadEncoding, PayloadEncoding, PayloadEncodingError, UAttributes, UEncoding,
-    UEncodingError, UFrameBuilder, UFrameBuilderError, UFrameMetadata, UFrameWireError,
-    UFrameWireFormat, UMessageType, UOwnedFrame, UPayloadFormat, UPriority,
+    assert_stable_payload_byte_backed_uninit, stable_payload_supports_byte_backed_uninit,
+    BorrowPayload, BytePayloadCodec, CustomPayloadEncoding, DecodePayload, DynPayloadCodec,
+    EncodePayload, EncodedPayload, LoanPayload, LoanUninitPayload, LoanedInitPayload,
+    LoanedUninitPayload, McapPayload, PayloadCodec, PayloadCodecCapabilities, PayloadCodecRegistry,
+    PayloadEncoding, PayloadEncodingError, PayloadLayout, PlacementDefault, ReadDecodePayload,
+    StableContainerPayload, StablePayload, StablePayloadVariant, StableTypeDetail,
+    TypedPayloadCodec, UAttributes, UEncoding, UEncodingError, UFrameBuilder, UFrameBuilderError,
+    UFrameMetadata, UFrameWireError, UFrameWireFormat, UMessageType, UOwnedFrame, UPayloadFormat,
+    UPriority, UWireError, ZeroCopySend,
 };
+#[cfg(any(
+    feature = "unsafe-stable-payload-tx",
+    feature = "expert-unsafe-payloads"
+))]
+pub use uframe::{UnsafeStablePayloadTxSlot, ZeroedStablePayloadTxSlot};
 
 mod uattributes;
 pub use uattributes::{
@@ -116,11 +159,16 @@ pub mod usubscription;
 mod ustatus;
 pub use ustatus::{UCode, UStatus};
 
+#[doc(hidden)]
+pub mod __derive_support {
+    pub use crate::uframe::ByteBackedStablePayloadField;
+}
+
 mod utransport;
 pub use utransport::{
     validate_frame_metadata_for_payload, validate_frame_metadata_for_transport,
     validate_owned_frame_for_transport, LocalUriProvider, StaticUriProvider, UOwnedListener,
-    UOwnedTransport, UOwnedTransportExt,
+    UOwnedTransport, UOwnedTransportExt, UZeroCopyUninitTransport, UZeroCopyUninitTransportExt,
 };
 
 #[cfg(any(test, feature = "test-util"))]
@@ -155,10 +203,21 @@ pub mod frame_wire {
 /// Application payload codec contracts and helpers.
 pub mod payload {
     pub use crate::uframe::{
-        CustomPayloadEncoding, PayloadEncoding, PayloadEncodingError, PayloadFormat, RawBytes,
-        UDeserializer, UEncoding, UEncodingError, UErasedSerializer, UPayloadFormat,
-        UReadDeserializer, USerializer, UWireError,
+        assert_stable_payload_byte_backed_uninit, stable_payload_supports_byte_backed_uninit,
+        BorrowPayload, ByteBackedStablePayload, BytePayloadCodec, CustomPayloadEncoding,
+        DecodePayload, DynPayloadCodec, EncodePayload, EncodedPayload, LoanPayload,
+        LoanUninitPayload, LoanedInitPayload, LoanedUninitPayload, McapPayload, PayloadCodec,
+        PayloadCodecCapabilities, PayloadCodecRegistry, PayloadEncoding, PayloadEncodingError,
+        PayloadFormat, PayloadLayout, PlacementDefault, RawBytes, ReadDecodePayload,
+        StableContainerPayload, StablePayload, StablePayloadVariant, StableTypeDetail,
+        TypedPayloadCodec, UDeserializer, UEncoding, UEncodingError, UErasedSerializer,
+        UPayloadFormat, UReadDeserializer, USerializer, UWireError, ZeroCopySend,
     };
+    #[cfg(any(
+        feature = "unsafe-stable-payload-tx",
+        feature = "expert-unsafe-payloads"
+    ))]
+    pub use crate::uframe::{UnsafeStablePayloadTxSlot, ZeroedStablePayloadTxSlot};
 
     #[cfg(feature = "protobuf-wire")]
     #[cfg_attr(docsrs, doc(cfg(feature = "protobuf-wire")))]
@@ -180,10 +239,16 @@ pub mod transport {
 /// Zero-copy transport capability APIs.
 pub mod zero_copy {
     pub use crate::uframe::{
-        UContiguousZeroCopyRxFrame, UTxBuffer, UVecTxBuffer, UZeroCopyPayloadCopyExt,
-        UZeroCopyRxFrame,
+        verify_contiguous_rx_payload_layout, verify_loaned_rx_payload_layout,
+        verify_tx_buffer_payload_layout, verify_uninit_tx_buffer_payload_layout, LoanedPayload,
+        LoanedPayloadMut, LoanedPayloadUninitMut, LoanedUninitByteWriter, PayloadLoanKind,
+        UContiguousZeroCopyRxFrame, ULoanedContiguousZeroCopyRxFrame, UTxBuffer, UUninitTxBuffer,
+        UVecTxBuffer, UVecUninitTxBuffer, UZeroCopyPayloadCopyExt, UZeroCopyRxFrame,
     };
-    pub use crate::utransport::{UZeroCopyListener, UZeroCopyTransport, UZeroCopyTransportExt};
+    pub use crate::utransport::{
+        UZeroCopyListener, UZeroCopyTransport, UZeroCopyTransportExt, UZeroCopyUninitTransport,
+        UZeroCopyUninitTransportExt,
+    };
 
     #[cfg(any(test, feature = "test-util"))]
     #[cfg_attr(docsrs, doc(cfg(feature = "test-util")))]
@@ -196,8 +261,14 @@ pub mod prelude {
         frame::{UFrameBuilder, UFrameMetadata, UMessageType, UOwnedFrame, UPriority},
         frame_wire::{UFrameWireError, UFrameWireFormat},
         payload::{
-            PayloadEncoding, PayloadFormat, RawBytes, UDeserializer, UPayloadFormat,
-            UReadDeserializer, USerializer, UWireError,
+            assert_stable_payload_byte_backed_uninit, stable_payload_supports_byte_backed_uninit,
+            BorrowPayload, BytePayloadCodec, DecodePayload, DynPayloadCodec, EncodePayload,
+            EncodedPayload, LoanPayload, LoanUninitPayload, LoanedInitPayload, LoanedUninitPayload,
+            McapPayload, PayloadCodec, PayloadCodecCapabilities, PayloadCodecRegistry,
+            PayloadEncoding, PayloadFormat, PayloadLayout, RawBytes, ReadDecodePayload,
+            StableContainerPayload, StablePayload, StablePayloadVariant, StableTypeDetail,
+            TypedPayloadCodec, UDeserializer, UPayloadFormat, UReadDeserializer, USerializer,
+            UWireError,
         },
         transport::{UOwnedListener, UOwnedTransport, UOwnedTransportExt},
         UCode, UStatus, UUri, UUID,

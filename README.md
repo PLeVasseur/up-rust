@@ -20,8 +20,10 @@ The crate needs to be added to the `[dependencies]` section of the `Cargo.toml` 
 up-rust = { version = "0.10" }
 ```
 
-Please refer to the [examples](./examples/) for owned-buffer and zero-copy payload-codec usage.
+Please refer to the [examples](./examples/) and [payload codec notes](./docs/payload-codecs.md) for owned-buffer, zero-copy, and stable-container payload-codec usage.
 The [native frame migration guide](./docs/native-frame-migration.md) explains how to move from generated `UMessage` envelopes to `UOwnedFrame`, `UFrameBuilder`, and serializer-neutral payloads, including a side-by-side owned/zero-copy transport API matrix.
+
+Stable-container payloads use two derive levels: `#[derive(StablePayload)]` for stable identity and RX borrowing, and `#[derive(StablePayload, ByteBackedStablePayload)]` when the type is also used with safe stable-container TX or owned/raw encode. Prefer the checked `ByteBackedStablePayload` derive over manual `unsafe impl up_rust::payload::ByteBackedStablePayload` except for expert FFI/codegen payloads.
 
 The crate root keeps the common native-frame types available for short examples. For larger codebases, prefer the role-focused modules `frame`, `payload`, `frame_wire`, `transport`, `zero_copy`, and `prelude` to make simple application code and advanced transport code easier to separate.
 
@@ -91,6 +93,30 @@ The API documentation can be generated using
 
 ```sh
 cargo doc --no-deps --all-features --open
+```
+
+### Verification
+
+Run the focused stable-payload compile-fail tests with:
+
+```sh
+cargo test --locked --test stable_payload_trybuild
+```
+
+The stable-container Miri test uses the nightly Miri component and disables
+Miri isolation because the broader test path touches environment/time/UUID
+behavior:
+
+```sh
+scripts/run-miri-stable-container.sh
+```
+
+Equivalent explicit command:
+
+```sh
+rustup +nightly component add miri
+cargo +nightly miri setup
+MIRIFLAGS="-Zmiri-disable-isolation" cargo +nightly miri test --test stable_container_miri
 ```
 
 ## License

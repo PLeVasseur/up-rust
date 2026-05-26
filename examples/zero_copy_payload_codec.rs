@@ -105,9 +105,9 @@ impl UZeroCopyTransport for LoopbackZeroCopyTransport {
         &self,
         header: UFrameMetadata,
         payload_len: usize,
-        _alignment: usize,
+        alignment: usize,
     ) -> Result<Self::Tx, UStatus> {
-        Ok(UVecTxBuffer::new(header, payload_len))
+        UVecTxBuffer::with_alignment(header, payload_len, alignment).map_err(UStatus::from)
     }
 
     async fn send_zero_copy(&self, buffer: Self::Tx) -> Result<(), UStatus> {

@@ -72,6 +72,9 @@ impl UOwnedFrameEndpoint {
     /// copied into owned listener callbacks for generic routing code. This is an
     /// adapter boundary, not end-to-end zero-copy forwarding.
     ///
+    /// Prefer [`Self::from_zero_copy_copying_adapter`] in new code when making
+    /// the copy boundary explicit at call sites.
+    ///
     /// ```no_run
     /// # use std::sync::Arc;
     /// # use up_rust::{transport::UOwnedFrameEndpoint, zero_copy::UZeroCopyTransport};
@@ -79,11 +82,25 @@ impl UOwnedFrameEndpoint {
     /// # where
     /// #     T: UZeroCopyTransport + Send + Sync + 'static,
     /// # {
-    /// let endpoint = UOwnedFrameEndpoint::from_zero_copy(transport);
+    /// let endpoint = UOwnedFrameEndpoint::from_zero_copy_copying_adapter(transport);
     /// # endpoint
     /// # }
     /// ```
     pub fn from_zero_copy<T>(transport: Arc<T>) -> Self
+    where
+        T: UZeroCopyTransport + Send + Sync + 'static,
+    {
+        Self::from_zero_copy_copying_adapter(transport)
+    }
+
+    /// Creates an owned-frame copying adapter around a zero-copy transport.
+    ///
+    /// This is the explicit form of [`Self::from_zero_copy`]. Owned sends are
+    /// copied into a transmit loan, and zero-copy receives are copied into owned
+    /// listener callbacks for generic routing code. This adapter is useful for
+    /// routers that operate on [`UOwnedFrame`], but it is not end-to-end
+    /// zero-copy forwarding.
+    pub fn from_zero_copy_copying_adapter<T>(transport: Arc<T>) -> Self
     where
         T: UZeroCopyTransport + Send + Sync + 'static,
     {
@@ -583,7 +600,7 @@ mod tests {
     #[tokio::test]
     async fn endpoint_sends_owned_frame_through_zero_copy_transport() {
         let transport = Arc::new(MemoryZeroCopyTransport::default());
-        let endpoint = UOwnedFrameEndpoint::from_zero_copy(transport.clone());
+        let endpoint = UOwnedFrameEndpoint::from_zero_copy_copying_adapter(transport.clone());
         let topic = UUri::try_from_parts("vehicle", 0x4210, 1, 0x9000).expect("valid topic");
         let frame = crate::UFrameBuilder::publish(topic)
             .build_with_raw_payload(b"payload".as_slice())
@@ -600,7 +617,9 @@ mod tests {
 
     #[tokio::test]
     async fn endpoint_rejects_wrong_length_zero_copy_reservation() {
-        let endpoint = UOwnedFrameEndpoint::from_zero_copy(Arc::new(WrongLengthZeroCopyTransport));
+        let endpoint = UOwnedFrameEndpoint::from_zero_copy_copying_adapter(Arc::new(
+            WrongLengthZeroCopyTransport,
+        ));
         let topic = UUri::try_from_parts("vehicle", 0x4210, 1, 0x9000).expect("valid topic");
         let frame = crate::UFrameBuilder::publish(topic)
             .build_with_raw_payload(b"payload".as_slice())
@@ -618,7 +637,7 @@ mod tests {
     #[tokio::test]
     async fn endpoint_adapts_zero_copy_receive_to_owned_listener() {
         let transport = Arc::new(MemoryZeroCopyTransport::default());
-        let endpoint = UOwnedFrameEndpoint::from_zero_copy(transport.clone());
+        let endpoint = UOwnedFrameEndpoint::from_zero_copy_copying_adapter(transport.clone());
         let topic = UUri::try_from_parts("vehicle", 0x4210, 1, 0x9000).expect("valid topic");
         let frame = crate::UFrameBuilder::publish(topic.clone())
             .build_with_raw_payload(b"payload".as_slice())

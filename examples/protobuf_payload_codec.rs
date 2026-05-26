@@ -12,18 +12,18 @@
  ********************************************************************************/
 
 use protobuf::well_known_types::wrappers::StringValue;
-use up_rust::{payload::UDeserializer, ProtobufPayload, UFrameMetadata, UOwnedFrame, UUri};
+use up_rust::{ProtobufPayload, UFrameMetadata, UOwnedFrame, UUri};
 
 fn main() -> Result<(), Box<dyn std::error::Error>> {
     let mut message = StringValue::new();
     message.value = "hello protobuf payload".to_string();
 
     let topic = UUri::try_from_parts("vehicle", 0x4210, 1, 0x8001)?;
-    let frame = UOwnedFrame::from_serializable::<ProtobufPayload, _>(
+    let frame = UOwnedFrame::from_payload_as::<ProtobufPayload, _>(
         UFrameMetadata::publish(topic),
         &message,
     )?;
-    let decoded = StringValue::deserialize_from(frame.payload_bytes())?;
+    let decoded: StringValue = frame.decode_payload_as::<ProtobufPayload, _>()?;
 
     assert_eq!(
         frame.metadata().encoding(),

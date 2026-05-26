@@ -26,11 +26,26 @@ pub use frame::{
 };
 pub use frame_wire::{UFrameWireError, UFrameWireFormat};
 pub use payload::{
-    PayloadFormat, RawBytes, UDeserializer, UErasedSerializer, UReadDeserializer, USerializer,
-    UWireError,
+    assert_stable_payload_byte_backed_uninit, stable_payload_supports_byte_backed_uninit,
+    BorrowPayload, ByteBackedStablePayload, ByteBackedStablePayloadField, BytePayloadCodec,
+    DecodePayload, DynPayloadCodec, EncodePayload, EncodedPayload, LoanPayload, LoanUninitPayload,
+    LoanedInitPayload, LoanedUninitPayload, McapPayload, PayloadCodec, PayloadCodecCapabilities,
+    PayloadCodecRegistry, PayloadFormat, PayloadLayout, PlacementDefault, RawBytes,
+    ReadDecodePayload, StableContainerPayload, StablePayload, StablePayloadVariant,
+    StableTypeDetail, TypedPayloadCodec, UDeserializer, UErasedSerializer, UReadDeserializer,
+    USerializer, UWireError, ZeroCopySend,
 };
+#[cfg(any(
+    feature = "unsafe-stable-payload-tx",
+    feature = "expert-unsafe-payloads"
+))]
+pub use payload::{UnsafeStablePayloadTxSlot, ZeroedStablePayloadTxSlot};
 pub use zero_copy::{
-    UContiguousZeroCopyRxFrame, UTxBuffer, UVecTxBuffer, UZeroCopyPayloadCopyExt, UZeroCopyRxFrame,
+    verify_contiguous_rx_payload_layout, verify_loaned_rx_payload_layout,
+    verify_tx_buffer_payload_layout, verify_uninit_tx_buffer_payload_layout, LoanedPayload,
+    LoanedPayloadMut, LoanedPayloadUninitMut, LoanedUninitByteWriter, PayloadLoanKind,
+    UContiguousZeroCopyRxFrame, ULoanedContiguousZeroCopyRxFrame, UTxBuffer, UUninitTxBuffer,
+    UVecTxBuffer, UVecUninitTxBuffer, UZeroCopyPayloadCopyExt, UZeroCopyRxFrame,
 };
 
 #[cfg(test)]

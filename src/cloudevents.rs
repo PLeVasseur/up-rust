@@ -303,13 +303,6 @@ fn optional_string_extension(
         .transpose()
 }
 
-fn required_string_extension(
-    event: &CloudEvent,
-    name: &'static str,
-) -> Result<String, CloudEventError> {
-    optional_string_extension(event, name)?.ok_or(CloudEventError::MissingAttribute(name))
-}
-
 fn optional_uri_extension(
     event: &CloudEvent,
     name: &'static str,

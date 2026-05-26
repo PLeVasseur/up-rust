@@ -25,6 +25,7 @@ on:
       - "examples/**"
       - "src/**"
       - "tests/**"
+      - "scripts/**"
       - "Cargo.*"
       - "build.rs"
       - "deny.toml"
@@ -66,7 +67,7 @@ jobs:
         toolchain: ${{ env.RUST_TOOLCHAIN }}
     - name: Run cargo check
       run: |
-        cargo check --workspace --all-targets --all-features
+        cargo check --locked --workspace --all-targets --all-features
 
   # [impl->req~up-language-ci-linter~1]
   fmt:
@@ -95,7 +96,7 @@ jobs:
       - name: Run cargo clippy
         run: |
           cargo clippy --version
-          cargo clippy --all-targets --all-features --no-deps -- -W warnings -D warnings
+          cargo clippy --locked --all-targets --all-features --no-deps -- -W warnings -D warnings
 
   # [impl->req~up-language-ci-api-docs~1]
   docu:
@@ -111,7 +112,7 @@ jobs:
           toolchain: ${{ env.RUST_TOOLCHAIN }}
       - name: Run rustdoc
         run: |
-          cargo doc --no-deps --all-features
+          cargo doc --locked --no-deps --all-features
 
   check-links:
     # check links contained in markdown, asciidoc and source code files
@@ -148,6 +149,7 @@ jobs:
       - name: Run cargo hack powerset
         run: |
           cargo hack check \
+            --locked \
             --no-dev-deps \
             --feature-powerset \
             --group-features default,communication,usubscription,udiscovery,utwin,symphony \
@@ -173,14 +175,17 @@ jobs:
       - name: Run lib tests
         run: |
           mkdir -p ${GITHUB_WORKSPACE}/target
-          RUSTC_BOOTSTRAP=1 cargo test --no-fail-fast --lib ${{ matrix.feature-flags }} -- -Z unstable-options --format junit --report-time > ${GITHUB_WORKSPACE}/target/lib-test-results.xml
+          RUSTC_BOOTSTRAP=1 cargo test --locked --no-fail-fast --lib ${{ matrix.feature-flags }} -- -Z unstable-options --format junit --report-time > ${GITHUB_WORKSPACE}/target/lib-test-results.xml
       - name: Run doc tests
         run: |
-          RUSTC_BOOTSTRAP=1 cargo test --no-fail-fast --doc ${{ matrix.feature-flags }} -- -Z unstable-options --format junit --report-time > ${GITHUB_WORKSPACE}/target/doc-test-results.xml
+          RUSTC_BOOTSTRAP=1 cargo test --locked --no-fail-fast --doc ${{ matrix.feature-flags }} -- -Z unstable-options --format junit --report-time > ${GITHUB_WORKSPACE}/target/doc-test-results.xml
+      - name: Run stable payload compile-fail tests
+        run: |
+          cargo test --locked --no-fail-fast --test stable_payload_trybuild ${{ matrix.feature-flags }}
       - name: Run TCK tests
         run: |
           # the Cucumber based tests write a results file in JUnit format to "tck-[test_name]-results.xml"
-          cargo test --no-fail-fast --test 'tck_*' ${{ matrix.feature-flags }} -- --junit-out-folder=${GITHUB_WORKSPACE}/target
+          cargo test --locked --no-fail-fast --test 'tck_*' ${{ matrix.feature-flags }} -- --junit-out-folder=${GITHUB_WORKSPACE}/target
 
       - name: Upload all-features test results artifact
         id: test_results

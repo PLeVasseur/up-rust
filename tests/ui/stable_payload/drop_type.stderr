@@ -1,0 +1,5 @@
+error[E0080]: evaluation panicked: StablePayload types must not implement Drop or contain fields that need drop
+ --> tests/ui/stable_payload/drop_type.rs:4:10
+  |
+4 | #[derive(StablePayload)]
+  |          ^^^^^^^^^^^^^ evaluation of `_` failed here

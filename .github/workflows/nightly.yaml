@@ -26,6 +26,19 @@ concurrency:
   cancel-in-progress: true
 
 jobs:
+  miri-stable-container:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+        with:
+          submodules: "recursive"
+      - uses: actions-rust-lang/setup-rust-toolchain@150fca883cd4034361b621bd4e6a9d34e5143606 # v1.15.4
+        with:
+          toolchain: nightly
+          components: miri
+      - name: Run stable-container Miri test
+        run: scripts/run-miri-stable-container.sh
+
   check-msrv:
     uses: eclipse-uprotocol/ci-cd/.github/workflows/rust-verify-msrv.yaml@c9fb74b20429e69c15021c64dcf343447a2f46a2 # main
 

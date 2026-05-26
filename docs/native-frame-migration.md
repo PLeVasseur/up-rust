@@ -72,6 +72,7 @@ Transport implementations should project these fields into their native metadata
 | `UTransport::send` | `UOwnedTransport::send_owned` or `UZeroCopyTransport::reserve` plus `send_zero_copy` | Always | Zero-copy send is intentionally two-phase so serializers can write directly into transport-loaned storage. |
 | `UTransport::register_listener` | `register_owned_listener` or `register_zero_copy_listener` | Always | Listener type follows transport capability: `UOwnedListener` or `UZeroCopyListener`. |
 | Pull-style receive helpers | `receive_owned` or `receive_zero_copy` implemented by transports that truly support pull receive | Always | The default returns `UNIMPLEMENTED`, matching mainline `UTransport`; listener-backed push receive is not hidden behind the pull API. |
+| Stable-layout payload contracts | `StablePayload` plus `StableContainerPayload<T>` | Always | Stable-container metadata now uses type name, `variant=fixed`, exact size, and sufficient alignment instead of layout hashes or field descriptors. |
 | Protobuf payload helpers | `build_with_protobuf_payload`, `ProtobufPayload` | `protobuf-wire` | Protobuf is a payload codec, not the transport envelope. |
 | uSubscription service payloads | Generated `up-core-api` protobuf DTOs | `protobuf-wire` | uSubscription service methods use their full-fidelity protobuf service DTOs inside native frames. |
 | `up_rust::*` service DTO imports | Module imports such as `up_rust::usubscription::Subscription` | Always | Service DTOs are grouped under service modules to keep the crate root focused on common frame and transport APIs. |
@@ -90,6 +91,40 @@ Removed APIs that do not have a direct replacement are intentionally retired rat
 | Direct generated `UAttributes` public-field mutation | Replaced by native `UAttributes` accessors, `with_*` modifiers, validators, and checked `UFrameBuilder`/`UFrameMetadata::try_*` constructors. |
 | Generated service DTOs wildcard-exported at crate root | Replaced by module imports such as `up_rust::usubscription::SubscriptionRequest` with `protobuf-wire` enabled. |
 | Listener-backed default pull receive helper | Retired. `receive_owned` and `receive_zero_copy` default to `UNIMPLEMENTED`; push-oriented transports should expose listener registration instead of hiding temporary registrations behind pull receive. |
+| Stable-layout public types such as `PayloadContract`, `StableLayout`, `StableFromBytes`, `StableIntoBytes`, `StableFieldDescriptor`, `StableLayoutDescriptor`, and `PayloadEndian` | Retired. Use `#[derive(StablePayload)]` and `StableContainerPayload<T>` for fixed-size typed zero-copy payloads. |
+| Stable metadata fields `version`, `endian`, `layout`, and `layout_hash` | Retired. New stable-container metadata is `type`, `variant=fixed`, `size`, and `align`; legacy metadata is rejected. |
+
+## Stable-Container Payload Migration
+
+Fixed-size typed zero-copy payloads now use one public safety contract. The `StablePayload` derive macro emits the matching `ZeroCopySend` implementation, so application payload types no longer derive both traits for uProtocol stable containers.
+
+Old shape:
+
+```rust,ignore
+#[repr(C)]
+#[derive(PlacementDefault, ZeroCopySend, StablePayload)]
+#[stable_payload(type_id = "example.vehicle.VehiclePose", version = 1)]
+struct VehiclePose {
+    x: u32,
+    y: u32,
+}
+```
+
+New shape:
+
+```rust,ignore
+#[repr(C)]
+#[derive(PlacementDefault, StablePayload)]
+#[stable_payload(type_name = "example.vehicle.VehiclePose")]
+struct VehiclePose {
+    x: u32,
+    y: u32,
+}
+```
+
+Keep the old stable `type_id` string as the new `type_name` unless the payload is intentionally a different wire type. Do not append a version suffix only because the attribute changed. For `VehiclePose` above, the stable-container custom content type becomes `application/vnd.uprotocol.stable-container;type="example.vehicle.VehiclePose";variant=fixed;size=8;align=4`.
+
+Runtime-length dynamic slice payloads are not part of this migration. They need a separate slice API because transmit loaning and receive borrowing must carry an element count and expose `&mut [T]` or `&[T]`, not one `T`. Until that API exists, `StableContainerPayload<T>` emits and accepts only `variant=fixed`.
 
 ## Owned And Zero-Copy Transport Parity
 
@@ -104,7 +139,7 @@ Use `UOwnedTransport` for the normal network, brokered, and in-process path. Use
 | Push callback | `UOwnedListener::on_receive_owned(UOwnedFrame)` | `UZeroCopyListener<Rx>::on_receive_zero_copy(Rx)` | The zero-copy `Rx` value is the receive lease and should release transport resources when dropped. |
 | Register listener | `register_owned_listener(...)` | `register_zero_copy_listener(...)` | Same filter semantics; listener type follows frame ownership. |
 | Unregister listener | `unregister_owned_listener(...)` | `unregister_zero_copy_listener(...)` | Same registration identity semantics. |
-| Typed send helper | `UOwnedTransportExt::send_serialized::<Codec, _>(...)` | `UZeroCopyTransportExt::send_serialized_zero_copy::<Codec, _>(...)` | Same `PayloadFormat` and `USerializer` contract; the zero-copy helper reserves a loan and serializes into it. |
+| Typed send helper | `UOwnedTransportExt::send_serialized::<Codec, _>(...)` | `UZeroCopyTransportExt::send_serialized_zero_copy::<Codec, _>(...)` or `UZeroCopyUninitTransportExt::send_uninit_loaned_payload_as::<StableContainerPayload<T>, T>(...)` | Serialized zero-copy reserves a loan and writes bytes into it. Stable typed uninit constructs `T` directly in transport storage without a source payload copy or default pre-initialization. |
 | Typed receive decode | `UOwnedFrame::deserialize::<Codec, T>()` | `UZeroCopyRxFrame::deserialize_from_reader::<Codec, T>()` or `UContiguousZeroCopyRxFrame::deserialize_borrowed::<Codec, T>()` | All check `PayloadEncoding` before decoding. Reader decode works for segmented receive leases; borrowed decode requires an explicit contiguous receive capability. |
 | Test fakes | `test_util::InMemoryOwnedTransport` | `test_util::InMemoryZeroCopyTransport` | The zero-copy fake uses `zero_copy::UVecTxBuffer` and `UOwnedFrame` to exercise the trait shape without shared-memory middleware. |
 | Trait mocks | `MockUOwnedTransport`, `MockUOwnedListener`, communication mocks such as `communication::MockRpcServer` | `zero_copy::MockUZeroCopyTransport` | Enabled by `test-util`; mock the trait shape you are depending on. |
@@ -141,7 +176,7 @@ transport.send_zero_copy(loan).await?;
 
 Do not build a `UOwnedFrame` first just to call a zero-copy transport unless you are intentionally crossing an owned/zero-copy adapter boundary. That adds the copy the zero-copy API is designed to avoid.
 
-`UOwnedFrameEndpoint` is that adapter boundary. It gives routing code one owned-frame facade over either transport capability. `UOwnedFrameEndpoint::from_zero_copy` copies an owned send into a transmit loan and copies a zero-copy receive lease into an owned listener callback. Use it when a generic router needs one owned-frame type; do not use it to claim end-to-end zero-copy behavior.
+`UOwnedFrameEndpoint` is that adapter boundary. It gives routing code one owned-frame facade over either transport capability. `UOwnedFrameEndpoint::from_zero_copy_copying_adapter` copies an owned send into a transmit loan and copies a zero-copy receive lease into an owned listener callback. Use it when a generic router needs one owned-frame type; do not use it to claim end-to-end zero-copy behavior. `from_zero_copy` remains a compatibility alias.
 
 The examples mirror the same serializer-neutral contract from different angles. [`owned_payload_codec.rs`](../examples/owned_payload_codec.rs) shows owned sends and owned listener callbacks. [`zero_copy_payload_codec.rs`](../examples/zero_copy_payload_codec.rs) shows zero-copy send helpers, pull receive, and borrowed deserialization. The payload examples differ so the zero-copy example can demonstrate borrowed receive views, but the `PayloadFormat`, `USerializer`, and `UDeserializer` contracts are the same.
 

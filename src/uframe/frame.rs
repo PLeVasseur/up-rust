@@ -17,7 +17,10 @@ use bytes::Bytes;
 
 use crate::{UAttributesError, UAttributesValidators, UCode, UUri, UUID};
 
-use super::payload::{PayloadFormat, RawBytes, UDeserializer, USerializer, UWireError};
+use super::payload::{
+    BorrowPayload, BytePayloadCodec, DecodePayload, EncodePayload, EncodedPayload, PayloadCodec,
+    PayloadFormat, RawBytes, UDeserializer, USerializer, UWireError,
+};
 
 /// Native uProtocol message kind carried in a frame metadata.
 #[derive(Clone, Copy, Debug, Eq, Hash, PartialEq)]
@@ -736,8 +739,48 @@ impl UOwnedFrame {
         F: PayloadFormat,
         T: USerializer<F>,
     {
-        let payload = value.serialize_owned()?;
-        Ok(Self::new(metadata.with_encoding(F::encoding()), payload))
+        Self::from_payload_as::<F, T>(metadata, value)
+    }
+
+    /// Encodes `value` with payload codec `C` and returns an owned frame.
+    ///
+    /// Existing [`PayloadFormat`] codecs work here through their compatibility
+    /// adapter. New codecs should implement [`PayloadCodec`] and
+    /// [`EncodePayload`].
+    pub fn from_payload_as<C, T>(metadata: UFrameMetadata, value: &T) -> Result<Self, UWireError>
+    where
+        C: PayloadCodec + EncodePayload<T>,
+        T: ?Sized,
+    {
+        let payload = C::encode_payload_owned(value)?;
+        Ok(Self::new(
+            metadata.with_encoding(C::payload_encoding()),
+            payload,
+        ))
+    }
+
+    /// Creates a payload-bearing frame from already encoded owned bytes.
+    ///
+    /// This is the no-extra-copy path for byte-oriented codecs such as
+    /// [`RawBytes`](crate::payload::RawBytes) and [`McapPayload`](crate::payload::McapPayload):
+    /// the supplied [`Bytes`] buffer is moved into the frame after metadata is
+    /// tagged with `C::payload_encoding()`.
+    pub fn from_bytes_as<C>(metadata: UFrameMetadata, payload: impl Into<Bytes>) -> Self
+    where
+        C: PayloadCodec + BytePayloadCodec,
+    {
+        Self::from_encoded_payload(metadata, EncodedPayload::<C>::from_bytes(payload))
+    }
+
+    /// Creates a payload-bearing frame from already encoded typed payload bytes.
+    pub fn from_encoded_payload<C>(metadata: UFrameMetadata, payload: EncodedPayload<C>) -> Self
+    where
+        C: PayloadCodec,
+    {
+        Self::new(
+            metadata.with_encoding(C::payload_encoding()),
+            payload.into_bytes(),
+        )
     }
 
     /// Returns frame metadata.
@@ -781,6 +824,11 @@ impl UOwnedFrame {
         self.payload
     }
 
+    /// Consumes the frame and returns metadata plus optional payload bytes.
+    pub fn into_parts(self) -> (UFrameMetadata, Option<Bytes>) {
+        (self.metadata, self.payload)
+    }
+
     /// Deserializes the payload with codec `F` after verifying encoding metadata.
     ///
     /// The frame must carry a payload and a compatible [`PayloadEncoding`].
@@ -789,19 +837,28 @@ impl UOwnedFrame {
         F: PayloadFormat,
         T: UDeserializer<'a, F>,
     {
-        let expected = F::encoding();
+        self.decode_payload_as::<F, T>()
+    }
+
+    /// Decodes the payload with codec `C` after verifying encoding metadata.
+    pub fn decode_payload_as<'a, C, T>(&'a self) -> Result<T, UWireError>
+    where
+        C: PayloadCodec + DecodePayload<'a, T>,
+    {
         let payload = self.payload.as_deref().ok_or(UWireError::MissingPayload)?;
-        let actual = self
-            .metadata
-            .encoding()
-            .ok_or(UWireError::MissingEncoding)?;
-        if !actual.is_compatible_with(&expected) {
-            return Err(UWireError::UnsupportedEncoding {
-                expected: Box::new(expected),
-                actual: Box::new(actual.clone()),
-            });
-        }
-        T::deserialize_from(payload)
+        C::verify_encoding(self.metadata.encoding())?;
+        C::decode_payload(payload)
+    }
+
+    /// Borrows a typed payload view with codec `C` after verifying encoding metadata.
+    pub fn borrow_payload_as<'a, C, T>(&'a self) -> Result<&'a T, UWireError>
+    where
+        C: PayloadCodec + BorrowPayload<T>,
+        T: ?Sized,
+    {
+        let payload = self.payload.as_deref().ok_or(UWireError::MissingPayload)?;
+        C::verify_encoding(self.metadata.encoding())?;
+        C::borrow_payload(payload)
     }
 }
 

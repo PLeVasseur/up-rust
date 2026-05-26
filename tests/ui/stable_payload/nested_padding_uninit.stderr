@@ -1,0 +1,5 @@
+error[E0080]: evaluation panicked: ByteBackedStablePayload field `field` must be recursively byte-backed
+  --> tests/ui/stable_payload/nested_padding_uninit.rs:15:12
+   |
+15 |     field: PaddedField,
+   |            ^^^^^^^^^^^ evaluation of `_` failed here

@@ -11,11 +11,18 @@
  * SPDX-License-Identifier: Apache-2.0
  ********************************************************************************/
 
-use std::io::{Cursor, Read};
+use std::{
+    io::{Cursor, Read},
+    mem::MaybeUninit,
+    ops::{Deref, DerefMut},
+};
 
 use super::{
     frame::{UFrameMetadata, UOwnedFrame},
-    payload::{PayloadFormat, UDeserializer, UReadDeserializer, UWireError},
+    payload::{
+        BorrowPayload, DecodePayload, PayloadCodec, PayloadFormat, PayloadLayout,
+        ReadDecodePayload, UDeserializer, UReadDeserializer, UWireError,
+    },
 };
 
 impl UZeroCopyRxFrame for UOwnedFrame {
@@ -80,6 +87,51 @@ pub trait UTxBuffer {
     /// Implementations must expose exactly the payload range requested from the
     /// transport, excluding any transport metadata prefix, padding, or trailer.
     fn payload_mut(&mut self) -> &mut [u8];
+
+    /// Returns the backing memory class for this transmit loan.
+    fn payload_loan_kind(&self) -> PayloadLoanKind {
+        PayloadLoanKind::TransportLoan
+    }
+
+    /// Returns mutable payload bytes with explicit loan provenance.
+    fn loaned_payload_mut(&mut self) -> LoanedPayloadMut<'_> {
+        let kind = self.payload_loan_kind();
+        unsafe { LoanedPayloadMut::new_unchecked(self.payload_mut(), kind) }
+    }
+}
+
+/// Mutable transmit storage whose application payload bytes are not yet initialized.
+///
+/// This is a type-state sibling of [`UTxBuffer`]. It must not expose payload
+/// bytes as `&[u8]` or `&mut [u8]`; callers initialize the payload through
+/// [`LoanedPayloadUninitMut`] and only then convert the loan into its initialized
+/// [`UTxBuffer`] form.
+pub trait UUninitTxBuffer {
+    /// Initialized transmit loan type produced after payload initialization.
+    type Initialized: UTxBuffer;
+
+    /// Returns the immutable frame metadata associated with this transmit loan.
+    fn metadata(&self) -> &UFrameMetadata;
+
+    /// Returns the visible application payload length.
+    fn payload_len(&self) -> usize;
+
+    /// Returns the backing memory class for this transmit loan.
+    fn payload_loan_kind(&self) -> PayloadLoanKind {
+        PayloadLoanKind::TransportLoan
+    }
+
+    /// Returns mutable uninitialized application payload storage.
+    fn payload_uninit_mut(&mut self) -> LoanedPayloadUninitMut<'_>;
+
+    /// Converts this uninitialized loan into its initialized TX buffer form.
+    ///
+    /// # Safety
+    ///
+    /// The caller must guarantee every visible application payload byte has been
+    /// initialized, and that any transport-owned bytes required for send were
+    /// initialized by the transport before conversion.
+    unsafe fn assume_payload_init(self) -> Self::Initialized;
 }
 
 /// Receive-side zero-copy frame lease.
@@ -155,6 +207,18 @@ pub trait UZeroCopyRxFrame {
         }
         T::deserialize_from_reader(self.payload_reader(), self.payload_len())
     }
+
+    /// Decodes this receive lease from its ordered payload reader with codec `C`.
+    ///
+    /// This path avoids coalescing segmented receive storage when the selected
+    /// codec can decode from a stream.
+    fn decode_payload_from_reader_as<C, T>(&self) -> Result<T, UWireError>
+    where
+        C: PayloadCodec + ReadDecodePayload<T>,
+    {
+        C::verify_encoding(self.metadata().encoding())?;
+        C::decode_payload_from_reader(self.payload_reader(), self.payload_len())
+    }
 }
 
 /// Receive-side frame lease with a guaranteed contiguous payload view.
@@ -192,6 +256,445 @@ pub trait UContiguousZeroCopyRxFrame: UZeroCopyRxFrame {
         }
         T::deserialize_from(self.contiguous_payload())
     }
+
+    /// Decodes a value from the contiguous payload with codec `C`.
+    fn decode_payload_as<'a, C, T>(&'a self) -> Result<T, UWireError>
+    where
+        C: PayloadCodec + DecodePayload<'a, T>,
+    {
+        C::verify_encoding(self.metadata().encoding())?;
+        C::decode_payload(self.contiguous_payload())
+    }
+
+    /// Borrows a typed view directly from the contiguous payload with codec `C`.
+    fn borrow_payload_as<'a, C, T>(&'a self) -> Result<&'a T, UWireError>
+    where
+        C: PayloadCodec + BorrowPayload<T>,
+        T: ?Sized,
+    {
+        C::verify_encoding(self.metadata().encoding())?;
+        C::borrow_payload(self.contiguous_payload())
+    }
+}
+
+/// Backing memory class for a loan-backed contiguous receive payload.
+#[derive(Clone, Copy, Debug, Eq, Hash, PartialEq)]
+pub enum PayloadLoanKind {
+    /// Payload bytes are backed by transport-owned loan/sample storage.
+    TransportLoan,
+    /// Payload bytes are backed by a shared-memory region.
+    SharedMemory,
+}
+
+/// Immutable payload bytes with explicit transport-loan provenance.
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub struct LoanedPayload<'a> {
+    bytes: &'a [u8],
+    kind: PayloadLoanKind,
+}
+
+impl<'a> LoanedPayload<'a> {
+    /// Creates a loaned payload view from transport-owned storage.
+    ///
+    /// This constructor is intended for transport implementations that can
+    /// prove payload provenance. Application code should obtain loaned payloads
+    /// from receive leases.
+    ///
+    /// # Safety
+    ///
+    /// Callers must guarantee `bytes` is backed by storage described by `kind`,
+    /// remains valid for `'a`, and was not allocated or coalesced solely to
+    /// satisfy a zero-copy borrow.
+    pub unsafe fn new_unchecked(bytes: &'a [u8], kind: PayloadLoanKind) -> Self {
+        Self { bytes, kind }
+    }
+
+    /// Returns the backing memory class.
+    pub fn kind(self) -> PayloadLoanKind {
+        self.kind
+    }
+
+    /// Returns the payload bytes.
+    pub fn as_bytes(self) -> &'a [u8] {
+        self.bytes
+    }
+
+    /// Returns the payload length in bytes.
+    pub fn len(self) -> usize {
+        self.bytes.len()
+    }
+
+    /// Returns whether the payload is empty.
+    pub fn is_empty(self) -> bool {
+        self.bytes.is_empty()
+    }
+}
+
+impl AsRef<[u8]> for LoanedPayload<'_> {
+    fn as_ref(&self) -> &[u8] {
+        self.bytes
+    }
+}
+
+impl Deref for LoanedPayload<'_> {
+    type Target = [u8];
+
+    fn deref(&self) -> &Self::Target {
+        self.bytes
+    }
+}
+
+/// Mutable payload bytes with explicit transport-loan provenance.
+#[derive(Debug, Eq, PartialEq)]
+pub struct LoanedPayloadMut<'a> {
+    bytes: &'a mut [u8],
+    kind: PayloadLoanKind,
+}
+
+impl<'a> LoanedPayloadMut<'a> {
+    /// Creates a mutable loaned payload view from transport-owned storage.
+    ///
+    /// This constructor is intended for transport implementations that can
+    /// prove the exposed slice is the exact visible application payload range.
+    /// Application code should use transmit loan APIs instead.
+    ///
+    /// # Safety
+    ///
+    /// Callers must guarantee `bytes` is backed by mutable storage described by
+    /// `kind`, remains valid for `'a`, and is the exact visible application
+    /// payload range for the loan.
+    pub unsafe fn new_unchecked(bytes: &'a mut [u8], kind: PayloadLoanKind) -> Self {
+        Self { bytes, kind }
+    }
+
+    /// Returns the backing memory class.
+    pub fn kind(&self) -> PayloadLoanKind {
+        self.kind
+    }
+
+    /// Returns the payload bytes.
+    pub fn as_bytes(&self) -> &[u8] {
+        self.bytes
+    }
+
+    /// Returns mutable payload bytes.
+    pub fn as_mut_bytes(&mut self) -> &mut [u8] {
+        self.bytes
+    }
+
+    /// Returns the payload length in bytes.
+    pub fn len(&self) -> usize {
+        self.bytes.len()
+    }
+
+    /// Returns whether the payload is empty.
+    pub fn is_empty(&self) -> bool {
+        self.bytes.is_empty()
+    }
+}
+
+impl AsRef<[u8]> for LoanedPayloadMut<'_> {
+    fn as_ref(&self) -> &[u8] {
+        self.bytes
+    }
+}
+
+impl AsMut<[u8]> for LoanedPayloadMut<'_> {
+    fn as_mut(&mut self) -> &mut [u8] {
+        self.bytes
+    }
+}
+
+impl Deref for LoanedPayloadMut<'_> {
+    type Target = [u8];
+
+    fn deref(&self) -> &Self::Target {
+        self.bytes
+    }
+}
+
+impl DerefMut for LoanedPayloadMut<'_> {
+    fn deref_mut(&mut self) -> &mut Self::Target {
+        self.bytes
+    }
+}
+
+/// Mutable uninitialized payload bytes with explicit transport-loan provenance.
+#[derive(Debug)]
+pub struct LoanedPayloadUninitMut<'a> {
+    bytes: &'a mut [MaybeUninit<u8>],
+    kind: PayloadLoanKind,
+}
+
+impl<'a> LoanedPayloadUninitMut<'a> {
+    /// Creates a mutable uninitialized loaned payload view from transport-owned storage.
+    ///
+    /// This constructor is intended for transport implementations that can
+    /// prove the exposed slice is the exact visible application payload range.
+    /// Application code should use uninitialized transmit helpers instead.
+    ///
+    /// # Safety
+    ///
+    /// Callers must guarantee `bytes` is backed by mutable storage described by
+    /// `kind`, remains valid for `'a`, and is the exact visible application
+    /// payload range for the loan.
+    pub unsafe fn new_unchecked(bytes: &'a mut [MaybeUninit<u8>], kind: PayloadLoanKind) -> Self {
+        Self { bytes, kind }
+    }
+
+    /// Returns the backing memory class.
+    pub fn kind(&self) -> PayloadLoanKind {
+        self.kind
+    }
+
+    pub(crate) fn as_uninit_bytes_mut_internal(&mut self) -> &mut [MaybeUninit<u8>] {
+        self.bytes
+    }
+
+    /// Returns mutable uninitialized payload bytes.
+    ///
+    /// # Safety
+    ///
+    /// Callers must initialize every byte they later expose as initialized and
+    /// must not let raw writes get out of sync with any higher-level initialization
+    /// proof. Prefer [`Self::into_writer`] for safe direct byte generation.
+    #[cfg(any(
+        feature = "unsafe-uninit-payload-bytes",
+        feature = "expert-unsafe-payloads"
+    ))]
+    pub unsafe fn as_uninit_bytes_mut(&mut self) -> &mut [MaybeUninit<u8>] {
+        self.as_uninit_bytes_mut_internal()
+    }
+
+    /// Returns the payload length in bytes.
+    pub fn len(&self) -> usize {
+        self.bytes.len()
+    }
+
+    /// Returns whether the payload is empty.
+    pub fn is_empty(&self) -> bool {
+        self.bytes.is_empty()
+    }
+
+    /// Creates a safe cursor that initializes bytes from the start of the payload.
+    pub fn into_writer(self) -> LoanedUninitByteWriter<'a> {
+        LoanedUninitByteWriter {
+            payload: self,
+            written: 0,
+        }
+    }
+
+    /// Converts this payload view into initialized mutable bytes.
+    ///
+    /// # Safety
+    ///
+    /// The caller must guarantee every byte in this payload view is initialized.
+    pub unsafe fn assume_init(self) -> LoanedPayloadMut<'a> {
+        let len = self.bytes.len();
+        let ptr = self.bytes.as_mut_ptr().cast::<u8>();
+        let bytes = unsafe { std::slice::from_raw_parts_mut(ptr, len) };
+        unsafe { LoanedPayloadMut::new_unchecked(bytes, self.kind) }
+    }
+}
+
+/// Safe cursor for initializing an uninitialized payload byte range exactly once.
+#[derive(Debug)]
+pub struct LoanedUninitByteWriter<'a> {
+    payload: LoanedPayloadUninitMut<'a>,
+    written: usize,
+}
+
+impl<'a> LoanedUninitByteWriter<'a> {
+    /// Returns the total payload length.
+    pub fn len(&self) -> usize {
+        self.payload.len()
+    }
+
+    /// Returns whether the payload is empty.
+    pub fn is_empty(&self) -> bool {
+        self.payload.is_empty()
+    }
+
+    /// Returns the number of initialized bytes written so far.
+    pub fn written(&self) -> usize {
+        self.written
+    }
+
+    /// Returns the number of bytes that still must be written before finish.
+    pub fn remaining(&self) -> usize {
+        self.len().saturating_sub(self.written)
+    }
+
+    /// Appends bytes to the initialized prefix of the payload.
+    pub fn write_all(&mut self, src: &[u8]) -> Result<(), UWireError> {
+        let end = self
+            .written
+            .checked_add(src.len())
+            .ok_or_else(|| UWireError::invalid_payload("payload writer length overflow"))?;
+        let total_len = self.len();
+        let dst = self
+            .payload
+            .bytes
+            .get_mut(self.written..end)
+            .ok_or_else(|| UWireError::buffer_too_small(end, total_len))?;
+        for (byte, slot) in src.iter().copied().zip(dst.iter_mut()) {
+            slot.write(byte);
+        }
+        self.written = end;
+        Ok(())
+    }
+
+    /// Finishes initialization and returns initialized mutable payload bytes.
+    pub fn finish(self) -> Result<LoanedPayloadMut<'a>, UWireError> {
+        let len = self.len();
+        if self.written != len {
+            return Err(UWireError::invalid_payload_length(len, self.written));
+        }
+        Ok(unsafe { self.payload.assume_init() })
+    }
+
+    /// Returns raw mutable uninitialized bytes for custom initialization.
+    ///
+    /// # Safety
+    ///
+    /// Callers must ensure the writer's `written` cursor remains consistent with
+    /// the initialized prefix before calling [`Self::finish`]. Prefer
+    /// [`Self::write_all`] for safe byte generation.
+    #[cfg(any(
+        feature = "unsafe-uninit-payload-bytes",
+        feature = "expert-unsafe-payloads"
+    ))]
+    pub unsafe fn as_uninit_bytes_mut(&mut self) -> &mut [MaybeUninit<u8>] {
+        self.payload.as_uninit_bytes_mut_internal()
+    }
+}
+
+/// Receive lease that can expose a contiguous payload from loan-backed storage.
+///
+/// This is stricter than [`UContiguousZeroCopyRxFrame`]. A contiguous payload may
+/// simply be owned memory, while this trait represents the payload-level
+/// zero-copy receive contract. Implementations must not allocate or coalesce to
+/// satisfy [`Self::try_loaned_contiguous_payload`].
+pub trait ULoanedContiguousZeroCopyRxFrame: UZeroCopyRxFrame {
+    /// Returns one contiguous loan-backed application payload view.
+    ///
+    /// Implementations return an error when the current frame is not backed by a
+    /// suitable loan, is segmented, or otherwise cannot provide the slice without
+    /// copying.
+    fn loaned_contiguous_payload(&self) -> Result<LoanedPayload<'_>, UWireError>;
+
+    /// Returns the backing memory class for successful loaned payload borrows.
+    fn payload_loan_kind(&self) -> Result<PayloadLoanKind, UWireError> {
+        Ok(self.loaned_contiguous_payload()?.kind())
+    }
+
+    /// Compatibility helper returning only loan-backed payload bytes.
+    fn try_loaned_contiguous_payload(&self) -> Result<&[u8], UWireError> {
+        Ok(self.loaned_contiguous_payload()?.as_bytes())
+    }
+
+    /// Borrows a typed view directly from loan-backed payload storage.
+    fn borrow_loaned_payload_as<C, T>(&self) -> Result<&T, UWireError>
+    where
+        C: PayloadCodec + BorrowPayload<T>,
+        T: ?Sized,
+    {
+        C::verify_encoding(self.metadata().encoding())?;
+        C::borrow_payload(self.loaned_contiguous_payload()?.as_bytes())
+    }
+}
+
+/// Verifies the visible transmit payload layout exposed by a zero-copy loan.
+pub fn verify_tx_buffer_payload_layout(
+    buffer: &mut impl UTxBuffer,
+    payload_len: usize,
+    alignment: usize,
+) -> Result<(), UWireError> {
+    let layout = PayloadLayout::new(payload_len, alignment)?;
+    let payload = buffer.payload_mut();
+    if payload.len() != layout.len() {
+        return Err(UWireError::invalid_payload_length(
+            layout.len(),
+            payload.len(),
+        ));
+    }
+    if !payload.is_empty() && (payload.as_ptr() as usize) % layout.align() != 0 {
+        return Err(UWireError::invalid_payload_alignment(
+            layout.align(),
+            payload.as_ptr() as usize,
+        ));
+    }
+    Ok(())
+}
+
+/// Verifies the visible uninitialized transmit payload layout exposed by a loan.
+pub fn verify_uninit_tx_buffer_payload_layout(
+    buffer: &mut impl UUninitTxBuffer,
+    payload_len: usize,
+    alignment: usize,
+) -> Result<(), UWireError> {
+    let layout = PayloadLayout::new(payload_len, alignment)?;
+    let mut payload = buffer.payload_uninit_mut();
+    let payload = payload.as_uninit_bytes_mut_internal();
+    if payload.len() != layout.len() {
+        return Err(UWireError::invalid_payload_length(
+            layout.len(),
+            payload.len(),
+        ));
+    }
+    if !payload.is_empty() && (payload.as_ptr() as usize) % layout.align() != 0 {
+        return Err(UWireError::invalid_payload_alignment(
+            layout.align(),
+            payload.as_ptr() as usize,
+        ));
+    }
+    Ok(())
+}
+
+/// Verifies the visible contiguous receive payload layout.
+pub fn verify_contiguous_rx_payload_layout(
+    frame: &(impl UContiguousZeroCopyRxFrame + ?Sized),
+    payload_len: usize,
+    alignment: usize,
+) -> Result<(), UWireError> {
+    let layout = PayloadLayout::new(payload_len, alignment)?;
+    let payload = frame.contiguous_payload();
+    if payload.len() != layout.len() || frame.payload_len() != layout.len() {
+        return Err(UWireError::invalid_payload_length(
+            layout.len(),
+            payload.len(),
+        ));
+    }
+    if !payload.is_empty() && (payload.as_ptr() as usize) % layout.align() != 0 {
+        return Err(UWireError::invalid_payload_alignment(
+            layout.align(),
+            payload.as_ptr() as usize,
+        ));
+    }
+    Ok(())
+}
+
+/// Verifies the loan-backed contiguous receive payload layout.
+pub fn verify_loaned_rx_payload_layout(
+    frame: &(impl ULoanedContiguousZeroCopyRxFrame + ?Sized),
+    payload_len: usize,
+    alignment: usize,
+) -> Result<(), UWireError> {
+    let layout = PayloadLayout::new(payload_len, alignment)?;
+    let payload = frame.try_loaned_contiguous_payload()?;
+    if payload.len() != layout.len() || frame.payload_len() != layout.len() {
+        return Err(UWireError::invalid_payload_length(
+            layout.len(),
+            payload.len(),
+        ));
+    }
+    if !payload.is_empty() && (payload.as_ptr() as usize) % layout.align() != 0 {
+        return Err(UWireError::invalid_payload_alignment(
+            layout.align(),
+            payload.as_ptr() as usize,
+        ));
+    }
+    Ok(())
 }
 
 /// Explicit helpers for crossing from zero-copy receive leases into owned bytes.
@@ -259,7 +762,124 @@ impl<T> UZeroCopyPayloadCopyExt for T where T: UZeroCopyRxFrame + ?Sized {}
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub struct UVecTxBuffer {
     metadata: UFrameMetadata,
-    payload: Vec<u8>,
+    storage: Vec<u8>,
+    payload_offset: usize,
+    payload_len: usize,
+}
+
+/// Owned uninitialized buffer useful for tests, examples, and uninit adapters.
+#[derive(Clone, Debug)]
+pub struct UVecUninitTxBuffer {
+    metadata: UFrameMetadata,
+    storage: Vec<MaybeUninit<u8>>,
+    payload_offset: usize,
+    payload_len: usize,
+}
+
+impl UVecUninitTxBuffer {
+    /// Creates an owned uninitialized transmit buffer.
+    pub fn new(metadata: UFrameMetadata, payload_len: usize) -> Self {
+        Self {
+            metadata,
+            storage: vec![MaybeUninit::uninit(); payload_len],
+            payload_offset: 0,
+            payload_len,
+        }
+    }
+
+    /// Creates an owned uninitialized transmit buffer whose visible payload starts at `alignment`.
+    pub fn with_alignment(
+        metadata: UFrameMetadata,
+        payload_len: usize,
+        alignment: usize,
+    ) -> Result<Self, UWireError> {
+        let layout = PayloadLayout::new(payload_len, alignment)?;
+        if layout.is_empty() {
+            return Ok(Self::new(metadata, payload_len));
+        }
+        let extra = layout.align().saturating_sub(1);
+        let storage_len = layout.len().checked_add(extra).ok_or_else(|| {
+            UWireError::invalid_payload("payload length plus alignment padding overflows usize")
+        })?;
+        let storage = vec![MaybeUninit::uninit(); storage_len];
+        let address = storage.as_ptr() as usize;
+        let payload_offset = if layout.align() == 1 {
+            0
+        } else {
+            (layout.align() - (address % layout.align())) % layout.align()
+        };
+        Ok(Self {
+            metadata,
+            storage,
+            payload_offset,
+            payload_len: layout.len(),
+        })
+    }
+
+    fn payload_range(&self) -> std::ops::Range<usize> {
+        let end = self
+            .payload_offset
+            .checked_add(self.payload_len)
+            .expect("UVecUninitTxBuffer payload range overflow");
+        self.payload_offset..end
+    }
+}
+
+impl UUninitTxBuffer for UVecUninitTxBuffer {
+    type Initialized = UVecTxBuffer;
+
+    fn metadata(&self) -> &UFrameMetadata {
+        &self.metadata
+    }
+
+    fn payload_len(&self) -> usize {
+        self.payload_len
+    }
+
+    fn payload_uninit_mut(&mut self) -> LoanedPayloadUninitMut<'_> {
+        let kind = self.payload_loan_kind();
+        let range = self.payload_range();
+        let payload = self
+            .storage
+            .get_mut(range)
+            .expect("UVecUninitTxBuffer payload range must be in bounds");
+        unsafe { LoanedPayloadUninitMut::new_unchecked(payload, kind) }
+    }
+
+    unsafe fn assume_payload_init(self) -> Self::Initialized {
+        let Self {
+            metadata,
+            mut storage,
+            payload_offset,
+            payload_len,
+        } = self;
+        let payload_end = payload_offset
+            .checked_add(payload_len)
+            .expect("UVecUninitTxBuffer payload range overflow");
+        let prefix = storage
+            .get_mut(..payload_offset)
+            .expect("UVecUninitTxBuffer prefix range must be in bounds");
+        for slot in prefix {
+            slot.write(0);
+        }
+        let suffix = storage
+            .get_mut(payload_end..)
+            .expect("UVecUninitTxBuffer suffix range must be in bounds");
+        for slot in suffix {
+            slot.write(0);
+        }
+        let len = storage.len();
+        let capacity = storage.capacity();
+        let ptr = storage.as_mut_ptr().cast::<u8>();
+        std::mem::forget(storage);
+        let storage = unsafe { Vec::from_raw_parts(ptr, len, capacity) };
+        UVecTxBuffer {
+            metadata,
+            storage,
+            payload_offset,
+            payload_len,
+        }
+    }
 }
 
 impl UVecTxBuffer {
@@ -267,14 +887,58 @@ impl UVecTxBuffer {
     pub fn new(metadata: UFrameMetadata, payload_len: usize) -> Self {
         Self {
             metadata,
-            payload: vec![0_u8; payload_len],
+            storage: vec![0_u8; payload_len],
+            payload_offset: 0,
+            payload_len,
         }
+    }
+
+    /// Creates an owned transmit buffer whose visible payload starts at `alignment`.
+    pub fn with_alignment(
+        metadata: UFrameMetadata,
+        payload_len: usize,
+        alignment: usize,
+    ) -> Result<Self, UWireError> {
+        let layout = PayloadLayout::new(payload_len, alignment)?;
+        if layout.is_empty() {
+            return Ok(Self::new(metadata, payload_len));
+        }
+        let extra = layout.align().saturating_sub(1);
+        let storage_len = layout.len().checked_add(extra).ok_or_else(|| {
+            UWireError::invalid_payload("payload length plus alignment padding overflows usize")
+        })?;
+        let storage = vec![0_u8; storage_len];
+        let address = storage.as_ptr() as usize;
+        let payload_offset = if layout.align() == 1 {
+            0
+        } else {
+            (layout.align() - (address % layout.align())) % layout.align()
+        };
+        Ok(Self {
+            metadata,
+            storage,
+            payload_offset,
+            payload_len: layout.len(),
+        })
+    }
+
+    fn payload_range(&self) -> std::ops::Range<usize> {
+        let end = self
+            .payload_offset
+            .checked_add(self.payload_len)
+            .expect("UVecTxBuffer payload range overflow");
+        self.payload_offset..end
     }
 
     /// Converts the buffer into an owned frame, consuming the emulated loan.
     pub fn into_frame(self) -> UOwnedFrame {
+        let payload = self
+            .storage
+            .get(self.payload_range())
+            .expect("UVecTxBuffer payload range must be in bounds")
+            .to_vec();
         if self.metadata.encoding().is_some() {
-            UOwnedFrame::new(self.metadata, self.payload)
+            UOwnedFrame::new(self.metadata, payload)
         } else {
             UOwnedFrame::without_payload(self.metadata)
         }
@@ -293,10 +957,15 @@ impl UTxBuffer for UVecTxBuffer {
     }
 
     fn payload(&self) -> &[u8] {
-        self.payload.as_ref()
+        self.storage
+            .get(self.payload_range())
+            .expect("UVecTxBuffer payload range must be in bounds")
     }
 
     fn payload_mut(&mut self) -> &mut [u8] {
-        self.payload.as_mut_slice()
+        let range = self.payload_range();
+        self.storage
+            .get_mut(range)
+            .expect("UVecTxBuffer payload range must be in bounds")
     }
 }

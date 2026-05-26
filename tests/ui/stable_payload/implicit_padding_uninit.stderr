@@ -1,0 +1,5 @@
+error[E0080]: evaluation panicked: ByteBackedStablePayload field `large` has implicit padding before it; add explicit initialized padding fields
+ --> tests/ui/stable_payload/implicit_padding_uninit.rs:8:5
+  |
+8 |     large: u32,
+  |     ^^^^^ evaluation of `_` failed here
