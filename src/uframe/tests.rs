@@ -70,6 +70,10 @@ struct ManualByteBackedPose {
     y: u32,
 }
 
+// SAFETY:
+// - `ManualByteBackedPose` is `#[repr(C)]`, has no drop glue, and contains only
+//   two initialized integer fields.
+// - The fixed stable type name is used only by these tests.
 unsafe impl ZeroCopySend for ManualByteBackedPose {
     unsafe fn type_name() -> &'static str {
         "example.vehicle.ManualByteBackedPose"
@@ -78,6 +82,9 @@ unsafe impl ZeroCopySend for ManualByteBackedPose {
     fn __is_zero_copy_send(&self) {}
 }
 
+// SAFETY:
+// - The test type is fixed-size, `#[repr(C)]`, and all valid test payload bytes
+//   are checked by stable-container metadata before borrowed as `Self`.
 unsafe impl StablePayload for ManualByteBackedPose {
     const SUPPORTS_BYTE_BACKED_UNINIT: bool = true;
 
@@ -86,6 +93,9 @@ unsafe impl StablePayload for ManualByteBackedPose {
     }
 }
 
+// SAFETY:
+// - `ManualByteBackedPose` has no implicit padding and every byte in
+//   `size_of::<Self>()` is covered by initialized `u32` fields.
 unsafe impl ByteBackedStablePayload for ManualByteBackedPose {}
 
 struct BorrowedContiguousFrame<'a> {
@@ -132,6 +142,9 @@ impl UContiguousZeroCopyRxFrame for BorrowedContiguousFrame<'_> {
 
 impl ULoanedContiguousZeroCopyRxFrame for BorrowedContiguousFrame<'_> {
     fn loaned_contiguous_payload(&self) -> Result<LoanedPayload<'_>, UWireError> {
+        // SAFETY:
+        // - This test frame deliberately models a transport-backed borrowed
+        //   payload, and `self.payload` remains valid for the lifetime of `&self`.
         Ok(unsafe { LoanedPayload::new_unchecked(self.payload, PayloadLoanKind::TransportLoan) })
     }
 }
@@ -255,6 +268,14 @@ impl UZeroCopyTransport for VehiclePoseTransport {
 }
 
 fn bytes_of_pose(pose: &VehiclePose) -> &[u8] {
+    // SAFETY:
+    // - `pose` is a valid shared reference to one `VehiclePose` and is therefore
+    //   non-null, aligned, and valid for reads of `size_of::<VehiclePose>()`
+    //   bytes.
+    // - Per https://doc.rust-lang.org/stable/std/slice/fn.from_raw_parts.html#safety:
+    //
+    //   "data must be non-null, valid for reads for `len * size_of::<T>()` many
+    //   bytes, and it must be properly aligned."
     unsafe {
         std::slice::from_raw_parts(
             (pose as *const VehiclePose).cast::<u8>(),
@@ -895,13 +916,34 @@ async fn stable_container_send_uninit_payload_supports_unsafe_field_initializati
     transport
         .send_uninit_loaned_payload_as::<StableContainerPayload<NonCopyPose>, NonCopyPose>(
             UFrameMetadata::publish(topic),
-            |mut slot| unsafe {
-                let ptr = slot.as_mut_ptr();
-                std::ptr::addr_of_mut!((*ptr).x).write(11);
-                std::ptr::addr_of_mut!((*ptr).y).write(13);
-                std::ptr::addr_of_mut!((*ptr).marker).write(NoCopyMarker { value: 2 });
-                std::ptr::addr_of_mut!((*ptr)._pad).write([0; 3]);
-                Ok(slot.assume_init())
+            |mut slot| {
+                // SAFETY: This feature-gated test writes every field of
+                // `NonCopyPose`, including explicit padding, before commit.
+                let ptr = unsafe { slot.as_mut_ptr() };
+                // SAFETY: `ptr` came from the loaned slot and points to enough
+                // storage for `NonCopyPose`; this only forms a raw field pointer.
+                let x = unsafe { std::ptr::addr_of_mut!((*ptr).x) };
+                // SAFETY: Same slot/provenance proof as for `x` above.
+                let y = unsafe { std::ptr::addr_of_mut!((*ptr).y) };
+                // SAFETY: Same slot/provenance proof as for `x` above.
+                let marker = unsafe { std::ptr::addr_of_mut!((*ptr).marker) };
+                // SAFETY: Same slot/provenance proof as for `x` above.
+                let pad = unsafe { std::ptr::addr_of_mut!((*ptr)._pad) };
+                // SAFETY: `x` points to the uninitialized `x` field and is
+                // written exactly once before `assume_init`.
+                unsafe { x.write(11) };
+                // SAFETY: `y` points to the uninitialized `y` field and is
+                // written exactly once before `assume_init`.
+                unsafe { y.write(13) };
+                // SAFETY: `marker` points to the uninitialized marker field and
+                // is written exactly once before `assume_init`.
+                unsafe { marker.write(NoCopyMarker { value: 2 }) };
+                // SAFETY: `_pad` is explicit test padding and is initialized
+                // before the stable payload is committed.
+                unsafe { pad.write([0; 3]) };
+                // SAFETY: All fields, including explicit padding, have been
+                // initialized and `NonCopyPose` has no implicit padding.
+                Ok(unsafe { slot.assume_init() })
             },
         )
         .await
@@ -920,24 +962,41 @@ async fn stable_container_send_uninit_payload_supports_unsafe_field_initializati
 #[cfg(feature = "expert-unsafe-payloads")]
 #[tokio::test]
 async fn stable_container_unsafe_tx_hatch_sends_explicitly_initialized_padded_payload() {
+    fn init_padded_pose<'payload>(
+        slot: UnsafeStablePayloadTxSlot<'payload, PaddedPose>,
+    ) -> Result<LoanedInitPayload<'payload, PaddedPose>, UWireError> {
+        let mut slot = slot.zeroed();
+        // SAFETY: `zeroed()` initialized all transported bytes; the raw pointer
+        // is used only for field writes before commit.
+        let ptr = unsafe { slot.as_mut_ptr() };
+        // SAFETY: `ptr` came from the loaned slot and points to enough storage
+        // for `PaddedPose`; this only forms a raw field pointer.
+        let small = unsafe { std::ptr::addr_of_mut!((*ptr).small) };
+        // SAFETY: Same slot/provenance proof as for `small` above.
+        let large = unsafe { std::ptr::addr_of_mut!((*ptr).large) };
+        // SAFETY: `small` points to the uninitialized `small` field and is
+        // written before commit.
+        unsafe { small.write(1) };
+        // SAFETY: `large` points to the uninitialized `large` field and is
+        // written before commit.
+        unsafe { large.write(2) };
+        // SAFETY: `zeroed()` initialized padding and both semantic fields have
+        // been written with valid values.
+        Ok(unsafe { slot.assume_init() })
+    }
+
     let topic = UUri::try_from("//my-vehicle/4210/1/B24D").unwrap();
     let transport = InMemoryZeroCopyTransport::default();
 
-    unsafe {
-        transport
-            .send_uninit_stable_payload_unchecked::<PaddedPose>(
-                UFrameMetadata::publish(topic),
-                |slot| {
-                    let mut slot = slot.zeroed();
-                    let ptr = slot.as_mut_ptr();
-                    std::ptr::addr_of_mut!((*ptr).small).write(1);
-                    std::ptr::addr_of_mut!((*ptr).large).write(2);
-                    Ok(slot.assume_init())
-                },
-            )
-            .await
-            .unwrap();
-    }
+    // SAFETY: The test closure zero-initializes the full transported byte range,
+    // writes all semantic fields, and only then returns an initialized marker.
+    let send = unsafe {
+        transport.send_uninit_stable_payload_unchecked::<PaddedPose>(
+            UFrameMetadata::publish(topic),
+            init_padded_pose,
+        )
+    };
+    send.await.unwrap();
 
     let frame = transport.sent_frames().pop().unwrap();
     let pose = <StableContainerPayload<PaddedPose> as BorrowPayload<PaddedPose>>::borrow_payload(
@@ -983,6 +1042,8 @@ fn aligned_uvec_uninit_tx_buffer_initializes_hidden_padding_before_conversion() 
     writer.write_all(b"abc").unwrap();
     let _initialized = writer.finish().unwrap();
 
+    // SAFETY: The byte writer initialized exactly the visible payload range;
+    // `UVecUninitTxBuffer` initializes hidden prefix/suffix bytes before commit.
     let buffer = unsafe { buffer.assume_payload_init() };
 
     assert_eq!(buffer.payload(), b"abc");
@@ -1005,7 +1066,14 @@ async fn direct_uninit_byte_writer_requires_exact_length() {
         )
         .await
         .unwrap();
-    assert_eq!(transport.sent_frames()[0].payload_bytes(), b"abc");
+    assert_eq!(
+        transport
+            .sent_frames()
+            .first()
+            .expect("one frame should be sent")
+            .payload_bytes(),
+        b"abc"
+    );
 
     let error = transport
         .send_uninit_loaned_bytes_as::<RawBytes>(

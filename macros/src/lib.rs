@@ -44,6 +44,12 @@ fn expand_stable_payload(input: DeriveInput) -> syn::Result<proc_macro2::TokenSt
             );
         };
 
+        // SAFETY:
+        // - The derive requires `#[repr(C)]` or `#[repr(transparent)]`, rejects
+        //   process-local fields, and rejects types that need drop glue.
+        // - Field checks recursively require every field to satisfy
+        //   `ZeroCopySend`.
+        // - The user-provided `type_name` is the stable identity for this type.
         unsafe impl ::up_rust::payload::ZeroCopySend for #name {
             unsafe fn type_name() -> &'static str {
                 #type_name
@@ -54,6 +60,12 @@ fn expand_stable_payload(input: DeriveInput) -> syn::Result<proc_macro2::TokenSt
             }
         }
 
+        // SAFETY:
+        // - The same representation, field, and drop-glue checks used for the
+        //   generated `ZeroCopySend` impl establish broad stable-payload
+        //   eligibility.
+        // - Runtime stable-container borrow paths still check type name,
+        //   variant, exact size, and alignment before exposing `&Self`.
         unsafe impl ::up_rust::payload::StablePayload for #name {
             const SUPPORTS_BYTE_BACKED_UNINIT: bool =
                 !::core::mem::needs_drop::<Self>()
@@ -94,6 +106,11 @@ fn expand_byte_backed_stable_payload(
             );
         };
 
+        // SAFETY:
+        // - The derive checked that fields exactly cover `size_of::<Self>()`,
+        //   so there is no implicit inter-field or trailing padding.
+        // - Every field is recursively byte-backed and `Self` does not need
+        //   drop glue, so safe construction initializes every transported byte.
         unsafe impl ::up_rust::payload::ByteBackedStablePayload for #name {}
     })
 }

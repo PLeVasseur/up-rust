@@ -659,6 +659,12 @@ pub trait UZeroCopyUninitTransportExt: UZeroCopyUninitTransport {
             let payload = C::loan_uninit_payload(loaned_payload).map_err(UStatus::from)?;
             let _initialized = init(payload).map_err(UStatus::from)?;
         }
+        // SAFETY:
+        // - `C::loan_uninit_payload` returned a typed slot whose initialized
+        //   marker can only be produced by `LoanedUninitPayload::write` or a
+        //   feature-gated unsafe initialization proof.
+        // - The closure returned that initialized marker successfully before
+        //   the buffer is committed.
         let buffer = unsafe { buffer.assume_payload_init() };
         self.send_zero_copy(buffer).await
     }
@@ -693,6 +699,8 @@ pub trait UZeroCopyUninitTransportExt: UZeroCopyUninitTransport {
             let writer = write(writer).map_err(UStatus::from)?;
             let _initialized = writer.finish().map_err(UStatus::from)?;
         }
+        // SAFETY: `LoanedUninitByteWriter::finish` succeeded, which proves the
+        // safe writer initialized exactly the full visible payload range.
         let buffer = unsafe { buffer.assume_payload_init() };
         self.send_zero_copy(buffer).await
     }
@@ -736,6 +744,11 @@ pub trait UZeroCopyUninitTransportExt: UZeroCopyUninitTransport {
                 .map_err(UStatus::from)?;
             let _initialized = init(slot).map_err(UStatus::from)?;
         }
+        // SAFETY:
+        // - This method is unsafe; its caller guarantees `init` returns only
+        //   after every transported byte contains one valid initialized `T`.
+        // - `UnsafeStablePayloadTxSlot::new` checked the loan's exact stable
+        //   payload length and alignment before handing the slot to `init`.
         let buffer = unsafe { buffer.assume_payload_init() };
         self.send_zero_copy(buffer).await
     }

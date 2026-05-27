@@ -96,6 +96,12 @@ pub trait UTxBuffer {
     /// Returns mutable payload bytes with explicit loan provenance.
     fn loaned_payload_mut(&mut self) -> LoanedPayloadMut<'_> {
         let kind = self.payload_loan_kind();
+        // SAFETY:
+        // - `UTxBuffer::payload_mut` is the transport contract for the exact
+        //   visible initialized application payload range, excluding metadata,
+        //   padding, and trailers.
+        // - `&mut self` gives exclusive access to that payload range while the
+        //   returned loaned view exists.
         unsafe { LoanedPayloadMut::new_unchecked(self.payload_mut(), kind) }
     }
 }
@@ -492,7 +498,17 @@ impl<'a> LoanedPayloadUninitMut<'a> {
     pub unsafe fn assume_init(self) -> LoanedPayloadMut<'a> {
         let len = self.bytes.len();
         let ptr = self.bytes.as_mut_ptr().cast::<u8>();
+        // SAFETY:
+        // - The caller guarantees every `MaybeUninit<u8>` element is initialized.
+        // - Per stable `MaybeUninit<T>` layout docs, `MaybeUninit<u8>` has the
+        //   same size, alignment, and ABI as `u8`.
+        // - Per stable `slice::from_raw_parts_mut` docs, the pointer must be
+        //   non-null, aligned, valid for `len` initialized `u8` elements, and
+        //   contained in one allocation; those properties come from the original
+        //   mutable slice plus the caller's initialization guarantee.
         let bytes = unsafe { std::slice::from_raw_parts_mut(ptr, len) };
+        // SAFETY: The initialized slice is the same exact loan-backed payload
+        // range and retains the original `PayloadLoanKind` provenance.
         unsafe { LoanedPayloadMut::new_unchecked(bytes, self.kind) }
     }
 }
@@ -550,6 +566,8 @@ impl<'a> LoanedUninitByteWriter<'a> {
         if self.written != len {
             return Err(UWireError::invalid_payload_length(len, self.written));
         }
+        // SAFETY: `written == len` proves that every byte in the payload range
+        // was initialized through `write_all` before conversion.
         Ok(unsafe { self.payload.assume_init() })
     }
 
@@ -843,6 +861,10 @@ impl UUninitTxBuffer for UVecUninitTxBuffer {
             .storage
             .get_mut(range)
             .expect("UVecUninitTxBuffer payload range must be in bounds");
+        // SAFETY:
+        // - `payload_range` is bounds-checked against `storage` above.
+        // - The returned range is the exact visible application payload range.
+        // - `&mut self` gives exclusive access to the storage for the loan.
         unsafe { LoanedPayloadUninitMut::new_unchecked(payload, kind) }
     }
 
@@ -872,6 +894,14 @@ impl UUninitTxBuffer for UVecUninitTxBuffer {
         let capacity = storage.capacity();
         let ptr = storage.as_mut_ptr().cast::<u8>();
         std::mem::forget(storage);
+        // SAFETY:
+        // - `MaybeUninit<u8>` has the same size, alignment, and ABI as `u8` per
+        //   the stable `MaybeUninit` layout docs.
+        // - The caller of `assume_payload_init` guarantees the visible payload
+        //   bytes are initialized; this function initializes the prefix and
+        //   suffix bytes before conversion.
+        // - `ptr`, `len`, and `capacity` come from the original `Vec` allocation,
+        //   and `storage` was forgotten so the allocation has one owner.
         let storage = unsafe { Vec::from_raw_parts(ptr, len, capacity) };
         UVecTxBuffer {
             metadata,

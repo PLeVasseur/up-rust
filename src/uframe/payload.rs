@@ -378,10 +378,24 @@ impl<'a, T> LoanedUninitPayload<'a, T> {
     /// Writes `value` into the loaned slot and marks it initialized.
     pub fn write(self, value: T) -> LoanedInitPayload<'a, T> {
         let ptr = self.ptr.as_ptr();
-        unsafe {
-            (*ptr).write(value);
-            LoanedInitPayload::new_unchecked(NonNull::new_unchecked(ptr.cast::<T>()))
-        }
+        // SAFETY:
+        // - `self.ptr` was created from a caller-proven loan-backed pointer
+        //   valid for writes of one `MaybeUninit<T>`.
+        // - Per https://doc.rust-lang.org/stable/std/mem/union.MaybeUninit.html#method.write:
+        //
+        //   "This also returns a mutable reference to the (now safely
+        //   initialized) contents of `self`."
+        //
+        //   We do not read through `ptr` before that write.
+        unsafe { (*ptr).write(value) };
+
+        let initialized = self.ptr.cast::<T>();
+        // SAFETY:
+        // - The `MaybeUninit::write` above initialized one valid `T` in the
+        //   loan-backed slot.
+        // - `NonNull::cast` preserves the non-null address and only changes the
+        //   pointee type from `MaybeUninit<T>` to initialized `T`.
+        unsafe { LoanedInitPayload::new_unchecked(initialized) }
     }
 
     /// Returns the raw typed pointer for field-by-field initialization.
@@ -410,9 +424,19 @@ impl<'a, T> LoanedUninitPayload<'a, T> {
         feature = "expert-unsafe-payloads"
     ))]
     pub unsafe fn assume_init(self) -> LoanedInitPayload<'a, T> {
-        unsafe {
-            LoanedInitPayload::new_unchecked(NonNull::new_unchecked(self.ptr.as_ptr().cast()))
-        }
+        let initialized = self.ptr.cast::<T>();
+        // SAFETY:
+        // - The caller of this unsafe method guarantees the slot contains one
+        //   fully initialized valid `T`.
+        // - Per https://doc.rust-lang.org/stable/std/mem/union.MaybeUninit.html#method.assume_init:
+        //
+        //   "It is up to the caller to guarantee that the `MaybeUninit<T>` really
+        //   is in an initialized state. Calling this when the content is not yet
+        //   fully initialized causes immediate undefined behavior."
+        //
+        // - `NonNull::cast` preserves the non-null loan address and changes only
+        //   the pointee type.
+        unsafe { LoanedInitPayload::new_unchecked(initialized) }
     }
 }
 
@@ -441,6 +465,11 @@ impl<'a, T> LoanedInitPayload<'a, T> {
 
     /// Returns the initialized payload as a mutable reference.
     pub fn as_mut(&mut self) -> &mut T {
+        // SAFETY:
+        // - `self.ptr` was created only after the slot was marked initialized.
+        // - `&mut self` gives exclusive access to the initialized marker, so no
+        //   second mutable reference to the same loaned `T` can be produced by
+        //   this API at the same time.
         unsafe { self.ptr.as_mut() }
     }
 }
@@ -1059,6 +1088,8 @@ pub unsafe trait StablePayload: ZeroCopySend + Sized + 'static {
 
     /// Cross-process and cross-language stable type identity.
     fn stable_type_name() -> &'static str {
+        // SAFETY: `StablePayload` inherits the `ZeroCopySend` safety contract;
+        // implementors must provide a stable type identity for `Self`.
         unsafe { <Self as ZeroCopySend>::type_name() }
     }
 
@@ -1237,7 +1268,6 @@ where
     feature = "expert-unsafe-payloads"
 ))]
 pub struct UnsafeStablePayloadTxSlot<'a, T> {
-    ptr: NonNull<mem::MaybeUninit<T>>,
     payload: LoanedPayloadUninitMut<'a>,
     _marker: PhantomData<&'a mut mem::MaybeUninit<T>>,
 }
@@ -1252,8 +1282,7 @@ pub struct UnsafeStablePayloadTxSlot<'a, T> {
     feature = "expert-unsafe-payloads"
 ))]
 pub struct ZeroedStablePayloadTxSlot<'a, T> {
-    ptr: NonNull<mem::MaybeUninit<T>>,
-    _payload: LoanedPayloadUninitMut<'a>,
+    payload: LoanedPayloadUninitMut<'a>,
     _marker: PhantomData<&'a mut mem::MaybeUninit<T>>,
 }
 
@@ -1268,10 +1297,7 @@ where
     /// Creates an unsafe stable payload TX slot after layout validation.
     pub(crate) fn new(mut payload: LoanedPayloadUninitMut<'a>) -> Result<Self, UWireError> {
         StableContainerPayload::<T>::check_uninit_layout(payload.as_uninit_bytes_mut_internal())?;
-        let ptr = NonNull::new(payload.as_uninit_bytes_mut_internal().as_mut_ptr().cast())
-            .ok_or_else(|| UWireError::invalid_payload("stable payload slot pointer is null"))?;
         Ok(Self {
-            ptr,
             payload,
             _marker: PhantomData,
         })
@@ -1283,8 +1309,7 @@ where
             slot.write(0);
         }
         ZeroedStablePayloadTxSlot {
-            ptr: self.ptr,
-            _payload: self.payload,
+            payload: self.payload,
             _marker: PhantomData,
         }
     }
@@ -1313,10 +1338,21 @@ where
     ///
     /// The caller must guarantee the full `size_of::<T>()` transported byte
     /// range, including padding, contains one valid initialized `T`.
-    pub unsafe fn assume_init(self) -> LoanedInitPayload<'a, T> {
-        unsafe {
-            LoanedInitPayload::new_unchecked(NonNull::new_unchecked(self.ptr.as_ptr().cast()))
-        }
+    pub unsafe fn assume_init(mut self) -> LoanedInitPayload<'a, T> {
+        let ptr: NonNull<mem::MaybeUninit<T>> = NonNull::new(
+            self.payload
+                .as_uninit_bytes_mut_internal()
+                .as_mut_ptr()
+                .cast(),
+        )
+        .expect("stable payload slot pointer is not null");
+        // SAFETY:
+        // - The caller of this unsafe method guarantees every transported byte,
+        //   including padding, contains one valid initialized `T`.
+        // - The pointer is derived from the retained loan after exact
+        //   length/alignment checks, avoiding stale raw pointers across moves of
+        //   the loan wrapper.
+        unsafe { LoanedInitPayload::new_unchecked(ptr.cast()) }
     }
 }
 
@@ -1340,7 +1376,10 @@ where
         feature = "expert-unsafe-payloads"
     ))]
     pub unsafe fn as_mut_ptr(&mut self) -> *mut T {
-        self.ptr.as_ptr().cast::<T>()
+        self.payload
+            .as_uninit_bytes_mut_internal()
+            .as_mut_ptr()
+            .cast()
     }
 
     /// Marks the slot initialized after custom byte/field construction.
@@ -1349,10 +1388,21 @@ where
     ///
     /// The caller must guarantee the full `size_of::<T>()` transported byte
     /// range, including padding, contains one valid initialized `T`.
-    pub unsafe fn assume_init(self) -> LoanedInitPayload<'a, T> {
-        unsafe {
-            LoanedInitPayload::new_unchecked(NonNull::new_unchecked(self.ptr.as_ptr().cast()))
-        }
+    pub unsafe fn assume_init(mut self) -> LoanedInitPayload<'a, T> {
+        let ptr: NonNull<mem::MaybeUninit<T>> = NonNull::new(
+            self.payload
+                .as_uninit_bytes_mut_internal()
+                .as_mut_ptr()
+                .cast(),
+        )
+        .expect("stable payload slot pointer is not null");
+        // SAFETY:
+        // - The caller of this unsafe method guarantees `zeroed()` plus any raw
+        //   field writes left the full transported byte range as one valid `T`.
+        // - The pointer is derived from the retained layout-checked loan at
+        //   commit time, avoiding stale raw pointers across moves of the loan
+        //   wrapper.
+        unsafe { LoanedInitPayload::new_unchecked(ptr.cast()) }
     }
 }
 
@@ -1560,6 +1610,17 @@ where
     fn encode_payload(value: &T, dst: &mut [u8]) -> Result<(), UWireError> {
         Self::check_byte_backed()?;
         Self::check_len(dst.len(), mem::size_of::<T>())?;
+        // SAFETY:
+        // - `value` is a valid shared reference to one `T`, so its address is
+        //   non-null, aligned, and valid for reads of `size_of::<T>()` bytes.
+        // - `T: ByteBackedStablePayload` proves every byte in the transported
+        //   `size_of::<T>()` representation is initialized by safe construction.
+        // - Per stable `slice::from_raw_parts` docs: "data must be non-null,
+        //   valid for reads for `len * size_of::<T>()` many bytes, and it must
+        //   be properly aligned" and "data must point to `len` consecutive
+        //   properly initialized values of type `T`". Here the slice element is
+        //   `u8`, `len` is `size_of::<T>()`, and the memory is contained in the
+        //   single allocation occupied by `value`.
         let src = unsafe {
             std::slice::from_raw_parts((value as *const T).cast::<u8>(), mem::size_of::<T>())
         };
@@ -1574,10 +1635,27 @@ where
 {
     fn borrow_payload(src: &[u8]) -> Result<&T, UWireError> {
         Self::check_layout(src)?;
+        // SAFETY:
+        // - `check_layout` verified that `src.len() == size_of::<T>()` and that
+        //   `src.as_ptr()` satisfies `align_of::<T>()`.
+        // - The returned reference is tied to `src`, whose slice reference is
+        //   non-null, valid for reads, and contained in one allocation.
+        // - `T: StablePayload` is the unsafe contract that the checked stable
+        //   metadata/provenance path represents one valid initialized `T`.
+        // - Per the Rust Reference, a value's alignment specifies which
+        //   addresses are valid to store the value at, and the size of `T` is
+        //   available through `size_of::<T>()` for `Sized` types.
         Ok(unsafe { &*src.as_ptr().cast::<T>() })
     }
 }
 
+// SAFETY:
+// - `loan_payload` checks byte-backed eligibility, exact length, and alignment
+//   before casting the destination to `*mut T`.
+// - The destination is filled with zeros before `PlacementDefault` runs, so
+//   byte-backed payload padding remains initialized.
+// - `T: ByteBackedStablePayload + PlacementDefault` provides the initialized
+//   byte representation and placement-construction contracts used below.
 unsafe impl<T> LoanPayload<T> for StableContainerPayload<T>
 where
     T: ByteBackedStablePayload + PlacementDefault,
@@ -1592,13 +1670,30 @@ where
         Self::check_layout_mut(dst)?;
         dst.fill(0);
         let ptr = dst.as_mut_ptr().cast::<T>();
-        unsafe {
-            T::placement_default(ptr);
-            Ok(&mut *ptr)
-        }
+        // SAFETY:
+        // - `check_layout_mut` verified exact length and `T` alignment for the
+        //   destination slice.
+        // - `dst.fill(0)` initialized every transported byte before placement
+        //   construction, including bytes that would otherwise be padding.
+        // - `PlacementDefault::placement_default` initializes one valid `T` at
+        //   `ptr`, and `&mut [u8]` gives exclusive access to the storage.
+        unsafe { T::placement_default(ptr) };
+        // SAFETY:
+        // - The placement construction above initialized one valid `T` at `ptr`.
+        // - `check_layout_mut` verified the exact length and alignment, and the
+        //   mutable slice borrow is still the unique access path for this loan.
+        // - Per https://doc.rust-lang.org/reference/behavior-considered-undefined.html,
+        //   producing a reference requires a non-null, aligned, initialized
+        //   pointee; those requirements were established before this cast.
+        Ok(unsafe { &mut *ptr })
     }
 }
 
+// SAFETY:
+// - `loan_uninit_payload` checks byte-backed eligibility and exact uninit
+//   length/alignment before constructing a typed uninit slot.
+// - `T: ByteBackedStablePayload` is the proof required by safe uninit TX paths
+//   that committing `size_of::<T>()` bytes cannot expose uninitialized padding.
 unsafe impl<T> LoanUninitPayload<T> for StableContainerPayload<T>
 where
     T: ByteBackedStablePayload,
@@ -1616,6 +1711,14 @@ where
         Self::check_uninit_layout(bytes)?;
         let ptr = NonNull::new(bytes.as_mut_ptr().cast::<mem::MaybeUninit<T>>())
             .ok_or_else(|| UWireError::invalid_payload("stable payload slot pointer is null"))?;
+        // SAFETY:
+        // - `check_uninit_layout` verified that the byte slice has exactly
+        //   `size_of::<T>()` bytes and satisfies `align_of::<T>()`.
+        // - Per stable `MaybeUninit<T>` layout docs, `MaybeUninit<T>` has the
+        //   same size and alignment as `T`, so the checked byte range can back
+        //   one `MaybeUninit<T>`.
+        // - The slice came from `LoanedPayloadUninitMut`, preserving loan
+        //   provenance and exclusive mutable access for `'a`.
         Ok(unsafe { LoanedUninitPayload::new_unchecked(ptr) })
     }
 }

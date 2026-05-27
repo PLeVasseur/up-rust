@@ -103,9 +103,11 @@ Run the focused stable-payload compile-fail tests with:
 cargo test --locked --test stable_payload_trybuild
 ```
 
-The stable-container Miri test uses the nightly Miri component and disables
-Miri isolation because the broader test path touches environment/time/UUID
-behavior:
+The stable-container Miri runner uses the nightly Miri component and covers the
+default stable payload path plus the feature-gated unsafe payload hatches. It
+disables Miri isolation because `UFrameMetadata::publish` builds a UUID from
+`SystemTime::elapsed`, which uses `clock_gettime`; Miri rejects that clock call
+when isolation is enabled.
 
 ```sh
 scripts/run-miri-stable-container.sh
@@ -117,6 +119,9 @@ Equivalent explicit command:
 rustup +nightly component add miri
 cargo +nightly miri setup
 MIRIFLAGS="-Zmiri-disable-isolation" cargo +nightly miri test --test stable_container_miri
+MIRIFLAGS="-Zmiri-disable-isolation" cargo +nightly miri test --features unsafe-stable-payload-init --test stable_container_miri
+MIRIFLAGS="-Zmiri-disable-isolation" cargo +nightly miri test --features unsafe-uninit-payload-bytes --test stable_container_miri
+MIRIFLAGS="-Zmiri-disable-isolation" cargo +nightly miri test --features expert-unsafe-payloads --test stable_container_miri
 ```
 
 ## License

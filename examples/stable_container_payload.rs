@@ -77,6 +77,9 @@ impl UUninitTxBuffer for VehiclePoseUninitFrame {
     }
 
     fn payload_uninit_mut(&mut self) -> LoanedPayloadUninitMut<'_> {
+        // SAFETY:
+        // - `self.storage.0` is the exact visible payload range for this example
+        //   frame and is exclusively borrowed through `&mut self`.
         unsafe {
             LoanedPayloadUninitMut::new_unchecked(
                 self.storage.0.as_mut_slice(),
@@ -85,9 +88,15 @@ impl UUninitTxBuffer for VehiclePoseUninitFrame {
         }
     }
 
+    /// # Safety
+    ///
+    /// The caller must guarantee every byte in this example's visible payload
+    /// range has been initialized before conversion.
     unsafe fn assume_payload_init(self) -> Self::Initialized {
         let mut bytes = [0_u8; std::mem::size_of::<VehiclePose>()];
         for (dst, src) in bytes.iter_mut().zip(self.storage.0) {
+            // SAFETY: The trait method caller guarantees each visible payload
+            // byte was initialized before conversion.
             *dst = unsafe { src.assume_init() };
         }
         VehiclePoseFrame {
@@ -136,6 +145,9 @@ impl UContiguousZeroCopyRxFrame for VehiclePoseFrame {
 
 impl ULoanedContiguousZeroCopyRxFrame for VehiclePoseFrame {
     fn loaned_contiguous_payload(&self) -> Result<LoanedPayload<'_>, up_rust::payload::UWireError> {
+        // SAFETY:
+        // - This example frame owns the backing storage and returns a payload
+        //   slice borrowed from `&self`, so the slice cannot outlive the frame.
         Ok(unsafe {
             LoanedPayload::new_unchecked(self.storage.0.as_slice(), PayloadLoanKind::TransportLoan)
         })
