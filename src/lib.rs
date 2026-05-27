@@ -74,6 +74,10 @@ release only emits and accepts `variant=fixed`.
 * `symphony` enables Symphony deployment-target helpers.
 * `test-util` enables `mockall` mocks for supported public traits and in-memory
   transport fakes under `test_util`.
+* `experimental-loaned-frame` exposes the experimental [`LoanedFrame`] routing
+  building block. It keeps a receive lease alive while ordered payload slices are
+  copied directly into a transmit loan. It is for copy-minimized routing and does
+  not imply zero-copy-preserving forwarding.
 * `unsafe-stable-payload-tx`, `unsafe-stable-payload-init`, and
   `unsafe-uninit-payload-bytes` expose expert payload APIs with caller-side
   initialization proof obligations. Direct manual `ByteBackedStablePayload`
@@ -133,6 +137,9 @@ pub use uframe::{
     UFrameMetadata, UFrameWireError, UFrameWireFormat, UMessageType, UOwnedFrame, UPayloadFormat,
     UPriority, UWireError, ZeroCopySend,
 };
+#[cfg(feature = "experimental-loaned-frame")]
+#[cfg_attr(docsrs, doc(cfg(feature = "experimental-loaned-frame")))]
+pub use uframe::{copy_loaned_frame_payload_to_tx, LoanedFrame, ZeroCopyLoanedFrame};
 #[cfg(any(
     feature = "unsafe-stable-payload-tx",
     feature = "expert-unsafe-payloads"
@@ -238,6 +245,9 @@ pub mod transport {
 
 /// Zero-copy transport capability APIs.
 pub mod zero_copy {
+    #[cfg(feature = "experimental-loaned-frame")]
+    #[cfg_attr(docsrs, doc(cfg(feature = "experimental-loaned-frame")))]
+    pub use crate::uframe::{copy_loaned_frame_payload_to_tx, LoanedFrame, ZeroCopyLoanedFrame};
     pub use crate::uframe::{
         verify_contiguous_rx_payload_layout, verify_loaned_rx_payload_layout,
         verify_tx_buffer_payload_layout, verify_uninit_tx_buffer_payload_layout, LoanedPayload,

@@ -16,6 +16,8 @@
 mod builder;
 mod frame;
 mod frame_wire;
+#[cfg(feature = "experimental-loaned-frame")]
+mod loaned_frame;
 mod payload;
 mod zero_copy;
 
@@ -25,6 +27,8 @@ pub use frame::{
     UEncodingError, UFrameMetadata, UMessageType, UOwnedFrame, UPayloadFormat, UPriority,
 };
 pub use frame_wire::{UFrameWireError, UFrameWireFormat};
+#[cfg(feature = "experimental-loaned-frame")]
+pub use loaned_frame::{copy_loaned_frame_payload_to_tx, LoanedFrame, ZeroCopyLoanedFrame};
 pub use payload::{
     assert_stable_payload_byte_backed_uninit, stable_payload_supports_byte_backed_uninit,
     BorrowPayload, ByteBackedStablePayload, ByteBackedStablePayloadField, BytePayloadCodec,

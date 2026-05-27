@@ -40,6 +40,7 @@ protobuf-wire = ["dep:protobuf", "dep:protobuf-codegen", "dep:protoc-bin-vendore
 symphony = ["util", "dep:serde", "dep:serde_json", "dep:symphony"]
 util = ["tokio/sync", "tokio/time"]
 test-util = ["mockall"]
+experimental-loaned-frame = []
 unsafe-stable-payload-tx = []
 unsafe-stable-payload-init = []
 unsafe-uninit-payload-bytes = []
