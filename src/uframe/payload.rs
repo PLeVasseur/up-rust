@@ -323,8 +323,12 @@ pub trait BorrowPayload<T: ?Sized>: PayloadCodec {
 /// # Safety
 ///
 /// Implementors must guarantee that `loan_payload` validates the destination
-/// byte range and only returns `&mut T` when the range contains one valid,
-/// properly aligned initialized `T` for the codec's transport representation.
+/// byte range and only returns `&mut T` when the range is in one allocation,
+/// uniquely borrowed for the returned lifetime, correctly aligned for `T`, and
+/// contains one initialized value with a valid bit pattern for the codec's
+/// transport representation. These are the reference validity, alignment,
+/// aliasing, and initializedness requirements described by the Rust Reference's
+/// undefined-behavior rules.
 pub unsafe trait LoanPayload<T>: PayloadCodec {
     /// Returns the exact layout required for a typed transmit loan.
     fn loan_layout() -> Result<PayloadLayout, UWireError>;
@@ -339,9 +343,13 @@ pub unsafe trait LoanPayload<T>: PayloadCodec {
 ///
 /// Implementors must guarantee that the returned [`LoanedUninitPayload`] covers
 /// exactly the bytes that will be committed by the transport after the caller
-/// returns an initialized marker. If the transport commits `size_of::<T>()`
-/// bytes, the implementation must ensure safe initialization paths cannot leave
-/// transported bytes, including padding, uninitialized.
+/// returns an initialized marker. The storage must be in one allocation,
+/// uniquely borrowed for the loan lifetime, correctly aligned for `T`, and
+/// valid for writes of one `MaybeUninit<T>`. If the transport commits
+/// `size_of::<T>()` bytes, the implementation must ensure safe initialization
+/// paths cannot leave transported bytes, including padding, uninitialized; this
+/// follows the `MaybeUninit<T>` initialization contract and the Rust Reference's
+/// reference validity rules.
 pub unsafe trait LoanUninitPayload<T>: PayloadCodec {
     /// Returns the exact layout required for a typed uninitialized transmit loan.
     fn loan_uninit_layout() -> Result<PayloadLayout, UWireError>;
@@ -366,8 +374,11 @@ impl<'a, T> LoanedUninitPayload<'a, T> {
     ///
     /// # Safety
     ///
-    /// `ptr` must be valid for writes of one `MaybeUninit<T>`, correctly aligned,
-    /// and backed by the transmit loan for `'a`.
+    /// `ptr` must be non-null, valid for writes of one `MaybeUninit<T>`,
+    /// correctly aligned for `T`, and backed by the transmit loan for `'a`.
+    /// No other reference may read or write the same slot until this marker is
+    /// consumed. Those obligations match `NonNull::as_mut`, `MaybeUninit<T>`
+    /// layout, and Rust Reference aliasing/alignment requirements.
     pub unsafe fn new_unchecked(ptr: NonNull<mem::MaybeUninit<T>>) -> Self {
         Self {
             ptr,

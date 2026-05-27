@@ -8,16 +8,12 @@ run_miri() {
     local feature="$1"
     shift
 
-    # The stable-container tests construct `UFrameMetadata::publish`, which
-    # builds a UUID from `SystemTime::elapsed`; Miri isolation rejects the
-    # underlying `clock_gettime` call, so disable isolation unless the caller
-    # supplies explicit `MIRIFLAGS`.
+    # The tests build deterministic metadata fixtures, so the runner is
+    # isolation-clean by default. Callers may still provide explicit MIRIFLAGS.
     if [[ -n "${feature}" ]]; then
-        MIRIFLAGS="${MIRIFLAGS:--Zmiri-disable-isolation}" \
-            cargo +nightly miri test --features "${feature}" --test stable_container_miri "$@"
+        cargo +nightly miri test --features "${feature}" --test stable_container_miri "$@"
     else
-        MIRIFLAGS="${MIRIFLAGS:--Zmiri-disable-isolation}" \
-            cargo +nightly miri test --test stable_container_miri "$@"
+        cargo +nightly miri test --test stable_container_miri "$@"
     fi
 }
 

@@ -24,7 +24,7 @@ use up_rust::{
         StableContainerPayload,
     },
     zero_copy::{UTxBuffer, UUninitTxBuffer, UVecTxBuffer, UVecUninitTxBuffer},
-    UFrameMetadata, UUri,
+    PayloadEncoding, UAttributes, UFrameMetadata, UMessageType, UUri, UUID,
 };
 
 #[cfg(feature = "expert-unsafe-payloads")]
@@ -32,6 +32,15 @@ use up_rust::{UOwnedFrame, UStatus, UZeroCopyUninitTransport};
 
 #[cfg(feature = "expert-unsafe-payloads")]
 use up_rust::zero_copy::{UZeroCopyTransport, UZeroCopyUninitTransportExt};
+
+fn miri_publish_metadata(topic: UUri) -> UFrameMetadata {
+    let id = UUID::from_u64_pair(0x0000_0000_0001_7000, 0x8010_1010_1010_1a1a)
+        .expect("fixed UUID should be valid");
+    UFrameMetadata::new(
+        UAttributes::new(id, topic, None, UMessageType::Publish),
+        None::<PayloadEncoding>,
+    )
+}
 
 #[repr(C)]
 #[derive(
@@ -121,7 +130,7 @@ impl UZeroCopyUninitTransport for MiriUninitTransport {
 fn stable_container_loan_then_borrow_is_miri_friendly() {
     let topic = UUri::try_from("//miri/4210/1/9000").unwrap();
     let mut buffer = UVecTxBuffer::with_alignment(
-        UFrameMetadata::publish(topic)
+        miri_publish_metadata(topic)
             .with_encoding(StableContainerPayload::<VehiclePose>::encoding()),
         mem::size_of::<VehiclePose>(),
         mem::align_of::<VehiclePose>(),
@@ -190,7 +199,7 @@ fn stable_container_borrows_broad_padded_initialized_bytes_under_miri() {
 fn stable_container_uninit_write_initializes_non_copy_payload_under_miri() {
     let topic = UUri::try_from("//miri/4210/1/9001").unwrap();
     let mut buffer = UVecUninitTxBuffer::with_alignment(
-        UFrameMetadata::publish(topic)
+        miri_publish_metadata(topic)
             .with_encoding(StableContainerPayload::<NonCopyPose>::encoding()),
         mem::size_of::<NonCopyPose>(),
         mem::align_of::<NonCopyPose>(),
@@ -229,7 +238,7 @@ fn stable_container_uninit_write_initializes_non_copy_payload_under_miri() {
 fn uninit_byte_writer_commits_exact_payload_under_miri() {
     let topic = UUri::try_from("//miri/4210/1/9002").unwrap();
     let mut buffer =
-        UVecUninitTxBuffer::with_alignment(UFrameMetadata::publish(topic), 3, 1).unwrap();
+        UVecUninitTxBuffer::with_alignment(miri_publish_metadata(topic), 3, 1).unwrap();
 
     {
         let mut writer = buffer.payload_uninit_mut().into_writer();
@@ -247,7 +256,7 @@ fn uninit_byte_writer_commits_exact_payload_under_miri() {
 fn uninit_buffer_initializes_hidden_padding_under_miri() {
     let topic = UUri::try_from("//miri/4210/1/9003").unwrap();
     let mut buffer =
-        UVecUninitTxBuffer::with_alignment(UFrameMetadata::publish(topic), 3, 4096).unwrap();
+        UVecUninitTxBuffer::with_alignment(miri_publish_metadata(topic), 3, 4096).unwrap();
 
     {
         let mut writer = buffer.payload_uninit_mut().into_writer();
@@ -269,7 +278,7 @@ fn uninit_buffer_initializes_hidden_padding_under_miri() {
 fn stable_container_raw_field_initialization_is_miri_friendly() {
     let topic = UUri::try_from("//miri/4210/1/9004").unwrap();
     let mut buffer = UVecUninitTxBuffer::with_alignment(
-        UFrameMetadata::publish(topic)
+        miri_publish_metadata(topic)
             .with_encoding(StableContainerPayload::<NonCopyPose>::encoding()),
         mem::size_of::<NonCopyPose>(),
         mem::align_of::<NonCopyPose>(),
@@ -327,7 +336,7 @@ fn stable_container_raw_field_initialization_is_miri_friendly() {
 fn raw_uninit_payload_bytes_are_miri_checked_when_fully_initialized() {
     let topic = UUri::try_from("//miri/4210/1/9005").unwrap();
     let mut buffer =
-        UVecUninitTxBuffer::with_alignment(UFrameMetadata::publish(topic), 4, 1).unwrap();
+        UVecUninitTxBuffer::with_alignment(miri_publish_metadata(topic), 4, 1).unwrap();
 
     {
         let mut payload = buffer.payload_uninit_mut();
@@ -383,7 +392,7 @@ async fn expert_padded_stable_payload_tx_is_miri_friendly_when_zeroed() {
     // writes both semantic fields, and only then returns the initialized marker.
     let send = unsafe {
         transport.send_uninit_stable_payload_unchecked::<PaddedPose>(
-            UFrameMetadata::publish(topic),
+            miri_publish_metadata(topic),
             init_padded_pose,
         )
     };

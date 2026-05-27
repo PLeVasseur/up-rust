@@ -47,8 +47,14 @@ fn expand_stable_payload(input: DeriveInput) -> syn::Result<proc_macro2::TokenSt
         // SAFETY:
         // - The derive requires `#[repr(C)]` or `#[repr(transparent)]`, rejects
         //   process-local fields, and rejects types that need drop glue.
+        // - Per the Rust Reference type-layout rules, those representations give
+        //   stable field ordering/ABI constraints that can be checked with
+        //   `offset_of!`, `size_of`, and `align_of`; the macro does not infer
+        //   layout for default-repr Rust types.
         // - Field checks recursively require every field to satisfy
         //   `ZeroCopySend`.
+        // - Rejecting drop glue keeps transport byte copies from skipping Rust
+        //   destructor ownership obligations.
         // - The user-provided `type_name` is the stable identity for this type.
         unsafe impl ::up_rust::payload::ZeroCopySend for #name {
             unsafe fn type_name() -> &'static str {
@@ -66,6 +72,9 @@ fn expand_stable_payload(input: DeriveInput) -> syn::Result<proc_macro2::TokenSt
         //   eligibility.
         // - Runtime stable-container borrow paths still check type name,
         //   variant, exact size, and alignment before exposing `&Self`.
+        // - Those runtime checks satisfy the Rust Reference requirements for an
+        //   aligned, initialized, valid reference before any typed borrow is
+        //   materialized from transported bytes.
         unsafe impl ::up_rust::payload::StablePayload for #name {
             const SUPPORTS_BYTE_BACKED_UNINIT: bool =
                 !::core::mem::needs_drop::<Self>()
@@ -109,6 +118,9 @@ fn expand_byte_backed_stable_payload(input: DeriveInput) -> syn::Result<proc_mac
         //   so there is no implicit inter-field or trailing padding.
         // - Every field is recursively byte-backed and `Self` does not need
         //   drop glue, so safe construction initializes every transported byte.
+        // - This is stronger than `StablePayload`: byte-backed transmit may copy
+        //   all bytes in `size_of::<Self>()`, so the macro must prove there are
+        //   no uninitialized padding bytes to expose.
         unsafe impl ::up_rust::payload::ByteBackedStablePayload for #name {}
     })
 }

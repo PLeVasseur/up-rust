@@ -136,7 +136,11 @@ pub trait UUninitTxBuffer {
     ///
     /// The caller must guarantee every visible application payload byte has been
     /// initialized, and that any transport-owned bytes required for send were
-    /// initialized by the transport before conversion.
+    /// initialized by the transport before conversion. Implementations that
+    /// reinterpret or commit storage must preserve the original allocation,
+    /// length, capacity, alignment, and ownership requirements of the relevant
+    /// standard-library operation, such as `Vec::from_raw_parts` or an external
+    /// SHM commit API.
     unsafe fn assume_payload_init(self) -> Self::Initialized;
 }
 
@@ -308,9 +312,12 @@ impl<'a> LoanedPayload<'a> {
     ///
     /// # Safety
     ///
-    /// Callers must guarantee `bytes` is backed by storage described by `kind`,
-    /// remains valid for `'a`, and was not allocated or coalesced solely to
-    /// satisfy a zero-copy borrow.
+    /// Callers must guarantee `bytes` is a valid shared slice for `'a`: it must
+    /// stay within one allocation, be valid for reads, and not be mutated through
+    /// an alias for the returned lifetime. The storage must be described by
+    /// `kind` and must not have been allocated or coalesced solely to satisfy a
+    /// zero-copy borrow. These obligations are the safety preconditions of
+    /// `slice::from_raw_parts` plus the transport's external provenance contract.
     pub unsafe fn new_unchecked(bytes: &'a [u8], kind: PayloadLoanKind) -> Self {
         Self { bytes, kind }
     }
@@ -366,9 +373,13 @@ impl<'a> LoanedPayloadMut<'a> {
     ///
     /// # Safety
     ///
-    /// Callers must guarantee `bytes` is backed by mutable storage described by
-    /// `kind`, remains valid for `'a`, and is the exact visible application
-    /// payload range for the loan.
+    /// Callers must guarantee `bytes` is a valid mutable slice for `'a`: it must
+    /// stay within one allocation, be valid for reads and writes, and have no
+    /// other active access path for the returned lifetime. The storage must be
+    /// described by `kind` and be the exact visible application payload range for
+    /// the loan. These obligations are the safety preconditions of
+    /// `slice::from_raw_parts_mut` plus the transport's external provenance
+    /// contract.
     pub unsafe fn new_unchecked(bytes: &'a mut [u8], kind: PayloadLoanKind) -> Self {
         Self { bytes, kind }
     }
@@ -441,9 +452,12 @@ impl<'a> LoanedPayloadUninitMut<'a> {
     ///
     /// # Safety
     ///
-    /// Callers must guarantee `bytes` is backed by mutable storage described by
-    /// `kind`, remains valid for `'a`, and is the exact visible application
-    /// payload range for the loan.
+    /// Callers must guarantee `bytes` is a valid mutable uninitialized byte slice
+    /// for `'a`: it must stay within one allocation, be valid for writes, and
+    /// have no other active access path for the returned lifetime. The storage
+    /// must be described by `kind` and be the exact visible application payload
+    /// range for the loan. `MaybeUninit<u8>` has the same layout as `u8`; the
+    /// initialization obligation is tracked by the returned loan marker.
     pub unsafe fn new_unchecked(bytes: &'a mut [MaybeUninit<u8>], kind: PayloadLoanKind) -> Self {
         Self { bytes, kind }
     }
