@@ -79,9 +79,7 @@ fn expand_stable_payload(input: DeriveInput) -> syn::Result<proc_macro2::TokenSt
     })
 }
 
-fn expand_byte_backed_stable_payload(
-    input: DeriveInput,
-) -> syn::Result<proc_macro2::TokenStream> {
+fn expand_byte_backed_stable_payload(input: DeriveInput) -> syn::Result<proc_macro2::TokenStream> {
     let name = &input.ident;
     let shape = analyze_stable_payload_shape(&input)?;
     let field_size_sum = shape.field_size_sum;
@@ -155,7 +153,8 @@ fn analyze_stable_payload_shape(input: &DeriveInput) -> syn::Result<StablePayloa
                 for field in &fields.named {
                     let ident = field.ident.as_ref().expect("named fields have identifiers");
                     let ty = &field.ty;
-                    let expected_offset = quote! { 0_usize #(+ ::core::mem::size_of::<#preceding_sizes>())* };
+                    let expected_offset =
+                        quote! { 0_usize #(+ ::core::mem::size_of::<#preceding_sizes>())* };
                     let padding_message = LitStr::new(
                         &format!(
                             "ByteBackedStablePayload field `{ident}` has implicit padding before it; add explicit initialized padding fields"

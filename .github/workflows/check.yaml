@@ -97,7 +97,7 @@ jobs:
       - name: Run cargo clippy
         run: |
           cargo clippy --version
-          cargo clippy --locked --all-targets --all-features --no-deps -- -W warnings -D warnings
+          cargo clippy --locked --all-targets --all-features --no-deps -- -D warnings
 
   # [impl->req~up-language-ci-api-docs~1]
   docu:
@@ -185,8 +185,8 @@ jobs:
           cargo test --locked --no-fail-fast --test stable_payload_trybuild ${{ matrix.feature-flags }}
       - name: Run TCK tests
         run: |
-          # the Cucumber based tests write a results file in JUnit format to "tck-[test_name]-results.xml"
-          cargo test --locked --no-fail-fast --test 'tck_*' ${{ matrix.feature-flags }} -- --junit-out-folder=${GITHUB_WORKSPACE}/target
+          cargo test --locked --no-fail-fast --test native_uuid_tck ${{ matrix.feature-flags }}
+          cargo test --locked --no-fail-fast --test native_uuri_tck ${{ matrix.feature-flags }}
 
       - name: Upload all-features test results artifact
         id: test_results

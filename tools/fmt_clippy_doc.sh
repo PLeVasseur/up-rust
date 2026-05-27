@@ -5,7 +5,7 @@ cargo fmt --all --check
 
 echo ""
 echo "Running cargo clippy"
-cargo clippy --all-targets --all-features --no-deps -- -W warnings -D warnings
+cargo clippy --all-targets --all-features --no-deps -- -D warnings
 
 echo ""
 echo "Running cargo doc"
