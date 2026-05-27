@@ -561,7 +561,7 @@ fn stable_container_borrow_rejects_wrong_alignment() {
     let storage = vec![0_u8; mem::size_of::<VehiclePose>() + align];
     let base = storage.as_ptr() as usize;
     let offset = (1..align)
-        .find(|offset| (base + offset) % align != 0)
+        .find(|offset| !(base + offset).is_multiple_of(align))
         .unwrap();
     let payload = storage
         .get(offset..offset + mem::size_of::<VehiclePose>())

@@ -273,7 +273,7 @@ pub trait UContiguousZeroCopyRxFrame: UZeroCopyRxFrame {
     }
 
     /// Borrows a typed view directly from the contiguous payload with codec `C`.
-    fn borrow_payload_as<'a, C, T>(&'a self) -> Result<&'a T, UWireError>
+    fn borrow_payload_as<C, T>(&self) -> Result<&T, UWireError>
     where
         C: PayloadCodec + BorrowPayload<T>,
         T: ?Sized,
@@ -636,7 +636,7 @@ pub fn verify_tx_buffer_payload_layout(
             payload.len(),
         ));
     }
-    if !payload.is_empty() && (payload.as_ptr() as usize) % layout.align() != 0 {
+    if !payload.is_empty() && !(payload.as_ptr() as usize).is_multiple_of(layout.align()) {
         return Err(UWireError::invalid_payload_alignment(
             layout.align(),
             payload.as_ptr() as usize,
@@ -660,7 +660,7 @@ pub fn verify_uninit_tx_buffer_payload_layout(
             payload.len(),
         ));
     }
-    if !payload.is_empty() && (payload.as_ptr() as usize) % layout.align() != 0 {
+    if !payload.is_empty() && !(payload.as_ptr() as usize).is_multiple_of(layout.align()) {
         return Err(UWireError::invalid_payload_alignment(
             layout.align(),
             payload.as_ptr() as usize,
@@ -683,7 +683,7 @@ pub fn verify_contiguous_rx_payload_layout(
             payload.len(),
         ));
     }
-    if !payload.is_empty() && (payload.as_ptr() as usize) % layout.align() != 0 {
+    if !payload.is_empty() && !(payload.as_ptr() as usize).is_multiple_of(layout.align()) {
         return Err(UWireError::invalid_payload_alignment(
             layout.align(),
             payload.as_ptr() as usize,
@@ -706,7 +706,7 @@ pub fn verify_loaned_rx_payload_layout(
             payload.len(),
         ));
     }
-    if !payload.is_empty() && (payload.as_ptr() as usize) % layout.align() != 0 {
+    if !payload.is_empty() && !(payload.as_ptr() as usize).is_multiple_of(layout.align()) {
         return Err(UWireError::invalid_payload_alignment(
             layout.align(),
             payload.as_ptr() as usize,

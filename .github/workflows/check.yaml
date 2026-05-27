@@ -27,6 +27,7 @@ on:
       - "tests/**"
       - "scripts/**"
       - "Cargo.*"
+      - "clippy.toml"
       - "build.rs"
       - "deny.toml"
   workflow_call:

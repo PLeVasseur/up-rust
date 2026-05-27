@@ -165,7 +165,8 @@ pub mod zero_copy_conformance {
 
         let storage = vec![0_u8; size + alignment];
         let base = storage.as_ptr() as usize;
-        let Some(offset) = (1..alignment).find(|offset| (base + offset) % alignment != 0) else {
+        let Some(offset) = (1..alignment).find(|offset| !(base + offset).is_multiple_of(alignment))
+        else {
             return Err(UWireError::invalid_payload(
                 "failed to construct a misaligned stable-container payload view",
             ));

@@ -156,12 +156,24 @@ required-features = ["util"]
 # this prevents cargo from complaining about code blocks
 # excluded from tarpaulin coverage checks
 unexpected_cfgs = { level = "warn", check-cfg = ['cfg(docsrs)', 'cfg(tarpaulin_include)'] }
+unsafe_op_in_unsafe_fn = "deny"
+missing_unsafe_on_extern = "deny"
+unsafe_attr_outside_unsafe = "deny"
+unused_unsafe = "deny"
 
 [lints.clippy]
 # see https://corrode.dev/blog/defensive-programming/#clippy-lints-for-defensive-programming
 missing_safety_doc = "deny"
 undocumented_unsafe_blocks = "deny"
 multiple_unsafe_ops_per_block = "deny"
+unnecessary_safety_comment = "deny"
+unnecessary_safety_doc = "deny"
+borrow_as_ptr = "deny"
+ptr_as_ptr = "deny"
+as_ptr_cast_mut = "deny"
+not_unsafe_ptr_arg_deref = "deny"
+transmute_ptr_to_ptr = "deny"
+transmute_ptr_to_ref = "deny"
 indexing_slicing = "deny"
 fallible_impl_from = "deny"
 wildcard_enum_match_arm = "deny"

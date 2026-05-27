@@ -851,7 +851,7 @@ impl UOwnedFrame {
     }
 
     /// Borrows a typed payload view with codec `C` after verifying encoding metadata.
-    pub fn borrow_payload_as<'a, C, T>(&'a self) -> Result<&'a T, UWireError>
+    pub fn borrow_payload_as<C, T>(&self) -> Result<&T, UWireError>
     where
         C: PayloadCodec + BorrowPayload<T>,
         T: ?Sized,

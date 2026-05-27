@@ -464,6 +464,7 @@ impl<'a, T> LoanedInitPayload<'a, T> {
     }
 
     /// Returns the initialized payload as a mutable reference.
+    #[allow(clippy::should_implement_trait)]
     pub fn as_mut(&mut self) -> &mut T {
         // SAFETY:
         // - `self.ptr` was created only after the slot was marked initialized.
@@ -471,6 +472,12 @@ impl<'a, T> LoanedInitPayload<'a, T> {
         //   second mutable reference to the same loaned `T` can be produced by
         //   this API at the same time.
         unsafe { self.ptr.as_mut() }
+    }
+}
+
+impl<T> AsMut<T> for LoanedInitPayload<'_, T> {
+    fn as_mut(&mut self) -> &mut T {
+        LoanedInitPayload::as_mut(self)
     }
 }
 
@@ -1256,7 +1263,8 @@ where
 {
     assert!(T::SUPPORTS_BYTE_BACKED_UNINIT);
     assert!(!mem::needs_drop::<T>());
-    let _ = T::BYTE_BACKED_STABLE_PAYLOAD_CHECK;
+    #[allow(path_statements)]
+    T::BYTE_BACKED_STABLE_PAYLOAD_CHECK;
 }
 
 /// Unsafe non-byte-backed stable-container TX slot.
@@ -1507,7 +1515,7 @@ impl<T: StablePayload> StableContainerPayload<T> {
 
         let address = src.as_ptr() as usize;
         let alignment = mem::align_of::<T>();
-        if address % alignment != 0 {
+        if !address.is_multiple_of(alignment) {
             return Err(UWireError::invalid_payload_alignment(alignment, address));
         }
         Ok(())
@@ -1522,7 +1530,7 @@ impl<T: StablePayload> StableContainerPayload<T> {
 
         let address = dst.as_ptr() as usize;
         let alignment = mem::align_of::<T>();
-        if address % alignment != 0 {
+        if !address.is_multiple_of(alignment) {
             return Err(UWireError::invalid_payload_alignment(alignment, address));
         }
         Ok(())
@@ -1553,7 +1561,8 @@ where
     fn assert_byte_backed() {
         assert!(T::SUPPORTS_BYTE_BACKED_UNINIT);
         assert!(!mem::needs_drop::<T>());
-        let _ = T::BYTE_BACKED_STABLE_PAYLOAD_CHECK;
+        #[allow(path_statements)]
+        T::BYTE_BACKED_STABLE_PAYLOAD_CHECK;
     }
 
     fn check_byte_backed() -> Result<(), UWireError> {
