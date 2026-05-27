@@ -17,7 +17,7 @@ The crate needs to be added to the `[dependencies]` section of the `Cargo.toml` 
 
 ```toml
 [dependencies]
-up-rust = { version = "0.10" }
+up-rust = { version = "0.11.0-SNAPSHOT" }
 ```
 
 Please refer to the [examples](./examples/) and [payload codec notes](./docs/payload-codecs.md) for owned-buffer, zero-copy, and stable-container payload-codec usage.
@@ -104,10 +104,9 @@ cargo test --locked --test stable_payload_trybuild
 ```
 
 The stable-container Miri runner uses the nightly Miri component and covers the
-default stable payload path plus the feature-gated unsafe payload hatches. It
-disables Miri isolation because `UFrameMetadata::publish` builds a UUID from
-`SystemTime::elapsed`, which uses `clock_gettime`; Miri rejects that clock call
-when isolation is enabled.
+default stable payload path plus the feature-gated unsafe payload hatches. The
+tests build deterministic metadata fixtures, so the runner is isolation-clean by
+default. Callers may still provide explicit `MIRIFLAGS` for local experiments.
 
 ```sh
 scripts/run-miri-stable-container.sh
@@ -118,10 +117,10 @@ Equivalent explicit command:
 ```sh
 rustup +nightly component add miri
 cargo +nightly miri setup
-MIRIFLAGS="-Zmiri-disable-isolation" cargo +nightly miri test --test stable_container_miri
-MIRIFLAGS="-Zmiri-disable-isolation" cargo +nightly miri test --features unsafe-stable-payload-init --test stable_container_miri
-MIRIFLAGS="-Zmiri-disable-isolation" cargo +nightly miri test --features unsafe-uninit-payload-bytes --test stable_container_miri
-MIRIFLAGS="-Zmiri-disable-isolation" cargo +nightly miri test --features expert-unsafe-payloads --test stable_container_miri
+cargo +nightly miri test --test stable_container_miri
+cargo +nightly miri test --features unsafe-stable-payload-init --test stable_container_miri
+cargo +nightly miri test --features unsafe-uninit-payload-bytes --test stable_container_miri
+cargo +nightly miri test --features expert-unsafe-payloads --test stable_container_miri
 ```
 
 ## License

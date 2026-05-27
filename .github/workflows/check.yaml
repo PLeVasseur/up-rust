@@ -153,7 +153,8 @@ jobs:
             --locked \
             --no-dev-deps \
             --feature-powerset \
-            --group-features default,communication,usubscription,udiscovery,utwin,symphony \
+            --group-features default,util \
+            --group-features unsafe-stable-payload-tx,unsafe-stable-payload-init,unsafe-uninit-payload-bytes,expert-unsafe-payloads \
             --depth 2
 
   # [impl->req~up-language-ci-test~1]

@@ -1247,10 +1247,23 @@ macro_rules! __up_rust_byte_backed_stable_field_supported {
 ///
 /// # Safety
 ///
-/// Implementors must guarantee every byte in `size_of::<Self>()` is initialized
-/// by safe construction paths used for stable-container TX and raw encode.
-/// Types with implicit padding usually cannot uphold this without an expert
-/// whole-byte initialization strategy.
+/// Implementors must guarantee that copying or initializing exactly
+/// `size_of::<Self>()` bytes is a sound representation of one valid `Self` for
+/// stable-container TX and raw encode paths. That requires all of the following:
+///
+/// - The type satisfies the broader [`StablePayload`] contract for stable type
+///   identity, exact size, alignment, and receive-side provenance checks.
+/// - Safe construction paths initialize every byte in the object representation,
+///   including implicit padding. The Rust Reference lists reading uninitialized
+///   bytes as undefined behavior.
+/// - Every field is recursively byte-backed, has a stable layout, and does not
+///   require drop glue that could be bypassed by byte transport.
+/// - The type has no invalid bit patterns that safe byte-backed TX or raw encode
+///   paths can produce.
+///
+/// Prefer `#[derive(StablePayload, ByteBackedStablePayload)]`, which proves the
+/// supported structural cases. Manual impls are for expert FFI/codegen payloads
+/// with an external layout proof and a whole-object initialization strategy.
 pub unsafe trait ByteBackedStablePayload: StablePayload {
     #[doc(hidden)]
     const BYTE_BACKED_STABLE_PAYLOAD_CHECK: () = {

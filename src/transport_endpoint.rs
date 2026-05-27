@@ -86,6 +86,9 @@ impl UOwnedFrameEndpoint {
     /// # endpoint
     /// # }
     /// ```
+    #[deprecated(
+        note = "use from_zero_copy_copying_adapter; this constructor copies at the owned/zero-copy boundary"
+    )]
     pub fn from_zero_copy<T>(transport: Arc<T>) -> Self
     where
         T: UZeroCopyTransport + Send + Sync + 'static,
@@ -100,6 +103,11 @@ impl UOwnedFrameEndpoint {
     /// listener callbacks for generic routing code. This adapter is useful for
     /// routers that operate on [`UOwnedFrame`], but it is not end-to-end
     /// zero-copy forwarding.
+    ///
+    /// The send path reserves byte-oriented payload storage with alignment `1`
+    /// because [`UOwnedFrame`] carries owned bytes, not typed stable-payload
+    /// layout information. Callers that need typed stable-payload alignment must
+    /// use the zero-copy transport and stable-payload helpers directly.
     pub fn from_zero_copy_copying_adapter<T>(transport: Arc<T>) -> Self
     where
         T: UZeroCopyTransport + Send + Sync + 'static,
@@ -268,6 +276,9 @@ where
 
     async fn send_owned(&self, frame: UOwnedFrame) -> Result<(), UStatus> {
         let payload_len = frame.payload_bytes().len();
+        // `UOwnedFrame` exposes only owned payload bytes here. This copying
+        // adapter intentionally requests byte alignment rather than claiming to
+        // preserve any typed stable-payload layout from an earlier boundary.
         let mut buffer = self
             .transport
             .reserve(frame.metadata().clone(), payload_len, 1)
@@ -321,7 +332,7 @@ where
     Rx: UZeroCopyRxFrame + Send + 'static,
 {
     async fn on_receive_zero_copy(&self, frame: Rx) {
-        let owned = if frame.metadata().encoding().is_some() {
+        let owned = if frame.has_payload() {
             UOwnedFrame::new(frame.metadata().clone(), frame.payload_to_vec())
         } else {
             UOwnedFrame::without_payload(frame.metadata().clone())
@@ -428,12 +439,20 @@ mod tests {
     #[derive(Default)]
     struct MemoryZeroCopyTransport {
         sent: Mutex<Vec<UOwnedFrame>>,
+        reserve_alignments: Mutex<Vec<usize>>,
         listener: Mutex<Option<Arc<dyn UZeroCopyListener<UOwnedFrame>>>>,
     }
 
     impl MemoryZeroCopyTransport {
         fn sent(&self) -> Vec<UOwnedFrame> {
             self.sent.lock().expect("sent lock poisoned").clone()
+        }
+
+        fn reserve_alignments(&self) -> Vec<usize> {
+            self.reserve_alignments
+                .lock()
+                .expect("reserve alignments lock poisoned")
+                .clone()
         }
 
         async fn inject(&self, frame: UOwnedFrame) {
@@ -457,8 +476,12 @@ mod tests {
             &self,
             metadata: UFrameMetadata,
             payload_len: usize,
-            _alignment: usize,
+            alignment: usize,
         ) -> Result<Self::Tx, UStatus> {
+            self.reserve_alignments
+                .lock()
+                .expect("reserve alignments lock poisoned")
+                .push(alignment);
             Ok(UVecTxBuffer::new(metadata, payload_len))
         }
 
@@ -613,6 +636,7 @@ mod tests {
 
         assert_eq!(endpoint.mode(), UOwnedFrameEndpointMode::ZeroCopy);
         assert_eq!(transport.sent(), vec![frame]);
+        assert_eq!(transport.reserve_alignments(), vec![1]);
     }
 
     #[tokio::test]
@@ -656,5 +680,75 @@ mod tests {
             *listener.0.lock().expect("frames lock poisoned"),
             vec![frame]
         );
+    }
+
+    #[tokio::test]
+    async fn endpoint_preserves_no_payload_receive() {
+        let transport = Arc::new(MemoryZeroCopyTransport::default());
+        let endpoint = UOwnedFrameEndpoint::from_zero_copy_copying_adapter(transport.clone());
+        let topic = UUri::try_from_parts("vehicle", 0x4210, 1, 0x9000).expect("valid topic");
+        let frame = crate::UFrameBuilder::publish(topic.clone())
+            .build()
+            .unwrap();
+        let listener = Arc::new(CaptureListener(Mutex::new(Vec::new())));
+
+        endpoint
+            .register_owned_listener(&topic, None, listener.clone())
+            .await
+            .expect("register works");
+        transport.inject(frame).await;
+
+        let frames = listener.0.lock().expect("frames lock poisoned");
+        assert_eq!(frames.len(), 1);
+        let received = frames.first().expect("one received frame");
+        assert!(!received.has_payload());
+        assert!(received.metadata().encoding().is_none());
+    }
+
+    #[tokio::test]
+    async fn endpoint_preserves_present_empty_payload_receive() {
+        let transport = Arc::new(MemoryZeroCopyTransport::default());
+        let endpoint = UOwnedFrameEndpoint::from_zero_copy_copying_adapter(transport.clone());
+        let topic = UUri::try_from_parts("vehicle", 0x4210, 1, 0x9000).expect("valid topic");
+        let frame = crate::UFrameBuilder::publish(topic.clone())
+            .build_with_raw_payload(Vec::<u8>::new())
+            .unwrap();
+        let listener = Arc::new(CaptureListener(Mutex::new(Vec::new())));
+
+        endpoint
+            .register_owned_listener(&topic, None, listener.clone())
+            .await
+            .expect("register works");
+        transport.inject(frame).await;
+
+        let frames = listener.0.lock().expect("frames lock poisoned");
+        assert_eq!(frames.len(), 1);
+        let received = frames.first().expect("one received frame");
+        assert!(received.has_payload());
+        assert!(received.payload_bytes().is_empty());
+        assert!(received.metadata().encoding().is_some());
+    }
+
+    #[tokio::test]
+    async fn endpoint_preserves_payload_even_when_encoding_is_missing() {
+        let transport = Arc::new(MemoryZeroCopyTransport::default());
+        let endpoint = UOwnedFrameEndpoint::from_zero_copy_copying_adapter(transport.clone());
+        let topic = UUri::try_from_parts("vehicle", 0x4210, 1, 0x9000).expect("valid topic");
+        let metadata = UFrameMetadata::publish(topic.clone());
+        let frame = UOwnedFrame::new(metadata, b"payload".as_slice());
+        let listener = Arc::new(CaptureListener(Mutex::new(Vec::new())));
+
+        endpoint
+            .register_owned_listener(&topic, None, listener.clone())
+            .await
+            .expect("register works");
+        transport.inject(frame).await;
+
+        let frames = listener.0.lock().expect("frames lock poisoned");
+        assert_eq!(frames.len(), 1);
+        let received = frames.first().expect("one received frame");
+        assert!(received.has_payload());
+        assert_eq!(received.payload_bytes(), b"payload");
+        assert!(received.metadata().encoding().is_none());
     }
 }

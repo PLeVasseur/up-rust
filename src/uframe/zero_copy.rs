@@ -43,6 +43,10 @@ impl UZeroCopyRxFrame for UOwnedFrame {
         self.payload_bytes().len()
     }
 
+    fn has_payload(&self) -> bool {
+        UOwnedFrame::has_payload(self)
+    }
+
     fn payload_reader(&self) -> Self::PayloadReader<'_> {
         Cursor::new(self.payload_bytes())
     }
@@ -168,6 +172,18 @@ pub trait UZeroCopyRxFrame {
     /// Transport metadata prefixes, alignment padding, and protocol trailers
     /// must not be included in this length.
     fn payload_len(&self) -> usize;
+
+    /// Returns whether this lease carries a payload, including a present empty
+    /// payload.
+    ///
+    /// The default preserves legacy transport implementations by treating any
+    /// non-empty payload byte range or any payload encoding metadata as payload
+    /// presence. Transport leases that can distinguish an absent payload from a
+    /// present empty payload without relying on encoding metadata should override
+    /// this method.
+    fn has_payload(&self) -> bool {
+        self.payload_len() > 0 || self.metadata().encoding().is_some()
+    }
 
     /// Returns an ordered reader over the application payload bytes.
     ///
