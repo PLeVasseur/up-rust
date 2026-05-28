@@ -12,19 +12,13 @@
  ********************************************************************************/
 
 use protobuf::well_known_types::{any::Any, wrappers::StringValue};
-use up_rust::{payload::USerializer, ProtobufAnyPayload, UFrameMetadata, UOwnedFrame, UUri};
+use up_rust::{ProtobufAnyPayload, UFrameBuilder, UUri};
 
 fn main() -> Result<(), Box<dyn std::error::Error>> {
     let topic = UUri::try_from("//vehicle/4210/1/8001")?;
     let mut message = StringValue::new();
     message.value = "protobuf Any payload".to_string();
-    let any = Any::pack(&message)?;
-
-    let payload = <Any as USerializer<ProtobufAnyPayload>>::serialize_owned(&any)?;
-    let frame = UOwnedFrame::new(
-        UFrameMetadata::publish(topic).with_encoding(ProtobufAnyPayload::encoding()),
-        payload,
-    );
+    let frame = UFrameBuilder::publish(topic).build_with_protobuf_any_payload(&message)?;
 
     let decoded_any: Any = frame.deserialize::<ProtobufAnyPayload, _>()?;
     let decoded = decoded_any
