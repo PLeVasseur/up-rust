@@ -645,16 +645,6 @@ pub trait ULoanedContiguousZeroCopyRxFrame: UZeroCopyRxFrame {
         Ok(self.loaned_contiguous_payload()?.as_bytes())
     }
 
-    /// Borrows a typed view directly from loan-backed payload storage.
-    fn borrow_loaned_payload_as<C, T>(&self) -> Result<&T, UWireError>
-    where
-        C: PayloadCodec + BorrowPayload<T>,
-        T: ?Sized,
-    {
-        C::verify_encoding(self.metadata().encoding())?;
-        C::borrow_payload(self.loaned_contiguous_payload()?.as_bytes())
-    }
-
     /// Borrows one stable-container value from loan-backed contiguous storage.
     ///
     /// This is the safe stable-container typed receive boundary. It validates the

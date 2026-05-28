@@ -63,17 +63,6 @@ pub mod zero_copy_conformance {
         verify_loaned_rx_payload_layout(frame, payload_len, alignment)
     }
 
-    /// Verifies and borrows a typed value from loan-backed RX storage.
-    pub fn borrow_loaned_payload_as<C, T>(
-        frame: &(impl ULoanedContiguousZeroCopyRxFrame + ?Sized),
-    ) -> Result<&T, UWireError>
-    where
-        C: PayloadCodec + crate::payload::BorrowPayload<T>,
-        T: ?Sized,
-    {
-        frame.borrow_loaned_payload_as::<C, T>()
-    }
-
     /// Verifies and borrows a stable-container value from loan-backed RX storage.
     pub fn borrow_stable_payload<T>(
         frame: &(impl ULoanedContiguousZeroCopyRxFrame + ?Sized),
@@ -191,23 +180,6 @@ pub mod zero_copy_conformance {
             }
             Ok(_) => Err(UWireError::invalid_payload(
                 "stable-container borrow unexpectedly accepted misaligned payload bytes",
-            )),
-            Err(error) => Err(error),
-        }
-    }
-
-    /// Verifies that copied or owned receive storage is not treated as loan-backed typed RX.
-    pub fn verify_loaned_rx_rejects_copied_fallback_as<C, T>(
-        frame: &(impl ULoanedContiguousZeroCopyRxFrame + ?Sized),
-    ) -> Result<(), UWireError>
-    where
-        C: PayloadCodec + crate::payload::BorrowPayload<T>,
-        T: ?Sized,
-    {
-        match frame.borrow_loaned_payload_as::<C, T>() {
-            Err(UWireError::NotLoanBacked) => Ok(()),
-            Ok(_) => Err(UWireError::invalid_payload(
-                "loan-backed typed borrow unexpectedly accepted copied payload storage",
             )),
             Err(error) => Err(error),
         }
