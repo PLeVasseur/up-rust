@@ -513,12 +513,6 @@ impl Default for PayloadEncoding {
     }
 }
 
-/// Deprecated compatibility alias for the native payload encoding type.
-pub type UEncoding = PayloadEncoding;
-
-/// Deprecated compatibility alias for custom payload encoding validation errors.
-pub type UEncodingError = PayloadEncodingError;
-
 /// Native frame metadata used by transport APIs.
 ///
 /// `UFrameMetadata` groups native uProtocol [`UAttributes`] with optional

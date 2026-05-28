@@ -17,11 +17,12 @@ use tokio::sync::Mutex;
 use up_rust::{
     payload::StableContainerPayload,
     zero_copy::{
-        LoanedPayload, LoanedPayloadUninitMut, PayloadLoanKind, UContiguousZeroCopyRxFrame,
+        LoanedPayload, LoanedPayloadUninitMut, PayloadLoanProvenance, UContiguousZeroCopyRxFrame,
         ULoanedContiguousZeroCopyRxFrame, UTxBuffer, UUninitTxBuffer, UZeroCopyRxFrame,
         UZeroCopyTransport,
     },
-    UCode, UFrameMetadata, UStatus, UUri, UZeroCopyUninitTransport, UZeroCopyUninitTransportExt,
+    UCode, UFrameMetadata, UStatus, UTxLoanSpec, UUri, UZeroCopyUninitTransport,
+    UZeroCopyUninitTransportExt,
 };
 
 #[repr(C)]
@@ -83,7 +84,7 @@ impl UUninitTxBuffer for VehiclePoseUninitFrame {
         unsafe {
             LoanedPayloadUninitMut::new_unchecked(
                 self.storage.0.as_mut_slice(),
-                PayloadLoanKind::TransportLoan,
+                PayloadLoanProvenance::OpaqueTransportLoan,
             )
         }
     }
@@ -149,7 +150,10 @@ impl ULoanedContiguousZeroCopyRxFrame for VehiclePoseFrame {
         // - This example frame owns the backing storage and returns a payload
         //   slice borrowed from `&self`, so the slice cannot outlive the frame.
         Ok(unsafe {
-            LoanedPayload::new_unchecked(self.storage.0.as_slice(), PayloadLoanKind::TransportLoan)
+            LoanedPayload::new_unchecked(
+                self.storage.0.as_slice(),
+                PayloadLoanProvenance::OpaqueTransportLoan,
+            )
         })
     }
 }
@@ -164,26 +168,21 @@ impl UZeroCopyTransport for StableLoopbackTransport {
     type Tx = VehiclePoseFrame;
     type Rx = VehiclePoseFrame;
 
-    async fn reserve(
-        &self,
-        metadata: UFrameMetadata,
-        payload_len: usize,
-        alignment: usize,
-    ) -> Result<Self::Tx, UStatus> {
-        if payload_len != std::mem::size_of::<VehiclePose>() {
+    async fn loan_tx(&self, spec: UTxLoanSpec) -> Result<Self::Tx, UStatus> {
+        if spec.payload_len() != std::mem::size_of::<VehiclePose>() {
             return Err(UStatus::fail_with_code(
                 UCode::INVALID_ARGUMENT,
                 "unsupported payload length",
             ));
         }
-        if alignment > std::mem::align_of::<VehiclePoseStorage>() {
+        if spec.payload_alignment() > std::mem::align_of::<VehiclePoseStorage>() {
             return Err(UStatus::fail_with_code(
                 UCode::INVALID_ARGUMENT,
                 "unsupported payload alignment",
             ));
         }
         Ok(VehiclePoseFrame {
-            metadata,
+            metadata: spec.metadata().clone(),
             storage: VehiclePoseStorage([0; std::mem::size_of::<VehiclePose>()]),
         })
     }
@@ -210,26 +209,21 @@ impl UZeroCopyTransport for StableLoopbackTransport {
 impl UZeroCopyUninitTransport for StableLoopbackTransport {
     type UninitTx = VehiclePoseUninitFrame;
 
-    async fn reserve_uninit(
-        &self,
-        metadata: UFrameMetadata,
-        payload_len: usize,
-        alignment: usize,
-    ) -> Result<Self::UninitTx, UStatus> {
-        if payload_len != std::mem::size_of::<VehiclePose>() {
+    async fn loan_uninit_tx(&self, spec: UTxLoanSpec) -> Result<Self::UninitTx, UStatus> {
+        if spec.payload_len() != std::mem::size_of::<VehiclePose>() {
             return Err(UStatus::fail_with_code(
                 UCode::INVALID_ARGUMENT,
                 "unsupported payload length",
             ));
         }
-        if alignment > std::mem::align_of::<VehiclePoseUninitStorage>() {
+        if spec.payload_alignment() > std::mem::align_of::<VehiclePoseUninitStorage>() {
             return Err(UStatus::fail_with_code(
                 UCode::INVALID_ARGUMENT,
                 "unsupported payload alignment",
             ));
         }
         Ok(VehiclePoseUninitFrame {
-            metadata,
+            metadata: spec.metadata().clone(),
             storage: VehiclePoseUninitStorage(
                 [const { MaybeUninit::uninit() }; std::mem::size_of::<VehiclePose>()],
             ),
@@ -256,7 +250,7 @@ async fn main() -> Result<(), Box<dyn Error>> {
         .await?;
 
     let rx = transport.receive_zero_copy(&topic, None).await?;
-    let pose = rx.borrow_loaned_payload_as::<StableContainerPayload<VehiclePose>, VehiclePose>()?;
+    let pose = rx.borrow_stable_payload::<VehiclePose>()?;
 
     assert_eq!(pose.x_m, 1.25);
     println!(

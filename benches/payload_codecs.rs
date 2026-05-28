@@ -11,11 +11,14 @@
  * SPDX-License-Identifier: Apache-2.0
  ********************************************************************************/
 
-use std::{hint::black_box, mem, time::Instant};
+use std::{hint::black_box, io::Cursor, mem, time::Instant};
 
 use bytes::Bytes;
 use up_rust::{
-    payload::{BorrowPayload, PlacementDefault, RawBytes, StableContainerPayload},
+    payload::{PlacementDefault, RawBytes, StableContainerPayload},
+    zero_copy::{
+        LoanedPayload, PayloadLoanProvenance, ULoanedContiguousZeroCopyRxFrame, UZeroCopyRxFrame,
+    },
     McapPayload, UFrameMetadata, UOwnedFrame, UUri,
 };
 
@@ -41,6 +44,52 @@ struct VehiclePose {
 
 #[repr(C, align(4))]
 struct AlignedPoseBytes([u8; mem::size_of::<VehiclePose>()]);
+
+struct LoanedPoseFrame<'a> {
+    metadata: UFrameMetadata,
+    payload: &'a [u8],
+}
+
+impl UZeroCopyRxFrame for LoanedPoseFrame<'_> {
+    type PayloadReader<'a>
+        = Cursor<&'a [u8]>
+    where
+        Self: 'a;
+    type PayloadSlices<'a>
+        = std::iter::Once<&'a [u8]>
+    where
+        Self: 'a;
+
+    fn metadata(&self) -> &UFrameMetadata {
+        &self.metadata
+    }
+
+    fn payload_len(&self) -> usize {
+        self.payload.len()
+    }
+
+    fn payload_reader(&self) -> Self::PayloadReader<'_> {
+        Cursor::new(self.payload)
+    }
+
+    fn payload_slices(&self) -> Self::PayloadSlices<'_> {
+        std::iter::once(self.payload)
+    }
+
+    fn try_contiguous_payload(&self) -> Option<&[u8]> {
+        Some(self.payload)
+    }
+}
+
+impl ULoanedContiguousZeroCopyRxFrame for LoanedPoseFrame<'_> {
+    fn loaned_contiguous_payload(&self) -> Result<LoanedPayload<'_>, up_rust::UWireError> {
+        // SAFETY: The benchmark frame keeps `payload` alive for `&self` and
+        // exposes it as the exact visible loan-backed payload slice.
+        Ok(unsafe {
+            LoanedPayload::new_unchecked(self.payload, PayloadLoanProvenance::OpaqueTransportLoan)
+        })
+    }
+}
 
 fn bench(name: &str, mut f: impl FnMut()) {
     let start = Instant::now();
@@ -100,10 +149,13 @@ fn main() {
     });
 
     bench("stable container typed borrow", || {
-        let borrowed =
-            <StableContainerPayload<VehiclePose> as BorrowPayload<VehiclePose>>::borrow_payload(
-                pose_bytes.0.as_slice(),
-            )
+        let frame = LoanedPoseFrame {
+            metadata: UFrameMetadata::publish(topic.clone())
+                .with_encoding(StableContainerPayload::<VehiclePose>::encoding()),
+            payload: pose_bytes.0.as_slice(),
+        };
+        let borrowed = frame
+            .borrow_stable_payload::<VehiclePose>()
             .expect("stable payload should borrow");
         black_box(borrowed.x);
     });

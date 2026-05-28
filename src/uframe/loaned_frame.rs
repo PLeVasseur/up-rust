@@ -14,7 +14,7 @@
 use super::{
     frame::{UFrameMetadata, UOwnedFrame},
     payload::UWireError,
-    zero_copy::{PayloadLoanKind, UTxBuffer, UZeroCopyRxFrame},
+    zero_copy::{PayloadLoanProvenance, UTxBuffer, UZeroCopyRxFrame},
 };
 
 /// Experimental frame view that keeps receive storage alive while routing.
@@ -44,7 +44,7 @@ pub trait LoanedFrame: Send {
     /// `None` means the frame is owned bytes or the erased receive lease cannot
     /// expose a useful transport-domain classification. Callers must not infer
     /// zero-copy-preserving forwarding capability from this value alone.
-    fn payload_loan_kind(&self) -> Option<PayloadLoanKind>;
+    fn payload_loan_provenance(&self) -> Option<PayloadLoanProvenance>;
 
     /// Returns a contiguous borrowed payload view when one is available without
     /// coalescing or allocation.
@@ -71,7 +71,7 @@ impl LoanedFrame for UOwnedFrame {
         self.payload_bytes().len()
     }
 
-    fn payload_loan_kind(&self) -> Option<PayloadLoanKind> {
+    fn payload_loan_provenance(&self) -> Option<PayloadLoanProvenance> {
         None
     }
 
@@ -93,7 +93,7 @@ impl LoanedFrame for UOwnedFrame {
 /// transport lease they come from.
 pub struct ZeroCopyLoanedFrame<Rx> {
     frame: Rx,
-    payload_loan_kind: Option<PayloadLoanKind>,
+    payload_loan_provenance: Option<PayloadLoanProvenance>,
 }
 
 impl<Rx> ZeroCopyLoanedFrame<Rx> {
@@ -101,15 +101,18 @@ impl<Rx> ZeroCopyLoanedFrame<Rx> {
     pub fn new(frame: Rx) -> Self {
         Self {
             frame,
-            payload_loan_kind: None,
+            payload_loan_provenance: None,
         }
     }
 
     /// Creates a loaned-frame adapter with an explicit backing loan class.
-    pub fn with_payload_loan_kind(frame: Rx, payload_loan_kind: PayloadLoanKind) -> Self {
+    pub fn with_payload_loan_provenance(
+        frame: Rx,
+        payload_loan_provenance: PayloadLoanProvenance,
+    ) -> Self {
         Self {
             frame,
-            payload_loan_kind: Some(payload_loan_kind),
+            payload_loan_provenance: Some(payload_loan_provenance),
         }
     }
 
@@ -135,8 +138,8 @@ where
         self.frame.payload_len()
     }
 
-    fn payload_loan_kind(&self) -> Option<PayloadLoanKind> {
-        self.payload_loan_kind
+    fn payload_loan_provenance(&self) -> Option<PayloadLoanProvenance> {
+        self.payload_loan_provenance
     }
 
     fn try_contiguous_payload(&self) -> Option<&[u8]> {
@@ -288,7 +291,10 @@ mod tests {
             metadata.clone(),
             vec![b"one".to_vec(), b"-two".to_vec(), b"-three".to_vec()],
         );
-        let loaned = ZeroCopyLoanedFrame::with_payload_loan_kind(rx, PayloadLoanKind::SharedMemory);
+        let loaned = ZeroCopyLoanedFrame::with_payload_loan_provenance(
+            rx,
+            PayloadLoanProvenance::SharedMemory,
+        );
         let mut tx = UVecTxBuffer::new(metadata.clone(), loaned.payload_len());
 
         let copied = copy_loaned_frame_payload_to_tx(&loaned, &mut tx).expect("copy succeeds");
@@ -297,8 +303,8 @@ mod tests {
         assert_eq!(tx.payload(), b"one-two-three");
         assert_eq!(loaned.metadata(), &metadata);
         assert_eq!(
-            loaned.payload_loan_kind(),
-            Some(PayloadLoanKind::SharedMemory)
+            loaned.payload_loan_provenance(),
+            Some(PayloadLoanProvenance::SharedMemory)
         );
         assert!(loaned.try_contiguous_payload().is_none());
     }

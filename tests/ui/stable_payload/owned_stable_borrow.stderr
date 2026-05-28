@@ -1,0 +1,24 @@
+error[E0277]: the trait bound `StableContainerPayload<OwnedStableBorrow>: BorrowPayload<OwnedStableBorrow>` is not satisfied
+  --> tests/ui/stable_payload/owned_stable_borrow.rs:18:30
+   |
+18 |         .borrow_payload_as::<StableContainerPayload<OwnedStableBorrow>, OwnedStableBorrow>()
+   |          -----------------   ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ the trait `BorrowPayload<OwnedStableBorrow>` is not implemented for `StableContainerPayload<OwnedStableBorrow>`
+   |          |
+   |          required by a bound introduced by this call
+   |
+help: the following other types implement trait `BorrowPayload<T>`
+  --> src/uframe/payload.rs
+   |
+   | impl BorrowPayload<[u8]> for RawBytes {
+   | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ `RawBytes`
+...
+   | impl BorrowPayload<[u8]> for McapPayload {
+   | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ `McapPayload`
+note: required by a bound in `UOwnedFrame::borrow_payload_as`
+  --> src/uframe/frame.rs
+   |
+   |     pub fn borrow_payload_as<C, T>(&self) -> Result<&T, UWireError>
+   |            ----------------- required by a bound in this associated function
+   |     where
+   |         C: PayloadCodec + BorrowPayload<T>,
+   |                           ^^^^^^^^^^^^^^^^ required by this bound in `UOwnedFrame::borrow_payload_as`

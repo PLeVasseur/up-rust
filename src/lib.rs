@@ -132,8 +132,8 @@ pub use uframe::{
     EncodePayload, EncodedPayload, LoanPayload, LoanUninitPayload, LoanedInitPayload,
     LoanedUninitPayload, McapPayload, PayloadCodec, PayloadCodecCapabilities, PayloadCodecRegistry,
     PayloadEncoding, PayloadEncodingError, PayloadLayout, PlacementDefault, ReadDecodePayload,
-    StableContainerPayload, StablePayload, StablePayloadVariant, StableTypeDetail,
-    TypedPayloadCodec, UAttributes, UEncoding, UEncodingError, UFrameBuilder, UFrameBuilderError,
+    StableContainerPayload, StableContainerPayloadInfo, StablePayload, StablePayloadVariant,
+    StableTypeDetail, TypedPayloadCodec, UAttributes, UFrameBuilder, UFrameBuilderError,
     UFrameMetadata, UFrameWireError, UFrameWireFormat, UMessageType, UOwnedFrame, UPayloadFormat,
     UPriority, UWireError, ZeroCopySend,
 };
@@ -174,8 +174,10 @@ pub mod __derive_support {
 mod utransport;
 pub use utransport::{
     validate_frame_metadata_for_payload, validate_frame_metadata_for_transport,
-    validate_owned_frame_for_transport, LocalUriProvider, StaticUriProvider, UOwnedListener,
-    UOwnedTransport, UOwnedTransportExt, UZeroCopyUninitTransport, UZeroCopyUninitTransportExt,
+    validate_owned_frame_for_transport, verify_filter_criteria, LocalUriProvider,
+    StaticUriProvider, UOwnedListener, UOwnedTransport, UOwnedTransportExt, UTxLoanSpec,
+    UTxPayloadSpec, UZeroCopyListener, UZeroCopyTransport, UZeroCopyTransportExt,
+    UZeroCopyUninitTransport, UZeroCopyUninitTransportExt,
 };
 
 #[cfg(any(test, feature = "test-util"))]
@@ -216,9 +218,9 @@ pub mod payload {
         LoanUninitPayload, LoanedInitPayload, LoanedUninitPayload, McapPayload, PayloadCodec,
         PayloadCodecCapabilities, PayloadCodecRegistry, PayloadEncoding, PayloadEncodingError,
         PayloadFormat, PayloadLayout, PlacementDefault, RawBytes, ReadDecodePayload,
-        StableContainerPayload, StablePayload, StablePayloadVariant, StableTypeDetail,
-        TypedPayloadCodec, UDeserializer, UEncoding, UEncodingError, UErasedSerializer,
-        UPayloadFormat, UReadDeserializer, USerializer, UWireError, ZeroCopySend,
+        StableContainerPayload, StableContainerPayloadInfo, StablePayload, StablePayloadVariant,
+        StableTypeDetail, TypedPayloadCodec, UDeserializer, UErasedSerializer, UPayloadFormat,
+        UReadDeserializer, USerializer, UWireError, ZeroCopySend,
     };
     #[cfg(any(
         feature = "unsafe-stable-payload-tx",
@@ -240,6 +242,7 @@ pub mod transport {
         validate_frame_metadata_for_payload, validate_frame_metadata_for_transport,
         validate_owned_frame_for_transport, verify_filter_criteria, ComparableOwnedListener,
         LocalUriProvider, StaticUriProvider, UOwnedListener, UOwnedTransport, UOwnedTransportExt,
+        UTxLoanSpec, UTxPayloadSpec,
     };
 }
 
@@ -251,13 +254,13 @@ pub mod zero_copy {
     pub use crate::uframe::{
         verify_contiguous_rx_payload_layout, verify_loaned_rx_payload_layout,
         verify_tx_buffer_payload_layout, verify_uninit_tx_buffer_payload_layout, LoanedPayload,
-        LoanedPayloadMut, LoanedPayloadUninitMut, LoanedUninitByteWriter, PayloadLoanKind,
+        LoanedPayloadMut, LoanedPayloadUninitMut, LoanedUninitByteWriter, PayloadLoanProvenance,
         UContiguousZeroCopyRxFrame, ULoanedContiguousZeroCopyRxFrame, UTxBuffer, UUninitTxBuffer,
         UVecTxBuffer, UVecUninitTxBuffer, UZeroCopyPayloadCopyExt, UZeroCopyRxFrame,
     };
     pub use crate::utransport::{
-        UZeroCopyListener, UZeroCopyTransport, UZeroCopyTransportExt, UZeroCopyUninitTransport,
-        UZeroCopyUninitTransportExt,
+        UTxLoanSpec, UTxPayloadSpec, UZeroCopyListener, UZeroCopyTransport, UZeroCopyTransportExt,
+        UZeroCopyUninitTransport, UZeroCopyUninitTransportExt,
     };
 
     #[cfg(any(test, feature = "test-util"))]
@@ -276,9 +279,9 @@ pub mod prelude {
             EncodedPayload, LoanPayload, LoanUninitPayload, LoanedInitPayload, LoanedUninitPayload,
             McapPayload, PayloadCodec, PayloadCodecCapabilities, PayloadCodecRegistry,
             PayloadEncoding, PayloadFormat, PayloadLayout, RawBytes, ReadDecodePayload,
-            StableContainerPayload, StablePayload, StablePayloadVariant, StableTypeDetail,
-            TypedPayloadCodec, UDeserializer, UPayloadFormat, UReadDeserializer, USerializer,
-            UWireError,
+            StableContainerPayload, StableContainerPayloadInfo, StablePayload,
+            StablePayloadVariant, StableTypeDetail, TypedPayloadCodec, UDeserializer,
+            UPayloadFormat, UReadDeserializer, USerializer, UWireError,
         },
         transport::{UOwnedListener, UOwnedTransport, UOwnedTransportExt},
         UCode, UStatus, UUri, UUID,

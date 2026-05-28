@@ -11,7 +11,7 @@
  * SPDX-License-Identifier: Apache-2.0
  ********************************************************************************/
 
-use std::mem;
+use std::{io::Cursor, mem};
 
 #[cfg(feature = "expert-unsafe-payloads")]
 use std::sync::Mutex;
@@ -20,15 +20,17 @@ use std::sync::Mutex;
 use async_trait::async_trait;
 use up_rust::{
     payload::{
-        BorrowPayload, EncodePayload, LoanPayload, LoanUninitPayload, PlacementDefault,
-        StableContainerPayload,
+        EncodePayload, LoanPayload, LoanUninitPayload, PlacementDefault, StableContainerPayload,
     },
-    zero_copy::{UTxBuffer, UUninitTxBuffer, UVecTxBuffer, UVecUninitTxBuffer},
+    zero_copy::{
+        LoanedPayload, PayloadLoanProvenance, ULoanedContiguousZeroCopyRxFrame, UTxBuffer,
+        UUninitTxBuffer, UVecTxBuffer, UVecUninitTxBuffer, UZeroCopyRxFrame,
+    },
     PayloadEncoding, UAttributes, UFrameMetadata, UMessageType, UUri, UUID,
 };
 
 #[cfg(feature = "expert-unsafe-payloads")]
-use up_rust::{UOwnedFrame, UStatus, UZeroCopyUninitTransport};
+use up_rust::{UOwnedFrame, UStatus, UTxLoanSpec, UZeroCopyUninitTransport};
 
 #[cfg(feature = "expert-unsafe-payloads")]
 use up_rust::zero_copy::{UZeroCopyTransport, UZeroCopyUninitTransportExt};
@@ -84,6 +86,69 @@ struct PaddedPose {
     large: u32,
 }
 
+struct LoanedSliceFrame<'a> {
+    metadata: UFrameMetadata,
+    payload: &'a [u8],
+}
+
+impl UZeroCopyRxFrame for LoanedSliceFrame<'_> {
+    type PayloadReader<'a>
+        = Cursor<&'a [u8]>
+    where
+        Self: 'a;
+    type PayloadSlices<'a>
+        = std::iter::Once<&'a [u8]>
+    where
+        Self: 'a;
+
+    fn metadata(&self) -> &UFrameMetadata {
+        &self.metadata
+    }
+
+    fn payload_len(&self) -> usize {
+        self.payload.len()
+    }
+
+    fn payload_reader(&self) -> Self::PayloadReader<'_> {
+        Cursor::new(self.payload)
+    }
+
+    fn payload_slices(&self) -> Self::PayloadSlices<'_> {
+        std::iter::once(self.payload)
+    }
+
+    fn try_contiguous_payload(&self) -> Option<&[u8]> {
+        Some(self.payload)
+    }
+}
+
+impl ULoanedContiguousZeroCopyRxFrame for LoanedSliceFrame<'_> {
+    fn loaned_contiguous_payload(&self) -> Result<LoanedPayload<'_>, up_rust::UWireError> {
+        // SAFETY: The test frame keeps `payload` alive for `&self` and exposes
+        // it as the exact visible loan-backed payload slice.
+        Ok(unsafe {
+            LoanedPayload::new_unchecked(self.payload, PayloadLoanProvenance::OpaqueTransportLoan)
+        })
+    }
+}
+
+fn with_stable_payload<T, R>(
+    encoding: PayloadEncoding,
+    payload: &[u8],
+    f: impl FnOnce(&T) -> R,
+) -> Result<R, up_rust::UWireError>
+where
+    T: up_rust::StablePayload,
+{
+    let frame = LoanedSliceFrame {
+        metadata: miri_publish_metadata(UUri::try_from("//miri/4210/1/9000").unwrap())
+            .with_encoding(encoding),
+        payload,
+    };
+    let borrowed = frame.borrow_stable_payload::<T>()?;
+    Ok(f(borrowed))
+}
+
 #[cfg(feature = "expert-unsafe-payloads")]
 #[derive(Default)]
 struct MiriUninitTransport {
@@ -96,13 +161,13 @@ impl UZeroCopyTransport for MiriUninitTransport {
     type Tx = UVecTxBuffer;
     type Rx = UOwnedFrame;
 
-    async fn reserve(
-        &self,
-        metadata: UFrameMetadata,
-        payload_len: usize,
-        alignment: usize,
-    ) -> Result<Self::Tx, UStatus> {
-        UVecTxBuffer::with_alignment(metadata, payload_len, alignment).map_err(UStatus::from)
+    async fn loan_tx(&self, spec: UTxLoanSpec) -> Result<Self::Tx, UStatus> {
+        UVecTxBuffer::with_alignment(
+            spec.metadata().clone(),
+            spec.payload_len(),
+            spec.payload_alignment(),
+        )
+        .map_err(UStatus::from)
     }
 
     async fn send_zero_copy(&self, buffer: Self::Tx) -> Result<(), UStatus> {
@@ -116,13 +181,13 @@ impl UZeroCopyTransport for MiriUninitTransport {
 impl UZeroCopyUninitTransport for MiriUninitTransport {
     type UninitTx = UVecUninitTxBuffer;
 
-    async fn reserve_uninit(
-        &self,
-        metadata: UFrameMetadata,
-        payload_len: usize,
-        alignment: usize,
-    ) -> Result<Self::UninitTx, UStatus> {
-        UVecUninitTxBuffer::with_alignment(metadata, payload_len, alignment).map_err(UStatus::from)
+    async fn loan_uninit_tx(&self, spec: UTxLoanSpec) -> Result<Self::UninitTx, UStatus> {
+        UVecUninitTxBuffer::with_alignment(
+            spec.metadata().clone(),
+            spec.payload_len(),
+            spec.payload_alignment(),
+        )
+        .map_err(UStatus::from)
     }
 }
 
@@ -146,12 +211,12 @@ fn stable_container_loan_then_borrow_is_miri_friendly() {
         pose.y = 9;
     }
 
-    let borrowed =
-        <StableContainerPayload<VehiclePose> as BorrowPayload<VehiclePose>>::borrow_payload(
-            buffer.payload(),
-        )
-        .unwrap();
-    assert_eq!(borrowed, &VehiclePose { x: 7, y: 9 });
+    with_stable_payload::<VehiclePose, _>(
+        StableContainerPayload::<VehiclePose>::encoding(),
+        buffer.payload(),
+        |borrowed| assert_eq!(borrowed, &VehiclePose { x: 7, y: 9 }),
+    )
+    .unwrap();
 }
 
 #[test]
@@ -168,12 +233,12 @@ fn stable_container_encode_then_borrow_is_miri_friendly() {
     )
     .unwrap();
 
-    let borrowed =
-        <StableContainerPayload<VehiclePose> as BorrowPayload<VehiclePose>>::borrow_payload(
-            storage.0.as_slice(),
-        )
-        .unwrap();
-    assert_eq!(borrowed, &value);
+    with_stable_payload::<VehiclePose, _>(
+        StableContainerPayload::<VehiclePose>::encoding(),
+        storage.0.as_slice(),
+        |borrowed| assert_eq!(borrowed, &value),
+    )
+    .unwrap();
 }
 
 #[test]
@@ -185,14 +250,15 @@ fn stable_container_borrows_broad_padded_initialized_bytes_under_miri() {
     storage.0[0] = 1;
     storage.0[4..8].copy_from_slice(&2_u32.to_ne_bytes());
 
-    let borrowed =
-        <StableContainerPayload<PaddedPose> as BorrowPayload<PaddedPose>>::borrow_payload(
-            storage.0.as_slice(),
-        )
-        .unwrap();
-
-    assert_eq!(borrowed.small, 1);
-    assert_eq!(borrowed.large, 2);
+    with_stable_payload::<PaddedPose, _>(
+        StableContainerPayload::<PaddedPose>::encoding(),
+        storage.0.as_slice(),
+        |borrowed| {
+            assert_eq!(borrowed.small, 1);
+            assert_eq!(borrowed.large, 2);
+        },
+    )
+    .unwrap();
 }
 
 #[test]
@@ -223,15 +289,16 @@ fn stable_container_uninit_write_initializes_non_copy_payload_under_miri() {
     // SAFETY: `slot.write` initialized exactly one `NonCopyPose` in the visible
     // payload range before the uninit buffer is committed.
     let buffer = unsafe { buffer.assume_payload_init() };
-    let borrowed =
-        <StableContainerPayload<NonCopyPose> as BorrowPayload<NonCopyPose>>::borrow_payload(
-            buffer.payload(),
-        )
-        .unwrap();
-
-    assert_eq!(borrowed.x, 11);
-    assert_eq!(borrowed.y, 13);
-    assert_eq!(borrowed.marker.value, 17);
+    with_stable_payload::<NonCopyPose, _>(
+        StableContainerPayload::<NonCopyPose>::encoding(),
+        buffer.payload(),
+        |borrowed| {
+            assert_eq!(borrowed.x, 11);
+            assert_eq!(borrowed.y, 13);
+            assert_eq!(borrowed.marker.value, 17);
+        },
+    )
+    .unwrap();
 }
 
 #[test]
@@ -317,15 +384,16 @@ fn stable_container_raw_field_initialization_is_miri_friendly() {
     // SAFETY: The raw field initialization above produced an initialized marker
     // before the uninit buffer is committed.
     let buffer = unsafe { buffer.assume_payload_init() };
-    let borrowed =
-        <StableContainerPayload<NonCopyPose> as BorrowPayload<NonCopyPose>>::borrow_payload(
-            buffer.payload(),
-        )
-        .unwrap();
-
-    assert_eq!(borrowed.x, 19);
-    assert_eq!(borrowed.y, 23);
-    assert_eq!(borrowed.marker.value, 29);
+    with_stable_payload::<NonCopyPose, _>(
+        StableContainerPayload::<NonCopyPose>::encoding(),
+        buffer.payload(),
+        |borrowed| {
+            assert_eq!(borrowed.x, 19);
+            assert_eq!(borrowed.y, 23);
+            assert_eq!(borrowed.marker.value, 29);
+        },
+    )
+    .unwrap();
 }
 
 #[cfg(any(
@@ -405,12 +473,13 @@ async fn expert_padded_stable_payload_tx_is_miri_friendly_when_zeroed() {
         .take()
         .expect("transport should have sent one frame");
     assert_eq!(frame.payload().len(), mem::size_of::<PaddedPose>());
-    let borrowed =
-        <StableContainerPayload<PaddedPose> as BorrowPayload<PaddedPose>>::borrow_payload(
-            frame.payload(),
-        )
-        .unwrap();
-
-    assert_eq!(borrowed.small, 31);
-    assert_eq!(borrowed.large, 37);
+    with_stable_payload::<PaddedPose, _>(
+        StableContainerPayload::<PaddedPose>::encoding(),
+        frame.payload(),
+        |borrowed| {
+            assert_eq!(borrowed.small, 31);
+            assert_eq!(borrowed.large, 37);
+        },
+    )
+    .unwrap();
 }

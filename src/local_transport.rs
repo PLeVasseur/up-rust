@@ -18,8 +18,8 @@ use std::{collections::HashSet, sync::Arc};
 use tokio::sync::RwLock;
 
 use crate::{
-    transport::ComparableOwnedListener, validate_owned_frame_for_transport, UCode, UOwnedFrame,
-    UOwnedListener, UOwnedTransport, UStatus, UUri,
+    transport::ComparableOwnedListener, validate_owned_frame_for_transport, verify_filter_criteria,
+    UCode, UOwnedFrame, UOwnedListener, UOwnedTransport, UStatus, UUri,
 };
 
 #[derive(Clone, Eq, PartialEq, Hash)]
@@ -87,6 +87,7 @@ impl UOwnedTransport for LocalTransport {
         sink_filter: Option<&UUri>,
         listener: Arc<dyn UOwnedListener>,
     ) -> Result<(), UStatus> {
+        verify_filter_criteria(source_filter, sink_filter)?;
         let registered_listener = RegisteredOwnedListener {
             source_filter: source_filter.to_owned(),
             sink_filter: sink_filter.map(ToOwned::to_owned),
@@ -110,6 +111,7 @@ impl UOwnedTransport for LocalTransport {
         sink_filter: Option<&UUri>,
         listener: Arc<dyn UOwnedListener>,
     ) -> Result<(), UStatus> {
+        verify_filter_criteria(source_filter, sink_filter)?;
         let registered_listener = RegisteredOwnedListener {
             source_filter: source_filter.to_owned(),
             sink_filter: sink_filter.map(ToOwned::to_owned),
@@ -131,7 +133,14 @@ impl UOwnedTransport for LocalTransport {
 mod tests {
     use std::sync::Arc;
 
-    use crate::{local_transport::LocalTransport, UCode, UOwnedTransport, UUri};
+    use crate::{local_transport::LocalTransport, UCode, UOwnedListener, UOwnedTransport, UUri};
+
+    struct NoopListener;
+
+    #[async_trait::async_trait]
+    impl UOwnedListener for NoopListener {
+        async fn on_receive_owned(&self, _frame: crate::UOwnedFrame) {}
+    }
 
     #[tokio::test]
     async fn receive_owned_defaults_to_unimplemented() {
@@ -142,5 +151,33 @@ mod tests {
             .receive_owned(&topic, None)
             .await
             .is_err_and(|status| status.get_code() == UCode::UNIMPLEMENTED));
+    }
+
+    #[tokio::test]
+    async fn register_owned_listener_rejects_invalid_filters() {
+        let transport = LocalTransport::default();
+        let rpc_method = UUri::try_from_parts("vehicle", 0x4210, 1, 0x0001).expect("valid URI");
+        let listener = Arc::new(NoopListener);
+
+        let status = transport
+            .register_owned_listener(&rpc_method, None, listener)
+            .await
+            .expect_err("invalid filter must be rejected");
+
+        assert_eq!(status.get_code(), UCode::INVALID_ARGUMENT);
+    }
+
+    #[tokio::test]
+    async fn unregister_owned_listener_rejects_invalid_filters_before_lookup() {
+        let transport = LocalTransport::default();
+        let rpc_method = UUri::try_from_parts("vehicle", 0x4210, 1, 0x0001).expect("valid URI");
+        let listener = Arc::new(NoopListener);
+
+        let status = transport
+            .unregister_owned_listener(&rpc_method, None, listener)
+            .await
+            .expect_err("invalid filter must be rejected");
+
+        assert_eq!(status.get_code(), UCode::INVALID_ARGUMENT);
     }
 }

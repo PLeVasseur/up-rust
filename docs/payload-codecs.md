@@ -1,6 +1,6 @@
 # Payload Codecs And Zero-Copy Support
 
-This crate separates whole-frame wire formats from payload codecs. Transports carry `UFrameMetadata` and payload bytes; they must not parse codec-specific stable type metadata or schema details.
+This crate separates whole-frame wire formats from payload codecs. Transports carry `UFrameMetadata` and payload bytes; they should keep codec-specific payload schemas opaque unless they are using the type-agnostic stable-container metadata parser for validation, diagnostics, compatibility lookup, or routing fail-safe checks.
 
 ## Copy Semantics
 
@@ -18,13 +18,13 @@ This crate separates whole-frame wire formats from payload codecs. Transports ca
 | `UZeroCopyUninitTransportExt::send_uninit_loaned_payload_as` | Constructs the typed payload directly in uninitialized transport storage exactly once. This is the true stable typed zero-copy TX path when the transport supports uninitialized loans. |
 | `UZeroCopyUninitTransportExt::send_uninit_loaned_bytes_as` | Lets generators write encoded bytes directly into uninitialized transport storage through an exact-length cursor. |
 | `UContiguousZeroCopyRxFrame::borrow_payload_as` | Borrows from one contiguous payload slice. This does not prove the slice is loan-backed. |
-| `ULoanedContiguousZeroCopyRxFrame::borrow_loaned_payload_as` | Borrows from contiguous loan-backed payload storage. This is the typed payload zero-copy RX path. |
+| `ULoanedContiguousZeroCopyRxFrame::borrow_stable_payload<T>()` | Borrows a stable-container `&T` from contiguous loan-backed payload storage after encoding, size, alignment, and lifetime checks. This is the safe stable typed zero-copy RX path. |
 
 ## Stable Containers
 
 `StableContainerPayload<T>` follows the iceoryx2 `ZeroCopySend` safety model. `StablePayload` is the unsafe shared-memory contract, the stable type name is the cross-process identity, and runtime compatibility checks use type name, `variant=fixed`, exact size, and sufficient advertised alignment. There is no required layout hash or fingerprint.
 
-Typed RX borrowing requires broad `StablePayload` plus matching metadata, exact payload length, and actual pointer alignment. Safe stable-container TX and owned/raw encode paths are stricter: they require `ByteBackedStablePayload`, the recursive proof that every byte in `size_of::<T>()` is initialized by safe construction. This excludes implicit-padding layouts from safe byte-backed TX/encode while still allowing them on RX when the received payload bytes are already initialized by the transport.
+Typed RX borrowing requires broad `StablePayload`, loan-backed contiguous receive storage, matching metadata, exact payload length, and actual pointer alignment. The safe API for that receive path is `ULoanedContiguousZeroCopyRxFrame::borrow_stable_payload<T>()`; owned frames and generic contiguous buffers cannot safely produce `&T` for stable-container payloads in this pass. Safe stable-container TX and owned/raw encode paths are stricter: they require `ByteBackedStablePayload`, the recursive proof that every byte in `size_of::<T>()` is initialized by safe construction. This excludes implicit-padding layouts from safe byte-backed TX/encode while still allowing them on loan-backed RX when the received payload bytes are already initialized by the transport.
 
 For payloads that are already encoded, prefer `EncodedPayload<C>` over passing raw bytes plus a separate codec type at the call site. `UOwnedFrame::from_encoded_payload`, `UOwnedTransportExt::send_encoded_payload`, and `UZeroCopyTransportExt::send_encoded_payload` keep the codec tag attached to the bytes.
 
@@ -86,7 +86,7 @@ For padded stable payloads, safe byte-backed TX/encode is intentionally unavaila
 | `unsafe-uninit-payload-bytes` | Raw `MaybeUninit<u8>` byte slices. | Keep byte initialization proof consistent. Prefer `LoanedUninitByteWriter`. |
 | `expert-unsafe-payloads` | All unsafe payload features. | All active unsafe obligations above. |
 
-The stable-container custom encoding uses `up.stable-container` as the codec family and carries type-detail metadata in the content type, for example `application/vnd.uprotocol.stable-container;type="example.vehicle.VehiclePose";variant=fixed;size=8;align=4`. This metadata is for endpoints/codecs; transports keep it opaque.
+The stable-container custom encoding uses `up.stable-container` as the codec family and carries type-detail metadata in the content type, for example `application/vnd.uprotocol.stable-container;type="example.vehicle.VehiclePose";variant=fixed;size=8;align=4`. `StableContainerPayloadInfo::parse(&PayloadEncoding)` exposes that metadata without constructing a typed borrow. The parser is for validation, diagnostics, compatibility lookup, and routing fail-safe checks only; it is not a proof that arbitrary owned bytes contain a valid `T`.
 
 Runtime-length dynamic slice payloads map to a separate future API. This fixed-size stable-container path always emits and requires `variant=fixed`.
 
@@ -120,7 +120,7 @@ struct VehiclePose {
 
 | Removed API or metadata | Replacement |
 | --- | --- |
-| `PayloadContract`, `StableLayout`, `StableFromBytes`, `StableIntoBytes` | `StablePayload` plus `StableContainerPayload<T>` encode, borrow, and loan traits. |
+| `PayloadContract`, `StableLayout`, `StableFromBytes`, `StableIntoBytes` | `StablePayload` plus `StableContainerPayload<T>` encode and loan traits. Stable typed receive uses `borrow_stable_payload<T>()` on loan-backed RX only. |
 | `StableFieldDescriptor`, `StableLayoutDescriptor`, `PayloadEndian`, `stable_payload_contract!` | No replacement. Runtime compatibility is type name, `variant=fixed`, exact size, and sufficient alignment. |
 | `#[stable_payload(type_id = "...", version = ...)]` | `#[stable_payload(type_name = "...")]`. Keep the same stable type string previously used as `type_id`. |
 | Separate `ZeroCopySend` derive for uProtocol stable payloads | `#[derive(StablePayload)]`, which emits the matching `ZeroCopySend` impl. Add `ByteBackedStablePayload` derive for safe TX/encode. |
@@ -154,4 +154,4 @@ Transport tests should use the conformance helpers:
 
 With the `test-util` feature, downstream transports can also use `test_util::zero_copy_conformance` wrappers around these checks.
 
-For payload-level zero-copy claims, a receive lease should implement `ULoanedContiguousZeroCopyRxFrame` and return `LoanedPayload<'_>`. If a transport can sometimes receive copied bytes, the trait implementation must return an error for those frames instead of silently treating them as typed zero-copy.
+For payload-level zero-copy claims, a receive lease should implement `ULoanedContiguousZeroCopyRxFrame` and return `LoanedPayload<'_>`. Stable typed receive must use `borrow_stable_payload<T>()`. If a transport can sometimes receive copied bytes, the trait implementation must return an error for those frames instead of silently treating them as typed zero-copy.

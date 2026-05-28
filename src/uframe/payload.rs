@@ -35,6 +35,9 @@ use crate::{UCode, UStatus};
 use super::frame::{PayloadEncoding, UPayloadFormat};
 use super::zero_copy::LoanedPayloadUninitMut;
 
+const STABLE_CONTAINER_ENCODING_ID: &str = "up.stable-container";
+const STABLE_CONTAINER_MEDIA_TYPE: &str = "application/vnd.uprotocol.stable-container";
+
 /// Error type used by serialization-neutral frame helpers.
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub enum UWireError {
@@ -838,13 +841,35 @@ impl PayloadCodecRegistry {
         self.codecs.get(encoding).cloned()
     }
 
+    /// Gets a registered codec compatible with `encoding`.
+    ///
+    /// Exact lookup remains the map semantic used by [`Self::get`]. This helper
+    /// additionally applies stable-container compatibility rules: matching stable
+    /// type name, `variant=fixed`, exact size, and advertised alignment greater
+    /// than or equal to the locally registered codec alignment.
+    pub fn get_compatible(&self, encoding: &PayloadEncoding) -> Option<Arc<dyn DynPayloadCodec>> {
+        if let Some(codec) = self.get(encoding) {
+            return Some(codec);
+        }
+
+        let actual = StableContainerPayloadInfo::parse(encoding).ok()?;
+        self.codecs.values().find_map(|codec| {
+            let expected = StableContainerPayloadInfo::parse(&codec.payload_encoding()).ok()?;
+            (actual.type_name == expected.type_name
+                && actual.variant == expected.variant
+                && actual.size == expected.size
+                && actual.alignment >= expected.alignment)
+                .then(|| codec.clone())
+        })
+    }
+
     /// Gets runtime-visible capabilities for a registered codec.
     pub fn capabilities(
         &self,
         encoding: &PayloadEncoding,
     ) -> Result<PayloadCodecCapabilities, UWireError> {
         let codec = self
-            .get(encoding)
+            .get_compatible(encoding)
             .ok_or_else(|| UWireError::CodecNotRegistered(format!("{encoding:?}")))?;
         Ok(codec.capabilities())
     }
@@ -1065,6 +1090,103 @@ pub struct StableTypeDetail<'a> {
     pub size: usize,
     /// Required payload value alignment in bytes.
     pub alignment: usize,
+}
+
+/// Type-agnostic stable-container metadata parsed from a payload encoding.
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct StableContainerPayloadInfo {
+    /// Cross-process and cross-language type identity.
+    pub type_name: String,
+    /// Stable-container payload variant.
+    pub variant: StablePayloadVariant,
+    /// Exact payload size in bytes.
+    pub size: usize,
+    /// Advertised payload alignment in bytes.
+    pub alignment: usize,
+}
+
+impl StableContainerPayloadInfo {
+    /// Native custom encoding id for stable-container payloads.
+    pub const ENCODING_ID: &'static str = STABLE_CONTAINER_ENCODING_ID;
+
+    /// Parses stable-container metadata from a payload encoding.
+    pub fn parse(encoding: &PayloadEncoding) -> Result<Self, UWireError> {
+        let expected = PayloadEncoding::custom(Self::ENCODING_ID, STABLE_CONTAINER_MEDIA_TYPE);
+        let Some(custom) = encoding.custom_encoding() else {
+            return Err(UWireError::UnsupportedEncoding {
+                expected: Box::new(expected),
+                actual: Box::new(encoding.clone()),
+            });
+        };
+        if custom.id() != Self::ENCODING_ID {
+            return Err(UWireError::UnsupportedEncoding {
+                expected: Box::new(expected),
+                actual: Box::new(encoding.clone()),
+            });
+        }
+        Self::parse_content_type(custom.content_type()).map_err(UWireError::invalid_payload)
+    }
+
+    /// Returns whether this metadata is compatible with local stable payload `T`.
+    pub fn is_compatible_with<T>(&self) -> bool
+    where
+        T: StablePayload,
+    {
+        let expected = T::stable_type_detail();
+        self.type_name == expected.type_name
+            && self.variant == expected.variant
+            && self.size == expected.size
+            && self.alignment >= expected.alignment
+    }
+
+    fn parse_content_type(content_type: &str) -> Result<Self, String> {
+        let media_type = mediatype::MediaType::parse(content_type)
+            .map_err(|error| format!("invalid media type: {error}"))?;
+        let expected_media_type = mediatype::MediaType::parse(STABLE_CONTAINER_MEDIA_TYPE)
+            .expect("stable-container media type is valid");
+        if media_type.essence() != expected_media_type {
+            return Err(format!(
+                "media type must be {}",
+                expected_media_type.essence()
+            ));
+        }
+
+        let type_name = required_stable_parameter(&media_type, "type")?;
+        if type_name.is_empty() {
+            return Err("type parameter must not be empty".to_string());
+        }
+        let variant = required_stable_parameter(&media_type, "variant")?;
+        let variant = StablePayloadVariant::parse(&variant).ok_or_else(|| {
+            format!(
+                "variant parameter must be {}",
+                StablePayloadVariant::FixedSize
+            )
+        })?;
+        let size = required_stable_parameter(&media_type, "size")?
+            .parse::<usize>()
+            .map_err(|error| format!("invalid size parameter: {error}"))?;
+        let alignment = required_stable_parameter(&media_type, "align")?
+            .parse::<usize>()
+            .map_err(|error| format!("invalid align parameter: {error}"))?;
+        PayloadLayout::new(size, alignment).map_err(|error| error.to_string())?;
+
+        Ok(Self {
+            type_name,
+            variant,
+            size,
+            alignment,
+        })
+    }
+}
+
+fn required_stable_parameter(
+    media_type: &mediatype::MediaType<'_>,
+    name: &'static str,
+) -> Result<String, String> {
+    media_type
+        .get_param(mediatype::Name::new_unchecked(name))
+        .map(|value| value.unquoted_str().into_owned())
+        .ok_or_else(|| format!("missing {name} parameter"))
 }
 
 impl Display for StableTypeDetail<'_> {
@@ -1448,9 +1570,9 @@ pub struct StableContainerPayload<T>(PhantomData<T>);
 
 impl<T: StablePayload> StableContainerPayload<T> {
     /// Native custom encoding id for stable-container payloads.
-    pub const ENCODING_ID: &'static str = "up.stable-container";
+    pub const ENCODING_ID: &'static str = STABLE_CONTAINER_ENCODING_ID;
 
-    const MEDIA_TYPE: &'static str = "application/vnd.uprotocol.stable-container";
+    const MEDIA_TYPE: &'static str = STABLE_CONTAINER_MEDIA_TYPE;
 
     /// Returns the stable-container payload encoding for `T`.
     pub fn encoding() -> PayloadEncoding
@@ -1482,56 +1604,28 @@ impl<T: StablePayload> StableContainerPayload<T> {
     }
 
     fn verify_content_type(content_type: &str) -> Result<(), String> {
-        let media_type = mediatype::MediaType::parse(content_type)
-            .map_err(|error| format!("invalid media type: {error}"))?;
-        let expected_media_type = mediatype::MediaType::parse(Self::MEDIA_TYPE)
-            .expect("stable-container media type is valid");
-        if media_type.essence() != expected_media_type {
-            return Err(format!(
-                "media type must be {}",
-                expected_media_type.essence()
-            ));
-        }
-
-        let type_name = Self::required_parameter(&media_type, "type")?;
-        let variant = Self::required_parameter(&media_type, "variant")?;
-        let size = Self::required_parameter(&media_type, "size")?
-            .parse::<usize>()
-            .map_err(|error| format!("invalid size parameter: {error}"))?;
-        let alignment = Self::required_parameter(&media_type, "align")?
-            .parse::<usize>()
-            .map_err(|error| format!("invalid align parameter: {error}"))?;
+        let info = StableContainerPayloadInfo::parse_content_type(content_type)?;
 
         let expected = T::stable_type_detail();
-        if type_name != expected.type_name {
+        if info.type_name != expected.type_name {
             return Err(format!("type parameter must be {}", expected.type_name));
         }
-        if StablePayloadVariant::parse(&variant) != Some(expected.variant) {
+        if info.variant != expected.variant {
             return Err(format!(
                 "variant parameter must be {}",
                 expected.variant.as_str()
             ));
         }
-        if size != expected.size {
+        if info.size != expected.size {
             return Err(format!("size parameter must be {}", expected.size));
         }
-        if alignment < expected.alignment {
+        if info.alignment < expected.alignment {
             return Err(format!(
                 "align parameter must be at least {}",
                 expected.alignment
             ));
         }
         Ok(())
-    }
-
-    fn required_parameter(
-        media_type: &mediatype::MediaType<'_>,
-        name: &'static str,
-    ) -> Result<String, String> {
-        media_type
-            .get_param(mediatype::Name::new_unchecked(name))
-            .map(|value| value.unquoted_str().into_owned())
-            .ok_or_else(|| format!("missing {name} parameter"))
     }
 
     fn check_layout(src: &[u8]) -> Result<(), UWireError> {
@@ -1575,6 +1669,19 @@ impl<T: StablePayload> StableContainerPayload<T> {
             )));
         }
         Ok(())
+    }
+
+    pub(crate) fn borrow_checked_payload(src: &[u8]) -> Result<&T, UWireError> {
+        Self::check_layout(src)?;
+        // SAFETY:
+        // - `check_layout` verified that `src.len() == size_of::<T>()` and that
+        //   `src.as_ptr()` satisfies `align_of::<T>()`.
+        // - The caller reached this method through the loan-backed receive API,
+        //   which ties the reference lifetime to the RX lease.
+        // - `T: StablePayload` is the unsafe contract that stable-container
+        //   metadata plus the transport's loan-backed receive path represents one
+        //   valid initialized `T`.
+        Ok(unsafe { &*src.as_ptr().cast::<T>() })
     }
 }
 
@@ -1659,26 +1766,6 @@ where
         };
         dst.copy_from_slice(src);
         Ok(())
-    }
-}
-
-impl<T> BorrowPayload<T> for StableContainerPayload<T>
-where
-    T: StablePayload,
-{
-    fn borrow_payload(src: &[u8]) -> Result<&T, UWireError> {
-        Self::check_layout(src)?;
-        // SAFETY:
-        // - `check_layout` verified that `src.len() == size_of::<T>()` and that
-        //   `src.as_ptr()` satisfies `align_of::<T>()`.
-        // - The returned reference is tied to `src`, whose slice reference is
-        //   non-null, valid for reads, and contained in one allocation.
-        // - `T: StablePayload` is the unsafe contract that the checked stable
-        //   metadata/provenance path represents one valid initialized `T`.
-        // - Per the Rust Reference, a value's alignment specifies which
-        //   addresses are valid to store the value at, and the size of `T` is
-        //   available through `size_of::<T>()` for `Sized` types.
-        Ok(unsafe { &*src.as_ptr().cast::<T>() })
     }
 }
 

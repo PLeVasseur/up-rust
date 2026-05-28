@@ -11,13 +11,13 @@
  * SPDX-License-Identifier: Apache-2.0
  ********************************************************************************/
 
-use std::{io::Cursor, mem, sync::Mutex};
+use std::{any::Any, io::Cursor, mem, sync::Arc, sync::Mutex};
 
 use super::*;
 use crate::{
     test_util::{zero_copy_conformance, InMemoryZeroCopyTransport},
     zero_copy::{UUninitTxBuffer, UVecUninitTxBuffer, UZeroCopyTransport, UZeroCopyTransportExt},
-    PlacementDefault, UCode, UStatus, UUri, UZeroCopyUninitTransportExt, UUID,
+    PlacementDefault, UCode, UStatus, UTxLoanSpec, UUri, UZeroCopyUninitTransportExt, UUID,
 };
 
 #[repr(C)]
@@ -145,7 +145,9 @@ impl ULoanedContiguousZeroCopyRxFrame for BorrowedContiguousFrame<'_> {
         // SAFETY:
         // - This test frame deliberately models a transport-backed borrowed
         //   payload, and `self.payload` remains valid for the lifetime of `&self`.
-        Ok(unsafe { LoanedPayload::new_unchecked(self.payload, PayloadLoanKind::TransportLoan) })
+        Ok(unsafe {
+            LoanedPayload::new_unchecked(self.payload, PayloadLoanProvenance::OpaqueTransportLoan)
+        })
     }
 }
 
@@ -197,12 +199,84 @@ impl ULoanedContiguousZeroCopyRxFrame for CopiedContiguousFrame<'_> {
     }
 }
 
+struct SegmentedCopyFrame {
+    metadata: UFrameMetadata,
+    payload_len: usize,
+    segments: Vec<Vec<u8>>,
+}
+
+fn test_vec_as_slice(bytes: &Vec<u8>) -> &[u8] {
+    bytes.as_slice()
+}
+
+impl UZeroCopyRxFrame for SegmentedCopyFrame {
+    type PayloadReader<'a>
+        = Cursor<Vec<u8>>
+    where
+        Self: 'a;
+    type PayloadSlices<'a>
+        = std::iter::Map<std::slice::Iter<'a, Vec<u8>>, fn(&Vec<u8>) -> &[u8]>
+    where
+        Self: 'a;
+
+    fn metadata(&self) -> &UFrameMetadata {
+        &self.metadata
+    }
+
+    fn payload_len(&self) -> usize {
+        self.payload_len
+    }
+
+    fn payload_reader(&self) -> Self::PayloadReader<'_> {
+        Cursor::new(self.segments.concat())
+    }
+
+    fn payload_slices(&self) -> Self::PayloadSlices<'_> {
+        self.segments
+            .iter()
+            .map(test_vec_as_slice as fn(&Vec<u8>) -> &[u8])
+    }
+}
+
 #[repr(C, align(4))]
 struct AlignedVehiclePoseBytes([u8; mem::size_of::<VehiclePose>()]);
 
 struct VehiclePoseTxBuffer {
     metadata: UFrameMetadata,
     storage: AlignedVehiclePoseBytes,
+}
+
+struct StableRuntimeCodec;
+
+impl DynPayloadCodec for StableRuntimeCodec {
+    fn codec_name(&self) -> &'static str {
+        "stable-runtime-test"
+    }
+
+    fn payload_encoding(&self) -> PayloadEncoding {
+        StableContainerPayload::<VehiclePose>::encoding()
+    }
+
+    fn capabilities(&self) -> PayloadCodecCapabilities {
+        PayloadCodecCapabilities {
+            borrow_loaned: true,
+            ..PayloadCodecCapabilities::default()
+        }
+    }
+
+    fn payload_layout(&self, _value: &dyn Any) -> Result<PayloadLayout, UWireError> {
+        Err(UWireError::invalid_payload("not used by this test codec"))
+    }
+
+    fn encode_payload(&self, _value: &dyn Any, _dst: &mut [u8]) -> Result<(), UWireError> {
+        Err(UWireError::invalid_payload("not used by this test codec"))
+    }
+
+    fn decode_payload_owned(&self, _src: &[u8]) -> Result<Box<dyn Any + Send>, UWireError> {
+        Err(UWireError::invalid_payload(
+            "stable owned typed decode is not supported",
+        ))
+    }
 }
 
 impl UTxBuffer for VehiclePoseTxBuffer {
@@ -229,35 +303,27 @@ impl UZeroCopyTransport for VehiclePoseTransport {
     type Tx = VehiclePoseTxBuffer;
     type Rx = UOwnedFrame;
 
-    async fn reserve(
-        &self,
-        metadata: UFrameMetadata,
-        payload_len: usize,
-        alignment: usize,
-    ) -> Result<Self::Tx, UStatus> {
-        if payload_len != mem::size_of::<VehiclePose>() {
+    async fn loan_tx(&self, spec: UTxLoanSpec) -> Result<Self::Tx, UStatus> {
+        if spec.payload_len() != mem::size_of::<VehiclePose>() {
             return Err(UStatus::fail_with_code(
                 UCode::INVALID_ARGUMENT,
                 "unexpected payload length",
             ));
         }
-        if alignment > mem::align_of::<AlignedVehiclePoseBytes>() {
+        if spec.payload_alignment() > mem::align_of::<AlignedVehiclePoseBytes>() {
             return Err(UStatus::fail_with_code(
                 UCode::INVALID_ARGUMENT,
                 "unsupported payload alignment",
             ));
         }
         Ok(VehiclePoseTxBuffer {
-            metadata,
+            metadata: spec.metadata().clone(),
             storage: AlignedVehiclePoseBytes([0; mem::size_of::<VehiclePose>()]),
         })
     }
 
     async fn send_zero_copy(&self, buffer: Self::Tx) -> Result<(), UStatus> {
-        let pose =
-            *<StableContainerPayload<VehiclePose> as BorrowPayload<VehiclePose>>::borrow_payload(
-                buffer.payload(),
-            )
+        let pose = *StableContainerPayload::<VehiclePose>::borrow_checked_payload(buffer.payload())
             .map_err(UStatus::from)?;
         self.sent
             .lock()
@@ -268,20 +334,18 @@ impl UZeroCopyTransport for VehiclePoseTransport {
 }
 
 fn bytes_of_pose(pose: &VehiclePose) -> &[u8] {
+    bytes_of(pose)
+}
+
+fn bytes_of<T>(value: &T) -> &[u8] {
     // SAFETY:
-    // - `pose` is a valid shared reference to one `VehiclePose` and is therefore
-    //   non-null, aligned, and valid for reads of `size_of::<VehiclePose>()`
-    //   bytes.
+    // - `value` is a valid shared reference to one `T` and is therefore non-null,
+    //   aligned, and valid for reads of `size_of::<T>()` bytes.
     // - Per https://doc.rust-lang.org/stable/std/slice/fn.from_raw_parts.html#safety:
     //
     //   "data must be non-null, valid for reads for `len * size_of::<T>()` many
     //   bytes, and it must be properly aligned."
-    unsafe {
-        std::slice::from_raw_parts(
-            (pose as *const VehiclePose).cast::<u8>(),
-            mem::size_of::<VehiclePose>(),
-        )
-    }
+    unsafe { std::slice::from_raw_parts((value as *const T).cast::<u8>(), mem::size_of::<T>()) }
 }
 
 fn stable_container_encoding(
@@ -422,14 +486,12 @@ fn mcap_payload_borrows_archive_bytes() {
 fn stable_container_borrow_rejects_wrong_encoding() {
     let topic = UUri::try_from("//my-vehicle/4210/1/B24D").unwrap();
     let pose = VehiclePose { x: 10, y: 20 };
-    let frame = UOwnedFrame::new(
-        UFrameMetadata::publish(topic).with_encoding(RawBytes::encoding()),
-        bytes_of_pose(&pose).to_vec(),
-    );
+    let frame = BorrowedContiguousFrame {
+        metadata: UFrameMetadata::publish(topic).with_encoding(RawBytes::encoding()),
+        payload: bytes_of_pose(&pose),
+    };
 
-    let error = frame
-        .borrow_payload_as::<StableContainerPayload<VehiclePose>, VehiclePose>()
-        .unwrap_err();
+    let error = frame.borrow_stable_payload::<VehiclePose>().unwrap_err();
 
     assert!(matches!(error, UWireError::UnsupportedEncoding { .. }));
 }
@@ -438,19 +500,17 @@ fn stable_container_borrow_rejects_wrong_encoding() {
 fn stable_container_borrow_rejects_wrong_stable_type_name() {
     let topic = UUri::try_from("//my-vehicle/4210/1/B24D").unwrap();
     let pose = VehiclePose { x: 10, y: 20 };
-    let frame = UOwnedFrame::new(
-        UFrameMetadata::publish(topic).with_encoding(stable_container_encoding(
+    let frame = BorrowedContiguousFrame {
+        metadata: UFrameMetadata::publish(topic).with_encoding(stable_container_encoding(
             "example.vehicle.OtherPose",
             "fixed",
             mem::size_of::<VehiclePose>(),
             mem::align_of::<VehiclePose>(),
         )),
-        bytes_of_pose(&pose).to_vec(),
-    );
+        payload: bytes_of_pose(&pose),
+    };
 
-    let error = frame
-        .borrow_payload_as::<StableContainerPayload<VehiclePose>, VehiclePose>()
-        .unwrap_err();
+    let error = frame.borrow_stable_payload::<VehiclePose>().unwrap_err();
 
     assert!(matches!(
         error,
@@ -463,19 +523,17 @@ fn stable_container_borrow_rejects_wrong_stable_type_name() {
 fn stable_container_borrow_rejects_wrong_variant() {
     let topic = UUri::try_from("//my-vehicle/4210/1/B24D").unwrap();
     let pose = VehiclePose { x: 10, y: 20 };
-    let frame = UOwnedFrame::new(
-        UFrameMetadata::publish(topic).with_encoding(stable_container_encoding(
+    let frame = BorrowedContiguousFrame {
+        metadata: UFrameMetadata::publish(topic).with_encoding(stable_container_encoding(
             "example.vehicle.VehiclePose",
             "dynamic",
             mem::size_of::<VehiclePose>(),
             mem::align_of::<VehiclePose>(),
         )),
-        bytes_of_pose(&pose).to_vec(),
-    );
+        payload: bytes_of_pose(&pose),
+    };
 
-    let error = frame
-        .borrow_payload_as::<StableContainerPayload<VehiclePose>, VehiclePose>()
-        .unwrap_err();
+    let error = frame.borrow_stable_payload::<VehiclePose>().unwrap_err();
 
     assert!(matches!(
         error,
@@ -488,19 +546,17 @@ fn stable_container_borrow_rejects_wrong_variant() {
 fn stable_container_borrow_rejects_wrong_advertised_size() {
     let topic = UUri::try_from("//my-vehicle/4210/1/B24D").unwrap();
     let pose = VehiclePose { x: 10, y: 20 };
-    let frame = UOwnedFrame::new(
-        UFrameMetadata::publish(topic).with_encoding(stable_container_encoding(
+    let frame = BorrowedContiguousFrame {
+        metadata: UFrameMetadata::publish(topic).with_encoding(stable_container_encoding(
             "example.vehicle.VehiclePose",
             "fixed",
             mem::size_of::<VehiclePose>() - 1,
             mem::align_of::<VehiclePose>(),
         )),
-        bytes_of_pose(&pose).to_vec(),
-    );
+        payload: bytes_of_pose(&pose),
+    };
 
-    let error = frame
-        .borrow_payload_as::<StableContainerPayload<VehiclePose>, VehiclePose>()
-        .unwrap_err();
+    let error = frame.borrow_stable_payload::<VehiclePose>().unwrap_err();
 
     assert!(matches!(
         error,
@@ -513,19 +569,17 @@ fn stable_container_borrow_rejects_wrong_advertised_size() {
 fn stable_container_borrow_rejects_insufficient_advertised_alignment() {
     let topic = UUri::try_from("//my-vehicle/4210/1/B24D").unwrap();
     let pose = VehiclePose { x: 10, y: 20 };
-    let frame = UOwnedFrame::new(
-        UFrameMetadata::publish(topic).with_encoding(stable_container_encoding(
+    let frame = BorrowedContiguousFrame {
+        metadata: UFrameMetadata::publish(topic).with_encoding(stable_container_encoding(
             "example.vehicle.VehiclePose",
             "fixed",
             mem::size_of::<VehiclePose>(),
-            mem::align_of::<VehiclePose>() - 1,
+            mem::align_of::<VehiclePose>() / 2,
         )),
-        bytes_of_pose(&pose).to_vec(),
-    );
+        payload: bytes_of_pose(&pose),
+    };
 
-    let error = frame
-        .borrow_payload_as::<StableContainerPayload<VehiclePose>, VehiclePose>()
-        .unwrap_err();
+    let error = frame.borrow_stable_payload::<VehiclePose>().unwrap_err();
 
     assert!(matches!(
         error,
@@ -537,15 +591,14 @@ fn stable_container_borrow_rejects_insufficient_advertised_alignment() {
 #[test]
 fn stable_container_borrow_rejects_wrong_payload_length() {
     let topic = UUri::try_from("//my-vehicle/4210/1/B24D").unwrap();
-    let frame = UOwnedFrame::new(
-        UFrameMetadata::publish(topic)
+    let payload = vec![0_u8; mem::size_of::<VehiclePose>() - 1];
+    let frame = BorrowedContiguousFrame {
+        metadata: UFrameMetadata::publish(topic)
             .with_encoding(StableContainerPayload::<VehiclePose>::encoding()),
-        vec![0_u8; mem::size_of::<VehiclePose>() - 1],
-    );
+        payload: payload.as_slice(),
+    };
 
-    let error = frame
-        .borrow_payload_as::<StableContainerPayload<VehiclePose>, VehiclePose>()
-        .unwrap_err();
+    let error = frame.borrow_stable_payload::<VehiclePose>().unwrap_err();
 
     assert!(matches!(
         error,
@@ -572,9 +625,7 @@ fn stable_container_borrow_rejects_wrong_alignment() {
         payload,
     };
 
-    let error = frame
-        .borrow_payload_as::<StableContainerPayload<VehiclePose>, VehiclePose>()
-        .unwrap_err();
+    let error = frame.borrow_stable_payload::<VehiclePose>().unwrap_err();
 
     assert!(matches!(
         error,
@@ -592,9 +643,7 @@ fn stable_container_borrows_typed_payload() {
         payload: bytes_of_pose(&pose),
     };
 
-    let borrowed = frame
-        .borrow_payload_as::<StableContainerPayload<VehiclePose>, VehiclePose>()
-        .unwrap();
+    let borrowed = frame.borrow_stable_payload::<VehiclePose>().unwrap();
 
     assert_eq!(borrowed, &pose);
 }
@@ -613,9 +662,7 @@ fn stable_container_borrows_broad_padded_payload_from_initialized_bytes() {
         payload: storage.0.as_slice(),
     };
 
-    let borrowed = frame
-        .borrow_payload_as::<StableContainerPayload<PaddedPose>, PaddedPose>()
-        .unwrap();
+    let borrowed = frame.borrow_stable_payload::<PaddedPose>().unwrap();
 
     assert_eq!(borrowed.small, 1);
     assert_eq!(borrowed.large, 2);
@@ -635,9 +682,7 @@ fn stable_container_borrow_accepts_larger_advertised_alignment() {
         payload: bytes_of_pose(&pose),
     };
 
-    let borrowed = frame
-        .borrow_payload_as::<StableContainerPayload<VehiclePose>, VehiclePose>()
-        .unwrap();
+    let borrowed = frame.borrow_stable_payload::<VehiclePose>().unwrap();
 
     assert_eq!(borrowed, &pose);
 }
@@ -658,13 +703,11 @@ fn stable_container_borrows_typed_payload_from_loaned_rx() {
         mem::align_of::<VehiclePose>(),
     )
     .unwrap();
-    let borrowed = frame
-        .borrow_loaned_payload_as::<StableContainerPayload<VehiclePose>, VehiclePose>()
-        .unwrap();
+    let borrowed = frame.borrow_stable_payload::<VehiclePose>().unwrap();
 
     assert_eq!(
-        frame.payload_loan_kind().unwrap(),
-        PayloadLoanKind::TransportLoan
+        frame.payload_loan_provenance().unwrap(),
+        PayloadLoanProvenance::OpaqueTransportLoan
     );
     assert_eq!(borrowed, &pose);
 }
@@ -681,6 +724,48 @@ fn stable_payload_type_detail_is_used_in_encoding() {
         StableContainerPayload::<VehiclePose>::encoding().content_type(),
         Some("application/vnd.uprotocol.stable-container;type=\"example.vehicle.VehiclePose\";variant=fixed;size=8;align=4")
     );
+}
+
+#[test]
+fn stable_container_payload_info_parses_type_agnostic_metadata() {
+    let info =
+        StableContainerPayloadInfo::parse(&StableContainerPayload::<VehiclePose>::encoding())
+            .unwrap();
+
+    assert_eq!(info.type_name, "example.vehicle.VehiclePose");
+    assert_eq!(info.variant, StablePayloadVariant::FixedSize);
+    assert_eq!(info.size, mem::size_of::<VehiclePose>());
+    assert_eq!(info.alignment, mem::align_of::<VehiclePose>());
+    assert!(info.is_compatible_with::<VehiclePose>());
+}
+
+#[test]
+fn stable_container_payload_info_rejects_malformed_metadata() {
+    let encoding = PayloadEncoding::custom(
+        StableContainerPayloadInfo::ENCODING_ID,
+        "application/vnd.uprotocol.stable-container;variant=fixed;size=8;align=4",
+    );
+
+    let error = StableContainerPayloadInfo::parse(&encoding).unwrap_err();
+
+    assert!(
+        matches!(error, UWireError::InvalidPayload(message) if message.contains("missing type"))
+    );
+}
+
+#[test]
+fn payload_codec_registry_get_compatible_accepts_larger_stable_alignment() {
+    let mut registry = PayloadCodecRegistry::new();
+    registry.insert(Arc::new(StableRuntimeCodec));
+    let encoding = stable_container_encoding(
+        "example.vehicle.VehiclePose",
+        "fixed",
+        mem::size_of::<VehiclePose>(),
+        mem::align_of::<VehiclePose>() * 2,
+    );
+
+    assert!(registry.get(&encoding).is_none());
+    assert!(registry.get_compatible(&encoding).is_some());
 }
 
 #[test]
@@ -715,17 +800,10 @@ fn zero_copy_conformance_helper_rejects_copied_fallback_as_loaned_rx() {
         payload: bytes_of_pose(&pose),
     };
 
-    assert_eq!(
-        frame
-            .borrow_payload_as::<StableContainerPayload<VehiclePose>, VehiclePose>()
-            .unwrap(),
-        &pose
-    );
-    zero_copy_conformance::verify_loaned_rx_rejects_copied_fallback_as::<
-        StableContainerPayload<VehiclePose>,
-        VehiclePose,
-    >(&frame)
-    .unwrap();
+    assert!(matches!(
+        frame.borrow_stable_payload::<VehiclePose>(),
+        Err(UWireError::NotLoanBacked)
+    ));
 }
 
 #[test]
@@ -787,6 +865,72 @@ fn zero_copy_rx_decodes_payload_from_reader_as_new_codec_api() {
 }
 
 #[test]
+fn zero_copy_payload_copy_to_vec_accepts_exact_segmented_slices() {
+    let topic = UUri::try_from("//my-vehicle/4210/1/B24D").unwrap();
+    let frame = SegmentedCopyFrame {
+        metadata: UFrameMetadata::publish(topic).with_encoding(RawBytes::encoding()),
+        payload_len: 7,
+        segments: vec![b"pay".to_vec(), b"load".to_vec()],
+    };
+
+    let payload = frame.try_payload_to_vec().unwrap();
+
+    assert_eq!(payload, b"payload");
+}
+
+#[test]
+fn zero_copy_payload_copy_to_vec_rejects_short_segmented_slices() {
+    let topic = UUri::try_from("//my-vehicle/4210/1/B24D").unwrap();
+    let frame = SegmentedCopyFrame {
+        metadata: UFrameMetadata::publish(topic).with_encoding(RawBytes::encoding()),
+        payload_len: 8,
+        segments: vec![b"payload".to_vec()],
+    };
+
+    let error = frame.try_payload_to_vec().unwrap_err();
+
+    assert!(
+        matches!(error, UWireError::InvalidPayload(message) if message.contains("payload_len returned 8"))
+    );
+}
+
+#[test]
+fn zero_copy_payload_copy_to_vec_rejects_long_segmented_slices() {
+    let topic = UUri::try_from("//my-vehicle/4210/1/B24D").unwrap();
+    let frame = SegmentedCopyFrame {
+        metadata: UFrameMetadata::publish(topic).with_encoding(RawBytes::encoding()),
+        payload_len: 3,
+        segments: vec![b"payload".to_vec()],
+    };
+
+    let error = frame.try_payload_to_vec().unwrap_err();
+
+    assert!(matches!(
+        error,
+        UWireError::BufferTooSmall {
+            expected: 3,
+            actual: 7
+        }
+    ));
+}
+
+#[test]
+fn zero_copy_payload_copy_to_vec_reports_allocation_overflow() {
+    let topic = UUri::try_from("//my-vehicle/4210/1/B24D").unwrap();
+    let frame = SegmentedCopyFrame {
+        metadata: UFrameMetadata::publish(topic).with_encoding(RawBytes::encoding()),
+        payload_len: usize::MAX,
+        segments: Vec::new(),
+    };
+
+    let error = frame.try_payload_to_vec().unwrap_err();
+
+    assert!(
+        matches!(error, UWireError::InvalidPayload(message) if message.contains("failed to allocate"))
+    );
+}
+
+#[test]
 fn dynamic_payload_codec_registry_encodes_and_decodes_owned_values() {
     let mut registry = PayloadCodecRegistry::new();
     registry.register::<RawBytes, Vec<u8>>();
@@ -814,7 +958,10 @@ fn tx_buffer_layout_conformance_checks_length_and_alignment() {
 
     verify_tx_buffer_payload_layout(&mut buffer, 8, 4).unwrap();
     let mut loaned = buffer.loaned_payload_mut();
-    assert_eq!(loaned.kind(), PayloadLoanKind::TransportLoan);
+    assert_eq!(
+        loaned.provenance(),
+        PayloadLoanProvenance::OpaqueTransportLoan
+    );
     *loaned.as_mut_bytes().first_mut().unwrap() = 0x42;
     assert_eq!(buffer.payload().first(), Some(&0x42));
 }
@@ -889,19 +1036,13 @@ async fn stable_container_send_uninit_payload_initializes_and_sends_non_copy() {
         frame.metadata().encoding(),
         Some(&StableContainerPayload::<NonCopyPose>::encoding())
     );
-    let pose = <StableContainerPayload<NonCopyPose> as BorrowPayload<NonCopyPose>>::borrow_payload(
-        frame.payload_bytes(),
-    )
-    .unwrap();
-    assert_eq!(
-        pose,
-        &NonCopyPose {
-            x: 7,
-            y: 9,
-            marker: NoCopyMarker { value: 1 },
-            _pad: [0; 3],
-        }
-    );
+    let expected = NonCopyPose {
+        x: 7,
+        y: 9,
+        marker: NoCopyMarker { value: 1 },
+        _pad: [0; 3],
+    };
+    assert_eq!(frame.payload_bytes(), bytes_of(&expected));
 }
 
 #[cfg(any(
@@ -950,13 +1091,13 @@ async fn stable_container_send_uninit_payload_supports_unsafe_field_initializati
         .unwrap();
 
     let frame = transport.sent_frames().pop().unwrap();
-    let pose = <StableContainerPayload<NonCopyPose> as BorrowPayload<NonCopyPose>>::borrow_payload(
-        frame.payload_bytes(),
-    )
-    .unwrap();
-    assert_eq!(pose.x, 11);
-    assert_eq!(pose.y, 13);
-    assert_eq!(pose.marker.value, 2);
+    let expected = NonCopyPose {
+        x: 11,
+        y: 13,
+        marker: NoCopyMarker { value: 2 },
+        _pad: [0; 3],
+    };
+    assert_eq!(frame.payload_bytes(), bytes_of(&expected));
 }
 
 #[cfg(feature = "expert-unsafe-payloads")]
@@ -999,12 +1140,11 @@ async fn stable_container_unsafe_tx_hatch_sends_explicitly_initialized_padded_pa
     send.await.unwrap();
 
     let frame = transport.sent_frames().pop().unwrap();
-    let pose = <StableContainerPayload<PaddedPose> as BorrowPayload<PaddedPose>>::borrow_payload(
-        frame.payload_bytes(),
-    )
-    .unwrap();
-    assert_eq!(pose.small, 1);
-    assert_eq!(pose.large, 2);
+    assert_eq!(frame.payload_bytes().first(), Some(&1));
+    assert_eq!(
+        frame.payload_bytes().get(4..8),
+        Some(2_u32.to_ne_bytes().as_slice())
+    );
 }
 
 #[test]

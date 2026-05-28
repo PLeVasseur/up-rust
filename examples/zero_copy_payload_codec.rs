@@ -19,7 +19,7 @@ use up_rust::{
     zero_copy::{
         UContiguousZeroCopyRxFrame, UVecTxBuffer, UZeroCopyTransport, UZeroCopyTransportExt,
     },
-    PayloadEncoding, UCode, UFrameMetadata, UOwnedFrame, UStatus, UUri,
+    PayloadEncoding, UCode, UFrameMetadata, UOwnedFrame, UStatus, UTxLoanSpec, UUri,
 };
 
 #[derive(Debug, PartialEq)]
@@ -101,13 +101,13 @@ impl UZeroCopyTransport for LoopbackZeroCopyTransport {
     type Tx = UVecTxBuffer;
     type Rx = UOwnedFrame;
 
-    async fn reserve(
-        &self,
-        header: UFrameMetadata,
-        payload_len: usize,
-        alignment: usize,
-    ) -> Result<Self::Tx, UStatus> {
-        UVecTxBuffer::with_alignment(header, payload_len, alignment).map_err(UStatus::from)
+    async fn loan_tx(&self, spec: UTxLoanSpec) -> Result<Self::Tx, UStatus> {
+        UVecTxBuffer::with_alignment(
+            spec.metadata().clone(),
+            spec.payload_len(),
+            spec.payload_alignment(),
+        )
+        .map_err(UStatus::from)
     }
 
     async fn send_zero_copy(&self, buffer: Self::Tx) -> Result<(), UStatus> {

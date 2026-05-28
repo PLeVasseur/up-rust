@@ -21,7 +21,8 @@ use super::{
     frame::{UFrameMetadata, UOwnedFrame},
     payload::{
         BorrowPayload, DecodePayload, PayloadCodec, PayloadFormat, PayloadLayout,
-        ReadDecodePayload, UDeserializer, UReadDeserializer, UWireError,
+        ReadDecodePayload, StableContainerPayload, StablePayload, UDeserializer, UReadDeserializer,
+        UWireError,
     },
 };
 
@@ -92,21 +93,21 @@ pub trait UTxBuffer {
     /// transport, excluding any transport metadata prefix, padding, or trailer.
     fn payload_mut(&mut self) -> &mut [u8];
 
-    /// Returns the backing memory class for this transmit loan.
-    fn payload_loan_kind(&self) -> PayloadLoanKind {
-        PayloadLoanKind::TransportLoan
+    /// Returns diagnostic provenance for this transmit loan.
+    fn payload_loan_provenance(&self) -> PayloadLoanProvenance {
+        PayloadLoanProvenance::OpaqueTransportLoan
     }
 
     /// Returns mutable payload bytes with explicit loan provenance.
     fn loaned_payload_mut(&mut self) -> LoanedPayloadMut<'_> {
-        let kind = self.payload_loan_kind();
+        let provenance = self.payload_loan_provenance();
         // SAFETY:
         // - `UTxBuffer::payload_mut` is the transport contract for the exact
         //   visible initialized application payload range, excluding metadata,
         //   padding, and trailers.
         // - `&mut self` gives exclusive access to that payload range while the
         //   returned loaned view exists.
-        unsafe { LoanedPayloadMut::new_unchecked(self.payload_mut(), kind) }
+        unsafe { LoanedPayloadMut::new_unchecked(self.payload_mut(), provenance) }
     }
 }
 
@@ -126,9 +127,9 @@ pub trait UUninitTxBuffer {
     /// Returns the visible application payload length.
     fn payload_len(&self) -> usize;
 
-    /// Returns the backing memory class for this transmit loan.
-    fn payload_loan_kind(&self) -> PayloadLoanKind {
-        PayloadLoanKind::TransportLoan
+    /// Returns diagnostic provenance for this transmit loan.
+    fn payload_loan_provenance(&self) -> PayloadLoanProvenance {
+        PayloadLoanProvenance::OpaqueTransportLoan
     }
 
     /// Returns mutable uninitialized application payload storage.
@@ -303,12 +304,12 @@ pub trait UContiguousZeroCopyRxFrame: UZeroCopyRxFrame {
     }
 }
 
-/// Backing memory class for a loan-backed contiguous receive payload.
+/// Diagnostic provenance for loan-backed payload storage.
 #[derive(Clone, Copy, Debug, Eq, Hash, PartialEq)]
-pub enum PayloadLoanKind {
-    /// Payload bytes are backed by transport-owned loan/sample storage.
-    TransportLoan,
-    /// Payload bytes are backed by a shared-memory region.
+pub enum PayloadLoanProvenance {
+    /// Payload bytes are backed by a transport loan whose domain is opaque.
+    OpaqueTransportLoan,
+    /// Payload bytes are backed by a proven shared-memory region.
     SharedMemory,
 }
 
@@ -316,7 +317,7 @@ pub enum PayloadLoanKind {
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub struct LoanedPayload<'a> {
     bytes: &'a [u8],
-    kind: PayloadLoanKind,
+    provenance: PayloadLoanProvenance,
 }
 
 impl<'a> LoanedPayload<'a> {
@@ -334,13 +335,13 @@ impl<'a> LoanedPayload<'a> {
     /// `kind` and must not have been allocated or coalesced solely to satisfy a
     /// zero-copy borrow. These obligations are the safety preconditions of
     /// `slice::from_raw_parts` plus the transport's external provenance contract.
-    pub unsafe fn new_unchecked(bytes: &'a [u8], kind: PayloadLoanKind) -> Self {
-        Self { bytes, kind }
+    pub unsafe fn new_unchecked(bytes: &'a [u8], provenance: PayloadLoanProvenance) -> Self {
+        Self { bytes, provenance }
     }
 
-    /// Returns the backing memory class.
-    pub fn kind(self) -> PayloadLoanKind {
-        self.kind
+    /// Returns diagnostic storage provenance.
+    pub fn provenance(self) -> PayloadLoanProvenance {
+        self.provenance
     }
 
     /// Returns the payload bytes.
@@ -377,7 +378,7 @@ impl Deref for LoanedPayload<'_> {
 #[derive(Debug, Eq, PartialEq)]
 pub struct LoanedPayloadMut<'a> {
     bytes: &'a mut [u8],
-    kind: PayloadLoanKind,
+    provenance: PayloadLoanProvenance,
 }
 
 impl<'a> LoanedPayloadMut<'a> {
@@ -396,13 +397,13 @@ impl<'a> LoanedPayloadMut<'a> {
     /// the loan. These obligations are the safety preconditions of
     /// `slice::from_raw_parts_mut` plus the transport's external provenance
     /// contract.
-    pub unsafe fn new_unchecked(bytes: &'a mut [u8], kind: PayloadLoanKind) -> Self {
-        Self { bytes, kind }
+    pub unsafe fn new_unchecked(bytes: &'a mut [u8], provenance: PayloadLoanProvenance) -> Self {
+        Self { bytes, provenance }
     }
 
-    /// Returns the backing memory class.
-    pub fn kind(&self) -> PayloadLoanKind {
-        self.kind
+    /// Returns diagnostic storage provenance.
+    pub fn provenance(&self) -> PayloadLoanProvenance {
+        self.provenance
     }
 
     /// Returns the payload bytes.
@@ -456,7 +457,7 @@ impl DerefMut for LoanedPayloadMut<'_> {
 #[derive(Debug)]
 pub struct LoanedPayloadUninitMut<'a> {
     bytes: &'a mut [MaybeUninit<u8>],
-    kind: PayloadLoanKind,
+    provenance: PayloadLoanProvenance,
 }
 
 impl<'a> LoanedPayloadUninitMut<'a> {
@@ -474,13 +475,16 @@ impl<'a> LoanedPayloadUninitMut<'a> {
     /// must be described by `kind` and be the exact visible application payload
     /// range for the loan. `MaybeUninit<u8>` has the same layout as `u8`; the
     /// initialization obligation is tracked by the returned loan marker.
-    pub unsafe fn new_unchecked(bytes: &'a mut [MaybeUninit<u8>], kind: PayloadLoanKind) -> Self {
-        Self { bytes, kind }
+    pub unsafe fn new_unchecked(
+        bytes: &'a mut [MaybeUninit<u8>],
+        provenance: PayloadLoanProvenance,
+    ) -> Self {
+        Self { bytes, provenance }
     }
 
-    /// Returns the backing memory class.
-    pub fn kind(&self) -> PayloadLoanKind {
-        self.kind
+    /// Returns diagnostic storage provenance.
+    pub fn provenance(&self) -> PayloadLoanProvenance {
+        self.provenance
     }
 
     pub(crate) fn as_uninit_bytes_mut_internal(&mut self) -> &mut [MaybeUninit<u8>] {
@@ -538,8 +542,8 @@ impl<'a> LoanedPayloadUninitMut<'a> {
         //   mutable slice plus the caller's initialization guarantee.
         let bytes = unsafe { std::slice::from_raw_parts_mut(ptr, len) };
         // SAFETY: The initialized slice is the same exact loan-backed payload
-        // range and retains the original `PayloadLoanKind` provenance.
-        unsafe { LoanedPayloadMut::new_unchecked(bytes, self.kind) }
+        // range and retains the original `PayloadLoanProvenance` diagnostic value.
+        unsafe { LoanedPayloadMut::new_unchecked(bytes, self.provenance) }
     }
 }
 
@@ -631,9 +635,9 @@ pub trait ULoanedContiguousZeroCopyRxFrame: UZeroCopyRxFrame {
     /// copying.
     fn loaned_contiguous_payload(&self) -> Result<LoanedPayload<'_>, UWireError>;
 
-    /// Returns the backing memory class for successful loaned payload borrows.
-    fn payload_loan_kind(&self) -> Result<PayloadLoanKind, UWireError> {
-        Ok(self.loaned_contiguous_payload()?.kind())
+    /// Returns diagnostic provenance for successful loaned payload borrows.
+    fn payload_loan_provenance(&self) -> Result<PayloadLoanProvenance, UWireError> {
+        Ok(self.loaned_contiguous_payload()?.provenance())
     }
 
     /// Compatibility helper returning only loan-backed payload bytes.
@@ -649,6 +653,21 @@ pub trait ULoanedContiguousZeroCopyRxFrame: UZeroCopyRxFrame {
     {
         C::verify_encoding(self.metadata().encoding())?;
         C::borrow_payload(self.loaned_contiguous_payload()?.as_bytes())
+    }
+
+    /// Borrows one stable-container value from loan-backed contiguous storage.
+    ///
+    /// This is the safe stable-container typed receive boundary. It validates the
+    /// stable-container encoding, exact payload size, local alignment, and loaned
+    /// lifetime before constructing `&T`. The diagnostic provenance value is not
+    /// used as the safety gate.
+    fn borrow_stable_payload<T>(&self) -> Result<&T, UWireError>
+    where
+        T: StablePayload,
+    {
+        StableContainerPayload::<T>::verify_encoding(self.metadata().encoding())?;
+        let payload = self.loaned_contiguous_payload()?;
+        StableContainerPayload::<T>::borrow_checked_payload(payload.as_bytes())
     }
 }
 
@@ -789,12 +808,32 @@ pub trait UZeroCopyPayloadCopyExt: UZeroCopyRxFrame {
     }
 
     /// Copies the ordered payload bytes into a newly allocated [`Vec<u8>`].
-    fn payload_to_vec(&self) -> Vec<u8> {
-        let mut payload = Vec::with_capacity(self.payload_len());
+    fn try_payload_to_vec(&self) -> Result<Vec<u8>, UWireError> {
+        let expected = self.payload_len();
+        let mut payload = Vec::new();
+        payload.try_reserve_exact(expected).map_err(|error| {
+            UWireError::invalid_payload(format!(
+                "failed to allocate {expected} payload bytes: {error}"
+            ))
+        })?;
+
+        let mut written = 0_usize;
         for slice in self.payload_slices() {
+            let end = written
+                .checked_add(slice.len())
+                .ok_or_else(|| UWireError::invalid_payload("payload length overflow"))?;
+            if end > expected {
+                return Err(UWireError::buffer_too_small(expected, end));
+            }
             payload.extend_from_slice(slice);
+            written = end;
         }
-        payload
+        if written != expected {
+            return Err(UWireError::invalid_payload(format!(
+                "payload slices yielded {written} bytes but payload_len returned {expected} bytes"
+            )));
+        }
+        Ok(payload)
     }
 }
 
@@ -885,7 +924,7 @@ impl UUninitTxBuffer for UVecUninitTxBuffer {
     }
 
     fn payload_uninit_mut(&mut self) -> LoanedPayloadUninitMut<'_> {
-        let kind = self.payload_loan_kind();
+        let provenance = self.payload_loan_provenance();
         let range = self.payload_range();
         let payload = self
             .storage
@@ -895,7 +934,7 @@ impl UUninitTxBuffer for UVecUninitTxBuffer {
         // - `payload_range` is bounds-checked against `storage` above.
         // - The returned range is the exact visible application payload range.
         // - `&mut self` gives exclusive access to the storage for the loan.
-        unsafe { LoanedPayloadUninitMut::new_unchecked(payload, kind) }
+        unsafe { LoanedPayloadUninitMut::new_unchecked(payload, provenance) }
     }
 
     unsafe fn assume_payload_init(self) -> Self::Initialized {

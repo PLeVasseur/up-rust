@@ -69,7 +69,7 @@ Transport implementations should project these fields into their native metadata
 | Generated `UAttributes` payload metadata | Native `UAttributes` inside `UFrameMetadata` | Always | Use accessors and builders instead of generated public fields. |
 | Generated payload-format enum | `PayloadEncoding` | Always | `PayloadEncoding::Standard(UPayloadFormat)` preserves upstream-compatible formats; `PayloadEncoding::Custom` identifies native-only byte-compatible layouts. |
 | Generated `UMessageBuilder` | Native `UFrameBuilder` that builds `UOwnedFrame` | Always | The new name makes the native frame output explicit. |
-| `UTransport::send` | `UOwnedTransport::send_owned` or `UZeroCopyTransport::reserve` plus `send_zero_copy` | Always | Zero-copy send is intentionally two-phase so serializers can write directly into transport-loaned storage. |
+| `UTransport::send` | `UOwnedTransport::send_owned` or `UZeroCopyTransport::loan_tx(UTxLoanSpec)` plus `send_zero_copy` | Always | Zero-copy send is intentionally two-phase so serializers can write directly into transport-loaned storage. |
 | `UTransport::register_listener` | `register_owned_listener` or `register_zero_copy_listener` | Always | Listener type follows transport capability: `UOwnedListener` or `UZeroCopyListener`. |
 | Pull-style receive helpers | `receive_owned` or `receive_zero_copy` implemented by transports that truly support pull receive | Always | The default returns `UNIMPLEMENTED`, matching mainline `UTransport`; listener-backed push receive is not hidden behind the pull API. |
 | Stable-layout payload contracts | `StablePayload` plus `StableContainerPayload<T>` | Always | Stable-container metadata now uses type name, `variant=fixed`, exact size, and sufficient alignment instead of layout hashes or field descriptors. |
@@ -134,7 +134,7 @@ Use `UOwnedTransport` for the normal network, brokered, and in-process path. Use
 
 | Operation | Owned-buffer API | Zero-copy API | Parity note |
 | --- | --- | --- | --- |
-| Send one frame | `send_owned(UOwnedFrame)` | `reserve(UFrameMetadata, payload_len, alignment)` then `send_zero_copy(Tx)` | This is the one intentional shape difference. Metadata is final at `reserve`; the serializer writes only into `Tx::payload_mut()` before the loan is sent. |
+| Send one frame | `send_owned(UOwnedFrame)` | `loan_tx(UTxLoanSpec)` then `send_zero_copy(Tx)` | This is the one intentional shape difference. Metadata and payload presence are validated before the transport sees the loan spec; the serializer writes only into `Tx::payload_mut()` before the loan is sent. |
 | Pull receive | `receive_owned(&UUri, Option<&UUri>) -> UOwnedFrame` | `receive_zero_copy(&UUri, Option<&UUri>) -> Rx` | Both default to `UNIMPLEMENTED`; implement only for transports that truly support pull receive. |
 | Push callback | `UOwnedListener::on_receive_owned(UOwnedFrame)` | `UZeroCopyListener<Rx>::on_receive_zero_copy(Rx)` | The zero-copy `Rx` value is the receive lease and should release transport resources when dropped. |
 | Register listener | `register_owned_listener(...)` | `register_zero_copy_listener(...)` | Same filter semantics; listener type follows frame ownership. |
@@ -163,12 +163,13 @@ The lower-level zero-copy equivalent is:
 
 ```rust
 let payload_len = reading.encoded_len();
+let layout = PayloadLayout::new(
+    payload_len,
+    <TemperatureReading as USerializer<TemperaturePayload>>::ALIGNMENT,
+)?;
+let spec = UTxLoanSpec::payload(metadata.with_encoding(TemperaturePayload::encoding()), layout)?;
 let mut loan = transport
-    .reserve(
-        metadata.with_encoding(TemperaturePayload::encoding()),
-        payload_len,
-        <TemperatureReading as USerializer<TemperaturePayload>>::ALIGNMENT,
-    )
+    .loan_tx(spec)
     .await?;
 reading.serialize_into(loan.payload_mut())?;
 transport.send_zero_copy(loan).await?;
@@ -176,7 +177,7 @@ transport.send_zero_copy(loan).await?;
 
 Do not build a `UOwnedFrame` first just to call a zero-copy transport unless you are intentionally crossing an owned/zero-copy adapter boundary. That adds the copy the zero-copy API is designed to avoid.
 
-`UOwnedFrameEndpoint` is that adapter boundary. It gives routing code one owned-frame facade over either transport capability. `UOwnedFrameEndpoint::from_zero_copy_copying_adapter` copies an owned send into a transmit loan and copies a zero-copy receive lease into an owned listener callback. Use it when a generic router needs one owned-frame type; do not use it to claim end-to-end zero-copy behavior. `from_zero_copy` remains a compatibility alias.
+`UOwnedFrameEndpoint` is that adapter boundary. It gives routing code one owned-frame facade over either transport capability. `UOwnedFrameEndpoint::from_zero_copy_copying_adapter` copies an owned send into a transmit loan and copies a zero-copy receive lease into an owned listener callback. Use it when a generic router needs one owned-frame type; do not use it to claim end-to-end zero-copy behavior.
 
 The examples mirror the same serializer-neutral contract from different angles. [`owned_payload_codec.rs`](../examples/owned_payload_codec.rs) shows owned sends and owned listener callbacks. [`zero_copy_payload_codec.rs`](../examples/zero_copy_payload_codec.rs) shows zero-copy send helpers, pull receive, and borrowed deserialization. The payload examples differ so the zero-copy example can demonstrate borrowed receive views, but the `PayloadFormat`, `USerializer`, and `UDeserializer` contracts are the same.
 
@@ -387,7 +388,7 @@ impl UOwnedTransport for MyTransport {
 }
 ```
 
-Zero-copy transports should implement `UZeroCopyTransport` only when the transport can honestly loan transmit storage and return receive leases. Network and broker transports should not fake zero-copy by copying into hidden buffers. The owned `send_owned(frame)` operation maps to `reserve(metadata, payload_len, alignment)`, serializer writes into the returned `Tx` buffer, and `send_zero_copy(tx)` publishes the loan. Metadata is intentionally fixed at reserve time so transports can compute native headers, hidden prefixes, payload offsets, and allocation sizes before exposing the payload loan.
+Zero-copy transports should implement `UZeroCopyTransport` only when the transport can honestly loan transmit storage and return receive leases. Network and broker transports should not fake zero-copy by copying into hidden buffers. The owned `send_owned(frame)` operation maps to a validated `UTxLoanSpec`, `loan_tx(spec)`, serializer writes into the returned `Tx` buffer, and `send_zero_copy(tx)` publishes the loan. Metadata and payload presence are intentionally fixed in the loan spec so transports can compute native headers, hidden prefixes, payload offsets, and allocation sizes before exposing the payload loan.
 
 ### Pull Receive On Push-Oriented Transports
 
@@ -409,7 +410,7 @@ let endpoint = UOwnedFrameEndpoint::from_owned(transport);
 # }
 ```
 
-For zero-copy transports, `UOwnedFrameEndpoint::from_zero_copy` copies an owned frame payload into a transmit loan for sends and copies zero-copy receive leases into owned listener callbacks for generic routing. It does not make a network or broker transport zero-copy; only transports that implement true loaned storage should use the zero-copy constructor. Treat the endpoint as an owned-frame facade for routing convenience, not as a zero-copy-preserving abstraction.
+For zero-copy transports, `UOwnedFrameEndpoint::from_zero_copy_copying_adapter` copies an owned frame payload into a transmit loan for sends and copies zero-copy receive leases into owned listener callbacks for generic routing. It does not make a network or broker transport zero-copy; only transports that implement true loaned storage should use the zero-copy constructor. Treat the endpoint as an owned-frame facade for routing convenience, not as a zero-copy-preserving abstraction.
 
 ## Downstream Transport Notes
 

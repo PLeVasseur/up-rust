@@ -23,8 +23,8 @@ mod zero_copy;
 
 pub use builder::{UFrameBuilder, UFrameBuilderError};
 pub use frame::{
-    CustomPayloadEncoding, PayloadEncoding, PayloadEncodingError, UAttributes, UEncoding,
-    UEncodingError, UFrameMetadata, UMessageType, UOwnedFrame, UPayloadFormat, UPriority,
+    CustomPayloadEncoding, PayloadEncoding, PayloadEncodingError, UAttributes, UFrameMetadata,
+    UMessageType, UOwnedFrame, UPayloadFormat, UPriority,
 };
 pub use frame_wire::{UFrameWireError, UFrameWireFormat};
 #[cfg(feature = "experimental-loaned-frame")]
@@ -35,9 +35,9 @@ pub use payload::{
     DecodePayload, DynPayloadCodec, EncodePayload, EncodedPayload, LoanPayload, LoanUninitPayload,
     LoanedInitPayload, LoanedUninitPayload, McapPayload, PayloadCodec, PayloadCodecCapabilities,
     PayloadCodecRegistry, PayloadFormat, PayloadLayout, PlacementDefault, RawBytes,
-    ReadDecodePayload, StableContainerPayload, StablePayload, StablePayloadVariant,
-    StableTypeDetail, TypedPayloadCodec, UDeserializer, UErasedSerializer, UReadDeserializer,
-    USerializer, UWireError, ZeroCopySend,
+    ReadDecodePayload, StableContainerPayload, StableContainerPayloadInfo, StablePayload,
+    StablePayloadVariant, StableTypeDetail, TypedPayloadCodec, UDeserializer, UErasedSerializer,
+    UReadDeserializer, USerializer, UWireError, ZeroCopySend,
 };
 #[cfg(any(
     feature = "unsafe-stable-payload-tx",
@@ -47,7 +47,7 @@ pub use payload::{UnsafeStablePayloadTxSlot, ZeroedStablePayloadTxSlot};
 pub use zero_copy::{
     verify_contiguous_rx_payload_layout, verify_loaned_rx_payload_layout,
     verify_tx_buffer_payload_layout, verify_uninit_tx_buffer_payload_layout, LoanedPayload,
-    LoanedPayloadMut, LoanedPayloadUninitMut, LoanedUninitByteWriter, PayloadLoanKind,
+    LoanedPayloadMut, LoanedPayloadUninitMut, LoanedUninitByteWriter, PayloadLoanProvenance,
     UContiguousZeroCopyRxFrame, ULoanedContiguousZeroCopyRxFrame, UTxBuffer, UUninitTxBuffer,
     UVecTxBuffer, UVecUninitTxBuffer, UZeroCopyPayloadCopyExt, UZeroCopyRxFrame,
 };

@@ -112,7 +112,6 @@ impl TryFrom<UOwnedFrame> for CloudEvent {
                 .ok_or(CloudEventError::MissingAttribute("payload encoding"))?;
             match encoding {
                 PayloadEncoding::Standard(format) => {
-                    event.data_content_type = format.content_type().map(str::to_string);
                     event.extensions.insert(
                         EXTENSION_NAME_PAYLOAD_FORMAT.to_string(),
                         CloudEventAttributeValue::Integer(i64::from(format.value())),
@@ -460,6 +459,25 @@ mod tests {
         assert_eq!(received.commstatus(), Some(UCode::UNAVAILABLE));
         assert_eq!(frame.metadata().encoding(), Some(&encoding));
         assert_eq!(frame.payload_bytes(), b"payload");
+    }
+
+    #[test]
+    fn standard_payload_uses_pformat_without_data_content_type() {
+        let source = UUri::try_from(SOURCE).unwrap();
+        let frame = UOwnedFrame::from_bytes_as::<crate::payload::RawBytes>(
+            UFrameMetadata::publish(source),
+            Bytes::from_static(b"payload"),
+        );
+
+        let event = CloudEvent::try_from(frame).unwrap();
+
+        assert_eq!(event.data_content_type, None);
+        assert_eq!(
+            event.extensions.get(EXTENSION_NAME_PAYLOAD_FORMAT),
+            Some(&CloudEventAttributeValue::Integer(i64::from(
+                UPayloadFormat::Raw.value()
+            )))
+        );
     }
 
     #[test]

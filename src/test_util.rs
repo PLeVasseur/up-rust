@@ -22,13 +22,13 @@ use async_trait::async_trait;
 use std::sync::Mutex;
 
 use crate::{
-    payload::{BorrowPayload, PayloadCodec, StableContainerPayload, StablePayload, UWireError},
+    payload::{PayloadCodec, StableContainerPayload, StablePayload, UWireError},
     zero_copy::{
         verify_loaned_rx_payload_layout, verify_tx_buffer_payload_layout,
         verify_uninit_tx_buffer_payload_layout, ULoanedContiguousZeroCopyRxFrame, UTxBuffer,
         UUninitTxBuffer, UVecTxBuffer, UVecUninitTxBuffer, UZeroCopyListener, UZeroCopyTransport,
     },
-    PayloadEncoding, UCode, UFrameMetadata, UOwnedFrame, UOwnedListener, UOwnedTransport, UStatus,
+    PayloadEncoding, UCode, UOwnedFrame, UOwnedListener, UOwnedTransport, UStatus, UTxLoanSpec,
     UUri, UZeroCopyUninitTransport,
 };
 
@@ -68,10 +68,20 @@ pub mod zero_copy_conformance {
         frame: &(impl ULoanedContiguousZeroCopyRxFrame + ?Sized),
     ) -> Result<&T, UWireError>
     where
-        C: PayloadCodec + BorrowPayload<T>,
+        C: PayloadCodec + crate::payload::BorrowPayload<T>,
         T: ?Sized,
     {
         frame.borrow_loaned_payload_as::<C, T>()
+    }
+
+    /// Verifies and borrows a stable-container value from loan-backed RX storage.
+    pub fn borrow_stable_payload<T>(
+        frame: &(impl ULoanedContiguousZeroCopyRxFrame + ?Sized),
+    ) -> Result<&T, UWireError>
+    where
+        T: StablePayload,
+    {
+        frame.borrow_stable_payload::<T>()
     }
 
     /// Builds stable-container metadata for a fixed-size stable payload type.
@@ -145,7 +155,7 @@ pub mod zero_copy_conformance {
             T::stable_type_name(),
             "fixed",
             core::mem::size_of::<T>(),
-            core::mem::align_of::<T>().saturating_sub(1),
+            core::mem::align_of::<T>().saturating_div(2).max(1),
         );
         expect_incompatible_stable_payload(StableContainerPayload::<T>::verify_encoding(Some(
             &encoding,
@@ -175,7 +185,7 @@ pub mod zero_copy_conformance {
             .get(offset..offset + size)
             .ok_or_else(|| UWireError::invalid_payload("misaligned payload view out of bounds"))?;
 
-        match <StableContainerPayload<T> as BorrowPayload<T>>::borrow_payload(payload) {
+        match StableContainerPayload::<T>::borrow_checked_payload(payload) {
             Err(UWireError::InvalidPayloadAlignment { expected, .. }) if expected == alignment => {
                 Ok(())
             }
@@ -191,7 +201,7 @@ pub mod zero_copy_conformance {
         frame: &(impl ULoanedContiguousZeroCopyRxFrame + ?Sized),
     ) -> Result<(), UWireError>
     where
-        C: PayloadCodec + BorrowPayload<T>,
+        C: PayloadCodec + crate::payload::BorrowPayload<T>,
         T: ?Sized,
     {
         match frame.borrow_loaned_payload_as::<C, T>() {
@@ -440,13 +450,13 @@ impl UZeroCopyTransport for InMemoryZeroCopyTransport {
     type Tx = UVecTxBuffer;
     type Rx = UOwnedFrame;
 
-    async fn reserve(
-        &self,
-        metadata: UFrameMetadata,
-        payload_len: usize,
-        alignment: usize,
-    ) -> Result<Self::Tx, UStatus> {
-        UVecTxBuffer::with_alignment(metadata, payload_len, alignment).map_err(UStatus::from)
+    async fn loan_tx(&self, spec: UTxLoanSpec) -> Result<Self::Tx, UStatus> {
+        UVecTxBuffer::with_alignment(
+            spec.metadata().clone(),
+            spec.payload_len(),
+            spec.payload_alignment(),
+        )
+        .map_err(UStatus::from)
     }
 
     async fn send_zero_copy(&self, buffer: Self::Tx) -> Result<(), UStatus> {
@@ -512,12 +522,12 @@ impl UZeroCopyTransport for InMemoryZeroCopyTransport {
 impl UZeroCopyUninitTransport for InMemoryZeroCopyTransport {
     type UninitTx = UVecUninitTxBuffer;
 
-    async fn reserve_uninit(
-        &self,
-        metadata: UFrameMetadata,
-        payload_len: usize,
-        alignment: usize,
-    ) -> Result<Self::UninitTx, UStatus> {
-        UVecUninitTxBuffer::with_alignment(metadata, payload_len, alignment).map_err(UStatus::from)
+    async fn loan_uninit_tx(&self, spec: UTxLoanSpec) -> Result<Self::UninitTx, UStatus> {
+        UVecUninitTxBuffer::with_alignment(
+            spec.metadata().clone(),
+            spec.payload_len(),
+            spec.payload_alignment(),
+        )
+        .map_err(UStatus::from)
     }
 }

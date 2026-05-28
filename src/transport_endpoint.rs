@@ -18,12 +18,14 @@ use std::{
 };
 
 use async_trait::async_trait;
+use tracing::warn;
 
 use crate::{
     utransport::{UZeroCopyListener, UZeroCopyTransport},
     validate_owned_frame_for_transport,
     zero_copy::{UTxBuffer, UZeroCopyPayloadCopyExt, UZeroCopyRxFrame},
-    UCode, UOwnedFrame, UOwnedListener, UOwnedTransport, UStatus, UUri,
+    UCode, UOwnedFrame, UOwnedListener, UOwnedTransport, UStatus, UTxLoanSpec, UTxPayloadSpec,
+    UUri,
 };
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
@@ -72,37 +74,12 @@ impl UOwnedFrameEndpoint {
     /// copied into owned listener callbacks for generic routing code. This is an
     /// adapter boundary, not end-to-end zero-copy forwarding.
     ///
-    /// Prefer [`Self::from_zero_copy_copying_adapter`] in new code when making
-    /// the copy boundary explicit at call sites.
-    ///
-    /// ```no_run
-    /// # use std::sync::Arc;
-    /// # use up_rust::{transport::UOwnedFrameEndpoint, zero_copy::UZeroCopyTransport};
-    /// # fn wrap<T>(transport: Arc<T>) -> UOwnedFrameEndpoint
-    /// # where
-    /// #     T: UZeroCopyTransport + Send + Sync + 'static,
-    /// # {
-    /// let endpoint = UOwnedFrameEndpoint::from_zero_copy_copying_adapter(transport);
-    /// # endpoint
-    /// # }
-    /// ```
-    #[deprecated(
-        note = "use from_zero_copy_copying_adapter; this constructor copies at the owned/zero-copy boundary"
-    )]
-    pub fn from_zero_copy<T>(transport: Arc<T>) -> Self
-    where
-        T: UZeroCopyTransport + Send + Sync + 'static,
-    {
-        Self::from_zero_copy_copying_adapter(transport)
-    }
-
     /// Creates an owned-frame copying adapter around a zero-copy transport.
     ///
-    /// This is the explicit form of [`Self::from_zero_copy`]. Owned sends are
-    /// copied into a transmit loan, and zero-copy receives are copied into owned
-    /// listener callbacks for generic routing code. This adapter is useful for
-    /// routers that operate on [`UOwnedFrame`], but it is not end-to-end
-    /// zero-copy forwarding.
+    /// Owned sends are copied into a transmit loan, and zero-copy receives are
+    /// copied into owned listener callbacks for generic routing code. This
+    /// adapter is useful for routers that operate on [`UOwnedFrame`], but it is
+    /// not end-to-end zero-copy forwarding.
     ///
     /// The send path reserves byte-oriented payload storage with alignment `1`
     /// because [`UOwnedFrame`] carries owned bytes, not typed stable-payload
@@ -279,10 +256,13 @@ where
         // `UOwnedFrame` exposes only owned payload bytes here. This copying
         // adapter intentionally requests byte alignment rather than claiming to
         // preserve any typed stable-payload layout from an earlier boundary.
-        let mut buffer = self
-            .transport
-            .reserve(frame.metadata().clone(), payload_len, 1)
-            .await?;
+        let payload = if frame.has_payload() {
+            UTxPayloadSpec::present(payload_len, 1).map_err(UStatus::from)?
+        } else {
+            UTxPayloadSpec::Absent
+        };
+        let spec = UTxLoanSpec::new(frame.metadata().clone(), payload)?;
+        let mut buffer = self.transport.loan_tx(spec).await?;
         let reserved_len = buffer.payload_mut().len();
         if reserved_len != payload_len {
             return Err(UStatus::fail_with_code(
@@ -333,7 +313,14 @@ where
 {
     async fn on_receive_zero_copy(&self, frame: Rx) {
         let owned = if frame.has_payload() {
-            UOwnedFrame::new(frame.metadata().clone(), frame.payload_to_vec())
+            let payload = match frame.try_payload_to_vec() {
+                Ok(payload) => payload,
+                Err(error) => {
+                    warn!(%error, "dropping invalid zero-copy frame at copying adapter boundary");
+                    return;
+                }
+            };
+            UOwnedFrame::new(frame.metadata().clone(), payload)
         } else {
             UOwnedFrame::without_payload(frame.metadata().clone())
         };
@@ -376,7 +363,8 @@ mod tests {
     use crate::{
         transport::{UOwnedFrameEndpoint, UOwnedFrameEndpointMode},
         zero_copy::{UTxBuffer, UVecTxBuffer, UZeroCopyListener, UZeroCopyTransport},
-        UCode, UFrameMetadata, UOwnedFrame, UOwnedListener, UOwnedTransport, UStatus, UUri,
+        UCode, UFrameMetadata, UOwnedFrame, UOwnedListener, UOwnedTransport, UStatus, UTxLoanSpec,
+        UUri,
     };
 
     #[derive(Default)]
@@ -472,17 +460,13 @@ mod tests {
         type Tx = UVecTxBuffer;
         type Rx = UOwnedFrame;
 
-        async fn reserve(
-            &self,
-            metadata: UFrameMetadata,
-            payload_len: usize,
-            alignment: usize,
-        ) -> Result<Self::Tx, UStatus> {
+        async fn loan_tx(&self, spec: UTxLoanSpec) -> Result<Self::Tx, UStatus> {
             self.reserve_alignments
                 .lock()
                 .expect("reserve alignments lock poisoned")
-                .push(alignment);
-            Ok(UVecTxBuffer::new(metadata, payload_len))
+                .push(spec.payload_alignment());
+            let payload_len = spec.payload_len();
+            Ok(UVecTxBuffer::new(spec.into_metadata(), payload_len))
         }
 
         async fn send_zero_copy(&self, buffer: Self::Tx) -> Result<(), UStatus> {
@@ -546,15 +530,10 @@ mod tests {
         type Tx = WrongLengthTxBuffer;
         type Rx = UOwnedFrame;
 
-        async fn reserve(
-            &self,
-            metadata: UFrameMetadata,
-            payload_len: usize,
-            _alignment: usize,
-        ) -> Result<Self::Tx, UStatus> {
+        async fn loan_tx(&self, spec: UTxLoanSpec) -> Result<Self::Tx, UStatus> {
             Ok(WrongLengthTxBuffer {
-                metadata,
-                payload: vec![0_u8; payload_len + 1],
+                metadata: spec.metadata().clone(),
+                payload: vec![0_u8; spec.payload_len() + 1],
             })
         }
 

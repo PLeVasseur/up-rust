@@ -125,6 +125,105 @@ pub fn validate_owned_frame_for_transport(frame: &UOwnedFrame) -> Result<(), USt
     validate_frame_metadata_for_payload(frame.metadata(), frame.has_payload())
 }
 
+/// Payload presence and layout requested for a transmit loan.
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub enum UTxPayloadSpec {
+    /// The frame carries no payload and no payload encoding metadata.
+    Absent,
+    /// The frame carries a payload, including a present empty payload.
+    Present(PayloadLayout),
+}
+
+impl UTxPayloadSpec {
+    /// Creates a present-payload spec from length and alignment.
+    pub fn present(payload_len: usize, alignment: usize) -> Result<Self, UWireError> {
+        PayloadLayout::new(payload_len, alignment).map(Self::Present)
+    }
+
+    /// Creates a present-empty-payload spec.
+    pub fn present_empty() -> Self {
+        Self::Present(PayloadLayout::new(0, 1).expect("alignment 1 is valid"))
+    }
+
+    /// Returns whether this spec represents a present payload.
+    pub fn is_present(self) -> bool {
+        matches!(self, Self::Present(_))
+    }
+
+    /// Returns the present payload layout, if any.
+    pub fn layout(self) -> Option<PayloadLayout> {
+        match self {
+            Self::Absent => None,
+            Self::Present(layout) => Some(layout),
+        }
+    }
+}
+
+/// Validated transport-independent transmit loan specification.
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct UTxLoanSpec {
+    metadata: UFrameMetadata,
+    payload: UTxPayloadSpec,
+}
+
+impl UTxLoanSpec {
+    /// Creates a validated transmit loan spec.
+    pub fn new(metadata: UFrameMetadata, payload: UTxPayloadSpec) -> Result<Self, UStatus> {
+        validate_frame_metadata_for_payload(&metadata, payload.is_present())?;
+        Ok(Self { metadata, payload })
+    }
+
+    /// Creates a no-payload transmit loan spec.
+    pub fn no_payload(metadata: UFrameMetadata) -> Result<Self, UStatus> {
+        Self::new(metadata, UTxPayloadSpec::Absent)
+    }
+
+    /// Creates a present-payload transmit loan spec.
+    pub fn payload(metadata: UFrameMetadata, layout: PayloadLayout) -> Result<Self, UStatus> {
+        Self::new(metadata, UTxPayloadSpec::Present(layout))
+    }
+
+    /// Creates a present-empty-payload transmit loan spec.
+    pub fn present_empty_payload(metadata: UFrameMetadata) -> Result<Self, UStatus> {
+        Self::new(metadata, UTxPayloadSpec::present_empty())
+    }
+
+    /// Returns the immutable frame metadata associated with this loan.
+    pub fn metadata(&self) -> &UFrameMetadata {
+        &self.metadata
+    }
+
+    /// Consumes the spec and returns its metadata.
+    pub fn into_metadata(self) -> UFrameMetadata {
+        self.metadata
+    }
+
+    /// Returns the payload presence and layout spec.
+    pub fn payload_spec(&self) -> UTxPayloadSpec {
+        self.payload
+    }
+
+    /// Returns whether the transmit frame carries a payload.
+    pub fn has_payload(&self) -> bool {
+        self.payload.is_present()
+    }
+
+    /// Returns the visible application payload length.
+    pub fn payload_len(&self) -> usize {
+        self.payload.layout().map_or(0, PayloadLayout::len)
+    }
+
+    /// Returns the requested visible application payload alignment.
+    pub fn payload_alignment(&self) -> usize {
+        self.payload.layout().map_or(1, PayloadLayout::align)
+    }
+
+    /// Returns the present payload layout, if any.
+    pub fn payload_layout(&self) -> Option<PayloadLayout> {
+        self.payload.layout()
+    }
+}
+
 /// A factory for URIs representing this uEntity's resources.
 #[cfg_attr(any(test, feature = "test-util"), mockall::automock)]
 pub trait LocalUriProvider: Send + Sync {
@@ -342,7 +441,7 @@ where
 /// Implement this trait only when the transport can loan transmit storage or
 /// deliver receive leases without hiding transport-owned copies.
 ///
-/// The metadata passed to [`Self::reserve`] is final for that transmit loan.
+/// The metadata passed to [`Self::loan_tx`] is final for that transmit loan.
 /// Implementations may encode metadata into native transport headers, side-band
 /// properties, or hidden prefixes before returning the loan. Callers must choose
 /// payload encoding, routing attributes, and other metadata before reserving so
@@ -350,7 +449,7 @@ where
 ///
 /// This is the zero-copy sibling of [`UOwnedTransport`]. Pull receive and
 /// listener registration map one-to-one to the owned API, while send is
-/// intentionally split into [`Self::reserve`] plus [`Self::send_zero_copy`] so
+/// intentionally split into [`Self::loan_tx`] plus [`Self::send_zero_copy`] so
 /// serializers can write directly into the transport loan.
 ///
 /// ```no_run
@@ -363,13 +462,12 @@ where
 ///     type Tx = UVecTxBuffer;
 ///     type Rx = UOwnedFrame;
 ///
-///     async fn reserve(
+///     async fn loan_tx(
 ///         &self,
-///         metadata: UFrameMetadata,
-///         payload_len: usize,
-///         _alignment: usize,
+///         spec: up_rust::UTxLoanSpec,
 ///     ) -> Result<Self::Tx, UStatus> {
-///         Ok(UVecTxBuffer::new(metadata, payload_len))
+///         let payload_len = spec.payload_len();
+///         Ok(UVecTxBuffer::new(spec.into_metadata(), payload_len))
 ///     }
 ///
 ///     async fn send_zero_copy(&self, buffer: Self::Tx) -> Result<(), UStatus> {
@@ -380,27 +478,22 @@ where
 /// ```
 #[async_trait]
 pub trait UZeroCopyTransport: Send + Sync {
-    /// Transport-specific transmit loan type returned by [`Self::reserve`].
+    /// Transport-specific transmit loan type returned by [`Self::loan_tx`].
     type Tx: UTxBuffer + Send;
 
     /// Transport-specific receive lease type returned by pull receive and
     /// delivered to zero-copy listeners.
     type Rx: UZeroCopyRxFrame + Send + 'static;
 
-    /// Reserves transmit storage for a frame with `metadata` and payload layout.
+    /// Reserves transmit storage for a validated frame loan spec.
     ///
-    /// `payload_len` is the number of application payload bytes the serializer
-    /// will write. `alignment` is the serializer's required payload alignment.
-    /// Implementations must either honor the requested alignment or return an
-    /// error before handing the loan to the caller. Metadata is immutable after
-    /// this call; transports may use it to compute payload layout and native
-    /// transport representation before exposing the payload storage.
-    async fn reserve(
-        &self,
-        metadata: UFrameMetadata,
-        payload_len: usize,
-        alignment: usize,
-    ) -> Result<Self::Tx, UStatus>;
+    /// The spec has already validated payload presence against encoding metadata
+    /// and the requested payload alignment. Implementations must either honor the
+    /// requested alignment or return an error before handing the loan to the
+    /// caller. Metadata is immutable after this call; transports may use it to
+    /// compute payload layout and native transport representation before exposing
+    /// the payload storage.
+    async fn loan_tx(&self, spec: UTxLoanSpec) -> Result<Self::Tx, UStatus>;
 
     /// Commits a previously reserved transmit loan.
     ///
@@ -461,7 +554,7 @@ pub trait UZeroCopyTransport: Send + Sync {
 
 /// Optional zero-copy capability for transports that can expose uninitialized TX payload storage.
 ///
-/// This is deliberately separate from [`UZeroCopyTransport::reserve`], whose
+/// This is deliberately separate from [`UZeroCopyTransport::loan_tx`], whose
 /// [`UTxBuffer`] result exposes initialized byte slices. Implementations must
 /// initialize any transport-owned bytes before returning the uninitialized loan;
 /// callers initialize only the visible application payload bytes.
@@ -470,13 +563,8 @@ pub trait UZeroCopyUninitTransport: UZeroCopyTransport {
     /// Transport-specific uninitialized transmit loan type.
     type UninitTx: UUninitTxBuffer<Initialized = Self::Tx> + Send;
 
-    /// Reserves uninitialized transmit storage for a frame payload.
-    async fn reserve_uninit(
-        &self,
-        metadata: UFrameMetadata,
-        payload_len: usize,
-        alignment: usize,
-    ) -> Result<Self::UninitTx, UStatus>;
+    /// Reserves uninitialized transmit storage for a validated frame loan spec.
+    async fn loan_uninit_tx(&self, spec: UTxLoanSpec) -> Result<Self::UninitTx, UStatus>;
 }
 
 fn validate_payload_layout_request(
@@ -547,29 +635,11 @@ pub trait UZeroCopyTransportExt: UZeroCopyTransport {
     {
         validate_frame_metadata_for_transport(&metadata)?;
         let layout = C::payload_layout(value).map_err(UStatus::from)?;
-        let mut buffer = self
-            .reserve(
-                metadata.with_encoding(C::payload_encoding()),
-                layout.len(),
-                layout.align(),
-            )
-            .await?;
+        let spec = UTxLoanSpec::payload(metadata.with_encoding(C::payload_encoding()), layout)?;
+        let mut buffer = self.loan_tx(spec).await?;
         verify_reserved_tx_payload_layout(&mut buffer, layout)?;
         C::encode_payload(value, buffer.payload_mut()).map_err(UStatus::from)?;
         self.send_zero_copy(buffer).await
-    }
-
-    /// Compatibility alias for [`Self::send_encoded_payload_as`].
-    async fn send_payload_as<C, T>(
-        &self,
-        metadata: UFrameMetadata,
-        value: &T,
-    ) -> Result<(), UStatus>
-    where
-        C: PayloadCodec + EncodePayload<T> + Send + Sync,
-        T: ?Sized + Sync,
-    {
-        self.send_encoded_payload_as::<C, T>(metadata, value).await
     }
 
     /// Copies already encoded payload bytes directly into a transport transmit loan.
@@ -584,13 +654,8 @@ pub trait UZeroCopyTransportExt: UZeroCopyTransport {
         validate_frame_metadata_for_transport(&metadata)?;
         let payload = payload.into_bytes();
         let layout = validate_payload_layout_request(payload.len(), 1)?;
-        let mut buffer = self
-            .reserve(
-                metadata.with_encoding(C::payload_encoding()),
-                layout.len(),
-                layout.align(),
-            )
-            .await?;
+        let spec = UTxLoanSpec::payload(metadata.with_encoding(C::payload_encoding()), layout)?;
+        let mut buffer = self.loan_tx(spec).await?;
         verify_reserved_tx_payload_layout(&mut buffer, layout)?;
         buffer
             .loaned_payload_mut()
@@ -609,13 +674,8 @@ pub trait UZeroCopyTransportExt: UZeroCopyTransport {
     {
         validate_frame_metadata_for_transport(&metadata)?;
         let layout = C::loan_layout().map_err(UStatus::from)?;
-        let mut buffer = self
-            .reserve(
-                metadata.with_encoding(C::payload_encoding()),
-                layout.len(),
-                layout.align(),
-            )
-            .await?;
+        let spec = UTxLoanSpec::payload(metadata.with_encoding(C::payload_encoding()), layout)?;
+        let mut buffer = self.loan_tx(spec).await?;
         verify_reserved_tx_payload_layout(&mut buffer, layout)?;
         {
             let mut loaned_payload = buffer.loaned_payload_mut();
@@ -646,13 +706,8 @@ pub trait UZeroCopyUninitTransportExt: UZeroCopyUninitTransport {
     {
         validate_frame_metadata_for_transport(&metadata)?;
         let layout = C::loan_uninit_layout().map_err(UStatus::from)?;
-        let mut buffer = self
-            .reserve_uninit(
-                metadata.with_encoding(C::payload_encoding()),
-                layout.len(),
-                layout.align(),
-            )
-            .await?;
+        let spec = UTxLoanSpec::payload(metadata.with_encoding(C::payload_encoding()), layout)?;
+        let mut buffer = self.loan_uninit_tx(spec).await?;
         verify_reserved_uninit_payload_layout(&mut buffer, layout)?;
         {
             let loaned_payload = buffer.payload_uninit_mut();
@@ -686,13 +741,8 @@ pub trait UZeroCopyUninitTransportExt: UZeroCopyUninitTransport {
     {
         validate_frame_metadata_for_transport(&metadata)?;
         let layout = validate_payload_layout_request(payload_len, alignment)?;
-        let mut buffer = self
-            .reserve_uninit(
-                metadata.with_encoding(C::payload_encoding()),
-                layout.len(),
-                layout.align(),
-            )
-            .await?;
+        let spec = UTxLoanSpec::payload(metadata.with_encoding(C::payload_encoding()), layout)?;
+        let mut buffer = self.loan_uninit_tx(spec).await?;
         verify_reserved_uninit_payload_layout(&mut buffer, layout)?;
         {
             let writer = buffer.payload_uninit_mut().into_writer();
@@ -731,13 +781,11 @@ pub trait UZeroCopyUninitTransportExt: UZeroCopyUninitTransport {
     {
         validate_frame_metadata_for_transport(&metadata)?;
         let layout = PayloadLayout::for_type::<T>();
-        let mut buffer = self
-            .reserve_uninit(
-                metadata.with_encoding(StableContainerPayload::<T>::encoding()),
-                layout.len(),
-                layout.align(),
-            )
-            .await?;
+        let spec = UTxLoanSpec::payload(
+            metadata.with_encoding(StableContainerPayload::<T>::encoding()),
+            layout,
+        )?;
+        let mut buffer = self.loan_uninit_tx(spec).await?;
         verify_reserved_uninit_payload_layout(&mut buffer, layout)?;
         {
             let slot = UnsafeStablePayloadTxSlot::new(buffer.payload_uninit_mut())
@@ -808,7 +856,7 @@ impl UOwnedTransport for MockUOwnedTransport {
 #[cfg(any(test, feature = "test-util"))]
 mockall::mock! {
     pub UZeroCopyTransport {
-        pub async fn do_reserve(&self, metadata: UFrameMetadata, payload_len: usize, alignment: usize) -> Result<UVecTxBuffer, UStatus>;
+        pub async fn do_loan_tx(&self, spec: UTxLoanSpec) -> Result<UVecTxBuffer, UStatus>;
         pub async fn do_send_zero_copy(&self, buffer: UVecTxBuffer) -> Result<(), UStatus>;
         pub async fn do_receive_zero_copy<'a>(&'a self, source_filter: &'a UUri, sink_filter: Option<&'a UUri>) -> Result<UOwnedFrame, UStatus>;
         pub async fn do_register_zero_copy_listener<'a>(&'a self, source_filter: &'a UUri, sink_filter: Option<&'a UUri>, listener: Arc<dyn UZeroCopyListener<UOwnedFrame>>) -> Result<(), UStatus>;
@@ -823,13 +871,8 @@ impl UZeroCopyTransport for MockUZeroCopyTransport {
     type Tx = UVecTxBuffer;
     type Rx = UOwnedFrame;
 
-    async fn reserve(
-        &self,
-        metadata: UFrameMetadata,
-        payload_len: usize,
-        alignment: usize,
-    ) -> Result<Self::Tx, UStatus> {
-        self.do_reserve(metadata, payload_len, alignment).await
+    async fn loan_tx(&self, spec: UTxLoanSpec) -> Result<Self::Tx, UStatus> {
+        self.do_loan_tx(spec).await
     }
 
     async fn send_zero_copy(&self, buffer: Self::Tx) -> Result<(), UStatus> {
@@ -1011,7 +1054,7 @@ mod tests {
         let transport = InMemoryZeroCopyTransport::default();
 
         transport
-            .send_payload_as::<RawBytes, [u8]>(UFrameMetadata::publish(topic), b"payload")
+            .send_encoded_payload_as::<RawBytes, [u8]>(UFrameMetadata::publish(topic), b"payload")
             .await
             .unwrap();
 
@@ -1051,14 +1094,13 @@ mod tests {
         type Tx = UVecTxBuffer;
         type Rx = UOwnedFrame;
 
-        async fn reserve(
-            &self,
-            metadata: UFrameMetadata,
-            payload_len: usize,
-            alignment: usize,
-        ) -> Result<Self::Tx, UStatus> {
-            UVecTxBuffer::with_alignment(metadata, payload_len + 1, alignment)
-                .map_err(UStatus::from)
+        async fn loan_tx(&self, spec: UTxLoanSpec) -> Result<Self::Tx, UStatus> {
+            UVecTxBuffer::with_alignment(
+                spec.metadata().clone(),
+                spec.payload_len() + 1,
+                spec.payload_alignment(),
+            )
+            .map_err(UStatus::from)
         }
 
         async fn send_zero_copy(&self, _buffer: Self::Tx) -> Result<(), UStatus> {
@@ -1073,7 +1115,7 @@ mod tests {
         let transport = OversizedTxLoanTransport::default();
 
         let status = transport
-            .send_payload_as::<RawBytes, [u8]>(UFrameMetadata::publish(topic), b"payload")
+            .send_encoded_payload_as::<RawBytes, [u8]>(UFrameMetadata::publish(topic), b"payload")
             .await
             .expect_err("bad transport loan must fail before send");
 
@@ -1091,13 +1133,13 @@ mod tests {
         type Tx = UVecTxBuffer;
         type Rx = UOwnedFrame;
 
-        async fn reserve(
-            &self,
-            metadata: UFrameMetadata,
-            payload_len: usize,
-            alignment: usize,
-        ) -> Result<Self::Tx, UStatus> {
-            UVecTxBuffer::with_alignment(metadata, payload_len, alignment).map_err(UStatus::from)
+        async fn loan_tx(&self, spec: UTxLoanSpec) -> Result<Self::Tx, UStatus> {
+            UVecTxBuffer::with_alignment(
+                spec.metadata().clone(),
+                spec.payload_len(),
+                spec.payload_alignment(),
+            )
+            .map_err(UStatus::from)
         }
 
         async fn send_zero_copy(&self, _buffer: Self::Tx) -> Result<(), UStatus> {
@@ -1110,14 +1152,13 @@ mod tests {
     impl UZeroCopyUninitTransport for OversizedUninitTxLoanTransport {
         type UninitTx = UVecUninitTxBuffer;
 
-        async fn reserve_uninit(
-            &self,
-            metadata: UFrameMetadata,
-            payload_len: usize,
-            alignment: usize,
-        ) -> Result<Self::UninitTx, UStatus> {
-            UVecUninitTxBuffer::with_alignment(metadata, payload_len + 1, alignment)
-                .map_err(UStatus::from)
+        async fn loan_uninit_tx(&self, spec: UTxLoanSpec) -> Result<Self::UninitTx, UStatus> {
+            UVecUninitTxBuffer::with_alignment(
+                spec.metadata().clone(),
+                spec.payload_len() + 1,
+                spec.payload_alignment(),
+            )
+            .map_err(UStatus::from)
         }
     }
 
@@ -1168,6 +1209,72 @@ mod tests {
         let frame = crate::UFrameBuilder::publish(topic).build().unwrap();
 
         validate_owned_frame_for_transport(&frame).unwrap();
+    }
+
+    #[test]
+    fn tx_loan_spec_accepts_absent_payload_without_encoding() {
+        let topic = UUri::try_from_parts("vehicle", 0x4210, 0x01, 0x9000).unwrap();
+        let spec = UTxLoanSpec::no_payload(UFrameMetadata::publish(topic)).unwrap();
+
+        assert!(!spec.has_payload());
+        assert_eq!(spec.payload_len(), 0);
+        assert_eq!(spec.payload_alignment(), 1);
+    }
+
+    #[test]
+    fn tx_loan_spec_accepts_present_empty_payload_with_encoding() {
+        let topic = UUri::try_from_parts("vehicle", 0x4210, 0x01, 0x9000).unwrap();
+        let spec = UTxLoanSpec::present_empty_payload(
+            UFrameMetadata::publish(topic).with_encoding(RawBytes::encoding()),
+        )
+        .unwrap();
+
+        assert!(spec.has_payload());
+        assert_eq!(spec.payload_len(), 0);
+        assert_eq!(spec.payload_alignment(), 1);
+    }
+
+    #[test]
+    fn tx_loan_spec_accepts_payload_bytes_with_encoding() {
+        let topic = UUri::try_from_parts("vehicle", 0x4210, 0x01, 0x9000).unwrap();
+        let layout = PayloadLayout::new(8, 4).unwrap();
+        let spec = UTxLoanSpec::payload(
+            UFrameMetadata::publish(topic).with_encoding(RawBytes::encoding()),
+            layout,
+        )
+        .unwrap();
+
+        assert!(spec.has_payload());
+        assert_eq!(spec.payload_layout(), Some(layout));
+    }
+
+    #[test]
+    fn tx_loan_spec_rejects_payload_without_encoding() {
+        let topic = UUri::try_from_parts("vehicle", 0x4210, 0x01, 0x9000).unwrap();
+        let layout = PayloadLayout::new(1, 1).unwrap();
+        let status = UTxLoanSpec::payload(UFrameMetadata::publish(topic), layout).unwrap_err();
+
+        assert_eq!(status.get_code(), UCode::INVALID_ARGUMENT);
+        assert!(status.get_message().contains("payload encoding is absent"));
+    }
+
+    #[test]
+    fn tx_loan_spec_rejects_encoding_with_absent_payload() {
+        let topic = UUri::try_from_parts("vehicle", 0x4210, 0x01, 0x9000).unwrap();
+        let status = UTxLoanSpec::no_payload(
+            UFrameMetadata::publish(topic).with_encoding(RawBytes::encoding()),
+        )
+        .unwrap_err();
+
+        assert_eq!(status.get_code(), UCode::INVALID_ARGUMENT);
+        assert!(status.get_message().contains("payload is absent"));
+    }
+
+    #[test]
+    fn tx_payload_spec_rejects_invalid_alignment() {
+        let error = UTxPayloadSpec::present(1, 3).unwrap_err();
+
+        assert!(matches!(error, UWireError::InvalidPayload(_)));
     }
 
     #[test]
