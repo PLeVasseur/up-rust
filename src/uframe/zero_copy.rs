@@ -26,7 +26,7 @@ use super::{
     },
 };
 
-impl UZeroCopyRxFrame for UOwnedFrame {
+impl UFrameView for UOwnedFrame {
     type PayloadReader<'a>
         = Cursor<&'a [u8]>
     where
@@ -58,12 +58,6 @@ impl UZeroCopyRxFrame for UOwnedFrame {
 
     fn try_contiguous_payload(&self) -> Option<&[u8]> {
         Some(self.payload_bytes())
-    }
-}
-
-impl UContiguousZeroCopyRxFrame for UOwnedFrame {
-    fn contiguous_payload(&self) -> &[u8] {
-        self.payload_bytes()
     }
 }
 
@@ -149,14 +143,14 @@ pub trait UUninitTxBuffer {
     unsafe fn assume_payload_init(self) -> Self::Initialized;
 }
 
-/// Receive-side zero-copy frame lease.
+/// Neutral view of frame metadata plus ordered payload bytes.
 ///
-/// The lease owns the lifetime of any borrowed payload views returned by this
-/// trait. Dropping the lease releases the underlying transport storage. The base
-/// receive capability is intentionally segmented-friendly: callers should prefer
-/// [`Self::payload_reader`] or [`Self::payload_slices`] unless they explicitly
-/// need a contiguous borrowed view.
-pub trait UZeroCopyRxFrame {
+/// This trait is shared by owned frames and transport receive leases. It does
+/// not by itself imply that payload bytes are backed by transport-loaned storage.
+/// The base capability is intentionally segmented-friendly: callers should
+/// prefer [`Self::payload_reader`] or [`Self::payload_slices`] unless they
+/// explicitly need a contiguous borrowed view.
+pub trait UFrameView {
     type PayloadReader<'a>: Read + 'a
     where
         Self: 'a;
@@ -164,22 +158,21 @@ pub trait UZeroCopyRxFrame {
     where
         Self: 'a;
 
-    /// Returns the native frame metadata reconstructed by the transport.
+    /// Returns the native frame metadata.
     fn metadata(&self) -> &UFrameMetadata;
 
-    /// Returns the number of application payload bytes visible through this
-    /// receive lease.
+    /// Returns the number of application payload bytes visible through this view.
     ///
     /// Transport metadata prefixes, alignment padding, and protocol trailers
     /// must not be included in this length.
     fn payload_len(&self) -> usize;
 
-    /// Returns whether this lease carries a payload, including a present empty
+    /// Returns whether this view carries a payload, including a present empty
     /// payload.
     ///
     /// The default preserves legacy transport implementations by treating any
     /// non-empty payload byte range or any payload encoding metadata as payload
-    /// presence. Transport leases that can distinguish an absent payload from a
+    /// presence. Frame views that can distinguish an absent payload from a
     /// present empty payload without relying on encoding metadata should override
     /// this method.
     fn has_payload(&self) -> bool {
@@ -200,7 +193,7 @@ pub trait UZeroCopyRxFrame {
     /// segmented buffers.
     fn payload_slices(&self) -> Self::PayloadSlices<'_>;
 
-    /// Returns a contiguous borrowed payload view when the transport can provide
+    /// Returns a contiguous borrowed payload view when this view can provide
     /// one without copying.
     ///
     /// A return value of `None` means callers should use [`Self::payload_reader`]
@@ -210,7 +203,7 @@ pub trait UZeroCopyRxFrame {
         None
     }
 
-    /// Deserializes this receive lease from its ordered payload reader.
+    /// Deserializes this frame view from its ordered payload reader.
     ///
     /// The method verifies the frame's [`PayloadEncoding`](crate::PayloadEncoding) against
     /// the selected [`PayloadFormat`] before invoking the reader-based deserializer.
@@ -235,7 +228,7 @@ pub trait UZeroCopyRxFrame {
         T::deserialize_from_reader(self.payload_reader(), self.payload_len())
     }
 
-    /// Decodes this receive lease from its ordered payload reader with codec `C`.
+    /// Decodes this frame view from its ordered payload reader with codec `C`.
     ///
     /// This path avoids coalescing segmented receive storage when the selected
     /// codec can decode from a stream.
@@ -248,13 +241,22 @@ pub trait UZeroCopyRxFrame {
     }
 }
 
+/// Receive-side zero-copy frame lease returned by a transport.
+///
+/// Dropping a receive lease releases the underlying transport storage. Borrowed
+/// payload views returned through [`UFrameView`] must not outlive the lease.
+/// Implementations must not allocate or coalesce payload storage to satisfy view
+/// accessors. Owned frames intentionally implement only [`UFrameView`], not this
+/// lease trait.
+pub trait UZeroCopyRxLease: UFrameView {}
+
 /// Receive-side frame lease with a guaranteed contiguous payload view.
 ///
 /// Implement this trait only for receive leases whose application payload is
 /// always available as one borrowed byte slice without copying. Segmented
-/// transports should implement only [`UZeroCopyRxFrame`] and rely on reader or
+/// transports should implement only [`UZeroCopyRxLease`] and rely on reader or
 /// slice iteration based decoding.
-pub trait UContiguousZeroCopyRxFrame: UZeroCopyRxFrame {
+pub trait UContiguousZeroCopyRxFrame: UZeroCopyRxLease {
     /// Returns the application payload as one contiguous borrowed byte slice.
     ///
     /// The returned slice must exclude transport metadata, padding, and trailers
@@ -627,7 +629,7 @@ impl<'a> LoanedUninitByteWriter<'a> {
 /// simply be owned memory, while this trait represents the payload-level
 /// zero-copy receive contract. Implementations must not allocate or coalesce to
 /// satisfy [`Self::try_loaned_contiguous_payload`].
-pub trait ULoanedContiguousZeroCopyRxFrame: UZeroCopyRxFrame {
+pub trait ULoanedContiguousZeroCopyRxFrame: UZeroCopyRxLease {
     /// Returns one contiguous loan-backed application payload view.
     ///
     /// Implementations return an error when the current frame is not backed by a
@@ -759,11 +761,11 @@ pub fn verify_loaned_rx_payload_layout(
 /// These helpers intentionally copy. They are useful at adapter boundaries such
 /// as routers that operate on [`UOwnedFrame`], but should not be used on a path
 /// that claims to preserve end-to-end zero-copy delivery.
-pub trait UZeroCopyPayloadCopyExt: UZeroCopyRxFrame {
+pub trait UZeroCopyPayloadCopyExt: UFrameView {
     /// Copies the ordered payload bytes into `dst`.
     ///
     /// Returns the number of bytes copied, or an error if `dst` is too small or
-    /// if the slice iterator does not produce exactly [`UZeroCopyRxFrame::payload_len`]
+    /// if the slice iterator does not produce exactly [`UFrameView::payload_len`]
     /// bytes.
     fn copy_payload_to(&self, dst: &mut [u8]) -> Result<usize, UWireError> {
         let expected = self.payload_len();
@@ -827,15 +829,15 @@ pub trait UZeroCopyPayloadCopyExt: UZeroCopyRxFrame {
     }
 }
 
-impl<T> UZeroCopyPayloadCopyExt for T where T: UZeroCopyRxFrame + ?Sized {}
+impl<T> UZeroCopyPayloadCopyExt for T where T: UFrameView + ?Sized {}
 
 /// Owned buffer useful for tests, examples, and adapters that emulate a transmit loan.
 ///
 /// `UVecTxBuffer` implements [`UTxBuffer`] over an owned `Vec<u8>`. It is
 /// intended for test fakes and examples; production shared-memory transports
-/// should expose their own transport-specific loan type. Use [`UOwnedFrame`] as a
-/// simple receive-side fake because it implements the zero-copy receive traits
-/// over its owned payload bytes.
+/// should expose their own transport-specific loan type. Receive-side fakes that
+/// are used as zero-copy transports should implement [`UZeroCopyRxLease`] rather
+/// than using [`UOwnedFrame`] as a lease.
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub struct UVecTxBuffer {
     metadata: UFrameMetadata,
@@ -851,6 +853,71 @@ pub struct UVecUninitTxBuffer {
     storage: Vec<MaybeUninit<u8>>,
     payload_offset: usize,
     payload_len: usize,
+}
+
+/// In-memory receive lease for tests and examples that need receive-lease shape.
+///
+/// This type owns its bytes but models the lifetime boundary of a receive lease:
+/// borrowed payload views cannot outlive the value. Production transports should
+/// expose transport-specific receive lease types backed by their native storage.
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct UVecRxLease {
+    frame: UOwnedFrame,
+}
+
+impl UVecRxLease {
+    /// Creates an in-memory receive lease from an owned frame.
+    pub fn new(frame: UOwnedFrame) -> Self {
+        Self { frame }
+    }
+
+    /// Consumes the lease and returns the owned frame used by this test lease.
+    pub fn into_frame(self) -> UOwnedFrame {
+        self.frame
+    }
+}
+
+impl UFrameView for UVecRxLease {
+    type PayloadReader<'a>
+        = Cursor<&'a [u8]>
+    where
+        Self: 'a;
+    type PayloadSlices<'a>
+        = std::iter::Once<&'a [u8]>
+    where
+        Self: 'a;
+
+    fn metadata(&self) -> &UFrameMetadata {
+        self.frame.metadata()
+    }
+
+    fn payload_len(&self) -> usize {
+        self.frame.payload_bytes().len()
+    }
+
+    fn has_payload(&self) -> bool {
+        self.frame.has_payload()
+    }
+
+    fn payload_reader(&self) -> Self::PayloadReader<'_> {
+        Cursor::new(self.frame.payload_bytes())
+    }
+
+    fn payload_slices(&self) -> Self::PayloadSlices<'_> {
+        std::iter::once(self.frame.payload_bytes())
+    }
+
+    fn try_contiguous_payload(&self) -> Option<&[u8]> {
+        Some(self.frame.payload_bytes())
+    }
+}
+
+impl UZeroCopyRxLease for UVecRxLease {}
+
+impl UContiguousZeroCopyRxFrame for UVecRxLease {
+    fn contiguous_payload(&self) -> &[u8] {
+        self.frame.payload_bytes()
+    }
 }
 
 impl UVecUninitTxBuffer {
@@ -1027,9 +1094,9 @@ impl UVecTxBuffer {
             .expect("UVecTxBuffer payload range must be in bounds")
             .to_vec();
         if self.metadata.encoding().is_some() {
-            UOwnedFrame::new(self.metadata, payload)
+            UOwnedFrame::with_payload_unchecked(self.metadata, payload)
         } else {
-            UOwnedFrame::without_payload(self.metadata)
+            UOwnedFrame::without_payload_unchecked(self.metadata)
         }
     }
 }

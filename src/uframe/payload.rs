@@ -868,9 +868,11 @@ impl PayloadCodecRegistry {
         &self,
         encoding: &PayloadEncoding,
     ) -> Result<PayloadCodecCapabilities, UWireError> {
-        let codec = self
-            .get_compatible(encoding)
-            .ok_or_else(|| UWireError::CodecNotRegistered(format!("{encoding:?}")))?;
+        let codec = self.get_compatible(encoding).ok_or_else(|| {
+            UWireError::CodecNotRegistered(format!(
+                "no exact or compatible codec registered for {encoding:?}"
+            ))
+        })?;
         Ok(codec.capabilities())
     }
 
@@ -887,9 +889,11 @@ impl PayloadCodecRegistry {
     where
         T: Any + Send + 'static,
     {
-        let codec = self
-            .get(encoding)
-            .ok_or_else(|| UWireError::CodecNotRegistered(format!("{encoding:?}")))?;
+        let codec = self.get_compatible(encoding).ok_or_else(|| {
+            UWireError::CodecNotRegistered(format!(
+                "no exact or compatible codec registered for {encoding:?}"
+            ))
+        })?;
         let value = codec.decode_payload_owned(src)?;
         value
             .downcast::<T>()
@@ -906,9 +910,11 @@ impl PayloadCodecRegistry {
         encoding: &PayloadEncoding,
         value: &dyn Any,
     ) -> Result<Bytes, UWireError> {
-        let codec = self
-            .get(encoding)
-            .ok_or_else(|| UWireError::CodecNotRegistered(format!("{encoding:?}")))?;
+        let codec = self.get(encoding).ok_or_else(|| {
+            UWireError::CodecNotRegistered(format!(
+                "no exact codec registered for encode request {encoding:?}"
+            ))
+        })?;
         codec.encode_payload_owned(value)
     }
 
@@ -918,9 +924,11 @@ impl PayloadCodecRegistry {
         encoding: &PayloadEncoding,
         src: &[u8],
     ) -> Result<Box<dyn Any + Send>, UWireError> {
-        let codec = self
-            .get(encoding)
-            .ok_or_else(|| UWireError::CodecNotRegistered(format!("{encoding:?}")))?;
+        let codec = self.get_compatible(encoding).ok_or_else(|| {
+            UWireError::CodecNotRegistered(format!(
+                "no exact or compatible codec registered for {encoding:?}"
+            ))
+        })?;
         codec.decode_payload_owned(src)
     }
 }
@@ -1205,6 +1213,16 @@ impl Display for StableTypeDetail<'_> {
 /// `StablePayload` follows the iceoryx2 [`ZeroCopySend`] safety model. The
 /// stable type name is the cross-process identity. Runtime compatibility checks
 /// use type name, variant, exact size, and sufficient advertised alignment.
+/// Those checks are necessary but not sufficient to prove arbitrary untrusted
+/// bytes form a valid Rust value. Stable-container typed receive is therefore a
+/// trusted-domain sender/receiver contract: senders must construct a valid `T`,
+/// and receivers may borrow `&T` only after metadata, length, alignment, and
+/// transport-loan provenance have been checked.
+///
+/// For untrusted inputs, validate or deserialize the bytes into an owned safe
+/// representation instead of borrowing them as `T`. Future APIs may add a
+/// stricter any-bit-pattern or validation-before-borrow contract for payloads
+/// intended to cross untrusted boundaries.
 ///
 /// # Safety
 ///

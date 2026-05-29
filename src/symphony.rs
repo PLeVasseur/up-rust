@@ -381,7 +381,7 @@ mod tests {
     }
 
     fn create_request_attributes(resource_id: u16) -> UAttributes {
-        UAttributes::new(
+        UAttributes::new_unchecked(
             UUID::build(),
             UUri::try_from_parts("authority", 0x10aa1, 0x01, 0x0000)
                 .expect("failed to create source URI"),

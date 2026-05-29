@@ -204,16 +204,19 @@ impl UFrameBuilder {
 
     /// Builds only the frame metadata.
     pub fn build_metadata(self) -> Result<UFrameMetadata, UFrameBuilderError> {
-        Ok(UFrameMetadata::new(self.build_attributes()?, self.encoding))
+        Ok(UFrameMetadata::new_unchecked(
+            self.build_attributes()?,
+            self.encoding,
+        ))
     }
 
     /// Builds an owned frame with the currently configured payload, if any.
     pub fn build(self) -> Result<UOwnedFrame, UFrameBuilderError> {
         let attributes = self.build_attributes()?;
-        let metadata = UFrameMetadata::new(attributes, self.encoding);
+        let metadata = UFrameMetadata::new_unchecked(attributes, self.encoding);
         Ok(match self.payload {
-            Some(payload) => UOwnedFrame::with_payload(metadata, payload),
-            None => UOwnedFrame::without_payload(metadata),
+            Some(payload) => UOwnedFrame::with_payload_unchecked(metadata, payload),
+            None => UOwnedFrame::without_payload_unchecked(metadata),
         })
     }
 
@@ -288,8 +291,8 @@ impl UFrameBuilder {
             .clone()
             .ok_or_else(|| UFrameBuilderError::invalid_attributes("source URI is required"))?;
         let sink = self.sink.clone();
-        let mut attributes =
-            UAttributes::new(id, source, sink, self.message_type).with_priority(self.priority);
+        let mut attributes = UAttributes::new_unchecked(id, source, sink, self.message_type)
+            .with_priority(self.priority);
         if let Some(ttl) = self.ttl {
             attributes = attributes.with_ttl(ttl);
         }

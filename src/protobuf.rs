@@ -23,12 +23,13 @@ use ::protobuf::{well_known_types::any::Any, CodedOutputStream, EnumOrUnknown, M
 use bytes::Bytes;
 
 use crate::{
+    frame_wire::{UFrameWireError, UFrameWireFormat},
     payload::{PayloadFormat, UDeserializer, UReadDeserializer, USerializer, UWireError},
     up_core_api::{
         uattributes as proto_attributes, ucode as proto_ucode, umessage as proto_message,
     },
-    PayloadEncoding, UAttributes, UCode, UFrameMetadata, UFrameWireError, UFrameWireFormat,
-    UMessageType, UOwnedFrame, UPayloadFormat, UPriority, UUri, UUID,
+    PayloadEncoding, UAttributes, UCode, UFrameMetadata, UMessageType, UOwnedFrame, UPayloadFormat,
+    UPriority, UUri, UUID,
 };
 
 /// Protocol Buffers application payload codec.
@@ -255,21 +256,22 @@ fn umessage_to_frame(message: &proto_message::UMessage) -> Result<UOwnedFrame, U
     let native_attributes = proto_attributes_to_native(attributes)?;
     let metadata = match (&message.payload, payload_format) {
         (None, proto_attributes::UPayloadFormat::UPAYLOAD_FORMAT_UNSPECIFIED) => {
-            UFrameMetadata::without_payload_encoding(native_attributes)
+            UFrameMetadata::without_payload_encoding_unchecked(native_attributes)
         }
         (None, _) => {
             return Err(UFrameWireError::invalid_frame(
                 "UMessage payload_format is set but payload is absent",
             ));
         }
-        (Some(_), format) => {
-            UFrameMetadata::new(native_attributes, proto_payload_format_to_encoding(format)?)
-        }
+        (Some(_), format) => UFrameMetadata::new_unchecked(
+            native_attributes,
+            proto_payload_format_to_encoding(format)?,
+        ),
     };
 
     Ok(match &message.payload {
-        Some(payload) => UOwnedFrame::with_payload(metadata, payload.clone()),
-        None => UOwnedFrame::without_payload(metadata),
+        Some(payload) => UOwnedFrame::with_payload_unchecked(metadata, payload.clone()),
+        None => UOwnedFrame::without_payload_unchecked(metadata),
     })
 }
 
@@ -316,7 +318,7 @@ fn proto_attributes_to_native(
         proto_priority_to_native(attributes.priority.enum_value().map_err(|value| {
             UFrameWireError::invalid_frame(format!("unknown priority {value}"))
         })?)?;
-    let mut native = UAttributes::new(
+    let mut native = UAttributes::new_unchecked(
         proto_uuid_to_native(id),
         proto_uri_to_native(source),
         attributes.sink.as_ref().map(proto_uri_to_native),
@@ -515,7 +517,7 @@ mod tests {
     use crate::{
         frame_wire::UFrameWireFormat,
         payload::{RawBytes, UDeserializer, USerializer, UWireError},
-        zero_copy::{UContiguousZeroCopyRxFrame, UTxBuffer, UVecTxBuffer, UZeroCopyRxFrame},
+        zero_copy::{UFrameView, UTxBuffer, UVecTxBuffer},
         PayloadEncoding, UFrameMetadata, UOwnedFrame, UPayloadFormat, UUri,
     };
 
@@ -533,7 +535,7 @@ mod tests {
         let input = message("owned protobuf payload");
 
         let frame = UOwnedFrame::from_serializable::<ProtobufPayload, _>(
-            UFrameMetadata::publish(topic),
+            UFrameMetadata::publish_unchecked(topic),
             &input,
         )
         .unwrap();
@@ -552,7 +554,7 @@ mod tests {
         let input = message("zero-copy protobuf payload");
         let payload_len = <StringValue as USerializer<ProtobufPayload>>::encoded_len(&input);
         let mut buffer = UVecTxBuffer::new(
-            UFrameMetadata::publish(topic).with_encoding(ProtobufPayload::encoding()),
+            UFrameMetadata::publish_unchecked(topic).with_encoding(ProtobufPayload::encoding()),
             payload_len,
         );
 
@@ -560,7 +562,7 @@ mod tests {
         assert_eq!(written, payload_len);
 
         let frame = buffer.into_frame();
-        let decoded: StringValue = frame.deserialize_borrowed::<ProtobufPayload, _>().unwrap();
+        let decoded: StringValue = frame.deserialize::<ProtobufPayload, _>().unwrap();
         let decoded_from_reader: StringValue = frame
             .deserialize_from_reader::<ProtobufPayload, _>()
             .unwrap();
@@ -596,10 +598,11 @@ mod tests {
         let id = UUID::from_u64_pair(0x0000_0000_0001_7000, 0x8000_0000_0000_0000).unwrap();
         let source = UUri::try_from_parts("vehicle", 0x4210, 1, 0x8001).unwrap();
         let payload = Bytes::from_static(b"legacy protobuf UMessage frame");
-        let attributes = UAttributes::new(id.clone(), source.clone(), None, UMessageType::Publish)
-            .with_priority(UPriority::CS1);
-        let frame = UOwnedFrame::with_payload(
-            UFrameMetadata::new(attributes, RawBytes::encoding()),
+        let attributes =
+            UAttributes::new_unchecked(id.clone(), source.clone(), None, UMessageType::Publish)
+                .with_priority(UPriority::CS1);
+        let frame = UOwnedFrame::with_payload_unchecked(
+            UFrameMetadata::new_unchecked(attributes, RawBytes::encoding()),
             payload.clone(),
         );
         let generated_message = proto_message::UMessage {
@@ -640,8 +643,8 @@ mod tests {
     #[test]
     fn protobuf_umessage_frame_round_trips_raw_payload() {
         let topic = UUri::try_from("//vehicle/4210/1/8001").unwrap();
-        let frame = UOwnedFrame::new(
-            UFrameMetadata::publish(topic).with_encoding(RawBytes::encoding()),
+        let frame = UOwnedFrame::with_payload_unchecked(
+            UFrameMetadata::publish_unchecked(topic).with_encoding(RawBytes::encoding()),
             b"raw payload".as_slice(),
         );
 
@@ -661,7 +664,7 @@ mod tests {
         let topic = UUri::try_from("//vehicle/4210/1/8001").unwrap();
         let input = message("protobuf payload inside protobuf UMessage frame");
         let frame = UOwnedFrame::from_serializable::<ProtobufPayload, _>(
-            UFrameMetadata::publish(topic),
+            UFrameMetadata::publish_unchecked(topic),
             &input,
         )
         .unwrap();
@@ -687,7 +690,7 @@ mod tests {
         let input = message("protobuf Any payload inside protobuf UMessage frame");
         let any = Any::pack(&input).unwrap();
         let frame = UOwnedFrame::from_serializable::<ProtobufAnyPayload, _>(
-            UFrameMetadata::publish(topic),
+            UFrameMetadata::publish_unchecked(topic),
             &any,
         )
         .unwrap();
@@ -707,8 +710,8 @@ mod tests {
     #[test]
     fn protobuf_umessage_frame_rejects_custom_payload_encoding() {
         let topic = UUri::try_from("//vehicle/4210/1/8001").unwrap();
-        let frame = UOwnedFrame::new(
-            UFrameMetadata::publish(topic).with_encoding(PayloadEncoding::custom(
+        let frame = UOwnedFrame::with_payload_unchecked(
+            UFrameMetadata::publish_unchecked(topic).with_encoding(PayloadEncoding::custom(
                 "com.example.native-bytes-v1",
                 "application/vnd.example.native-bytes",
             )),
@@ -719,7 +722,7 @@ mod tests {
 
         assert!(matches!(
             error,
-            crate::UFrameWireError::UnsupportedPayloadEncoding(message)
+            UFrameWireError::UnsupportedPayloadEncoding(message)
                 if message.contains("custom payload encoding")
         ));
     }
@@ -727,8 +730,8 @@ mod tests {
     #[test]
     fn protobuf_umessage_frame_round_trips_unspecified_payload_format() {
         let topic = UUri::try_from("//vehicle/4210/1/8001").unwrap();
-        let frame = UOwnedFrame::new(
-            UFrameMetadata::publish(topic)
+        let frame = UOwnedFrame::with_payload_unchecked(
+            UFrameMetadata::publish_unchecked(topic)
                 .with_encoding(PayloadEncoding::standard(UPayloadFormat::Unspecified)),
             b"out-of-band".as_slice(),
         );
@@ -743,8 +746,8 @@ mod tests {
     #[test]
     fn payload_decoder_rejects_payload_from_wrong_inner_codec_after_frame_decode() {
         let topic = UUri::try_from("//vehicle/4210/1/8001").unwrap();
-        let frame = UOwnedFrame::new(
-            UFrameMetadata::publish(topic).with_encoding(RawBytes::encoding()),
+        let frame = UOwnedFrame::with_payload_unchecked(
+            UFrameMetadata::publish_unchecked(topic).with_encoding(RawBytes::encoding()),
             b"not protobuf".as_slice(),
         );
         let encoded = ProtobufUMessageFrame::serialize_frame(&frame).unwrap();

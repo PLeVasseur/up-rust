@@ -18,8 +18,8 @@ use std::{collections::HashSet, sync::Arc};
 use tokio::sync::RwLock;
 
 use crate::{
-    transport::ComparableOwnedListener, validate_owned_frame_for_transport, verify_filter_criteria,
-    UCode, UOwnedFrame, UOwnedListener, UOwnedTransport, UStatus, UUri,
+    transport::{ComparableOwnedListener, UOwnedTransportImpl, ValidatedOwnedFrame},
+    verify_filter_criteria, UCode, UOwnedFrame, UOwnedListener, UStatus, UUri,
 };
 
 #[derive(Clone, Eq, PartialEq, Hash)]
@@ -74,14 +74,14 @@ impl LocalTransport {
 }
 
 #[async_trait::async_trait]
-impl UOwnedTransport for LocalTransport {
-    async fn send_owned(&self, frame: UOwnedFrame) -> Result<(), UStatus> {
-        validate_owned_frame_for_transport(&frame)?;
+impl UOwnedTransportImpl for LocalTransport {
+    async fn send_validated_owned(&self, frame: ValidatedOwnedFrame) -> Result<(), UStatus> {
+        let frame = frame.into_inner();
         self.dispatch_owned(frame).await;
         Ok(())
     }
 
-    async fn register_owned_listener(
+    async fn register_validated_owned_listener(
         &self,
         source_filter: &UUri,
         sink_filter: Option<&UUri>,
@@ -105,7 +105,7 @@ impl UOwnedTransport for LocalTransport {
         }
     }
 
-    async fn unregister_owned_listener(
+    async fn unregister_validated_owned_listener(
         &self,
         source_filter: &UUri,
         sink_filter: Option<&UUri>,

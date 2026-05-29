@@ -12,6 +12,12 @@
  ********************************************************************************/
 
 //! Native CloudEvents mapping for serializer-neutral uProtocol frames.
+//!
+//! CloudEvents data without `datacontenttype`, `pformat`, or custom encoding
+//! metadata maps to `UPayloadFormat::Unspecified` for wire compatibility with
+//! raw/default CloudEvents producers. This fallback is specific to the
+//! CloudEvents adapter; native frames with payload bytes generally still require
+//! explicit payload encoding metadata.
 
 use std::{collections::BTreeMap, error::Error, fmt::Display, str::FromStr};
 
@@ -194,7 +200,7 @@ impl TryFrom<CloudEvent> for UOwnedFrame {
             .map_err(|error| CloudEventError::InvalidAttribute(error.to_string()))?;
         let sink = optional_uri_extension(&event, EXTENSION_NAME_SINK)?;
         let message_type = cloud_event_type_to_message_type(&event.type_)?;
-        let mut attributes = UAttributes::new(id, source, sink, message_type);
+        let mut attributes = UAttributes::new_unchecked(id, source, sink, message_type);
 
         if let Some(priority) = optional_string_extension(&event, EXTENSION_NAME_PRIORITY)? {
             attributes = attributes.with_priority(code_to_priority(&priority)?);
@@ -256,12 +262,16 @@ impl TryFrom<CloudEvent> for UOwnedFrame {
                     return Err(CloudEventError::MissingAttribute("datacontenttype"))
                 }
             };
-            let frame = UOwnedFrame::new(UFrameMetadata::new(attributes, encoding), data);
+            let frame = UOwnedFrame::with_payload_unchecked(
+                UFrameMetadata::new_unchecked(attributes, encoding),
+                data,
+            );
             validate_cloud_event_frame(&frame)?;
             Ok(frame)
         } else {
-            let frame =
-                UOwnedFrame::without_payload(UFrameMetadata::without_payload_encoding(attributes));
+            let frame = UOwnedFrame::without_payload_unchecked(
+                UFrameMetadata::without_payload_encoding_unchecked(attributes),
+            );
             validate_cloud_event_frame(&frame)?;
             Ok(frame)
         }
@@ -409,7 +419,7 @@ mod tests {
         let request_id = UUID::build();
         let source = UUri::try_from(RPC_METHOD).unwrap();
         let sink = UUri::try_from(SINK).unwrap();
-        let attributes = UAttributes::new(
+        let attributes = UAttributes::new_unchecked(
             id.clone(),
             source.clone(),
             Some(sink.clone()),
@@ -424,8 +434,8 @@ mod tests {
             "com.example.native-string-v1",
             "application/vnd.example.native-string",
         );
-        let frame = UOwnedFrame::new(
-            UFrameMetadata::new(attributes, encoding.clone()),
+        let frame = UOwnedFrame::with_payload_unchecked(
+            UFrameMetadata::new_unchecked(attributes, encoding.clone()),
             Bytes::from_static(b"payload"),
         );
 
@@ -465,7 +475,7 @@ mod tests {
     fn standard_payload_uses_pformat_without_data_content_type() {
         let source = UUri::try_from(SOURCE).unwrap();
         let frame = UOwnedFrame::from_bytes_as::<crate::payload::RawBytes>(
-            UFrameMetadata::publish(source),
+            UFrameMetadata::publish_unchecked(source),
             Bytes::from_static(b"payload"),
         );
 
@@ -513,6 +523,84 @@ mod tests {
             UOwnedFrame::try_from(event),
             Err(CloudEventError::InvalidAttribute(_))
         ));
+    }
+
+    #[test]
+    fn cloudevent_data_without_metadata_uses_unspecified_adapter_fallback() {
+        let mut event = CloudEvent::new(
+            MESSAGE_ID.to_string(),
+            "up-pub.v1".to_string(),
+            SOURCE.to_string(),
+        );
+        event.data = Some(Bytes::from_static(b"payload"));
+
+        let frame = UOwnedFrame::try_from(event).unwrap();
+
+        assert_eq!(
+            frame.metadata().encoding(),
+            Some(&PayloadEncoding::standard(UPayloadFormat::Unspecified))
+        );
+        assert_eq!(frame.payload_bytes(), b"payload");
+    }
+
+    #[test]
+    fn cloudevent_standard_and_custom_payload_metadata_are_rejected_together() {
+        let mut event = CloudEvent::new(
+            MESSAGE_ID.to_string(),
+            "up-pub.v1".to_string(),
+            SOURCE.to_string(),
+        );
+        event.data = Some(Bytes::from_static(b"payload"));
+        event.extensions.insert(
+            EXTENSION_NAME_PAYLOAD_FORMAT.to_string(),
+            CloudEventAttributeValue::Integer(i64::from(UPayloadFormat::Raw.value())),
+        );
+        event.extensions.insert(
+            EXTENSION_NAME_CUSTOM_ENCODING_ID.to_string(),
+            CloudEventAttributeValue::String("custom".to_string()),
+        );
+
+        assert!(matches!(
+            UOwnedFrame::try_from(event),
+            Err(CloudEventError::InvalidAttribute(_))
+        ));
+    }
+
+    #[test]
+    fn cloudevent_custom_id_without_content_type_is_rejected() {
+        let mut event = CloudEvent::new(
+            MESSAGE_ID.to_string(),
+            "up-pub.v1".to_string(),
+            SOURCE.to_string(),
+        );
+        event.data = Some(Bytes::from_static(b"payload"));
+        event.extensions.insert(
+            EXTENSION_NAME_CUSTOM_ENCODING_ID.to_string(),
+            CloudEventAttributeValue::String("custom".to_string()),
+        );
+
+        assert!(matches!(
+            UOwnedFrame::try_from(event),
+            Err(CloudEventError::MissingAttribute("datacontenttype"))
+        ));
+    }
+
+    #[test]
+    fn cloudevent_without_data_drops_payload_encoding_metadata() {
+        let mut event = CloudEvent::new(
+            MESSAGE_ID.to_string(),
+            "up-pub.v1".to_string(),
+            SOURCE.to_string(),
+        );
+        event.extensions.insert(
+            EXTENSION_NAME_PAYLOAD_FORMAT.to_string(),
+            CloudEventAttributeValue::Integer(i64::from(UPayloadFormat::Raw.value())),
+        );
+
+        let frame = UOwnedFrame::try_from(event).unwrap();
+
+        assert!(!frame.has_payload());
+        assert_eq!(frame.metadata().encoding(), None);
     }
 
     #[test]

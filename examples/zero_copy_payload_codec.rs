@@ -17,9 +17,10 @@ use tokio::sync::Mutex;
 use up_rust::{
     payload::{PayloadFormat, UDeserializer, USerializer, UWireError},
     zero_copy::{
-        UContiguousZeroCopyRxFrame, UVecTxBuffer, UZeroCopyTransport, UZeroCopyTransportExt,
+        UContiguousZeroCopyRxFrame, UVecRxLease, UVecTxBuffer, UZeroCopyTransport,
+        UZeroCopyTransportExt, UZeroCopyTransportImpl, ValidatedTxLoanSpec,
     },
-    PayloadEncoding, UCode, UFrameMetadata, UOwnedFrame, UStatus, UTxLoanSpec, UUri,
+    PayloadEncoding, UCode, UFrameMetadata, UOwnedFrame, UStatus, UUri,
 };
 
 #[derive(Debug, PartialEq)]
@@ -97,11 +98,11 @@ struct LoopbackZeroCopyTransport {
 }
 
 #[async_trait::async_trait]
-impl UZeroCopyTransport for LoopbackZeroCopyTransport {
+impl UZeroCopyTransportImpl for LoopbackZeroCopyTransport {
     type Tx = UVecTxBuffer;
-    type Rx = UOwnedFrame;
+    type Rx = UVecRxLease;
 
-    async fn loan_tx(&self, spec: UTxLoanSpec) -> Result<Self::Tx, UStatus> {
+    async fn loan_validated_tx(&self, spec: ValidatedTxLoanSpec) -> Result<Self::Tx, UStatus> {
         UVecTxBuffer::with_alignment(
             spec.metadata().clone(),
             spec.payload_len(),
@@ -110,12 +111,12 @@ impl UZeroCopyTransport for LoopbackZeroCopyTransport {
         .map_err(UStatus::from)
     }
 
-    async fn send_zero_copy(&self, buffer: Self::Tx) -> Result<(), UStatus> {
+    async fn send_validated_zero_copy(&self, buffer: Self::Tx) -> Result<(), UStatus> {
         self.queue.lock().await.push_back(buffer.into_frame());
         Ok(())
     }
 
-    async fn receive_zero_copy(
+    async fn receive_validated_zero_copy(
         &self,
         _source_filter: &UUri,
         _sink_filter: Option<&UUri>,
@@ -124,6 +125,7 @@ impl UZeroCopyTransport for LoopbackZeroCopyTransport {
             .lock()
             .await
             .pop_front()
+            .map(UVecRxLease::new)
             .ok_or_else(|| UStatus::fail_with_code(UCode::NOT_FOUND, "no frame available"))
     }
 }
@@ -141,7 +143,7 @@ pub async fn main() -> Result<(), Box<dyn Error>> {
 
     transport
         .send_serialized_zero_copy::<ImagePayload, _>(
-            UFrameMetadata::publish(topic.clone()),
+            UFrameMetadata::try_publish(topic.clone())?,
             &image,
         )
         .await?;

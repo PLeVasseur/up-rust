@@ -14,7 +14,7 @@
 use super::{
     frame::{UFrameMetadata, UOwnedFrame},
     payload::UWireError,
-    zero_copy::{PayloadLoanProvenance, UTxBuffer, UZeroCopyRxFrame},
+    zero_copy::{PayloadLoanProvenance, UTxBuffer, UZeroCopyRxLease},
 };
 
 /// Experimental frame view that keeps receive storage alive while routing.
@@ -124,7 +124,7 @@ impl<Rx> ZeroCopyLoanedFrame<Rx> {
 
 impl<Rx> LoanedFrame for ZeroCopyLoanedFrame<Rx>
 where
-    Rx: UZeroCopyRxFrame + Send,
+    Rx: UZeroCopyRxLease + Send,
 {
     fn metadata(&self) -> &UFrameMetadata {
         self.frame.metadata()
@@ -208,7 +208,7 @@ mod tests {
     use super::*;
     use std::io::Cursor;
 
-    use crate::uframe::{PayloadCodec, RawBytes, UVecTxBuffer};
+    use crate::uframe::{PayloadCodec, RawBytes, UFrameView, UVecTxBuffer};
     use crate::UUri;
 
     fn vec_as_slice(bytes: &Vec<u8>) -> &[u8] {
@@ -239,7 +239,7 @@ mod tests {
         }
     }
 
-    impl UZeroCopyRxFrame for SegmentedRxFrame {
+    impl UFrameView for SegmentedRxFrame {
         type PayloadReader<'a>
             = Cursor<Vec<u8>>
         where
@@ -279,9 +279,11 @@ mod tests {
         }
     }
 
+    impl UZeroCopyRxLease for SegmentedRxFrame {}
+
     fn raw_metadata() -> UFrameMetadata {
         let topic = UUri::try_from_parts("vehicle", 0x4210, 1, 0x9000).expect("valid topic");
-        UFrameMetadata::publish(topic).with_encoding(RawBytes::payload_encoding())
+        UFrameMetadata::publish_unchecked(topic).with_encoding(RawBytes::payload_encoding())
     }
 
     #[test]
@@ -311,8 +313,8 @@ mod tests {
 
     #[test]
     fn loaned_frame_preserves_no_payload_and_present_empty_payload() {
-        let no_payload = UOwnedFrame::without_payload(raw_metadata());
-        let present_empty = UOwnedFrame::new(raw_metadata(), Vec::<u8>::new());
+        let no_payload = UOwnedFrame::without_payload_unchecked(raw_metadata());
+        let present_empty = UOwnedFrame::with_payload_unchecked(raw_metadata(), Vec::<u8>::new());
 
         assert!(!LoanedFrame::has_payload(&no_payload));
         assert_eq!(LoanedFrame::try_contiguous_payload(&no_payload), None);
@@ -354,7 +356,7 @@ mod tests {
 
     #[test]
     fn no_payload_loaned_frame_copies_zero_bytes() {
-        let metadata = UFrameMetadata::publish(
+        let metadata = UFrameMetadata::publish_unchecked(
             UUri::try_from_parts("vehicle", 0x4210, 1, 0x9000).expect("valid topic"),
         );
         let rx = SegmentedRxFrame::no_payload(metadata.clone());

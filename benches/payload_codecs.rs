@@ -17,7 +17,8 @@ use bytes::Bytes;
 use up_rust::{
     payload::{PlacementDefault, RawBytes, StableContainerPayload},
     zero_copy::{
-        LoanedPayload, PayloadLoanProvenance, ULoanedContiguousZeroCopyRxFrame, UZeroCopyRxFrame,
+        LoanedPayload, PayloadLoanProvenance, UFrameView, ULoanedContiguousZeroCopyRxFrame,
+        UZeroCopyRxLease,
     },
     McapPayload, UFrameMetadata, UOwnedFrame, UUri,
 };
@@ -50,7 +51,7 @@ struct LoanedPoseFrame<'a> {
     payload: &'a [u8],
 }
 
-impl UZeroCopyRxFrame for LoanedPoseFrame<'_> {
+impl UFrameView for LoanedPoseFrame<'_> {
     type PayloadReader<'a>
         = Cursor<&'a [u8]>
     where
@@ -80,6 +81,8 @@ impl UZeroCopyRxFrame for LoanedPoseFrame<'_> {
         Some(self.payload)
     }
 }
+
+impl UZeroCopyRxLease for LoanedPoseFrame<'_> {}
 
 impl ULoanedContiguousZeroCopyRxFrame for LoanedPoseFrame<'_> {
     fn loaned_contiguous_payload(&self) -> Result<LoanedPayload<'_>, up_rust::UWireError> {
@@ -115,7 +118,7 @@ fn main() {
 
     bench("raw from_bytes_as moves Bytes handle", || {
         let frame = UOwnedFrame::from_bytes_as::<RawBytes>(
-            UFrameMetadata::publish(topic.clone()),
+            UFrameMetadata::publish_unchecked(topic.clone()),
             payload.clone(),
         );
         black_box(frame.payload_bytes().len());
@@ -123,7 +126,7 @@ fn main() {
 
     bench("raw from_payload_as copies bytes", || {
         let frame = UOwnedFrame::from_payload_as::<RawBytes, [u8]>(
-            UFrameMetadata::publish(topic.clone()),
+            UFrameMetadata::publish_unchecked(topic.clone()),
             payload.as_ref(),
         )
         .expect("raw payload should encode");
@@ -132,7 +135,7 @@ fn main() {
 
     bench("mcap from_bytes_as moves Bytes handle", || {
         let frame = UOwnedFrame::from_bytes_as::<McapPayload>(
-            UFrameMetadata::publish(topic.clone()),
+            UFrameMetadata::publish_unchecked(topic.clone()),
             mcap.clone(),
         );
         black_box(frame.payload_bytes().len());
@@ -141,7 +144,7 @@ fn main() {
     bench("stable container owned encode", || {
         let frame =
             UOwnedFrame::from_payload_as::<StableContainerPayload<VehiclePose>, VehiclePose>(
-                UFrameMetadata::publish(topic.clone()),
+                UFrameMetadata::publish_unchecked(topic.clone()),
                 &pose,
             )
             .expect("stable payload should encode");
@@ -150,7 +153,7 @@ fn main() {
 
     bench("stable container typed borrow", || {
         let frame = LoanedPoseFrame {
-            metadata: UFrameMetadata::publish(topic.clone())
+            metadata: UFrameMetadata::publish_unchecked(topic.clone())
                 .with_encoding(StableContainerPayload::<VehiclePose>::encoding()),
             payload: pose_bytes.0.as_slice(),
         };

@@ -20,7 +20,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
 
     let topic = UUri::try_from_parts("vehicle", 0x4210, 1, 0x8001)?;
     let frame = UOwnedFrame::from_payload_as::<ProtobufPayload, _>(
-        UFrameMetadata::publish(topic),
+        UFrameMetadata::try_publish(topic)?,
         &message,
     )?;
     let decoded: StringValue = frame.decode_payload_as::<ProtobufPayload, _>()?;

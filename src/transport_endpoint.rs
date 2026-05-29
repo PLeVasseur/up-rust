@@ -23,9 +23,10 @@ use tracing::warn;
 use crate::{
     utransport::{UZeroCopyListener, UZeroCopyTransport},
     validate_owned_frame_for_transport,
-    zero_copy::{UTxBuffer, UZeroCopyPayloadCopyExt, UZeroCopyRxFrame},
-    UCode, UOwnedFrame, UOwnedListener, UOwnedTransport, UStatus, UTxLoanSpec, UTxPayloadSpec,
-    UUri,
+    zero_copy::{
+        UTxBuffer, UTxLoanSpec, UTxPayloadSpec, UZeroCopyPayloadCopyExt, UZeroCopyRxLease,
+    },
+    UCode, UOwnedFrame, UOwnedListener, UOwnedTransport, UStatus, UUri,
 };
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
@@ -309,7 +310,7 @@ struct ZeroCopyToOwnedListener<Rx> {
 #[async_trait]
 impl<Rx> UZeroCopyListener<Rx> for ZeroCopyToOwnedListener<Rx>
 where
-    Rx: UZeroCopyRxFrame + Send + 'static,
+    Rx: UZeroCopyRxLease + Send + 'static,
 {
     async fn on_receive_zero_copy(&self, frame: Rx) {
         let owned = if frame.has_payload() {
@@ -320,9 +321,9 @@ where
                     return;
                 }
             };
-            UOwnedFrame::new(frame.metadata().clone(), payload)
+            UOwnedFrame::with_payload_unchecked(frame.metadata().clone(), payload)
         } else {
-            UOwnedFrame::without_payload(frame.metadata().clone())
+            UOwnedFrame::without_payload_unchecked(frame.metadata().clone())
         };
         self.listener.on_receive_owned(owned).await;
     }
@@ -361,10 +362,14 @@ mod tests {
     use async_trait::async_trait;
 
     use crate::{
-        transport::{UOwnedFrameEndpoint, UOwnedFrameEndpointMode},
-        zero_copy::{UTxBuffer, UVecTxBuffer, UZeroCopyListener, UZeroCopyTransport},
-        UCode, UFrameMetadata, UOwnedFrame, UOwnedListener, UOwnedTransport, UStatus, UTxLoanSpec,
-        UUri,
+        transport::{
+            UOwnedFrameEndpoint, UOwnedFrameEndpointMode, UOwnedTransportImpl, ValidatedOwnedFrame,
+        },
+        zero_copy::{
+            UTxBuffer, UVecRxLease, UVecTxBuffer, UZeroCopyListener, UZeroCopyTransportImpl,
+            ValidatedTxLoanSpec,
+        },
+        UCode, UFrameMetadata, UOwnedFrame, UOwnedListener, UStatus, UUri,
     };
 
     #[derive(Default)]
@@ -391,13 +396,16 @@ mod tests {
     }
 
     #[async_trait]
-    impl UOwnedTransport for MemoryOwnedTransport {
-        async fn send_owned(&self, frame: UOwnedFrame) -> Result<(), UStatus> {
-            self.sent.lock().expect("sent lock poisoned").push(frame);
+    impl UOwnedTransportImpl for MemoryOwnedTransport {
+        async fn send_validated_owned(&self, frame: ValidatedOwnedFrame) -> Result<(), UStatus> {
+            self.sent
+                .lock()
+                .expect("sent lock poisoned")
+                .push(frame.into_inner());
             Ok(())
         }
 
-        async fn register_owned_listener(
+        async fn register_validated_owned_listener(
             &self,
             _source_filter: &UUri,
             _sink_filter: Option<&UUri>,
@@ -407,7 +415,7 @@ mod tests {
             Ok(())
         }
 
-        async fn unregister_owned_listener(
+        async fn unregister_validated_owned_listener(
             &self,
             _source_filter: &UUri,
             _sink_filter: Option<&UUri>,
@@ -428,7 +436,7 @@ mod tests {
     struct MemoryZeroCopyTransport {
         sent: Mutex<Vec<UOwnedFrame>>,
         reserve_alignments: Mutex<Vec<usize>>,
-        listener: Mutex<Option<Arc<dyn UZeroCopyListener<UOwnedFrame>>>>,
+        listener: Mutex<Option<Arc<dyn UZeroCopyListener<UVecRxLease>>>>,
     }
 
     impl MemoryZeroCopyTransport {
@@ -450,17 +458,17 @@ mod tests {
                 .expect("listener lock poisoned")
                 .clone();
             if let Some(listener) = listener {
-                listener.on_receive_zero_copy(frame).await;
+                listener.on_receive_zero_copy(UVecRxLease::new(frame)).await;
             }
         }
     }
 
     #[async_trait]
-    impl UZeroCopyTransport for MemoryZeroCopyTransport {
+    impl UZeroCopyTransportImpl for MemoryZeroCopyTransport {
         type Tx = UVecTxBuffer;
-        type Rx = UOwnedFrame;
+        type Rx = UVecRxLease;
 
-        async fn loan_tx(&self, spec: UTxLoanSpec) -> Result<Self::Tx, UStatus> {
+        async fn loan_validated_tx(&self, spec: ValidatedTxLoanSpec) -> Result<Self::Tx, UStatus> {
             self.reserve_alignments
                 .lock()
                 .expect("reserve alignments lock poisoned")
@@ -469,7 +477,7 @@ mod tests {
             Ok(UVecTxBuffer::new(spec.into_metadata(), payload_len))
         }
 
-        async fn send_zero_copy(&self, buffer: Self::Tx) -> Result<(), UStatus> {
+        async fn send_validated_zero_copy(&self, buffer: Self::Tx) -> Result<(), UStatus> {
             self.sent
                 .lock()
                 .expect("sent lock poisoned")
@@ -477,7 +485,7 @@ mod tests {
             Ok(())
         }
 
-        async fn register_zero_copy_listener(
+        async fn register_validated_zero_copy_listener(
             &self,
             _source_filter: &UUri,
             _sink_filter: Option<&UUri>,
@@ -487,7 +495,7 @@ mod tests {
             Ok(())
         }
 
-        async fn unregister_zero_copy_listener(
+        async fn unregister_validated_zero_copy_listener(
             &self,
             _source_filter: &UUri,
             _sink_filter: Option<&UUri>,
@@ -526,22 +534,22 @@ mod tests {
     struct WrongLengthZeroCopyTransport;
 
     #[async_trait]
-    impl UZeroCopyTransport for WrongLengthZeroCopyTransport {
+    impl UZeroCopyTransportImpl for WrongLengthZeroCopyTransport {
         type Tx = WrongLengthTxBuffer;
-        type Rx = UOwnedFrame;
+        type Rx = UVecRxLease;
 
-        async fn loan_tx(&self, spec: UTxLoanSpec) -> Result<Self::Tx, UStatus> {
+        async fn loan_validated_tx(&self, spec: ValidatedTxLoanSpec) -> Result<Self::Tx, UStatus> {
             Ok(WrongLengthTxBuffer {
                 metadata: spec.metadata().clone(),
                 payload: vec![0_u8; spec.payload_len() + 1],
             })
         }
 
-        async fn send_zero_copy(&self, _buffer: Self::Tx) -> Result<(), UStatus> {
+        async fn send_validated_zero_copy(&self, _buffer: Self::Tx) -> Result<(), UStatus> {
             Ok(())
         }
 
-        async fn register_zero_copy_listener(
+        async fn register_validated_zero_copy_listener(
             &self,
             _source_filter: &UUri,
             _sink_filter: Option<&UUri>,
@@ -550,7 +558,7 @@ mod tests {
             Ok(())
         }
 
-        async fn unregister_zero_copy_listener(
+        async fn unregister_validated_zero_copy_listener(
             &self,
             _source_filter: &UUri,
             _sink_filter: Option<&UUri>,
@@ -713,8 +721,8 @@ mod tests {
         let transport = Arc::new(MemoryZeroCopyTransport::default());
         let endpoint = UOwnedFrameEndpoint::from_zero_copy_copying_adapter(transport.clone());
         let topic = UUri::try_from_parts("vehicle", 0x4210, 1, 0x9000).expect("valid topic");
-        let metadata = UFrameMetadata::publish(topic.clone());
-        let frame = UOwnedFrame::new(metadata, b"payload".as_slice());
+        let metadata = UFrameMetadata::publish_unchecked(topic.clone());
+        let frame = UOwnedFrame::with_payload_unchecked(metadata, b"payload".as_slice());
         let listener = Arc::new(CaptureListener(Mutex::new(Vec::new())));
 
         endpoint

@@ -87,11 +87,16 @@ pub struct UAttributes {
 }
 
 impl UAttributes {
-    /// Creates native uProtocol attributes with default priority and no optional fields.
+    /// Creates native uProtocol attributes without validating message-type invariants.
     ///
-    /// Prefer [`crate::UFrameBuilder`] or checked [`UFrameMetadata`] constructors
-    /// for application frames so message-type-specific invariants are validated.
-    pub fn new(id: UUID, source: UUri, sink: Option<UUri>, message_type: UMessageType) -> Self {
+    /// Prefer [`crate::UFrameBuilder`] or [`Self::try_new`] for application
+    /// frames so message-type-specific invariants are validated.
+    pub fn new_unchecked(
+        id: UUID,
+        source: UUri,
+        sink: Option<UUri>,
+        message_type: UMessageType,
+    ) -> Self {
         Self {
             id,
             source,
@@ -105,6 +110,18 @@ impl UAttributes {
             permission_level: None,
             commstatus: None,
         }
+    }
+
+    /// Creates native uProtocol attributes and validates message-type invariants.
+    pub fn try_new(
+        id: UUID,
+        source: UUri,
+        sink: Option<UUri>,
+        message_type: UMessageType,
+    ) -> Result<Self, UAttributesError> {
+        let attributes = Self::new_unchecked(id, source, sink, message_type);
+        attributes.validate()?;
+        Ok(attributes)
     }
 
     /// Returns the frame identifier.
@@ -528,35 +545,57 @@ pub struct UFrameMetadata {
 }
 
 impl UFrameMetadata {
-    /// Creates frame metadata from native attributes and optional payload encoding.
+    /// Creates frame metadata from native attributes and optional payload encoding without validation.
     ///
     /// The encoding must be `Some` exactly when the corresponding frame carries a
-    /// payload. Use [`Self::without_payload_encoding`] for no-payload frames.
-    pub fn new(attributes: UAttributes, encoding: impl Into<Option<PayloadEncoding>>) -> Self {
+    /// payload. Use [`Self::try_new`] when constructing application metadata.
+    pub fn new_unchecked(
+        attributes: UAttributes,
+        encoding: impl Into<Option<PayloadEncoding>>,
+    ) -> Self {
         Self {
             attributes,
             encoding: encoding.into(),
         }
     }
 
-    /// Creates metadata for a frame with no payload bytes.
-    pub fn without_payload_encoding(attributes: UAttributes) -> Self {
-        Self::new(attributes, None::<PayloadEncoding>)
+    /// Creates frame metadata after validating message-type-specific attributes.
+    ///
+    /// Payload presence cannot be proven from metadata alone, so callers that
+    /// already have payload bytes should prefer [`UOwnedFrame::try_with_payload`]
+    /// or [`UOwnedFrame::try_from_parts`].
+    pub fn try_new(
+        attributes: UAttributes,
+        encoding: impl Into<Option<PayloadEncoding>>,
+    ) -> Result<Self, UAttributesError> {
+        let metadata = Self::new_unchecked(attributes, encoding);
+        metadata.validate()?;
+        Ok(metadata)
+    }
+
+    /// Creates metadata for a frame with no payload bytes without validation.
+    pub fn without_payload_encoding_unchecked(attributes: UAttributes) -> Self {
+        Self::new_unchecked(attributes, None::<PayloadEncoding>)
+    }
+
+    /// Creates metadata for a frame with no payload bytes after validating attributes.
+    pub fn try_without_payload_encoding(attributes: UAttributes) -> Result<Self, UAttributesError> {
+        Self::try_new(attributes, None::<PayloadEncoding>)
     }
 
     /// Creates unchecked Publish metadata.
     ///
     /// Prefer [`Self::try_publish`] or [`crate::UFrameBuilder::publish`] for application frames.
-    pub fn publish(topic: UUri) -> Self {
-        Self::new(
-            UAttributes::new(UUID::build(), topic, None, UMessageType::Publish),
+    pub fn publish_unchecked(topic: UUri) -> Self {
+        Self::new_unchecked(
+            UAttributes::new_unchecked(UUID::build(), topic, None, UMessageType::Publish),
             None::<PayloadEncoding>,
         )
     }
 
     /// Creates checked Publish metadata.
     pub fn try_publish(topic: UUri) -> Result<Self, UAttributesError> {
-        let metadata = Self::publish(topic);
+        let metadata = Self::publish_unchecked(topic);
         metadata.validate()?;
         Ok(metadata)
     }
@@ -564,9 +603,9 @@ impl UFrameMetadata {
     /// Creates unchecked Notification metadata.
     ///
     /// Prefer [`Self::try_notification`] or [`crate::UFrameBuilder::notification`] for application frames.
-    pub fn notification(origin: UUri, destination: UUri) -> Self {
-        Self::new(
-            UAttributes::new(
+    pub fn notification_unchecked(origin: UUri, destination: UUri) -> Self {
+        Self::new_unchecked(
+            UAttributes::new_unchecked(
                 UUID::build(),
                 origin,
                 Some(destination),
@@ -578,7 +617,7 @@ impl UFrameMetadata {
 
     /// Creates checked Notification metadata.
     pub fn try_notification(origin: UUri, destination: UUri) -> Result<Self, UAttributesError> {
-        let metadata = Self::notification(origin, destination);
+        let metadata = Self::notification_unchecked(origin, destination);
         metadata.validate()?;
         Ok(metadata)
     }
@@ -586,9 +625,9 @@ impl UFrameMetadata {
     /// Creates unchecked RPC Request metadata.
     ///
     /// Prefer [`Self::try_request`] or [`crate::UFrameBuilder::request`] for application frames.
-    pub fn request(method_to_invoke: UUri, reply_to_address: UUri, ttl: u32) -> Self {
-        Self::new(
-            UAttributes::new(
+    pub fn request_unchecked(method_to_invoke: UUri, reply_to_address: UUri, ttl: u32) -> Self {
+        Self::new_unchecked(
+            UAttributes::new_unchecked(
                 UUID::build(),
                 reply_to_address,
                 Some(method_to_invoke),
@@ -606,7 +645,7 @@ impl UFrameMetadata {
         reply_to_address: UUri,
         ttl: u32,
     ) -> Result<Self, UAttributesError> {
-        let metadata = Self::request(method_to_invoke, reply_to_address, ttl);
+        let metadata = Self::request_unchecked(method_to_invoke, reply_to_address, ttl);
         metadata.validate()?;
         Ok(metadata)
     }
@@ -614,9 +653,13 @@ impl UFrameMetadata {
     /// Creates unchecked RPC Response metadata.
     ///
     /// Prefer [`Self::try_response`] or [`crate::UFrameBuilder::response`] for application frames.
-    pub fn response(reply_to_address: UUri, request_id: UUID, invoked_method: UUri) -> Self {
-        Self::new(
-            UAttributes::new(
+    pub fn response_unchecked(
+        reply_to_address: UUri,
+        request_id: UUID,
+        invoked_method: UUri,
+    ) -> Self {
+        Self::new_unchecked(
+            UAttributes::new_unchecked(
                 UUID::build(),
                 invoked_method,
                 Some(reply_to_address),
@@ -634,7 +677,7 @@ impl UFrameMetadata {
         request_id: UUID,
         invoked_method: UUri,
     ) -> Result<Self, UAttributesError> {
-        let metadata = Self::response(reply_to_address, request_id, invoked_method);
+        let metadata = Self::response_unchecked(reply_to_address, request_id, invoked_method);
         metadata.validate()?;
         Ok(metadata)
     }
@@ -696,31 +739,56 @@ pub struct UOwnedFrame {
 }
 
 impl UOwnedFrame {
-    /// Creates a payload-bearing frame.
+    /// Creates a payload-bearing frame without validating metadata or payload consistency.
     ///
     /// `metadata.encoding()` should be `Some` for frames created with this
     /// constructor. Use [`Self::from_serializable`] or [`crate::UFrameBuilder`]
     /// when the payload codec should set the encoding automatically.
-    pub fn new(metadata: UFrameMetadata, payload: impl Into<Bytes>) -> Self {
-        Self::with_payload(metadata, payload)
-    }
-
-    /// Creates a payload-bearing frame from metadata and payload bytes.
-    pub fn with_payload(metadata: UFrameMetadata, payload: impl Into<Bytes>) -> Self {
+    pub fn with_payload_unchecked(metadata: UFrameMetadata, payload: impl Into<Bytes>) -> Self {
         Self {
             metadata,
             payload: Some(payload.into()),
         }
     }
 
-    /// Creates a frame with no payload and no payload encoding.
+    /// Creates a payload-bearing frame after validating metadata and payload encoding presence.
+    pub fn try_with_payload(
+        metadata: UFrameMetadata,
+        payload: impl Into<Bytes>,
+    ) -> Result<Self, UAttributesError> {
+        Self::try_from_parts(metadata, Some(payload.into()))
+    }
+
+    /// Creates a frame with no payload and no payload encoding without validating metadata.
     ///
     /// Any encoding present in `metadata` is removed so payload presence and
     /// payload encoding remain consistent.
-    pub fn without_payload(metadata: UFrameMetadata) -> Self {
+    pub fn without_payload_unchecked(metadata: UFrameMetadata) -> Self {
         Self {
             metadata: metadata.without_encoding(),
             payload: None,
+        }
+    }
+
+    /// Creates a frame with no payload after validating metadata.
+    pub fn try_without_payload(metadata: UFrameMetadata) -> Result<Self, UAttributesError> {
+        Self::try_from_parts(metadata.without_encoding(), None)
+    }
+
+    /// Creates an owned frame from metadata plus optional payload bytes after validation.
+    pub fn try_from_parts(
+        metadata: UFrameMetadata,
+        payload: Option<Bytes>,
+    ) -> Result<Self, UAttributesError> {
+        metadata.validate()?;
+        match (payload.is_some(), metadata.encoding().is_some()) {
+            (true, true) | (false, false) => Ok(Self { metadata, payload }),
+            (true, false) => Err(UAttributesError::validation_error(
+                "payload is present but payload encoding is absent",
+            )),
+            (false, true) => Err(UAttributesError::validation_error(
+                "payload encoding is present but payload is absent",
+            )),
         }
     }
 
@@ -747,7 +815,7 @@ impl UOwnedFrame {
         T: ?Sized,
     {
         let payload = C::encode_payload_owned(value)?;
-        Ok(Self::new(
+        Ok(Self::with_payload_unchecked(
             metadata.with_encoding(C::payload_encoding()),
             payload,
         ))
@@ -771,7 +839,7 @@ impl UOwnedFrame {
     where
         C: PayloadCodec,
     {
-        Self::new(
+        Self::with_payload_unchecked(
             metadata.with_encoding(C::payload_encoding()),
             payload.into_bytes(),
         )

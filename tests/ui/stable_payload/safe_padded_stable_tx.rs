@@ -1,4 +1,7 @@
-use up_rust::{payload::EncodePayload, StableContainerPayload, StablePayload};
+use up_rust::{
+    payload::{EncodePayload, StableContainerPayload},
+    StablePayload,
+};
 
 #[repr(C)]
 #[derive(StablePayload)]

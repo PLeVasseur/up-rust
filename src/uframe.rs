@@ -48,8 +48,9 @@ pub use zero_copy::{
     verify_contiguous_rx_payload_layout, verify_loaned_rx_payload_layout,
     verify_tx_buffer_payload_layout, verify_uninit_tx_buffer_payload_layout, LoanedPayload,
     LoanedPayloadMut, LoanedPayloadUninitMut, LoanedUninitByteWriter, PayloadLoanProvenance,
-    UContiguousZeroCopyRxFrame, ULoanedContiguousZeroCopyRxFrame, UTxBuffer, UUninitTxBuffer,
-    UVecTxBuffer, UVecUninitTxBuffer, UZeroCopyPayloadCopyExt, UZeroCopyRxFrame,
+    UContiguousZeroCopyRxFrame, UFrameView, ULoanedContiguousZeroCopyRxFrame, UTxBuffer,
+    UUninitTxBuffer, UVecRxLease, UVecTxBuffer, UVecUninitTxBuffer, UZeroCopyPayloadCopyExt,
+    UZeroCopyRxLease,
 };
 
 #[cfg(test)]

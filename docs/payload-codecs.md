@@ -71,7 +71,7 @@ Stable typed uninitialized TX uses a type-state capability so uninitialized memo
 ```rust,ignore
 transport
     .send_uninit_loaned_payload_as::<StableContainerPayload<VehiclePose>, VehiclePose>(
-        UFrameMetadata::publish(topic),
+        UFrameMetadata::try_publish(topic)?,
         |slot| Ok(slot.write(VehiclePose { x: 1.0, y: 2.0 })),
     )
     .await?;

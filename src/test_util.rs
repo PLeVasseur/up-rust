@@ -23,13 +23,14 @@ use std::sync::Mutex;
 
 use crate::{
     payload::{PayloadCodec, StableContainerPayload, StablePayload, UWireError},
+    transport::{UOwnedTransportImpl, ValidatedOwnedFrame},
     zero_copy::{
         verify_loaned_rx_payload_layout, verify_tx_buffer_payload_layout,
         verify_uninit_tx_buffer_payload_layout, ULoanedContiguousZeroCopyRxFrame, UTxBuffer,
-        UUninitTxBuffer, UVecTxBuffer, UVecUninitTxBuffer, UZeroCopyListener, UZeroCopyTransport,
+        UUninitTxBuffer, UVecRxLease, UVecTxBuffer, UVecUninitTxBuffer, UZeroCopyListener,
+        UZeroCopyTransportImpl, UZeroCopyUninitTransportImpl, ValidatedTxLoanSpec,
     },
-    PayloadEncoding, UCode, UOwnedFrame, UOwnedListener, UOwnedTransport, UStatus, UTxLoanSpec,
-    UUri, UZeroCopyUninitTransport,
+    PayloadEncoding, UCode, UOwnedFrame, UOwnedListener, UStatus, UUri,
 };
 
 /// Reusable zero-copy transport conformance checks for downstream transport tests.
@@ -293,8 +294,9 @@ impl InMemoryOwnedTransport {
 }
 
 #[async_trait]
-impl UOwnedTransport for InMemoryOwnedTransport {
-    async fn send_owned(&self, frame: UOwnedFrame) -> Result<(), UStatus> {
+impl UOwnedTransportImpl for InMemoryOwnedTransport {
+    async fn send_validated_owned(&self, frame: ValidatedOwnedFrame) -> Result<(), UStatus> {
+        let frame = frame.into_inner();
         self.sent
             .lock()
             .expect("sent lock poisoned")
@@ -303,7 +305,7 @@ impl UOwnedTransport for InMemoryOwnedTransport {
         Ok(())
     }
 
-    async fn register_owned_listener(
+    async fn register_validated_owned_listener(
         &self,
         source_filter: &UUri,
         sink_filter: Option<&UUri>,
@@ -320,7 +322,7 @@ impl UOwnedTransport for InMemoryOwnedTransport {
         Ok(())
     }
 
-    async fn unregister_owned_listener(
+    async fn unregister_validated_owned_listener(
         &self,
         source_filter: &UUri,
         sink_filter: Option<&UUri>,
@@ -344,7 +346,7 @@ impl UOwnedTransport for InMemoryOwnedTransport {
 struct RegisteredZeroCopyListener {
     source_filter: UUri,
     sink_filter: Option<UUri>,
-    listener: Arc<dyn UZeroCopyListener<UOwnedFrame>>,
+    listener: Arc<dyn UZeroCopyListener<UVecRxLease>>,
 }
 
 impl RegisteredZeroCopyListener {
@@ -366,7 +368,7 @@ impl RegisteredZeroCopyListener {
         &self,
         source_filter: &UUri,
         sink_filter: Option<&UUri>,
-        listener: &Arc<dyn UZeroCopyListener<UOwnedFrame>>,
+        listener: &Arc<dyn UZeroCopyListener<UVecRxLease>>,
     ) -> bool {
         self.source_filter == *source_filter
             && self.sink_filter.as_ref() == sink_filter
@@ -376,8 +378,8 @@ impl RegisteredZeroCopyListener {
 
 /// In-memory zero-copy transport useful for unit tests and examples.
 ///
-/// This type uses [`UVecTxBuffer`] and [`UOwnedFrame`] so tests can exercise the
-/// zero-copy trait shape without requiring shared-memory middleware.
+/// This type uses [`UVecTxBuffer`] and [`UVecRxLease`] so tests can exercise the
+/// zero-copy lease shape without requiring shared-memory middleware.
 #[derive(Default)]
 pub struct InMemoryZeroCopyTransport {
     listeners: Mutex<Vec<RegisteredZeroCopyListener>>,
@@ -410,7 +412,7 @@ impl InMemoryZeroCopyTransport {
             if registration.matches_frame(&frame) {
                 registration
                     .listener
-                    .on_receive_zero_copy(frame.clone())
+                    .on_receive_zero_copy(UVecRxLease::new(frame.clone()))
                     .await;
             }
         }
@@ -418,11 +420,11 @@ impl InMemoryZeroCopyTransport {
 }
 
 #[async_trait]
-impl UZeroCopyTransport for InMemoryZeroCopyTransport {
+impl UZeroCopyTransportImpl for InMemoryZeroCopyTransport {
     type Tx = UVecTxBuffer;
-    type Rx = UOwnedFrame;
+    type Rx = UVecRxLease;
 
-    async fn loan_tx(&self, spec: UTxLoanSpec) -> Result<Self::Tx, UStatus> {
+    async fn loan_validated_tx(&self, spec: ValidatedTxLoanSpec) -> Result<Self::Tx, UStatus> {
         UVecTxBuffer::with_alignment(
             spec.metadata().clone(),
             spec.payload_len(),
@@ -431,7 +433,7 @@ impl UZeroCopyTransport for InMemoryZeroCopyTransport {
         .map_err(UStatus::from)
     }
 
-    async fn send_zero_copy(&self, buffer: Self::Tx) -> Result<(), UStatus> {
+    async fn send_validated_zero_copy(&self, buffer: Self::Tx) -> Result<(), UStatus> {
         let frame = buffer.into_frame();
         self.sent
             .lock()
@@ -441,7 +443,7 @@ impl UZeroCopyTransport for InMemoryZeroCopyTransport {
         Ok(())
     }
 
-    async fn receive_zero_copy(
+    async fn receive_validated_zero_copy(
         &self,
         _source_filter: &UUri,
         _sink_filter: Option<&UUri>,
@@ -450,10 +452,11 @@ impl UZeroCopyTransport for InMemoryZeroCopyTransport {
             .lock()
             .expect("queue lock poisoned")
             .pop_front()
+            .map(UVecRxLease::new)
             .ok_or_else(|| UStatus::fail_with_code(UCode::NOT_FOUND, "no frame available"))
     }
 
-    async fn register_zero_copy_listener(
+    async fn register_validated_zero_copy_listener(
         &self,
         source_filter: &UUri,
         sink_filter: Option<&UUri>,
@@ -470,7 +473,7 @@ impl UZeroCopyTransport for InMemoryZeroCopyTransport {
         Ok(())
     }
 
-    async fn unregister_zero_copy_listener(
+    async fn unregister_validated_zero_copy_listener(
         &self,
         source_filter: &UUri,
         sink_filter: Option<&UUri>,
@@ -491,10 +494,13 @@ impl UZeroCopyTransport for InMemoryZeroCopyTransport {
 }
 
 #[async_trait]
-impl UZeroCopyUninitTransport for InMemoryZeroCopyTransport {
+impl UZeroCopyUninitTransportImpl for InMemoryZeroCopyTransport {
     type UninitTx = UVecUninitTxBuffer;
 
-    async fn loan_uninit_tx(&self, spec: UTxLoanSpec) -> Result<Self::UninitTx, UStatus> {
+    async fn loan_validated_uninit_tx(
+        &self,
+        spec: ValidatedTxLoanSpec,
+    ) -> Result<Self::UninitTx, UStatus> {
         UVecUninitTxBuffer::with_alignment(
             spec.metadata().clone(),
             spec.payload_len(),

@@ -1505,14 +1505,15 @@ fn metadata_with_options(
 ) -> Result<UFrameMetadata, crate::UAttributesError> {
     let id = options.message_id.unwrap_or_else(UUID::build);
     let priority = options.priority.unwrap_or(default_priority);
-    let mut attributes = UAttributes::new(id, source, sink, message_type).with_priority(priority);
+    let mut attributes =
+        UAttributes::new_unchecked(id, source, sink, message_type).with_priority(priority);
     if let Some(ttl) = options.ttl {
         attributes = attributes.with_ttl(ttl);
     }
     if let Some(token) = options.token {
         attributes = attributes.with_token(token);
     }
-    let metadata = UFrameMetadata::without_payload_encoding(attributes);
+    let metadata = UFrameMetadata::without_payload_encoding_unchecked(attributes);
     metadata.validate()?;
     Ok(metadata)
 }
@@ -1564,9 +1565,9 @@ fn response_error_status(response: &UOwnedFrame, commstatus: UCode) -> UStatus {
 fn frame_from_payload(metadata: UFrameMetadata, payload: Option<UPayload>) -> UOwnedFrame {
     if let Some(payload) = payload {
         let (encoding, bytes) = payload.into_parts();
-        UOwnedFrame::new(metadata.with_encoding(encoding), bytes)
+        UOwnedFrame::with_payload_unchecked(metadata.with_encoding(encoding), bytes)
     } else {
-        UOwnedFrame::without_payload(metadata)
+        UOwnedFrame::without_payload_unchecked(metadata)
     }
 }
 

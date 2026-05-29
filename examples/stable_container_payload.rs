@@ -18,11 +18,11 @@ use up_rust::{
     payload::StableContainerPayload,
     zero_copy::{
         LoanedPayload, LoanedPayloadUninitMut, PayloadLoanProvenance, UContiguousZeroCopyRxFrame,
-        ULoanedContiguousZeroCopyRxFrame, UTxBuffer, UUninitTxBuffer, UZeroCopyRxFrame,
-        UZeroCopyTransport,
+        UFrameView, ULoanedContiguousZeroCopyRxFrame, UTxBuffer, UUninitTxBuffer, UZeroCopyRxLease,
+        UZeroCopyTransport, UZeroCopyTransportImpl, UZeroCopyUninitTransportExt,
+        UZeroCopyUninitTransportImpl, ValidatedTxLoanSpec,
     },
-    UCode, UFrameMetadata, UStatus, UTxLoanSpec, UUri, UZeroCopyUninitTransport,
-    UZeroCopyUninitTransportExt,
+    UCode, UFrameMetadata, UStatus, UUri,
 };
 
 #[repr(C)]
@@ -107,7 +107,7 @@ impl UUninitTxBuffer for VehiclePoseUninitFrame {
     }
 }
 
-impl UZeroCopyRxFrame for VehiclePoseFrame {
+impl UFrameView for VehiclePoseFrame {
     type PayloadReader<'a>
         = Cursor<&'a [u8]>
     where
@@ -138,6 +138,8 @@ impl UZeroCopyRxFrame for VehiclePoseFrame {
     }
 }
 
+impl UZeroCopyRxLease for VehiclePoseFrame {}
+
 impl UContiguousZeroCopyRxFrame for VehiclePoseFrame {
     fn contiguous_payload(&self) -> &[u8] {
         self.storage.0.as_slice()
@@ -164,11 +166,11 @@ struct StableLoopbackTransport {
 }
 
 #[async_trait::async_trait]
-impl UZeroCopyTransport for StableLoopbackTransport {
+impl UZeroCopyTransportImpl for StableLoopbackTransport {
     type Tx = VehiclePoseFrame;
     type Rx = VehiclePoseFrame;
 
-    async fn loan_tx(&self, spec: UTxLoanSpec) -> Result<Self::Tx, UStatus> {
+    async fn loan_validated_tx(&self, spec: ValidatedTxLoanSpec) -> Result<Self::Tx, UStatus> {
         if spec.payload_len() != std::mem::size_of::<VehiclePose>() {
             return Err(UStatus::fail_with_code(
                 UCode::INVALID_ARGUMENT,
@@ -187,12 +189,12 @@ impl UZeroCopyTransport for StableLoopbackTransport {
         })
     }
 
-    async fn send_zero_copy(&self, buffer: Self::Tx) -> Result<(), UStatus> {
+    async fn send_validated_zero_copy(&self, buffer: Self::Tx) -> Result<(), UStatus> {
         self.queue.lock().await.push_back(buffer);
         Ok(())
     }
 
-    async fn receive_zero_copy(
+    async fn receive_validated_zero_copy(
         &self,
         _source_filter: &UUri,
         _sink_filter: Option<&UUri>,
@@ -206,10 +208,13 @@ impl UZeroCopyTransport for StableLoopbackTransport {
 }
 
 #[async_trait::async_trait]
-impl UZeroCopyUninitTransport for StableLoopbackTransport {
+impl UZeroCopyUninitTransportImpl for StableLoopbackTransport {
     type UninitTx = VehiclePoseUninitFrame;
 
-    async fn loan_uninit_tx(&self, spec: UTxLoanSpec) -> Result<Self::UninitTx, UStatus> {
+    async fn loan_validated_uninit_tx(
+        &self,
+        spec: ValidatedTxLoanSpec,
+    ) -> Result<Self::UninitTx, UStatus> {
         if spec.payload_len() != std::mem::size_of::<VehiclePose>() {
             return Err(UStatus::fail_with_code(
                 UCode::INVALID_ARGUMENT,
@@ -238,7 +243,7 @@ async fn main() -> Result<(), Box<dyn Error>> {
 
     transport
         .send_uninit_loaned_payload_as::<StableContainerPayload<VehiclePose>, VehiclePose>(
-            UFrameMetadata::publish(topic.clone()),
+            UFrameMetadata::try_publish(topic.clone())?,
             |slot| {
                 Ok(slot.write(VehiclePose {
                     x_m: 1.25,

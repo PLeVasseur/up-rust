@@ -75,7 +75,7 @@ impl Error for UFrameWireError {}
 ///
 /// ```no_run
 /// # use bytes::Bytes;
-/// # use up_rust::{UFrameWireError, UFrameWireFormat, UOwnedFrame};
+/// # use up_rust::{frame_wire::{UFrameWireError, UFrameWireFormat}, UOwnedFrame};
 /// struct MyEnvelope;
 ///
 /// impl UFrameWireFormat for MyEnvelope {

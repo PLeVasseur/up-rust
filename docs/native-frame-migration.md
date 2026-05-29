@@ -65,7 +65,7 @@ Transport implementations should project these fields into their native metadata
 
 | Old API or concept | Native replacement | Feature | Notes |
 | --- | --- | --- | --- |
-| Generated `UMessage` transport envelope | `UOwnedFrame` or `UZeroCopyRxFrame` receive lease | Always | Transports receive native metadata plus payload bytes, not a generated wrapper. |
+| Generated `UMessage` transport envelope | `UOwnedFrame` or `zero_copy::UZeroCopyRxLease` receive lease | Always | Transports receive native metadata plus payload bytes, not a generated wrapper. |
 | Generated `UAttributes` payload metadata | Native `UAttributes` inside `UFrameMetadata` | Always | Use accessors and builders instead of generated public fields. |
 | Generated payload-format enum | `PayloadEncoding` | Always | `PayloadEncoding::Standard(UPayloadFormat)` preserves upstream-compatible formats; `PayloadEncoding::Custom` identifies native-only byte-compatible layouts. |
 | Generated `UMessageBuilder` | Native `UFrameBuilder` that builds `UOwnedFrame` | Always | The new name makes the native frame output explicit. |
@@ -83,7 +83,7 @@ Removed APIs that do not have a direct replacement are intentionally retired rat
 
 | Removed API or behavior | Replacement or retirement rationale |
 | --- | --- |
-| Generated `UMessage` as the transport argument and listener callback value | Retired from the transport boundary. Use `UOwnedFrame` or a `UZeroCopyRxFrame` receive lease so transports do not have to encode all metadata through Protocol Buffers. |
+| Generated `UMessage` as the transport argument and listener callback value | Retired from the transport boundary. Use `UOwnedFrame` or a `zero_copy::UZeroCopyRxLease` receive lease so transports do not have to encode all metadata through Protocol Buffers. |
 | Generated `UPayloadFormat` as the only payload identity | Native APIs now use `PayloadEncoding`, which can carry either a standard upstream `UPayloadFormat` or a native-only custom encoding. |
 | `UTransport`, `UListener`, `ComparableListener`, and `MockTransport` | Replaced by `UOwnedTransport`, `UOwnedListener`, `transport::ComparableOwnedListener`, `MockUOwnedTransport`, and `MockUOwnedListener` for owned-buffer transports. Use `zero_copy::UZeroCopyTransport` and `zero_copy::UZeroCopyListener` only for true loaned-storage transports. |
 | Panic-based builder setters from generated `UMessageBuilder` | Replaced by `UFrameBuilder` terminal methods returning `Result<UOwnedFrame, UFrameBuilderError>`. Invalid metadata is reported as a recoverable construction error. |
@@ -134,14 +134,14 @@ Use `UOwnedTransport` for the normal network, brokered, and in-process path. Use
 
 | Operation | Owned-buffer API | Zero-copy API | Parity note |
 | --- | --- | --- | --- |
-| Send one frame | `send_owned(UOwnedFrame)` | `loan_tx(UTxLoanSpec)` then `send_zero_copy(Tx)` | This is the one intentional shape difference. Metadata and payload presence are validated before the transport sees the loan spec; the serializer writes only into `Tx::payload_mut()` before the loan is sent. |
+| Send one frame | `send_owned(UOwnedFrame)` | `loan_tx(zero_copy::UTxLoanSpec)` then `send_zero_copy(Tx)` | This is the one intentional shape difference. Public APIs validate metadata and payload presence before delegating to implementation traits with validated input wrappers. The serializer writes only into `Tx::payload_mut()` before the loan is sent. |
 | Pull receive | `receive_owned(&UUri, Option<&UUri>) -> UOwnedFrame` | `receive_zero_copy(&UUri, Option<&UUri>) -> Rx` | Both default to `UNIMPLEMENTED`; implement only for transports that truly support pull receive. |
 | Push callback | `UOwnedListener::on_receive_owned(UOwnedFrame)` | `UZeroCopyListener<Rx>::on_receive_zero_copy(Rx)` | The zero-copy `Rx` value is the receive lease and should release transport resources when dropped. |
 | Register listener | `register_owned_listener(...)` | `register_zero_copy_listener(...)` | Same filter semantics; listener type follows frame ownership. |
 | Unregister listener | `unregister_owned_listener(...)` | `unregister_zero_copy_listener(...)` | Same registration identity semantics. |
 | Typed send helper | `UOwnedTransportExt::send_serialized::<Codec, _>(...)` | `UZeroCopyTransportExt::send_serialized_zero_copy::<Codec, _>(...)` or `UZeroCopyUninitTransportExt::send_uninit_loaned_payload_as::<StableContainerPayload<T>, T>(...)` | Serialized zero-copy reserves a loan and writes bytes into it. Stable typed uninit constructs `T` directly in transport storage without a source payload copy or default pre-initialization. |
-| Typed receive decode | `UOwnedFrame::deserialize::<Codec, T>()` | `UZeroCopyRxFrame::deserialize_from_reader::<Codec, T>()` or `UContiguousZeroCopyRxFrame::deserialize_borrowed::<Codec, T>()` | All check `PayloadEncoding` before decoding. Reader decode works for segmented receive leases; borrowed decode requires an explicit contiguous receive capability. |
-| Test fakes | `test_util::InMemoryOwnedTransport` | `test_util::InMemoryZeroCopyTransport` | The zero-copy fake uses `zero_copy::UVecTxBuffer` and `UOwnedFrame` to exercise the trait shape without shared-memory middleware. |
+| Typed receive decode | `UOwnedFrame::deserialize::<Codec, T>()` or `zero_copy::UFrameView::deserialize_from_reader::<Codec, T>()` | `zero_copy::UZeroCopyRxLease::deserialize_from_reader::<Codec, T>()` or `zero_copy::UContiguousZeroCopyRxFrame::deserialize_borrowed::<Codec, T>()` | All check `PayloadEncoding` before decoding. Reader decode works for owned frame views and segmented receive leases; borrowed decode requires an explicit contiguous receive-lease capability. |
+| Test fakes | `test_util::InMemoryOwnedTransport` | `test_util::InMemoryZeroCopyTransport` | The zero-copy fake uses `zero_copy::UVecTxBuffer` and `zero_copy::UVecRxLease` to exercise the lease shape without shared-memory middleware. |
 | Trait mocks | `MockUOwnedTransport`, `MockUOwnedListener`, communication mocks such as `communication::MockRpcServer` | `zero_copy::MockUZeroCopyTransport` | Enabled by `test-util`; mock the trait shape you are depending on. |
 
 The send mapping is easiest to remember as a buffer-ownership swap:
@@ -363,19 +363,36 @@ Protocol Buffers are payload bytes only in this path. They do not wrap the trans
 
 uSubscription service APIs are available with `protobuf-wire` and use the generated `up-core-api` DTOs directly, for example `up_rust::core::usubscription::SubscriptionRequest`. Helper functions convert between native `UUri` values and generated protobuf URI DTOs when constructing service requests.
 
+## Constructor And Import Migration
+
+Unchecked reconstruction APIs are now visibly named `*_unchecked`. Use them only at transport receive/projection boundaries that validate before send or delivery.
+
+| Old low-level constructor | New unchecked name | Preferred checked/common path |
+| --- | --- | --- |
+| `UAttributes::new(...)` | `UAttributes::new_unchecked(...)` | `UFrameBuilder` or `UAttributes::try_new(...)` |
+| `UFrameMetadata::new(...)` | `UFrameMetadata::new_unchecked(...)` | `UFrameMetadata::try_new(...)` or `UFrameBuilder::build_metadata()` |
+| `UFrameMetadata::publish(...)` | `UFrameMetadata::publish_unchecked(...)` | `UFrameMetadata::try_publish(...)` or `UFrameBuilder::publish(...)` |
+| `UFrameMetadata::notification(...)` | `UFrameMetadata::notification_unchecked(...)` | `UFrameMetadata::try_notification(...)` or `UFrameBuilder::notification(...)` |
+| `UFrameMetadata::request(...)` | `UFrameMetadata::request_unchecked(...)` | `UFrameMetadata::try_request(...)` or `UFrameBuilder::request(...)` |
+| `UFrameMetadata::response(...)` | `UFrameMetadata::response_unchecked(...)` | `UFrameMetadata::try_response(...)` or `UFrameBuilder::response(...)` |
+| `UOwnedFrame::new(...)` / `with_payload(...)` | `UOwnedFrame::with_payload_unchecked(...)` | `UOwnedFrame::try_with_payload(...)`, `try_from_parts(...)`, or `UFrameBuilder` |
+| `UOwnedFrame::without_payload(...)` | `UOwnedFrame::without_payload_unchecked(...)` | `UOwnedFrame::try_without_payload(...)` or `UFrameBuilder::build()` |
+
+The crate root now exports common owned-frame APIs only. Import zero-copy, stable-container, uninitialized-loan, transport-implementation, and conformance helpers from `zero_copy`, `payload`, `transport`, or `test_util` modules.
+
 ## Transport Migration
 
-Owned transports should implement `UOwnedTransport` and accept `UOwnedFrame`:
+Owned transport crates should implement `transport::UOwnedTransportImpl`. Application code still uses the public `UOwnedTransport` API, whose blanket implementation validates before calling the implementation trait:
 
 ```rust
 use async_trait::async_trait;
-use up_rust::{UOwnedFrame, UOwnedTransport, UStatus, UUri};
+use up_rust::{transport::{UOwnedTransportImpl, ValidatedOwnedFrame}, UStatus};
 
 struct MyTransport;
 
 #[async_trait]
-impl UOwnedTransport for MyTransport {
-    async fn send_owned(&self, frame: UOwnedFrame) -> Result<(), UStatus> {
+impl UOwnedTransportImpl for MyTransport {
+    async fn send_validated_owned(&self, frame: ValidatedOwnedFrame) -> Result<(), UStatus> {
         let attributes = frame.metadata().attributes();
         let encoding = frame.metadata().encoding();
         let payload = frame.payload_bytes();
@@ -388,7 +405,7 @@ impl UOwnedTransport for MyTransport {
 }
 ```
 
-Zero-copy transports should implement `UZeroCopyTransport` only when the transport can honestly loan transmit storage and return receive leases. Network and broker transports should not fake zero-copy by copying into hidden buffers. The owned `send_owned(frame)` operation maps to a validated `UTxLoanSpec`, `loan_tx(spec)`, serializer writes into the returned `Tx` buffer, and `send_zero_copy(tx)` publishes the loan. Metadata and payload presence are intentionally fixed in the loan spec so transports can compute native headers, hidden prefixes, payload offsets, and allocation sizes before exposing the payload loan.
+Zero-copy transport crates should implement `zero_copy::UZeroCopyTransportImpl` only when the transport can honestly loan transmit storage and return receive leases. Network and broker transports should not fake zero-copy by copying into hidden buffers. The public `loan_tx(spec)` operation maps to `ValidatedTxLoanSpec`, serializer writes into the returned `Tx` buffer, and `send_zero_copy(tx)` validates before calling `send_validated_zero_copy(tx)`. Metadata and payload presence are intentionally fixed in the loan spec so transports can compute native headers, hidden prefixes, payload offsets, and allocation sizes before exposing the payload loan.
 
 ### Pull Receive On Push-Oriented Transports
 

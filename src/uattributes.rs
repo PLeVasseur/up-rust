@@ -425,10 +425,11 @@ mod tests {
 
     #[test]
     fn publish_validator_enforces_topic_source_and_no_sink() {
-        let valid = UAttributes::new(UUID::build(), publish_topic(), None, UMessageType::Publish);
+        let valid =
+            UAttributes::new_unchecked(UUID::build(), publish_topic(), None, UMessageType::Publish);
         assert!(PublishValidator.validate(&valid).is_ok());
 
-        let invalid = UAttributes::new(
+        let invalid = UAttributes::new_unchecked(
             UUID::build(),
             reply_to_address(),
             Some(destination()),
@@ -439,7 +440,7 @@ mod tests {
 
     #[test]
     fn notification_validator_enforces_destination_sink() {
-        let valid = UAttributes::new(
+        let valid = UAttributes::new_unchecked(
             UUID::build(),
             origin(),
             Some(destination()),
@@ -447,7 +448,7 @@ mod tests {
         );
         assert!(NotificationValidator.validate(&valid).is_ok());
 
-        let invalid = UAttributes::new(
+        let invalid = UAttributes::new_unchecked(
             UUID::build(),
             origin(),
             Some(method_to_invoke()),
@@ -458,7 +459,7 @@ mod tests {
 
     #[test]
     fn request_validator_enforces_rpc_fields() {
-        let valid = UAttributes::new(
+        let valid = UAttributes::new_unchecked(
             UUID::build(),
             reply_to_address(),
             Some(method_to_invoke()),
@@ -478,7 +479,7 @@ mod tests {
 
     #[test]
     fn response_validator_enforces_rpc_fields() {
-        let valid = UAttributes::new(
+        let valid = UAttributes::new_unchecked(
             UUID::build(),
             method_to_invoke(),
             Some(reply_to_address()),

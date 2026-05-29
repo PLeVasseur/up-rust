@@ -127,24 +127,11 @@ pub mod protobuf;
 
 mod uframe;
 pub use uframe::{
-    assert_stable_payload_byte_backed_uninit, stable_payload_supports_byte_backed_uninit,
-    BorrowPayload, BytePayloadCodec, CustomPayloadEncoding, DecodePayload, DynPayloadCodec,
-    EncodePayload, EncodedPayload, LoanPayload, LoanUninitPayload, LoanedInitPayload,
-    LoanedUninitPayload, McapPayload, PayloadCodec, PayloadCodecCapabilities, PayloadCodecRegistry,
-    PayloadEncoding, PayloadEncodingError, PayloadLayout, PlacementDefault, ReadDecodePayload,
-    StableContainerPayload, StableContainerPayloadInfo, StablePayload, StablePayloadVariant,
-    StableTypeDetail, TypedPayloadCodec, UAttributes, UFrameBuilder, UFrameBuilderError,
-    UFrameMetadata, UFrameWireError, UFrameWireFormat, UMessageType, UOwnedFrame, UPayloadFormat,
-    UPriority, UWireError, ZeroCopySend,
+    BorrowPayload, BytePayloadCodec, CustomPayloadEncoding, DecodePayload, EncodePayload,
+    EncodedPayload, McapPayload, PayloadCodec, PayloadEncoding, PayloadEncodingError,
+    PayloadFormat, RawBytes, UAttributes, UDeserializer, UFrameBuilder, UFrameBuilderError,
+    UFrameMetadata, UMessageType, UOwnedFrame, UPayloadFormat, UPriority, USerializer, UWireError,
 };
-#[cfg(feature = "experimental-loaned-frame")]
-#[cfg_attr(docsrs, doc(cfg(feature = "experimental-loaned-frame")))]
-pub use uframe::{copy_loaned_frame_payload_to_tx, LoanedFrame, ZeroCopyLoanedFrame};
-#[cfg(any(
-    feature = "unsafe-stable-payload-tx",
-    feature = "expert-unsafe-payloads"
-))]
-pub use uframe::{UnsafeStablePayloadTxSlot, ZeroedStablePayloadTxSlot};
 
 mod uattributes;
 pub use uattributes::{
@@ -175,9 +162,7 @@ mod utransport;
 pub use utransport::{
     validate_frame_metadata_for_payload, validate_frame_metadata_for_transport,
     validate_owned_frame_for_transport, verify_filter_criteria, LocalUriProvider,
-    StaticUriProvider, UOwnedListener, UOwnedTransport, UOwnedTransportExt, UTxLoanSpec,
-    UTxPayloadSpec, UZeroCopyListener, UZeroCopyTransport, UZeroCopyTransportExt,
-    UZeroCopyUninitTransport, UZeroCopyUninitTransportExt,
+    StaticUriProvider, UOwnedListener, UOwnedTransport, UOwnedTransportExt,
 };
 
 #[cfg(any(test, feature = "test-util"))]
@@ -240,9 +225,10 @@ pub mod transport {
     };
     pub use crate::utransport::{
         validate_frame_metadata_for_payload, validate_frame_metadata_for_transport,
-        validate_owned_frame_for_transport, verify_filter_criteria, ComparableOwnedListener,
-        LocalUriProvider, StaticUriProvider, UOwnedListener, UOwnedTransport, UOwnedTransportExt,
-        UTxLoanSpec, UTxPayloadSpec,
+        validate_frame_view_for_transport, validate_owned_frame_for_transport,
+        verify_filter_criteria, ComparableOwnedListener, LocalUriProvider, StaticUriProvider,
+        UOwnedListener, UOwnedTransport, UOwnedTransportExt, UOwnedTransportImpl, UTxLoanSpec,
+        UTxPayloadSpec, ValidatedOwnedFrame, ValidatedTxLoanSpec,
     };
 }
 
@@ -255,12 +241,14 @@ pub mod zero_copy {
         verify_contiguous_rx_payload_layout, verify_loaned_rx_payload_layout,
         verify_tx_buffer_payload_layout, verify_uninit_tx_buffer_payload_layout, LoanedPayload,
         LoanedPayloadMut, LoanedPayloadUninitMut, LoanedUninitByteWriter, PayloadLoanProvenance,
-        UContiguousZeroCopyRxFrame, ULoanedContiguousZeroCopyRxFrame, UTxBuffer, UUninitTxBuffer,
-        UVecTxBuffer, UVecUninitTxBuffer, UZeroCopyPayloadCopyExt, UZeroCopyRxFrame,
+        UContiguousZeroCopyRxFrame, UFrameView, ULoanedContiguousZeroCopyRxFrame, UTxBuffer,
+        UUninitTxBuffer, UVecRxLease, UVecTxBuffer, UVecUninitTxBuffer, UZeroCopyPayloadCopyExt,
+        UZeroCopyRxLease,
     };
     pub use crate::utransport::{
         UTxLoanSpec, UTxPayloadSpec, UZeroCopyListener, UZeroCopyTransport, UZeroCopyTransportExt,
-        UZeroCopyUninitTransport, UZeroCopyUninitTransportExt,
+        UZeroCopyTransportImpl, UZeroCopyUninitTransport, UZeroCopyUninitTransportExt,
+        UZeroCopyUninitTransportImpl, ValidatedTxLoanSpec,
     };
 
     #[cfg(any(test, feature = "test-util"))]
@@ -274,14 +262,9 @@ pub mod prelude {
         frame::{UFrameBuilder, UFrameMetadata, UMessageType, UOwnedFrame, UPriority},
         frame_wire::{UFrameWireError, UFrameWireFormat},
         payload::{
-            assert_stable_payload_byte_backed_uninit, stable_payload_supports_byte_backed_uninit,
-            BorrowPayload, BytePayloadCodec, DecodePayload, DynPayloadCodec, EncodePayload,
-            EncodedPayload, LoanPayload, LoanUninitPayload, LoanedInitPayload, LoanedUninitPayload,
-            McapPayload, PayloadCodec, PayloadCodecCapabilities, PayloadCodecRegistry,
-            PayloadEncoding, PayloadFormat, PayloadLayout, RawBytes, ReadDecodePayload,
-            StableContainerPayload, StableContainerPayloadInfo, StablePayload,
-            StablePayloadVariant, StableTypeDetail, TypedPayloadCodec, UDeserializer,
-            UPayloadFormat, UReadDeserializer, USerializer, UWireError,
+            BorrowPayload, BytePayloadCodec, DecodePayload, EncodePayload, EncodedPayload,
+            McapPayload, PayloadCodec, PayloadEncoding, PayloadFormat, RawBytes, UDeserializer,
+            UPayloadFormat, USerializer, UWireError,
         },
         transport::{UOwnedListener, UOwnedTransport, UOwnedTransportExt},
         UCode, UStatus, UUri, UUID,

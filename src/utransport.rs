@@ -27,10 +27,16 @@ use crate::{
     },
     zero_copy::{
         verify_tx_buffer_payload_layout, verify_uninit_tx_buffer_payload_layout,
-        LoanedUninitByteWriter, UTxBuffer, UUninitTxBuffer, UZeroCopyRxFrame,
+        LoanedUninitByteWriter, UFrameView, UTxBuffer, UUninitTxBuffer, UZeroCopyRxLease,
     },
     UCode, UFrameMetadata, UOwnedFrame, UStatus, UUri,
 };
+
+mod sealed {
+    pub trait OwnedTransportSealed {}
+    pub trait ZeroCopyTransportSealed {}
+    pub trait ZeroCopyUninitTransportSealed {}
+}
 
 #[cfg(any(
     feature = "unsafe-stable-payload-tx",
@@ -39,7 +45,7 @@ use crate::{
 use crate::payload::{StableContainerPayload, StablePayload, UnsafeStablePayloadTxSlot};
 
 #[cfg(any(test, feature = "test-util"))]
-use crate::zero_copy::UVecTxBuffer;
+use crate::zero_copy::{UVecRxLease, UVecTxBuffer};
 
 /// Verifies that given UUris can be used as source and sink filter UUris.
 pub fn verify_filter_criteria(
@@ -123,6 +129,46 @@ pub fn validate_frame_metadata_for_payload(
 /// Validates an owned frame before transport send or application delivery.
 pub fn validate_owned_frame_for_transport(frame: &UOwnedFrame) -> Result<(), UStatus> {
     validate_frame_metadata_for_payload(frame.metadata(), frame.has_payload())
+}
+
+/// Validates a frame view before transport delivery.
+pub fn validate_frame_view_for_transport(
+    frame: &(impl UFrameView + ?Sized),
+) -> Result<(), UStatus> {
+    validate_frame_metadata_for_payload(frame.metadata(), frame.has_payload())
+}
+
+/// Owned frame that has passed transport-boundary validation.
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct ValidatedOwnedFrame(UOwnedFrame);
+
+impl ValidatedOwnedFrame {
+    /// Returns the validated owned frame.
+    pub fn as_frame(&self) -> &UOwnedFrame {
+        &self.0
+    }
+
+    /// Consumes the wrapper and returns the validated owned frame.
+    pub fn into_inner(self) -> UOwnedFrame {
+        self.0
+    }
+}
+
+impl TryFrom<UOwnedFrame> for ValidatedOwnedFrame {
+    type Error = UStatus;
+
+    fn try_from(value: UOwnedFrame) -> Result<Self, Self::Error> {
+        validate_owned_frame_for_transport(&value)?;
+        Ok(Self(value))
+    }
+}
+
+impl Deref for ValidatedOwnedFrame {
+    type Target = UOwnedFrame;
+
+    fn deref(&self) -> &Self::Target {
+        &self.0
+    }
 }
 
 /// Payload presence and layout requested for a transmit loan.
@@ -224,6 +270,74 @@ impl UTxLoanSpec {
     }
 }
 
+/// Transmit loan spec that has passed the public transport validation boundary.
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct ValidatedTxLoanSpec(UTxLoanSpec);
+
+impl ValidatedTxLoanSpec {
+    /// Returns the validated transmit loan spec.
+    pub fn as_spec(&self) -> &UTxLoanSpec {
+        &self.0
+    }
+
+    /// Consumes the wrapper and returns the validated transmit loan spec.
+    pub fn into_inner(self) -> UTxLoanSpec {
+        self.0
+    }
+
+    /// Returns immutable frame metadata associated with this loan.
+    pub fn metadata(&self) -> &UFrameMetadata {
+        self.0.metadata()
+    }
+
+    /// Consumes the spec and returns its metadata.
+    pub fn into_metadata(self) -> UFrameMetadata {
+        self.0.into_metadata()
+    }
+
+    /// Returns whether the transmit frame carries a payload.
+    pub fn has_payload(&self) -> bool {
+        self.0.has_payload()
+    }
+
+    /// Returns the visible application payload length.
+    pub fn payload_len(&self) -> usize {
+        self.0.payload_len()
+    }
+
+    /// Returns the requested visible application payload alignment.
+    pub fn payload_alignment(&self) -> usize {
+        self.0.payload_alignment()
+    }
+
+    /// Returns the payload presence and layout spec.
+    pub fn payload_spec(&self) -> UTxPayloadSpec {
+        self.0.payload_spec()
+    }
+
+    /// Returns the present payload layout, if any.
+    pub fn payload_layout(&self) -> Option<PayloadLayout> {
+        self.0.payload_layout()
+    }
+}
+
+impl TryFrom<UTxLoanSpec> for ValidatedTxLoanSpec {
+    type Error = UStatus;
+
+    fn try_from(value: UTxLoanSpec) -> Result<Self, Self::Error> {
+        validate_frame_metadata_for_payload(value.metadata(), value.has_payload())?;
+        Ok(Self(value))
+    }
+}
+
+impl Deref for ValidatedTxLoanSpec {
+    type Target = UTxLoanSpec;
+
+    fn deref(&self) -> &Self::Target {
+        &self.0
+    }
+}
+
 /// A factory for URIs representing this uEntity's resources.
 #[cfg_attr(any(test, feature = "test-util"), mockall::automock)]
 pub trait LocalUriProvider: Send + Sync {
@@ -289,6 +403,58 @@ pub trait UOwnedListener: Send + Sync {
     async fn on_receive_owned(&self, frame: UOwnedFrame);
 }
 
+/// Implementation boundary for serialization-neutral owned-buffer transports.
+///
+/// Transport authors implement this trait. The public [`UOwnedTransport`]
+/// blanket implementation validates frames and filters before delegating here.
+#[async_trait]
+pub trait UOwnedTransportImpl: Send + Sync {
+    async fn send_validated_owned(&self, frame: ValidatedOwnedFrame) -> Result<(), UStatus>;
+
+    /// Receives one matching owned frame from transports that support pull receive.
+    async fn receive_validated_owned(
+        &self,
+        _source_filter: &UUri,
+        _sink_filter: Option<&UUri>,
+    ) -> Result<UOwnedFrame, UStatus> {
+        Err(UStatus::fail_with_code(
+            UCode::UNIMPLEMENTED,
+            "not implemented",
+        ))
+    }
+
+    /// Registers an owned listener after public filter validation.
+    ///
+    /// Implementations must validate reconstructed frames before invoking the
+    /// listener. The public wrapper validates pull delivery, but listener
+    /// lifecycle semantics are implementation-owned.
+    async fn register_validated_owned_listener(
+        &self,
+        _source_filter: &UUri,
+        _sink_filter: Option<&UUri>,
+        _listener: Arc<dyn UOwnedListener>,
+    ) -> Result<(), UStatus> {
+        Err(UStatus::fail_with_code(
+            UCode::UNIMPLEMENTED,
+            "not implemented",
+        ))
+    }
+
+    async fn unregister_validated_owned_listener(
+        &self,
+        _source_filter: &UUri,
+        _sink_filter: Option<&UUri>,
+        _listener: Arc<dyn UOwnedListener>,
+    ) -> Result<(), UStatus> {
+        Err(UStatus::fail_with_code(
+            UCode::UNIMPLEMENTED,
+            "not implemented",
+        ))
+    }
+}
+
+impl<T> sealed::OwnedTransportSealed for T where T: UOwnedTransportImpl + ?Sized {}
+
 /// The serialization-neutral owned-buffer transport API.
 ///
 /// Owned transports are the default path for network, brokered, and in-process
@@ -296,12 +462,12 @@ pub trait UOwnedListener: Send + Sync {
 ///
 /// ```no_run
 /// # use async_trait::async_trait;
-/// # use up_rust::{UOwnedFrame, UOwnedTransport, UStatus};
+/// # use up_rust::{transport::{UOwnedTransportImpl, ValidatedOwnedFrame}, UStatus};
 /// struct MyTransport;
 ///
 /// #[async_trait]
-/// impl UOwnedTransport for MyTransport {
-///     async fn send_owned(&self, frame: UOwnedFrame) -> Result<(), UStatus> {
+/// impl UOwnedTransportImpl for MyTransport {
+///     async fn send_validated_owned(&self, frame: ValidatedOwnedFrame) -> Result<(), UStatus> {
 ///         let metadata = frame.metadata();
 ///         let payload = frame.payload_bytes();
 ///         # let _ = (metadata, payload);
@@ -310,7 +476,7 @@ pub trait UOwnedListener: Send + Sync {
 /// }
 /// ```
 #[async_trait]
-pub trait UOwnedTransport: Send + Sync {
+pub trait UOwnedTransport: sealed::OwnedTransportSealed + Send + Sync {
     async fn send_owned(&self, frame: UOwnedFrame) -> Result<(), UStatus>;
 
     /// Receives one matching owned frame from transports that support pull receive.
@@ -352,6 +518,60 @@ pub trait UOwnedTransport: Send + Sync {
             UCode::UNIMPLEMENTED,
             "not implemented",
         ))
+    }
+}
+
+#[async_trait]
+impl<T> UOwnedTransport for T
+where
+    T: UOwnedTransportImpl + ?Sized,
+{
+    async fn send_owned(&self, frame: UOwnedFrame) -> Result<(), UStatus> {
+        self.send_validated_owned(ValidatedOwnedFrame::try_from(frame)?)
+            .await
+    }
+
+    async fn receive_owned(
+        &self,
+        source_filter: &UUri,
+        sink_filter: Option<&UUri>,
+    ) -> Result<UOwnedFrame, UStatus> {
+        verify_filter_criteria(source_filter, sink_filter)?;
+        let frame =
+            UOwnedTransportImpl::receive_validated_owned(self, source_filter, sink_filter).await?;
+        Ok(ValidatedOwnedFrame::try_from(frame)?.into_inner())
+    }
+
+    async fn register_owned_listener(
+        &self,
+        source_filter: &UUri,
+        sink_filter: Option<&UUri>,
+        listener: Arc<dyn UOwnedListener>,
+    ) -> Result<(), UStatus> {
+        verify_filter_criteria(source_filter, sink_filter)?;
+        UOwnedTransportImpl::register_validated_owned_listener(
+            self,
+            source_filter,
+            sink_filter,
+            listener,
+        )
+        .await
+    }
+
+    async fn unregister_owned_listener(
+        &self,
+        source_filter: &UUri,
+        sink_filter: Option<&UUri>,
+        listener: Arc<dyn UOwnedListener>,
+    ) -> Result<(), UStatus> {
+        verify_filter_criteria(source_filter, sink_filter)?;
+        UOwnedTransportImpl::unregister_validated_owned_listener(
+            self,
+            source_filter,
+            sink_filter,
+            listener,
+        )
+        .await
     }
 }
 
@@ -430,11 +650,73 @@ impl<T> UOwnedTransportExt for T where T: UOwnedTransport + ?Sized {}
 #[async_trait]
 pub trait UZeroCopyListener<Rx>: Send + Sync
 where
-    Rx: UZeroCopyRxFrame + Send + 'static,
+    Rx: UZeroCopyRxLease + Send + 'static,
 {
     /// Handles one received zero-copy frame lease.
     async fn on_receive_zero_copy(&self, frame: Rx);
 }
+
+/// Implementation boundary for transports that can loan zero-copy storage.
+///
+/// Transport authors implement this trait. The public [`UZeroCopyTransport`]
+/// blanket implementation validates loan specs, send buffers, receive leases,
+/// and filters before delegating here.
+#[async_trait]
+pub trait UZeroCopyTransportImpl: Send + Sync {
+    /// Transport-specific transmit loan type.
+    type Tx: UTxBuffer + Send;
+
+    /// Transport-specific receive lease type.
+    type Rx: UZeroCopyRxLease + Send + 'static;
+
+    /// Reserves transmit storage for a validated frame loan spec.
+    async fn loan_validated_tx(&self, spec: ValidatedTxLoanSpec) -> Result<Self::Tx, UStatus>;
+
+    /// Commits a validated transmit loan.
+    async fn send_validated_zero_copy(&self, buffer: Self::Tx) -> Result<(), UStatus>;
+
+    /// Receives one matching zero-copy frame from transports that support pull receive.
+    async fn receive_validated_zero_copy(
+        &self,
+        _source_filter: &UUri,
+        _sink_filter: Option<&UUri>,
+    ) -> Result<Self::Rx, UStatus> {
+        Err(UStatus::fail_with_code(
+            UCode::UNIMPLEMENTED,
+            "not implemented",
+        ))
+    }
+
+    /// Registers a zero-copy listener after public filter validation.
+    ///
+    /// Implementations must validate reconstructed receive leases before
+    /// invoking the listener.
+    async fn register_validated_zero_copy_listener(
+        &self,
+        _source_filter: &UUri,
+        _sink_filter: Option<&UUri>,
+        _listener: Arc<dyn UZeroCopyListener<Self::Rx>>,
+    ) -> Result<(), UStatus> {
+        Err(UStatus::fail_with_code(
+            UCode::UNIMPLEMENTED,
+            "not implemented",
+        ))
+    }
+
+    async fn unregister_validated_zero_copy_listener(
+        &self,
+        _source_filter: &UUri,
+        _sink_filter: Option<&UUri>,
+        _listener: Arc<dyn UZeroCopyListener<Self::Rx>>,
+    ) -> Result<(), UStatus> {
+        Err(UStatus::fail_with_code(
+            UCode::UNIMPLEMENTED,
+            "not implemented",
+        ))
+    }
+}
+
+impl<T> sealed::ZeroCopyTransportSealed for T where T: UZeroCopyTransportImpl + ?Sized {}
 
 /// The zero-copy transport capability API.
 ///
@@ -454,36 +736,36 @@ where
 ///
 /// ```no_run
 /// # use async_trait::async_trait;
-/// # use up_rust::{zero_copy::{UVecTxBuffer, UZeroCopyTransport}, UFrameMetadata, UOwnedFrame, UStatus, UUri};
+/// # use up_rust::{zero_copy::{UVecTxBuffer, UVecRxLease, UZeroCopyTransportImpl}, UStatus};
 /// struct SharedMemoryTransport;
 ///
 /// #[async_trait]
-/// impl UZeroCopyTransport for SharedMemoryTransport {
+/// impl UZeroCopyTransportImpl for SharedMemoryTransport {
 ///     type Tx = UVecTxBuffer;
-///     type Rx = UOwnedFrame;
+///     type Rx = UVecRxLease;
 ///
-///     async fn loan_tx(
+///     async fn loan_validated_tx(
 ///         &self,
-///         spec: up_rust::UTxLoanSpec,
+///         spec: up_rust::zero_copy::ValidatedTxLoanSpec,
 ///     ) -> Result<Self::Tx, UStatus> {
 ///         let payload_len = spec.payload_len();
 ///         Ok(UVecTxBuffer::new(spec.into_metadata(), payload_len))
 ///     }
 ///
-///     async fn send_zero_copy(&self, buffer: Self::Tx) -> Result<(), UStatus> {
+///     async fn send_validated_zero_copy(&self, buffer: Self::Tx) -> Result<(), UStatus> {
 ///         # let _ = buffer;
 ///         Ok(())
 ///     }
 /// }
 /// ```
 #[async_trait]
-pub trait UZeroCopyTransport: Send + Sync {
+pub trait UZeroCopyTransport: sealed::ZeroCopyTransportSealed + Send + Sync {
     /// Transport-specific transmit loan type returned by [`Self::loan_tx`].
     type Tx: UTxBuffer + Send;
 
     /// Transport-specific receive lease type returned by pull receive and
     /// delivered to zero-copy listeners.
-    type Rx: UZeroCopyRxFrame + Send + 'static;
+    type Rx: UZeroCopyRxLease + Send + 'static;
 
     /// Reserves transmit storage for a validated frame loan spec.
     ///
@@ -552,6 +834,86 @@ pub trait UZeroCopyTransport: Send + Sync {
     }
 }
 
+#[async_trait]
+impl<T> UZeroCopyTransport for T
+where
+    T: UZeroCopyTransportImpl + ?Sized,
+{
+    type Tx = T::Tx;
+    type Rx = T::Rx;
+
+    async fn loan_tx(&self, spec: UTxLoanSpec) -> Result<Self::Tx, UStatus> {
+        self.loan_validated_tx(ValidatedTxLoanSpec::try_from(spec)?)
+            .await
+    }
+
+    async fn send_zero_copy(&self, buffer: Self::Tx) -> Result<(), UStatus> {
+        let has_payload = !buffer.payload().is_empty() || buffer.metadata().encoding().is_some();
+        validate_frame_metadata_for_payload(buffer.metadata(), has_payload)?;
+        self.send_validated_zero_copy(buffer).await
+    }
+
+    async fn receive_zero_copy(
+        &self,
+        source_filter: &UUri,
+        sink_filter: Option<&UUri>,
+    ) -> Result<Self::Rx, UStatus> {
+        verify_filter_criteria(source_filter, sink_filter)?;
+        let frame =
+            UZeroCopyTransportImpl::receive_validated_zero_copy(self, source_filter, sink_filter)
+                .await?;
+        validate_frame_view_for_transport(&frame)?;
+        Ok(frame)
+    }
+
+    async fn register_zero_copy_listener(
+        &self,
+        source_filter: &UUri,
+        sink_filter: Option<&UUri>,
+        listener: Arc<dyn UZeroCopyListener<Self::Rx>>,
+    ) -> Result<(), UStatus> {
+        verify_filter_criteria(source_filter, sink_filter)?;
+        UZeroCopyTransportImpl::register_validated_zero_copy_listener(
+            self,
+            source_filter,
+            sink_filter,
+            listener,
+        )
+        .await
+    }
+
+    async fn unregister_zero_copy_listener(
+        &self,
+        source_filter: &UUri,
+        sink_filter: Option<&UUri>,
+        listener: Arc<dyn UZeroCopyListener<Self::Rx>>,
+    ) -> Result<(), UStatus> {
+        verify_filter_criteria(source_filter, sink_filter)?;
+        UZeroCopyTransportImpl::unregister_validated_zero_copy_listener(
+            self,
+            source_filter,
+            sink_filter,
+            listener,
+        )
+        .await
+    }
+}
+
+/// Implementation boundary for transports that can expose uninitialized TX payload storage.
+#[async_trait]
+pub trait UZeroCopyUninitTransportImpl: UZeroCopyTransportImpl {
+    /// Transport-specific uninitialized transmit loan type.
+    type UninitTx: UUninitTxBuffer<Initialized = Self::Tx> + Send;
+
+    /// Reserves uninitialized transmit storage for a validated frame loan spec.
+    async fn loan_validated_uninit_tx(
+        &self,
+        spec: ValidatedTxLoanSpec,
+    ) -> Result<Self::UninitTx, UStatus>;
+}
+
+impl<T> sealed::ZeroCopyUninitTransportSealed for T where T: UZeroCopyUninitTransportImpl + ?Sized {}
+
 /// Optional zero-copy capability for transports that can expose uninitialized TX payload storage.
 ///
 /// This is deliberately separate from [`UZeroCopyTransport::loan_tx`], whose
@@ -559,12 +921,27 @@ pub trait UZeroCopyTransport: Send + Sync {
 /// initialize any transport-owned bytes before returning the uninitialized loan;
 /// callers initialize only the visible application payload bytes.
 #[async_trait]
-pub trait UZeroCopyUninitTransport: UZeroCopyTransport {
+pub trait UZeroCopyUninitTransport:
+    UZeroCopyTransport + sealed::ZeroCopyUninitTransportSealed
+{
     /// Transport-specific uninitialized transmit loan type.
     type UninitTx: UUninitTxBuffer<Initialized = Self::Tx> + Send;
 
     /// Reserves uninitialized transmit storage for a validated frame loan spec.
     async fn loan_uninit_tx(&self, spec: UTxLoanSpec) -> Result<Self::UninitTx, UStatus>;
+}
+
+#[async_trait]
+impl<T> UZeroCopyUninitTransport for T
+where
+    T: UZeroCopyUninitTransportImpl + ?Sized,
+{
+    type UninitTx = T::UninitTx;
+
+    async fn loan_uninit_tx(&self, spec: UTxLoanSpec) -> Result<Self::UninitTx, UStatus> {
+        self.loan_validated_uninit_tx(ValidatedTxLoanSpec::try_from(spec)?)
+            .await
+    }
 }
 
 fn validate_payload_layout_request(
@@ -808,7 +1185,7 @@ impl<T> UZeroCopyUninitTransportExt for T where T: UZeroCopyUninitTransport + ?S
 #[cfg(any(test, feature = "test-util"))]
 mockall::mock! {
     pub UOwnedTransport {
-        pub async fn do_send_owned(&self, frame: UOwnedFrame) -> Result<(), UStatus>;
+        pub async fn do_send_validated_owned(&self, frame: ValidatedOwnedFrame) -> Result<(), UStatus>;
         pub async fn do_receive_owned<'a>(&'a self, source_filter: &'a UUri, sink_filter: Option<&'a UUri>) -> Result<UOwnedFrame, UStatus>;
         pub async fn do_register_owned_listener<'a>(&'a self, source_filter: &'a UUri, sink_filter: Option<&'a UUri>, listener: Arc<dyn UOwnedListener>) -> Result<(), UStatus>;
         pub async fn do_unregister_owned_listener<'a>(&'a self, source_filter: &'a UUri, sink_filter: Option<&'a UUri>, listener: Arc<dyn UOwnedListener>) -> Result<(), UStatus>;
@@ -818,12 +1195,12 @@ mockall::mock! {
 #[cfg(not(tarpaulin_include))]
 #[cfg(any(test, feature = "test-util"))]
 #[async_trait]
-impl UOwnedTransport for MockUOwnedTransport {
-    async fn send_owned(&self, frame: UOwnedFrame) -> Result<(), UStatus> {
-        self.do_send_owned(frame).await
+impl UOwnedTransportImpl for MockUOwnedTransport {
+    async fn send_validated_owned(&self, frame: ValidatedOwnedFrame) -> Result<(), UStatus> {
+        self.do_send_validated_owned(frame).await
     }
 
-    async fn receive_owned(
+    async fn receive_validated_owned(
         &self,
         source_filter: &UUri,
         sink_filter: Option<&UUri>,
@@ -831,7 +1208,7 @@ impl UOwnedTransport for MockUOwnedTransport {
         self.do_receive_owned(source_filter, sink_filter).await
     }
 
-    async fn register_owned_listener(
+    async fn register_validated_owned_listener(
         &self,
         source_filter: &UUri,
         sink_filter: Option<&UUri>,
@@ -841,7 +1218,7 @@ impl UOwnedTransport for MockUOwnedTransport {
             .await
     }
 
-    async fn unregister_owned_listener(
+    async fn unregister_validated_owned_listener(
         &self,
         source_filter: &UUri,
         sink_filter: Option<&UUri>,
@@ -856,30 +1233,30 @@ impl UOwnedTransport for MockUOwnedTransport {
 #[cfg(any(test, feature = "test-util"))]
 mockall::mock! {
     pub UZeroCopyTransport {
-        pub async fn do_loan_tx(&self, spec: UTxLoanSpec) -> Result<UVecTxBuffer, UStatus>;
-        pub async fn do_send_zero_copy(&self, buffer: UVecTxBuffer) -> Result<(), UStatus>;
-        pub async fn do_receive_zero_copy<'a>(&'a self, source_filter: &'a UUri, sink_filter: Option<&'a UUri>) -> Result<UOwnedFrame, UStatus>;
-        pub async fn do_register_zero_copy_listener<'a>(&'a self, source_filter: &'a UUri, sink_filter: Option<&'a UUri>, listener: Arc<dyn UZeroCopyListener<UOwnedFrame>>) -> Result<(), UStatus>;
-        pub async fn do_unregister_zero_copy_listener<'a>(&'a self, source_filter: &'a UUri, sink_filter: Option<&'a UUri>, listener: Arc<dyn UZeroCopyListener<UOwnedFrame>>) -> Result<(), UStatus>;
+        pub async fn do_loan_validated_tx(&self, spec: ValidatedTxLoanSpec) -> Result<UVecTxBuffer, UStatus>;
+        pub async fn do_send_validated_zero_copy(&self, buffer: UVecTxBuffer) -> Result<(), UStatus>;
+        pub async fn do_receive_zero_copy<'a>(&'a self, source_filter: &'a UUri, sink_filter: Option<&'a UUri>) -> Result<UVecRxLease, UStatus>;
+        pub async fn do_register_zero_copy_listener<'a>(&'a self, source_filter: &'a UUri, sink_filter: Option<&'a UUri>, listener: Arc<dyn UZeroCopyListener<UVecRxLease>>) -> Result<(), UStatus>;
+        pub async fn do_unregister_zero_copy_listener<'a>(&'a self, source_filter: &'a UUri, sink_filter: Option<&'a UUri>, listener: Arc<dyn UZeroCopyListener<UVecRxLease>>) -> Result<(), UStatus>;
     }
 }
 
 #[cfg(not(tarpaulin_include))]
 #[cfg(any(test, feature = "test-util"))]
 #[async_trait]
-impl UZeroCopyTransport for MockUZeroCopyTransport {
+impl UZeroCopyTransportImpl for MockUZeroCopyTransport {
     type Tx = UVecTxBuffer;
-    type Rx = UOwnedFrame;
+    type Rx = UVecRxLease;
 
-    async fn loan_tx(&self, spec: UTxLoanSpec) -> Result<Self::Tx, UStatus> {
-        self.do_loan_tx(spec).await
+    async fn loan_validated_tx(&self, spec: ValidatedTxLoanSpec) -> Result<Self::Tx, UStatus> {
+        self.do_loan_validated_tx(spec).await
     }
 
-    async fn send_zero_copy(&self, buffer: Self::Tx) -> Result<(), UStatus> {
-        self.do_send_zero_copy(buffer).await
+    async fn send_validated_zero_copy(&self, buffer: Self::Tx) -> Result<(), UStatus> {
+        self.do_send_validated_zero_copy(buffer).await
     }
 
-    async fn receive_zero_copy(
+    async fn receive_validated_zero_copy(
         &self,
         source_filter: &UUri,
         sink_filter: Option<&UUri>,
@@ -887,7 +1264,7 @@ impl UZeroCopyTransport for MockUZeroCopyTransport {
         self.do_receive_zero_copy(source_filter, sink_filter).await
     }
 
-    async fn register_zero_copy_listener(
+    async fn register_validated_zero_copy_listener(
         &self,
         source_filter: &UUri,
         sink_filter: Option<&UUri>,
@@ -897,7 +1274,7 @@ impl UZeroCopyTransport for MockUZeroCopyTransport {
             .await
     }
 
-    async fn unregister_zero_copy_listener(
+    async fn unregister_validated_zero_copy_listener(
         &self,
         source_filter: &UUri,
         sink_filter: Option<&UUri>,
@@ -965,7 +1342,7 @@ mod tests {
     use crate::{
         payload::RawBytes,
         test_util::{InMemoryOwnedTransport, InMemoryZeroCopyTransport},
-        zero_copy::UVecUninitTxBuffer,
+        zero_copy::{UVecRxLease, UVecUninitTxBuffer},
     };
 
     use super::*;
@@ -991,8 +1368,11 @@ mod tests {
         struct EmptyTransport;
 
         #[async_trait]
-        impl UOwnedTransport for EmptyTransport {
-            async fn send_owned(&self, _frame: UOwnedFrame) -> Result<(), UStatus> {
+        impl UOwnedTransportImpl for EmptyTransport {
+            async fn send_validated_owned(
+                &self,
+                _frame: ValidatedOwnedFrame,
+            ) -> Result<(), UStatus> {
                 Ok(())
             }
         }
@@ -1024,12 +1404,46 @@ mod tests {
         let expected = frame.clone();
         let mut transport = MockUOwnedTransport::new();
         transport
-            .expect_do_send_owned()
+            .expect_do_send_validated_owned()
             .once()
-            .withf(move |actual| actual == &expected)
+            .withf(move |actual| actual.as_frame() == &expected)
             .return_const(Ok(()));
 
         transport.send_owned(frame).await.unwrap();
+    }
+
+    #[tokio::test]
+    async fn owned_transport_rejects_invalid_frame_before_impl_observes_it() {
+        #[derive(Default)]
+        struct SpyOwnedTransport {
+            send_count: Mutex<usize>,
+        }
+
+        #[async_trait]
+        impl UOwnedTransportImpl for SpyOwnedTransport {
+            async fn send_validated_owned(
+                &self,
+                _frame: ValidatedOwnedFrame,
+            ) -> Result<(), UStatus> {
+                *self.send_count.lock().expect("send count lock poisoned") += 1;
+                Ok(())
+            }
+        }
+
+        let topic = UUri::try_from_parts("vehicle", 0x4210, 0x01, 0x9000).unwrap();
+        let frame = UOwnedFrame::with_payload_unchecked(
+            UFrameMetadata::publish_unchecked(topic),
+            bytes::Bytes::from_static(b"missing encoding"),
+        );
+        let transport = SpyOwnedTransport::default();
+
+        let status = transport
+            .send_owned(frame)
+            .await
+            .expect_err("invalid frame must be rejected before implementation callback");
+
+        assert_eq!(status.get_code(), UCode::INVALID_ARGUMENT);
+        assert_eq!(*transport.send_count.lock().unwrap(), 0);
     }
 
     #[tokio::test]
@@ -1038,7 +1452,7 @@ mod tests {
         let transport = InMemoryOwnedTransport::default();
 
         transport
-            .send_payload_as::<RawBytes, [u8]>(UFrameMetadata::publish(topic), b"payload")
+            .send_payload_as::<RawBytes, [u8]>(UFrameMetadata::publish_unchecked(topic), b"payload")
             .await
             .unwrap();
 
@@ -1054,7 +1468,10 @@ mod tests {
         let transport = InMemoryZeroCopyTransport::default();
 
         transport
-            .send_encoded_payload_as::<RawBytes, [u8]>(UFrameMetadata::publish(topic), b"payload")
+            .send_encoded_payload_as::<RawBytes, [u8]>(
+                UFrameMetadata::publish_unchecked(topic),
+                b"payload",
+            )
             .await
             .unwrap();
 
@@ -1072,7 +1489,7 @@ mod tests {
 
         UZeroCopyTransportExt::send_encoded_payload(
             &transport,
-            UFrameMetadata::publish(topic),
+            UFrameMetadata::publish_unchecked(topic),
             payload,
         )
         .await
@@ -1090,11 +1507,11 @@ mod tests {
     }
 
     #[async_trait]
-    impl UZeroCopyTransport for OversizedTxLoanTransport {
+    impl UZeroCopyTransportImpl for OversizedTxLoanTransport {
         type Tx = UVecTxBuffer;
-        type Rx = UOwnedFrame;
+        type Rx = UVecRxLease;
 
-        async fn loan_tx(&self, spec: UTxLoanSpec) -> Result<Self::Tx, UStatus> {
+        async fn loan_validated_tx(&self, spec: ValidatedTxLoanSpec) -> Result<Self::Tx, UStatus> {
             UVecTxBuffer::with_alignment(
                 spec.metadata().clone(),
                 spec.payload_len() + 1,
@@ -1103,7 +1520,7 @@ mod tests {
             .map_err(UStatus::from)
         }
 
-        async fn send_zero_copy(&self, _buffer: Self::Tx) -> Result<(), UStatus> {
+        async fn send_validated_zero_copy(&self, _buffer: Self::Tx) -> Result<(), UStatus> {
             *self.send_count.lock().expect("send count lock poisoned") += 1;
             Ok(())
         }
@@ -1115,11 +1532,53 @@ mod tests {
         let transport = OversizedTxLoanTransport::default();
 
         let status = transport
-            .send_encoded_payload_as::<RawBytes, [u8]>(UFrameMetadata::publish(topic), b"payload")
+            .send_encoded_payload_as::<RawBytes, [u8]>(
+                UFrameMetadata::publish_unchecked(topic),
+                b"payload",
+            )
             .await
             .expect_err("bad transport loan must fail before send");
 
         assert_eq!(status.get_code(), UCode::INTERNAL);
+        assert_eq!(*transport.send_count.lock().unwrap(), 0);
+    }
+
+    #[tokio::test]
+    async fn zero_copy_transport_rejects_invalid_send_buffer_before_impl_observes_it() {
+        #[derive(Default)]
+        struct SpyZeroCopyTransport {
+            send_count: Mutex<usize>,
+        }
+
+        #[async_trait]
+        impl UZeroCopyTransportImpl for SpyZeroCopyTransport {
+            type Tx = UVecTxBuffer;
+            type Rx = UVecRxLease;
+
+            async fn loan_validated_tx(
+                &self,
+                spec: ValidatedTxLoanSpec,
+            ) -> Result<Self::Tx, UStatus> {
+                let payload_len = spec.payload_len();
+                Ok(UVecTxBuffer::new(spec.into_metadata(), payload_len))
+            }
+
+            async fn send_validated_zero_copy(&self, _buffer: Self::Tx) -> Result<(), UStatus> {
+                *self.send_count.lock().expect("send count lock poisoned") += 1;
+                Ok(())
+            }
+        }
+
+        let topic = UUri::try_from_parts("vehicle", 0x4210, 0x01, 0x9000).unwrap();
+        let buffer = UVecTxBuffer::new(UFrameMetadata::publish_unchecked(topic), 3);
+        let transport = SpyZeroCopyTransport::default();
+
+        let status = transport
+            .send_zero_copy(buffer)
+            .await
+            .expect_err("invalid buffer must be rejected before implementation callback");
+
+        assert_eq!(status.get_code(), UCode::INVALID_ARGUMENT);
         assert_eq!(*transport.send_count.lock().unwrap(), 0);
     }
 
@@ -1129,11 +1588,11 @@ mod tests {
     }
 
     #[async_trait]
-    impl UZeroCopyTransport for OversizedUninitTxLoanTransport {
+    impl UZeroCopyTransportImpl for OversizedUninitTxLoanTransport {
         type Tx = UVecTxBuffer;
-        type Rx = UOwnedFrame;
+        type Rx = UVecRxLease;
 
-        async fn loan_tx(&self, spec: UTxLoanSpec) -> Result<Self::Tx, UStatus> {
+        async fn loan_validated_tx(&self, spec: ValidatedTxLoanSpec) -> Result<Self::Tx, UStatus> {
             UVecTxBuffer::with_alignment(
                 spec.metadata().clone(),
                 spec.payload_len(),
@@ -1142,17 +1601,20 @@ mod tests {
             .map_err(UStatus::from)
         }
 
-        async fn send_zero_copy(&self, _buffer: Self::Tx) -> Result<(), UStatus> {
+        async fn send_validated_zero_copy(&self, _buffer: Self::Tx) -> Result<(), UStatus> {
             *self.send_count.lock().expect("send count lock poisoned") += 1;
             Ok(())
         }
     }
 
     #[async_trait]
-    impl UZeroCopyUninitTransport for OversizedUninitTxLoanTransport {
+    impl UZeroCopyUninitTransportImpl for OversizedUninitTxLoanTransport {
         type UninitTx = UVecUninitTxBuffer;
 
-        async fn loan_uninit_tx(&self, spec: UTxLoanSpec) -> Result<Self::UninitTx, UStatus> {
+        async fn loan_validated_uninit_tx(
+            &self,
+            spec: ValidatedTxLoanSpec,
+        ) -> Result<Self::UninitTx, UStatus> {
             UVecUninitTxBuffer::with_alignment(
                 spec.metadata().clone(),
                 spec.payload_len() + 1,
@@ -1169,7 +1631,7 @@ mod tests {
 
         let status = transport
             .send_uninit_loaned_bytes_as::<RawBytes>(
-                UFrameMetadata::publish(topic),
+                UFrameMetadata::publish_unchecked(topic),
                 3,
                 1,
                 |mut writer| {
@@ -1191,7 +1653,7 @@ mod tests {
 
         let status = transport
             .send_uninit_loaned_bytes_as::<RawBytes>(
-                UFrameMetadata::publish(topic),
+                UFrameMetadata::publish_unchecked(topic),
                 3,
                 3,
                 |writer| Ok(writer),
@@ -1214,7 +1676,7 @@ mod tests {
     #[test]
     fn tx_loan_spec_accepts_absent_payload_without_encoding() {
         let topic = UUri::try_from_parts("vehicle", 0x4210, 0x01, 0x9000).unwrap();
-        let spec = UTxLoanSpec::no_payload(UFrameMetadata::publish(topic)).unwrap();
+        let spec = UTxLoanSpec::no_payload(UFrameMetadata::publish_unchecked(topic)).unwrap();
 
         assert!(!spec.has_payload());
         assert_eq!(spec.payload_len(), 0);
@@ -1225,7 +1687,7 @@ mod tests {
     fn tx_loan_spec_accepts_present_empty_payload_with_encoding() {
         let topic = UUri::try_from_parts("vehicle", 0x4210, 0x01, 0x9000).unwrap();
         let spec = UTxLoanSpec::present_empty_payload(
-            UFrameMetadata::publish(topic).with_encoding(RawBytes::encoding()),
+            UFrameMetadata::publish_unchecked(topic).with_encoding(RawBytes::encoding()),
         )
         .unwrap();
 
@@ -1239,7 +1701,7 @@ mod tests {
         let topic = UUri::try_from_parts("vehicle", 0x4210, 0x01, 0x9000).unwrap();
         let layout = PayloadLayout::new(8, 4).unwrap();
         let spec = UTxLoanSpec::payload(
-            UFrameMetadata::publish(topic).with_encoding(RawBytes::encoding()),
+            UFrameMetadata::publish_unchecked(topic).with_encoding(RawBytes::encoding()),
             layout,
         )
         .unwrap();
@@ -1252,7 +1714,8 @@ mod tests {
     fn tx_loan_spec_rejects_payload_without_encoding() {
         let topic = UUri::try_from_parts("vehicle", 0x4210, 0x01, 0x9000).unwrap();
         let layout = PayloadLayout::new(1, 1).unwrap();
-        let status = UTxLoanSpec::payload(UFrameMetadata::publish(topic), layout).unwrap_err();
+        let status =
+            UTxLoanSpec::payload(UFrameMetadata::publish_unchecked(topic), layout).unwrap_err();
 
         assert_eq!(status.get_code(), UCode::INVALID_ARGUMENT);
         assert!(status.get_message().contains("payload encoding is absent"));
@@ -1262,7 +1725,7 @@ mod tests {
     fn tx_loan_spec_rejects_encoding_with_absent_payload() {
         let topic = UUri::try_from_parts("vehicle", 0x4210, 0x01, 0x9000).unwrap();
         let status = UTxLoanSpec::no_payload(
-            UFrameMetadata::publish(topic).with_encoding(RawBytes::encoding()),
+            UFrameMetadata::publish_unchecked(topic).with_encoding(RawBytes::encoding()),
         )
         .unwrap_err();
 
@@ -1290,7 +1753,10 @@ mod tests {
     #[test]
     fn validate_owned_frame_rejects_payload_without_encoding() {
         let topic = UUri::try_from_parts("vehicle", 0x4210, 0x01, 0x9000).unwrap();
-        let frame = UOwnedFrame::new(UFrameMetadata::publish(topic), Vec::<u8>::new());
+        let frame = UOwnedFrame::with_payload_unchecked(
+            UFrameMetadata::publish_unchecked(topic),
+            Vec::<u8>::new(),
+        );
         let status = validate_owned_frame_for_transport(&frame).unwrap_err();
 
         assert_eq!(status.get_code(), UCode::INVALID_ARGUMENT);
@@ -1300,14 +1766,14 @@ mod tests {
     #[test]
     fn validate_frame_metadata_rejects_expired_frames() {
         let topic = UUri::try_from_parts("vehicle", 0x4210, 0x01, 0x9000).unwrap();
-        let attributes = crate::UAttributes::new(
+        let attributes = crate::UAttributes::new_unchecked(
             crate::UUID::build_for_timestamp_millis(1),
             topic,
             None,
             crate::UMessageType::Publish,
         )
         .with_ttl(1);
-        let metadata = UFrameMetadata::without_payload_encoding(attributes);
+        let metadata = UFrameMetadata::without_payload_encoding_unchecked(attributes);
         let status = validate_frame_metadata_for_transport(&metadata).unwrap_err();
 
         assert_eq!(status.get_code(), UCode::DEADLINE_EXCEEDED);

@@ -3,8 +3,8 @@ use std::io::Cursor;
 use up_rust::{
     payload::StableContainerPayload,
     zero_copy::{
-        LoanedPayload, PayloadLoanProvenance, ULoanedContiguousZeroCopyRxFrame,
-        UZeroCopyRxFrame,
+        LoanedPayload, PayloadLoanProvenance, UFrameView, ULoanedContiguousZeroCopyRxFrame,
+        UZeroCopyRxLease,
     },
     StablePayload, UFrameMetadata, UUri,
 };
@@ -25,7 +25,7 @@ struct LoanedFrame<'a> {
     payload: &'a [u8],
 }
 
-impl UZeroCopyRxFrame for LoanedFrame<'_> {
+impl UFrameView for LoanedFrame<'_> {
     type PayloadReader<'a>
         = Cursor<&'a [u8]>
     where
@@ -52,6 +52,8 @@ impl UZeroCopyRxFrame for LoanedFrame<'_> {
     }
 }
 
+impl UZeroCopyRxLease for LoanedFrame<'_> {}
+
 impl ULoanedContiguousZeroCopyRxFrame for LoanedFrame<'_> {
     fn loaned_contiguous_payload(&self) -> Result<LoanedPayload<'_>, up_rust::UWireError> {
         Ok(unsafe {
@@ -66,7 +68,7 @@ fn main() {
     storage.0[4..8].copy_from_slice(&2_u32.to_ne_bytes());
 
     let frame = LoanedFrame {
-        metadata: UFrameMetadata::publish(UUri::try_from("//vehicle/4210/1/9000").unwrap())
+        metadata: UFrameMetadata::publish_unchecked(UUri::try_from("//vehicle/4210/1/9000").unwrap())
             .with_encoding(StableContainerPayload::<BroadPadded>::encoding()),
         payload: storage.0.as_slice(),
     };

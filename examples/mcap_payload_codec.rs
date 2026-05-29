@@ -19,7 +19,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     let archive = Bytes::from_static(b"\x89MCAP\r\nfixture-bytes");
 
     let frame = UOwnedFrame::from_encoded_payload(
-        UFrameMetadata::publish(topic),
+        UFrameMetadata::try_publish(topic)?,
         EncodedPayload::<McapPayload>::from_bytes(archive.clone()),
     );
     let borrowed = frame.borrow_payload_as::<McapPayload, [u8]>()?;

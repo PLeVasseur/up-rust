@@ -14,10 +14,15 @@
 use std::{any::Any, io::Cursor, mem, sync::Arc, sync::Mutex};
 
 use super::*;
+use crate::payload::PlacementDefault;
 use crate::{
     test_util::{zero_copy_conformance, InMemoryZeroCopyTransport},
-    zero_copy::{UUninitTxBuffer, UVecUninitTxBuffer, UZeroCopyTransport, UZeroCopyTransportExt},
-    PlacementDefault, UCode, UStatus, UTxLoanSpec, UUri, UZeroCopyUninitTransportExt, UUID,
+    zero_copy::{
+        UFrameView, UUninitTxBuffer, UVecRxLease, UVecUninitTxBuffer, UZeroCopyRxLease,
+        UZeroCopyTransportExt, UZeroCopyTransportImpl, UZeroCopyUninitTransportExt,
+        ValidatedTxLoanSpec,
+    },
+    UCode, UStatus, UUri, UUID,
 };
 
 #[repr(C)]
@@ -103,7 +108,7 @@ struct BorrowedContiguousFrame<'a> {
     payload: &'a [u8],
 }
 
-impl UZeroCopyRxFrame for BorrowedContiguousFrame<'_> {
+impl UFrameView for BorrowedContiguousFrame<'_> {
     type PayloadReader<'a>
         = Cursor<&'a [u8]>
     where
@@ -133,6 +138,8 @@ impl UZeroCopyRxFrame for BorrowedContiguousFrame<'_> {
         Some(self.payload)
     }
 }
+
+impl UZeroCopyRxLease for BorrowedContiguousFrame<'_> {}
 
 impl UContiguousZeroCopyRxFrame for BorrowedContiguousFrame<'_> {
     fn contiguous_payload(&self) -> &[u8] {
@@ -156,7 +163,7 @@ struct CopiedContiguousFrame<'a> {
     payload: &'a [u8],
 }
 
-impl UZeroCopyRxFrame for CopiedContiguousFrame<'_> {
+impl UFrameView for CopiedContiguousFrame<'_> {
     type PayloadReader<'a>
         = Cursor<&'a [u8]>
     where
@@ -187,6 +194,8 @@ impl UZeroCopyRxFrame for CopiedContiguousFrame<'_> {
     }
 }
 
+impl UZeroCopyRxLease for CopiedContiguousFrame<'_> {}
+
 impl UContiguousZeroCopyRxFrame for CopiedContiguousFrame<'_> {
     fn contiguous_payload(&self) -> &[u8] {
         self.payload
@@ -209,7 +218,7 @@ fn test_vec_as_slice(bytes: &Vec<u8>) -> &[u8] {
     bytes.as_slice()
 }
 
-impl UZeroCopyRxFrame for SegmentedCopyFrame {
+impl UFrameView for SegmentedCopyFrame {
     type PayloadReader<'a>
         = Cursor<Vec<u8>>
     where
@@ -237,6 +246,8 @@ impl UZeroCopyRxFrame for SegmentedCopyFrame {
             .map(test_vec_as_slice as fn(&Vec<u8>) -> &[u8])
     }
 }
+
+impl UZeroCopyRxLease for SegmentedCopyFrame {}
 
 #[repr(C, align(4))]
 struct AlignedVehiclePoseBytes([u8; mem::size_of::<VehiclePose>()]);
@@ -299,11 +310,11 @@ struct VehiclePoseTransport {
 }
 
 #[async_trait::async_trait]
-impl UZeroCopyTransport for VehiclePoseTransport {
+impl UZeroCopyTransportImpl for VehiclePoseTransport {
     type Tx = VehiclePoseTxBuffer;
-    type Rx = UOwnedFrame;
+    type Rx = UVecRxLease;
 
-    async fn loan_tx(&self, spec: UTxLoanSpec) -> Result<Self::Tx, UStatus> {
+    async fn loan_validated_tx(&self, spec: ValidatedTxLoanSpec) -> Result<Self::Tx, UStatus> {
         if spec.payload_len() != mem::size_of::<VehiclePose>() {
             return Err(UStatus::fail_with_code(
                 UCode::INVALID_ARGUMENT,
@@ -322,7 +333,7 @@ impl UZeroCopyTransport for VehiclePoseTransport {
         })
     }
 
-    async fn send_zero_copy(&self, buffer: Self::Tx) -> Result<(), UStatus> {
+    async fn send_validated_zero_copy(&self, buffer: Self::Tx) -> Result<(), UStatus> {
         let pose = *StableContainerPayload::<VehiclePose>::borrow_checked_payload(buffer.payload())
             .map_err(UStatus::from)?;
         self.sent
@@ -446,7 +457,7 @@ fn standard_encoding_maps_known_content_type() {
 fn owned_frame_uses_selected_payload_codec() {
     let topic = UUri::try_from("//my-vehicle/4210/1/B24D").unwrap();
     let frame = UOwnedFrame::from_serializable::<RawBytes, _>(
-        UFrameMetadata::publish(topic),
+        UFrameMetadata::publish_unchecked(topic),
         &&[0x0a_u8, 0x0b_u8][..],
     )
     .unwrap();
@@ -459,7 +470,7 @@ fn owned_frame_uses_selected_payload_codec() {
 fn owned_frame_uses_payload_codec_adapter_for_raw_bytes() {
     let topic = UUri::try_from("//my-vehicle/4210/1/B24D").unwrap();
     let frame = UOwnedFrame::from_payload_as::<RawBytes, [u8]>(
-        UFrameMetadata::publish(topic),
+        UFrameMetadata::publish_unchecked(topic),
         &[0x0a_u8, 0x0b_u8],
     )
     .unwrap();
@@ -473,9 +484,11 @@ fn owned_frame_uses_payload_codec_adapter_for_raw_bytes() {
 fn mcap_payload_borrows_archive_bytes() {
     let topic = UUri::try_from("//my-vehicle/4210/1/B24D").unwrap();
     let archive: &[u8] = b"\x89MCAP\r\nfixture";
-    let frame =
-        UOwnedFrame::from_payload_as::<McapPayload, [u8]>(UFrameMetadata::publish(topic), archive)
-            .unwrap();
+    let frame = UOwnedFrame::from_payload_as::<McapPayload, [u8]>(
+        UFrameMetadata::publish_unchecked(topic),
+        archive,
+    )
+    .unwrap();
 
     let borrowed = frame.borrow_payload_as::<McapPayload, [u8]>().unwrap();
     assert_eq!(frame.metadata().encoding(), Some(&McapPayload::encoding()));
@@ -487,7 +500,7 @@ fn stable_container_borrow_rejects_wrong_encoding() {
     let topic = UUri::try_from("//my-vehicle/4210/1/B24D").unwrap();
     let pose = VehiclePose { x: 10, y: 20 };
     let frame = BorrowedContiguousFrame {
-        metadata: UFrameMetadata::publish(topic).with_encoding(RawBytes::encoding()),
+        metadata: UFrameMetadata::publish_unchecked(topic).with_encoding(RawBytes::encoding()),
         payload: bytes_of_pose(&pose),
     };
 
@@ -501,12 +514,14 @@ fn stable_container_borrow_rejects_wrong_stable_type_name() {
     let topic = UUri::try_from("//my-vehicle/4210/1/B24D").unwrap();
     let pose = VehiclePose { x: 10, y: 20 };
     let frame = BorrowedContiguousFrame {
-        metadata: UFrameMetadata::publish(topic).with_encoding(stable_container_encoding(
-            "example.vehicle.OtherPose",
-            "fixed",
-            mem::size_of::<VehiclePose>(),
-            mem::align_of::<VehiclePose>(),
-        )),
+        metadata: UFrameMetadata::publish_unchecked(topic).with_encoding(
+            stable_container_encoding(
+                "example.vehicle.OtherPose",
+                "fixed",
+                mem::size_of::<VehiclePose>(),
+                mem::align_of::<VehiclePose>(),
+            ),
+        ),
         payload: bytes_of_pose(&pose),
     };
 
@@ -524,12 +539,14 @@ fn stable_container_borrow_rejects_wrong_variant() {
     let topic = UUri::try_from("//my-vehicle/4210/1/B24D").unwrap();
     let pose = VehiclePose { x: 10, y: 20 };
     let frame = BorrowedContiguousFrame {
-        metadata: UFrameMetadata::publish(topic).with_encoding(stable_container_encoding(
-            "example.vehicle.VehiclePose",
-            "dynamic",
-            mem::size_of::<VehiclePose>(),
-            mem::align_of::<VehiclePose>(),
-        )),
+        metadata: UFrameMetadata::publish_unchecked(topic).with_encoding(
+            stable_container_encoding(
+                "example.vehicle.VehiclePose",
+                "dynamic",
+                mem::size_of::<VehiclePose>(),
+                mem::align_of::<VehiclePose>(),
+            ),
+        ),
         payload: bytes_of_pose(&pose),
     };
 
@@ -547,12 +564,14 @@ fn stable_container_borrow_rejects_wrong_advertised_size() {
     let topic = UUri::try_from("//my-vehicle/4210/1/B24D").unwrap();
     let pose = VehiclePose { x: 10, y: 20 };
     let frame = BorrowedContiguousFrame {
-        metadata: UFrameMetadata::publish(topic).with_encoding(stable_container_encoding(
-            "example.vehicle.VehiclePose",
-            "fixed",
-            mem::size_of::<VehiclePose>() - 1,
-            mem::align_of::<VehiclePose>(),
-        )),
+        metadata: UFrameMetadata::publish_unchecked(topic).with_encoding(
+            stable_container_encoding(
+                "example.vehicle.VehiclePose",
+                "fixed",
+                mem::size_of::<VehiclePose>() - 1,
+                mem::align_of::<VehiclePose>(),
+            ),
+        ),
         payload: bytes_of_pose(&pose),
     };
 
@@ -570,12 +589,14 @@ fn stable_container_borrow_rejects_insufficient_advertised_alignment() {
     let topic = UUri::try_from("//my-vehicle/4210/1/B24D").unwrap();
     let pose = VehiclePose { x: 10, y: 20 };
     let frame = BorrowedContiguousFrame {
-        metadata: UFrameMetadata::publish(topic).with_encoding(stable_container_encoding(
-            "example.vehicle.VehiclePose",
-            "fixed",
-            mem::size_of::<VehiclePose>(),
-            mem::align_of::<VehiclePose>() / 2,
-        )),
+        metadata: UFrameMetadata::publish_unchecked(topic).with_encoding(
+            stable_container_encoding(
+                "example.vehicle.VehiclePose",
+                "fixed",
+                mem::size_of::<VehiclePose>(),
+                mem::align_of::<VehiclePose>() / 2,
+            ),
+        ),
         payload: bytes_of_pose(&pose),
     };
 
@@ -593,7 +614,7 @@ fn stable_container_borrow_rejects_wrong_payload_length() {
     let topic = UUri::try_from("//my-vehicle/4210/1/B24D").unwrap();
     let payload = vec![0_u8; mem::size_of::<VehiclePose>() - 1];
     let frame = BorrowedContiguousFrame {
-        metadata: UFrameMetadata::publish(topic)
+        metadata: UFrameMetadata::publish_unchecked(topic)
             .with_encoding(StableContainerPayload::<VehiclePose>::encoding()),
         payload: payload.as_slice(),
     };
@@ -620,7 +641,7 @@ fn stable_container_borrow_rejects_wrong_alignment() {
         .get(offset..offset + mem::size_of::<VehiclePose>())
         .unwrap();
     let frame = BorrowedContiguousFrame {
-        metadata: UFrameMetadata::publish(topic)
+        metadata: UFrameMetadata::publish_unchecked(topic)
             .with_encoding(StableContainerPayload::<VehiclePose>::encoding()),
         payload,
     };
@@ -638,7 +659,7 @@ fn stable_container_borrows_typed_payload() {
     let topic = UUri::try_from("//my-vehicle/4210/1/B24D").unwrap();
     let pose = VehiclePose { x: 10, y: 20 };
     let frame = BorrowedContiguousFrame {
-        metadata: UFrameMetadata::publish(topic)
+        metadata: UFrameMetadata::publish_unchecked(topic)
             .with_encoding(StableContainerPayload::<VehiclePose>::encoding()),
         payload: bytes_of_pose(&pose),
     };
@@ -657,7 +678,7 @@ fn stable_container_borrows_broad_padded_payload_from_initialized_bytes() {
     storage.0[0] = 1;
     storage.0[4..8].copy_from_slice(&2_u32.to_ne_bytes());
     let frame = BorrowedContiguousFrame {
-        metadata: UFrameMetadata::publish(topic)
+        metadata: UFrameMetadata::publish_unchecked(topic)
             .with_encoding(StableContainerPayload::<PaddedPose>::encoding()),
         payload: storage.0.as_slice(),
     };
@@ -673,12 +694,14 @@ fn stable_container_borrow_accepts_larger_advertised_alignment() {
     let topic = UUri::try_from("//my-vehicle/4210/1/B24D").unwrap();
     let pose = VehiclePose { x: 10, y: 20 };
     let frame = BorrowedContiguousFrame {
-        metadata: UFrameMetadata::publish(topic).with_encoding(stable_container_encoding(
-            "example.vehicle.VehiclePose",
-            "fixed",
-            mem::size_of::<VehiclePose>(),
-            mem::align_of::<VehiclePose>() * 2,
-        )),
+        metadata: UFrameMetadata::publish_unchecked(topic).with_encoding(
+            stable_container_encoding(
+                "example.vehicle.VehiclePose",
+                "fixed",
+                mem::size_of::<VehiclePose>(),
+                mem::align_of::<VehiclePose>() * 2,
+            ),
+        ),
         payload: bytes_of_pose(&pose),
     };
 
@@ -692,7 +715,7 @@ fn stable_container_borrows_typed_payload_from_loaned_rx() {
     let topic = UUri::try_from("//my-vehicle/4210/1/B24D").unwrap();
     let pose = VehiclePose { x: 10, y: 20 };
     let frame = BorrowedContiguousFrame {
-        metadata: UFrameMetadata::publish(topic)
+        metadata: UFrameMetadata::publish_unchecked(topic)
             .with_encoding(StableContainerPayload::<VehiclePose>::encoding()),
         payload: bytes_of_pose(&pose),
     };
@@ -795,7 +818,7 @@ fn zero_copy_conformance_helper_rejects_copied_fallback_as_loaned_rx() {
     let topic = UUri::try_from("//my-vehicle/4210/1/B24D").unwrap();
     let pose = VehiclePose { x: 10, y: 20 };
     let frame = CopiedContiguousFrame {
-        metadata: UFrameMetadata::publish(topic)
+        metadata: UFrameMetadata::publish_unchecked(topic)
             .with_encoding(StableContainerPayload::<VehiclePose>::encoding()),
         payload: bytes_of_pose(&pose),
     };
@@ -811,7 +834,7 @@ fn stable_container_owned_frame_encodes_payload_bytes() {
     let topic = UUri::try_from("//my-vehicle/4210/1/B24D").unwrap();
     let pose = VehiclePose { x: 10, y: 20 };
     let frame = UOwnedFrame::from_payload_as::<StableContainerPayload<VehiclePose>, VehiclePose>(
-        UFrameMetadata::publish(topic),
+        UFrameMetadata::publish_unchecked(topic),
         &pose,
     )
     .unwrap();
@@ -829,7 +852,10 @@ fn owned_frame_from_bytes_as_moves_bytes_without_payload_copy() {
     let payload = bytes::Bytes::from_static(b"\x89MCAP\r\nfixture");
     let payload_ptr = payload.as_ptr();
 
-    let frame = UOwnedFrame::from_bytes_as::<McapPayload>(UFrameMetadata::publish(topic), payload);
+    let frame = UOwnedFrame::from_bytes_as::<McapPayload>(
+        UFrameMetadata::publish_unchecked(topic),
+        payload,
+    );
 
     assert_eq!(frame.metadata().encoding(), Some(&McapPayload::encoding()));
     assert_eq!(frame.payload().unwrap().as_ptr(), payload_ptr);
@@ -842,7 +868,8 @@ fn owned_frame_from_encoded_payload_moves_bytes_without_payload_copy() {
     let payload_ptr = payload.as_ptr();
     let encoded = EncodedPayload::<RawBytes>::from_bytes(payload);
 
-    let frame = UOwnedFrame::from_encoded_payload(UFrameMetadata::publish(topic), encoded);
+    let frame =
+        UOwnedFrame::from_encoded_payload(UFrameMetadata::publish_unchecked(topic), encoded);
     let (metadata, payload) = frame.into_parts();
 
     assert_eq!(metadata.encoding(), Some(&RawBytes::encoding()));
@@ -853,7 +880,7 @@ fn owned_frame_from_encoded_payload_moves_bytes_without_payload_copy() {
 fn zero_copy_rx_decodes_payload_from_reader_as_new_codec_api() {
     let topic = UUri::try_from("//my-vehicle/4210/1/B24D").unwrap();
     let frame = BorrowedContiguousFrame {
-        metadata: UFrameMetadata::publish(topic).with_encoding(RawBytes::encoding()),
+        metadata: UFrameMetadata::publish_unchecked(topic).with_encoding(RawBytes::encoding()),
         payload: b"payload",
     };
 
@@ -868,7 +895,7 @@ fn zero_copy_rx_decodes_payload_from_reader_as_new_codec_api() {
 fn zero_copy_payload_copy_to_vec_accepts_exact_segmented_slices() {
     let topic = UUri::try_from("//my-vehicle/4210/1/B24D").unwrap();
     let frame = SegmentedCopyFrame {
-        metadata: UFrameMetadata::publish(topic).with_encoding(RawBytes::encoding()),
+        metadata: UFrameMetadata::publish_unchecked(topic).with_encoding(RawBytes::encoding()),
         payload_len: 7,
         segments: vec![b"pay".to_vec(), b"load".to_vec()],
     };
@@ -882,7 +909,7 @@ fn zero_copy_payload_copy_to_vec_accepts_exact_segmented_slices() {
 fn zero_copy_payload_copy_to_vec_rejects_short_segmented_slices() {
     let topic = UUri::try_from("//my-vehicle/4210/1/B24D").unwrap();
     let frame = SegmentedCopyFrame {
-        metadata: UFrameMetadata::publish(topic).with_encoding(RawBytes::encoding()),
+        metadata: UFrameMetadata::publish_unchecked(topic).with_encoding(RawBytes::encoding()),
         payload_len: 8,
         segments: vec![b"payload".to_vec()],
     };
@@ -898,7 +925,7 @@ fn zero_copy_payload_copy_to_vec_rejects_short_segmented_slices() {
 fn zero_copy_payload_copy_to_vec_rejects_long_segmented_slices() {
     let topic = UUri::try_from("//my-vehicle/4210/1/B24D").unwrap();
     let frame = SegmentedCopyFrame {
-        metadata: UFrameMetadata::publish(topic).with_encoding(RawBytes::encoding()),
+        metadata: UFrameMetadata::publish_unchecked(topic).with_encoding(RawBytes::encoding()),
         payload_len: 3,
         segments: vec![b"payload".to_vec()],
     };
@@ -918,7 +945,7 @@ fn zero_copy_payload_copy_to_vec_rejects_long_segmented_slices() {
 fn zero_copy_payload_copy_to_vec_reports_allocation_overflow() {
     let topic = UUri::try_from("//my-vehicle/4210/1/B24D").unwrap();
     let frame = SegmentedCopyFrame {
-        metadata: UFrameMetadata::publish(topic).with_encoding(RawBytes::encoding()),
+        metadata: UFrameMetadata::publish_unchecked(topic).with_encoding(RawBytes::encoding()),
         payload_len: usize::MAX,
         segments: Vec::new(),
     };
@@ -950,7 +977,7 @@ fn dynamic_payload_codec_registry_encodes_and_decodes_owned_values() {
 fn tx_buffer_layout_conformance_checks_length_and_alignment() {
     let topic = UUri::try_from("//my-vehicle/4210/1/B24D").unwrap();
     let mut buffer = UVecTxBuffer::with_alignment(
-        UFrameMetadata::publish(topic).with_encoding(RawBytes::encoding()),
+        UFrameMetadata::publish_unchecked(topic).with_encoding(RawBytes::encoding()),
         8,
         4,
     )
@@ -970,7 +997,7 @@ fn tx_buffer_layout_conformance_checks_length_and_alignment() {
 fn uninit_tx_buffer_layout_conformance_checks_length_and_alignment() {
     let topic = UUri::try_from("//my-vehicle/4210/1/B24D").unwrap();
     let mut buffer = UVecUninitTxBuffer::with_alignment(
-        UFrameMetadata::publish(topic).with_encoding(RawBytes::encoding()),
+        UFrameMetadata::publish_unchecked(topic).with_encoding(RawBytes::encoding()),
         8,
         4,
     )
@@ -989,7 +1016,7 @@ async fn stable_container_send_loaned_payload_initializes_and_sends() {
 
     transport
         .send_loaned_payload_as::<StableContainerPayload<VehiclePose>, VehiclePose>(
-            UFrameMetadata::publish(topic),
+            UFrameMetadata::publish_unchecked(topic),
             |payload| {
                 payload.x = 7;
                 payload.y = 9;
@@ -1018,7 +1045,7 @@ async fn stable_container_send_uninit_payload_initializes_and_sends_non_copy() {
 
     transport
         .send_uninit_loaned_payload_as::<StableContainerPayload<NonCopyPose>, NonCopyPose>(
-            UFrameMetadata::publish(topic),
+            UFrameMetadata::publish_unchecked(topic),
             |slot| {
                 Ok(slot.write(NonCopyPose {
                     x: 7,
@@ -1056,7 +1083,7 @@ async fn stable_container_send_uninit_payload_supports_unsafe_field_initializati
 
     transport
         .send_uninit_loaned_payload_as::<StableContainerPayload<NonCopyPose>, NonCopyPose>(
-            UFrameMetadata::publish(topic),
+            UFrameMetadata::publish_unchecked(topic),
             |mut slot| {
                 // SAFETY: This feature-gated test writes every field of
                 // `NonCopyPose`, including explicit padding, before commit.
@@ -1133,7 +1160,7 @@ async fn stable_container_unsafe_tx_hatch_sends_explicitly_initialized_padded_pa
     // writes all semantic fields, and only then returns an initialized marker.
     let send = unsafe {
         transport.send_uninit_stable_payload_unchecked::<PaddedPose>(
-            UFrameMetadata::publish(topic),
+            UFrameMetadata::publish_unchecked(topic),
             init_padded_pose,
         )
     };
@@ -1159,7 +1186,7 @@ async fn stable_container_send_uninit_payload_failed_init_does_not_send() {
 
     let error = transport
         .send_uninit_loaned_payload_as::<StableContainerPayload<VehiclePose>, VehiclePose>(
-            UFrameMetadata::publish(topic),
+            UFrameMetadata::publish_unchecked(topic),
             |_slot| Err(UWireError::invalid_payload("init failed")),
         )
         .await
@@ -1173,7 +1200,7 @@ async fn stable_container_send_uninit_payload_failed_init_does_not_send() {
 fn aligned_uvec_uninit_tx_buffer_initializes_hidden_padding_before_conversion() {
     let topic = UUri::try_from("//my-vehicle/4210/1/B24D").unwrap();
     let mut buffer = UVecUninitTxBuffer::with_alignment(
-        UFrameMetadata::publish(topic).with_encoding(RawBytes::encoding()),
+        UFrameMetadata::publish_unchecked(topic).with_encoding(RawBytes::encoding()),
         3,
         4096,
     )
@@ -1196,7 +1223,7 @@ async fn direct_uninit_byte_writer_requires_exact_length() {
 
     transport
         .send_uninit_loaned_bytes_as::<RawBytes>(
-            UFrameMetadata::publish(topic.clone()),
+            UFrameMetadata::publish_unchecked(topic.clone()),
             3,
             1,
             |mut writer| {
@@ -1217,7 +1244,7 @@ async fn direct_uninit_byte_writer_requires_exact_length() {
 
     let error = transport
         .send_uninit_loaned_bytes_as::<RawBytes>(
-            UFrameMetadata::publish(topic),
+            UFrameMetadata::publish_unchecked(topic),
             3,
             1,
             |mut writer| {
@@ -1289,7 +1316,7 @@ impl<'a> UDeserializer<'a, OtherNativeBytesPayload> for &'a [u8] {
 fn owned_frame_deserialize_rejects_wrong_payload_codec() {
     let topic = UUri::try_from("//my-vehicle/4210/1/B24D").unwrap();
     let frame = UOwnedFrame::from_serializable::<RawBytes, _>(
-        UFrameMetadata::publish(topic),
+        UFrameMetadata::publish_unchecked(topic),
         &&[0x0a_u8, 0x0b_u8][..],
     )
     .unwrap();
@@ -1303,8 +1330,8 @@ fn owned_frame_deserialize_rejects_wrong_payload_codec() {
 #[test]
 fn owned_frame_deserialize_accepts_matching_custom_encoding() {
     let topic = UUri::try_from("//my-vehicle/4210/1/B24D").unwrap();
-    let frame = UOwnedFrame::new(
-        UFrameMetadata::publish(topic).with_encoding(NativeBytesPayload::encoding()),
+    let frame = UOwnedFrame::with_payload_unchecked(
+        UFrameMetadata::publish_unchecked(topic).with_encoding(NativeBytesPayload::encoding()),
         vec![0x0a_u8, 0x0b_u8],
     );
 
@@ -1317,8 +1344,8 @@ fn owned_frame_deserialize_accepts_matching_custom_encoding() {
 #[test]
 fn owned_frame_deserialize_rejects_wrong_custom_encoding() {
     let topic = UUri::try_from("//my-vehicle/4210/1/B24D").unwrap();
-    let frame = UOwnedFrame::new(
-        UFrameMetadata::publish(topic).with_encoding(NativeBytesPayload::encoding()),
+    let frame = UOwnedFrame::with_payload_unchecked(
+        UFrameMetadata::publish_unchecked(topic).with_encoding(NativeBytesPayload::encoding()),
         vec![0x0a_u8, 0x0b_u8],
     );
 
@@ -1331,8 +1358,8 @@ fn owned_frame_deserialize_rejects_wrong_custom_encoding() {
 #[test]
 fn owned_frame_deserialize_rejects_custom_encoding_for_standard_decoder() {
     let topic = UUri::try_from("//my-vehicle/4210/1/B24D").unwrap();
-    let frame = UOwnedFrame::new(
-        UFrameMetadata::publish(topic).with_encoding(NativeBytesPayload::encoding()),
+    let frame = UOwnedFrame::with_payload_unchecked(
+        UFrameMetadata::publish_unchecked(topic).with_encoding(NativeBytesPayload::encoding()),
         vec![0x0a_u8, 0x0b_u8],
     );
 

@@ -21,25 +21,30 @@ use async_trait::async_trait;
 use up_rust::{
     payload::{
         EncodePayload, LoanPayload, LoanUninitPayload, PlacementDefault, StableContainerPayload,
+        StablePayload,
     },
     zero_copy::{
-        LoanedPayload, PayloadLoanProvenance, ULoanedContiguousZeroCopyRxFrame, UTxBuffer,
-        UUninitTxBuffer, UVecTxBuffer, UVecUninitTxBuffer, UZeroCopyRxFrame,
+        LoanedPayload, PayloadLoanProvenance, UFrameView, ULoanedContiguousZeroCopyRxFrame,
+        UTxBuffer, UUninitTxBuffer, UVecRxLease, UVecTxBuffer, UVecUninitTxBuffer,
+        UZeroCopyRxLease,
     },
     PayloadEncoding, UAttributes, UFrameMetadata, UMessageType, UUri, UUID,
 };
 
 #[cfg(feature = "expert-unsafe-payloads")]
-use up_rust::{UOwnedFrame, UStatus, UTxLoanSpec, UZeroCopyUninitTransport};
+use up_rust::UStatus;
 
 #[cfg(feature = "expert-unsafe-payloads")]
-use up_rust::zero_copy::{UZeroCopyTransport, UZeroCopyUninitTransportExt};
+use up_rust::zero_copy::{
+    UZeroCopyTransportImpl, UZeroCopyUninitTransportExt, UZeroCopyUninitTransportImpl,
+    ValidatedTxLoanSpec,
+};
 
 fn miri_publish_metadata(topic: UUri) -> UFrameMetadata {
     let id = UUID::from_u64_pair(0x0000_0000_0001_7000, 0x8010_1010_1010_1a1a)
         .expect("fixed UUID should be valid");
-    UFrameMetadata::new(
-        UAttributes::new(id, topic, None, UMessageType::Publish),
+    UFrameMetadata::new_unchecked(
+        UAttributes::new_unchecked(id, topic, None, UMessageType::Publish),
         None::<PayloadEncoding>,
     )
 }
@@ -91,7 +96,7 @@ struct LoanedSliceFrame<'a> {
     payload: &'a [u8],
 }
 
-impl UZeroCopyRxFrame for LoanedSliceFrame<'_> {
+impl UFrameView for LoanedSliceFrame<'_> {
     type PayloadReader<'a>
         = Cursor<&'a [u8]>
     where
@@ -122,6 +127,8 @@ impl UZeroCopyRxFrame for LoanedSliceFrame<'_> {
     }
 }
 
+impl UZeroCopyRxLease for LoanedSliceFrame<'_> {}
+
 impl ULoanedContiguousZeroCopyRxFrame for LoanedSliceFrame<'_> {
     fn loaned_contiguous_payload(&self) -> Result<LoanedPayload<'_>, up_rust::UWireError> {
         // SAFETY: The test frame keeps `payload` alive for `&self` and exposes
@@ -138,7 +145,7 @@ fn with_stable_payload<T, R>(
     f: impl FnOnce(&T) -> R,
 ) -> Result<R, up_rust::UWireError>
 where
-    T: up_rust::StablePayload,
+    T: StablePayload,
 {
     let frame = LoanedSliceFrame {
         metadata: miri_publish_metadata(UUri::try_from("//miri/4210/1/9000").unwrap())
@@ -157,11 +164,11 @@ struct MiriUninitTransport {
 
 #[cfg(feature = "expert-unsafe-payloads")]
 #[async_trait]
-impl UZeroCopyTransport for MiriUninitTransport {
+impl UZeroCopyTransportImpl for MiriUninitTransport {
     type Tx = UVecTxBuffer;
-    type Rx = UOwnedFrame;
+    type Rx = UVecRxLease;
 
-    async fn loan_tx(&self, spec: UTxLoanSpec) -> Result<Self::Tx, UStatus> {
+    async fn loan_validated_tx(&self, spec: ValidatedTxLoanSpec) -> Result<Self::Tx, UStatus> {
         UVecTxBuffer::with_alignment(
             spec.metadata().clone(),
             spec.payload_len(),
@@ -170,7 +177,7 @@ impl UZeroCopyTransport for MiriUninitTransport {
         .map_err(UStatus::from)
     }
 
-    async fn send_zero_copy(&self, buffer: Self::Tx) -> Result<(), UStatus> {
+    async fn send_validated_zero_copy(&self, buffer: Self::Tx) -> Result<(), UStatus> {
         *self.sent.lock().expect("sent lock poisoned") = Some(buffer);
         Ok(())
     }
@@ -178,10 +185,13 @@ impl UZeroCopyTransport for MiriUninitTransport {
 
 #[cfg(feature = "expert-unsafe-payloads")]
 #[async_trait]
-impl UZeroCopyUninitTransport for MiriUninitTransport {
+impl UZeroCopyUninitTransportImpl for MiriUninitTransport {
     type UninitTx = UVecUninitTxBuffer;
 
-    async fn loan_uninit_tx(&self, spec: UTxLoanSpec) -> Result<Self::UninitTx, UStatus> {
+    async fn loan_validated_uninit_tx(
+        &self,
+        spec: ValidatedTxLoanSpec,
+    ) -> Result<Self::UninitTx, UStatus> {
         UVecUninitTxBuffer::with_alignment(
             spec.metadata().clone(),
             spec.payload_len(),
