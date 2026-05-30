@@ -11,14 +11,17 @@
  * SPDX-License-Identifier: Apache-2.0
  ********************************************************************************/
 
+use std::any::Any;
+use std::collections::HashMap;
 use std::fmt::{Debug, Formatter};
 use std::hash::{Hash, Hasher};
 use std::num::TryFromIntError;
 use std::ops::Deref;
-use std::sync::Arc;
+use std::sync::{Arc, LazyLock, Mutex as StdMutex};
 
 use async_trait::async_trait;
 use bytes::Bytes;
+use tracing::warn;
 
 use crate::{
     payload::{
@@ -136,6 +139,161 @@ pub fn validate_frame_view_for_transport(
     frame: &(impl UFrameView + ?Sized),
 ) -> Result<(), UStatus> {
     validate_frame_metadata_for_payload(frame.metadata(), frame.has_payload())
+}
+
+#[derive(Clone, Debug, Eq, Hash, PartialEq)]
+struct ListenerRegistrationKey {
+    transport: usize,
+    source_filter: UUri,
+    sink_filter: Option<UUri>,
+    listener: usize,
+}
+
+static OWNED_LISTENER_REGISTRY: LazyLock<
+    StdMutex<HashMap<ListenerRegistrationKey, Arc<dyn UOwnedListener>>>,
+> = LazyLock::new(|| StdMutex::new(HashMap::new()));
+
+static ZERO_COPY_LISTENER_REGISTRY: LazyLock<
+    StdMutex<HashMap<ListenerRegistrationKey, Arc<dyn Any + Send + Sync>>>,
+> = LazyLock::new(|| StdMutex::new(HashMap::new()));
+
+fn transport_pointer<T: ?Sized>(transport: &T) -> usize {
+    let ptr = transport as *const T;
+    ptr.cast::<()>() as usize
+}
+
+fn owned_listener_pointer(listener: &Arc<dyn UOwnedListener>) -> usize {
+    Arc::as_ptr(listener).cast::<()>() as usize
+}
+
+fn zero_copy_listener_pointer<Rx>(listener: &Arc<dyn UZeroCopyListener<Rx>>) -> usize
+where
+    Rx: UZeroCopyRxLease + Send + 'static,
+{
+    Arc::as_ptr(listener).cast::<()>() as usize
+}
+
+fn listener_registration_key<T: ?Sized>(
+    transport: &T,
+    source_filter: &UUri,
+    sink_filter: Option<&UUri>,
+    listener: usize,
+) -> ListenerRegistrationKey {
+    ListenerRegistrationKey {
+        transport: transport_pointer(transport),
+        source_filter: source_filter.clone(),
+        sink_filter: sink_filter.cloned(),
+        listener,
+    }
+}
+
+struct ValidatingOwnedListener {
+    listener: Arc<dyn UOwnedListener>,
+}
+
+#[async_trait]
+impl UOwnedListener for ValidatingOwnedListener {
+    async fn on_receive_owned(&self, frame: UOwnedFrame) {
+        match validate_owned_frame_for_transport(&frame) {
+            Ok(()) => self.listener.on_receive_owned(frame).await,
+            Err(error) => warn!(%error, "dropping invalid owned frame before listener delivery"),
+        }
+    }
+}
+
+struct ValidatingZeroCopyListener<Rx>
+where
+    Rx: UZeroCopyRxLease + Send + 'static,
+{
+    listener: Arc<dyn UZeroCopyListener<Rx>>,
+}
+
+#[async_trait]
+impl<Rx> UZeroCopyListener<Rx> for ValidatingZeroCopyListener<Rx>
+where
+    Rx: UZeroCopyRxLease + Send + 'static,
+{
+    async fn on_receive_zero_copy(&self, frame: Rx) {
+        match validate_frame_view_for_transport(&frame) {
+            Ok(()) => self.listener.on_receive_zero_copy(frame).await,
+            Err(error) => {
+                warn!(%error, "dropping invalid zero-copy frame before listener delivery")
+            }
+        }
+    }
+}
+
+fn registered_owned_listener(
+    key: &ListenerRegistrationKey,
+    listener: Arc<dyn UOwnedListener>,
+) -> (Arc<dyn UOwnedListener>, bool) {
+    let mut registry = OWNED_LISTENER_REGISTRY
+        .lock()
+        .expect("owned listener registry lock poisoned");
+    if let Some(existing) = registry.get(key) {
+        return (existing.clone(), false);
+    }
+
+    let validating_listener: Arc<dyn UOwnedListener> =
+        Arc::new(ValidatingOwnedListener { listener });
+    registry.insert(key.clone(), validating_listener.clone());
+    (validating_listener, true)
+}
+
+fn registered_zero_copy_listener<Rx>(
+    key: &ListenerRegistrationKey,
+    listener: Arc<dyn UZeroCopyListener<Rx>>,
+) -> (Arc<dyn UZeroCopyListener<Rx>>, bool)
+where
+    Rx: UZeroCopyRxLease + Send + 'static,
+{
+    let mut registry = ZERO_COPY_LISTENER_REGISTRY
+        .lock()
+        .expect("zero-copy listener registry lock poisoned");
+    if let Some(existing) = registry.get(key) {
+        if let Ok(existing) = existing
+            .clone()
+            .downcast::<ValidatingZeroCopyListener<Rx>>()
+        {
+            let existing: Arc<dyn UZeroCopyListener<Rx>> = existing;
+            return (existing, false);
+        }
+    }
+
+    let validating_listener = Arc::new(ValidatingZeroCopyListener { listener });
+    let erased: Arc<dyn Any + Send + Sync> = validating_listener.clone();
+    registry.insert(key.clone(), erased);
+    let validating_listener: Arc<dyn UZeroCopyListener<Rx>> = validating_listener;
+    (validating_listener, true)
+}
+
+fn owned_listener_for_unregister(
+    key: &ListenerRegistrationKey,
+    fallback: Arc<dyn UOwnedListener>,
+) -> Arc<dyn UOwnedListener> {
+    OWNED_LISTENER_REGISTRY
+        .lock()
+        .expect("owned listener registry lock poisoned")
+        .get(key)
+        .cloned()
+        .unwrap_or(fallback)
+}
+
+fn zero_copy_listener_for_unregister<Rx>(
+    key: &ListenerRegistrationKey,
+    fallback: Arc<dyn UZeroCopyListener<Rx>>,
+) -> Arc<dyn UZeroCopyListener<Rx>>
+where
+    Rx: UZeroCopyRxLease + Send + 'static,
+{
+    ZERO_COPY_LISTENER_REGISTRY
+        .lock()
+        .expect("zero-copy listener registry lock poisoned")
+        .get(key)
+        .cloned()
+        .and_then(|listener| listener.downcast::<ValidatingZeroCopyListener<Rx>>().ok())
+        .map(|listener| listener as Arc<dyn UZeroCopyListener<Rx>>)
+        .unwrap_or(fallback)
 }
 
 /// Owned frame that has passed transport-boundary validation.
@@ -425,9 +583,10 @@ pub trait UOwnedTransportImpl: Send + Sync {
 
     /// Registers an owned listener after public filter validation.
     ///
-    /// Implementations must validate reconstructed frames before invoking the
-    /// listener. The public wrapper validates pull delivery, but listener
-    /// lifecycle semantics are implementation-owned.
+    /// The public wrapper passes a listener that validates reconstructed frames
+    /// before invoking the user listener. Implementations must keep the listener
+    /// object identity they receive so the public unregister path can remove the
+    /// same validating wrapper later.
     async fn register_validated_owned_listener(
         &self,
         _source_filter: &UUri,
@@ -549,13 +708,27 @@ where
         listener: Arc<dyn UOwnedListener>,
     ) -> Result<(), UStatus> {
         verify_filter_criteria(source_filter, sink_filter)?;
-        UOwnedTransportImpl::register_validated_owned_listener(
+        let key = listener_registration_key(
+            self,
+            source_filter,
+            sink_filter,
+            owned_listener_pointer(&listener),
+        );
+        let (listener, inserted) = registered_owned_listener(&key, listener);
+        let result = UOwnedTransportImpl::register_validated_owned_listener(
             self,
             source_filter,
             sink_filter,
             listener,
         )
-        .await
+        .await;
+        if result.is_err() && inserted {
+            OWNED_LISTENER_REGISTRY
+                .lock()
+                .expect("owned listener registry lock poisoned")
+                .remove(&key);
+        }
+        result
     }
 
     async fn unregister_owned_listener(
@@ -565,13 +738,27 @@ where
         listener: Arc<dyn UOwnedListener>,
     ) -> Result<(), UStatus> {
         verify_filter_criteria(source_filter, sink_filter)?;
-        UOwnedTransportImpl::unregister_validated_owned_listener(
+        let key = listener_registration_key(
+            self,
+            source_filter,
+            sink_filter,
+            owned_listener_pointer(&listener),
+        );
+        let listener = owned_listener_for_unregister(&key, listener);
+        let result = UOwnedTransportImpl::unregister_validated_owned_listener(
             self,
             source_filter,
             sink_filter,
             listener,
         )
-        .await
+        .await;
+        if result.is_ok() {
+            OWNED_LISTENER_REGISTRY
+                .lock()
+                .expect("owned listener registry lock poisoned")
+                .remove(&key);
+        }
+        result
     }
 }
 
@@ -689,8 +876,10 @@ pub trait UZeroCopyTransportImpl: Send + Sync {
 
     /// Registers a zero-copy listener after public filter validation.
     ///
-    /// Implementations must validate reconstructed receive leases before
-    /// invoking the listener.
+    /// The public wrapper passes a listener that validates reconstructed receive
+    /// leases before invoking the user listener. Implementations must keep the
+    /// listener object identity they receive so the public unregister path can
+    /// remove the same validating wrapper later.
     async fn register_validated_zero_copy_listener(
         &self,
         _source_filter: &UUri,
@@ -873,13 +1062,27 @@ where
         listener: Arc<dyn UZeroCopyListener<Self::Rx>>,
     ) -> Result<(), UStatus> {
         verify_filter_criteria(source_filter, sink_filter)?;
-        UZeroCopyTransportImpl::register_validated_zero_copy_listener(
+        let key = listener_registration_key(
+            self,
+            source_filter,
+            sink_filter,
+            zero_copy_listener_pointer(&listener),
+        );
+        let (listener, inserted) = registered_zero_copy_listener(&key, listener);
+        let result = UZeroCopyTransportImpl::register_validated_zero_copy_listener(
             self,
             source_filter,
             sink_filter,
             listener,
         )
-        .await
+        .await;
+        if result.is_err() && inserted {
+            ZERO_COPY_LISTENER_REGISTRY
+                .lock()
+                .expect("zero-copy listener registry lock poisoned")
+                .remove(&key);
+        }
+        result
     }
 
     async fn unregister_zero_copy_listener(
@@ -889,13 +1092,27 @@ where
         listener: Arc<dyn UZeroCopyListener<Self::Rx>>,
     ) -> Result<(), UStatus> {
         verify_filter_criteria(source_filter, sink_filter)?;
-        UZeroCopyTransportImpl::unregister_validated_zero_copy_listener(
+        let key = listener_registration_key(
+            self,
+            source_filter,
+            sink_filter,
+            zero_copy_listener_pointer(&listener),
+        );
+        let listener = zero_copy_listener_for_unregister(&key, listener);
+        let result = UZeroCopyTransportImpl::unregister_validated_zero_copy_listener(
             self,
             source_filter,
             sink_filter,
             listener,
         )
-        .await
+        .await;
+        if result.is_ok() {
+            ZERO_COPY_LISTENER_REGISTRY
+                .lock()
+                .expect("zero-copy listener registry lock poisoned")
+                .remove(&key);
+        }
+        result
     }
 }
 
@@ -1446,6 +1663,104 @@ mod tests {
         assert_eq!(*transport.send_count.lock().unwrap(), 0);
     }
 
+    #[derive(Default)]
+    struct CountingOwnedListener {
+        count: Mutex<usize>,
+    }
+
+    impl CountingOwnedListener {
+        fn count(&self) -> usize {
+            *self
+                .count
+                .lock()
+                .expect("owned listener count lock poisoned")
+        }
+    }
+
+    #[async_trait]
+    impl UOwnedListener for CountingOwnedListener {
+        async fn on_receive_owned(&self, _frame: UOwnedFrame) {
+            *self
+                .count
+                .lock()
+                .expect("owned listener count lock poisoned") += 1;
+        }
+    }
+
+    #[derive(Default)]
+    struct ListenerSpyOwnedTransport {
+        listener: Mutex<Option<Arc<dyn UOwnedListener>>>,
+    }
+
+    #[async_trait]
+    impl UOwnedTransportImpl for ListenerSpyOwnedTransport {
+        async fn send_validated_owned(&self, _frame: ValidatedOwnedFrame) -> Result<(), UStatus> {
+            Ok(())
+        }
+
+        async fn register_validated_owned_listener(
+            &self,
+            _source_filter: &UUri,
+            _sink_filter: Option<&UUri>,
+            listener: Arc<dyn UOwnedListener>,
+        ) -> Result<(), UStatus> {
+            *self.listener.lock().expect("listener lock poisoned") = Some(listener);
+            Ok(())
+        }
+
+        async fn unregister_validated_owned_listener(
+            &self,
+            _source_filter: &UUri,
+            _sink_filter: Option<&UUri>,
+            listener: Arc<dyn UOwnedListener>,
+        ) -> Result<(), UStatus> {
+            let mut registered = self.listener.lock().expect("listener lock poisoned");
+            match registered.as_ref() {
+                Some(existing) if Arc::ptr_eq(existing, &listener) => {
+                    *registered = None;
+                    Ok(())
+                }
+                _ => Err(UStatus::fail_with_code(
+                    UCode::INVALID_ARGUMENT,
+                    "unregistered listener identity did not match registered listener",
+                )),
+            }
+        }
+    }
+
+    #[tokio::test]
+    async fn owned_listener_wrapper_rejects_invalid_delivery_and_preserves_unregister_identity() {
+        let source = UUri::any();
+        let topic = UUri::try_from_parts("vehicle", 0x4210, 0x01, 0x9000).unwrap();
+        let transport = ListenerSpyOwnedTransport::default();
+        let listener = Arc::new(CountingOwnedListener::default());
+
+        transport
+            .register_owned_listener(&source, None, listener.clone())
+            .await
+            .unwrap();
+        let registered = transport
+            .listener
+            .lock()
+            .expect("listener lock poisoned")
+            .as_ref()
+            .expect("listener not registered")
+            .clone();
+
+        let invalid_frame = UOwnedFrame::with_payload_unchecked(
+            UFrameMetadata::publish_unchecked(topic),
+            bytes::Bytes::from_static(b"missing encoding"),
+        );
+        registered.on_receive_owned(invalid_frame).await;
+
+        assert_eq!(listener.count(), 0);
+        transport
+            .unregister_owned_listener(&source, None, listener)
+            .await
+            .unwrap();
+        assert!(transport.listener.lock().unwrap().is_none());
+    }
+
     #[tokio::test]
     async fn owned_transport_ext_sends_payload_as_codec() {
         let topic = UUri::try_from_parts("vehicle", 0x4210, 0x01, 0x9000).unwrap();
@@ -1580,6 +1895,114 @@ mod tests {
 
         assert_eq!(status.get_code(), UCode::INVALID_ARGUMENT);
         assert_eq!(*transport.send_count.lock().unwrap(), 0);
+    }
+
+    #[derive(Default)]
+    struct CountingZeroCopyListener {
+        count: Mutex<usize>,
+    }
+
+    impl CountingZeroCopyListener {
+        fn count(&self) -> usize {
+            *self
+                .count
+                .lock()
+                .expect("zero-copy listener count lock poisoned")
+        }
+    }
+
+    #[async_trait]
+    impl UZeroCopyListener<UVecRxLease> for CountingZeroCopyListener {
+        async fn on_receive_zero_copy(&self, _frame: UVecRxLease) {
+            *self
+                .count
+                .lock()
+                .expect("zero-copy listener count lock poisoned") += 1;
+        }
+    }
+
+    #[derive(Default)]
+    struct ListenerSpyZeroCopyTransport {
+        listener: Mutex<Option<Arc<dyn UZeroCopyListener<UVecRxLease>>>>,
+    }
+
+    #[async_trait]
+    impl UZeroCopyTransportImpl for ListenerSpyZeroCopyTransport {
+        type Tx = UVecTxBuffer;
+        type Rx = UVecRxLease;
+
+        async fn loan_validated_tx(&self, spec: ValidatedTxLoanSpec) -> Result<Self::Tx, UStatus> {
+            Ok(UVecTxBuffer::new(spec.into_metadata(), 0))
+        }
+
+        async fn send_validated_zero_copy(&self, _buffer: Self::Tx) -> Result<(), UStatus> {
+            Ok(())
+        }
+
+        async fn register_validated_zero_copy_listener(
+            &self,
+            _source_filter: &UUri,
+            _sink_filter: Option<&UUri>,
+            listener: Arc<dyn UZeroCopyListener<Self::Rx>>,
+        ) -> Result<(), UStatus> {
+            *self.listener.lock().expect("listener lock poisoned") = Some(listener);
+            Ok(())
+        }
+
+        async fn unregister_validated_zero_copy_listener(
+            &self,
+            _source_filter: &UUri,
+            _sink_filter: Option<&UUri>,
+            listener: Arc<dyn UZeroCopyListener<Self::Rx>>,
+        ) -> Result<(), UStatus> {
+            let mut registered = self.listener.lock().expect("listener lock poisoned");
+            match registered.as_ref() {
+                Some(existing) if Arc::ptr_eq(existing, &listener) => {
+                    *registered = None;
+                    Ok(())
+                }
+                _ => Err(UStatus::fail_with_code(
+                    UCode::INVALID_ARGUMENT,
+                    "unregistered listener identity did not match registered listener",
+                )),
+            }
+        }
+    }
+
+    #[tokio::test]
+    async fn zero_copy_listener_wrapper_rejects_invalid_delivery_and_preserves_unregister_identity()
+    {
+        let source = UUri::any();
+        let topic = UUri::try_from_parts("vehicle", 0x4210, 0x01, 0x9000).unwrap();
+        let transport = ListenerSpyZeroCopyTransport::default();
+        let listener = Arc::new(CountingZeroCopyListener::default());
+
+        transport
+            .register_zero_copy_listener(&source, None, listener.clone())
+            .await
+            .unwrap();
+        let registered = transport
+            .listener
+            .lock()
+            .expect("listener lock poisoned")
+            .as_ref()
+            .expect("listener not registered")
+            .clone();
+
+        let invalid_frame = UOwnedFrame::with_payload_unchecked(
+            UFrameMetadata::publish_unchecked(topic),
+            bytes::Bytes::from_static(b"missing encoding"),
+        );
+        registered
+            .on_receive_zero_copy(UVecRxLease::new(invalid_frame))
+            .await;
+
+        assert_eq!(listener.count(), 0);
+        transport
+            .unregister_zero_copy_listener(&source, None, listener)
+            .await
+            .unwrap();
+        assert!(transport.listener.lock().unwrap().is_none());
     }
 
     #[derive(Default)]

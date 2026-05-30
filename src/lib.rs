@@ -27,7 +27,12 @@ Publish, Notification, Request, or Response frame, then send it with an
 
 For discoverability, the same public types are grouped by role under [`frame`],
 [`frame_wire`], [`payload`], [`transport`], [`zero_copy`], and [`prelude`]. The
-crate root keeps the most common re-exports for short examples.
+crate root keeps common application-facing frame, URI/status, payload-codec, and
+owned-transport re-exports for short examples. Transport implementation helpers
+and validators remain root-visible because owned transport implementations use
+them to share the same public boundary checks as application sends; they are also
+grouped under [`transport`]. Advanced zero-copy and unsafe payload surfaces
+require role-module imports instead of root imports.
 
 # Advanced Paths
 

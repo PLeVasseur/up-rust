@@ -330,7 +330,7 @@ Typed frame deserialization checks `PayloadEncoding` before decoding bytes. If a
 
 Use `UFrameBuilder` or `UFrameMetadata::try_publish`, `try_notification`, `try_request`, and `try_response` when constructing application frames. These checked paths validate message IDs, URI roles, request TTL, RPC priority, response request IDs, and message-type-specific fields.
 
-The shorter `UFrameMetadata::publish`, `notification`, `request`, and `response` constructors are intentionally unchecked convenience helpers. They are useful in tests, adapters, and low-level code that validates separately with `UAttributes::validate` or `UFrameMetadata::validate`.
+The explicit `UFrameMetadata::publish_unchecked`, `notification_unchecked`, `request_unchecked`, and `response_unchecked` constructors skip validation. Use them only in tests, adapters, and low-level receive/projection code that validates separately with `UAttributes::validate`, `UFrameMetadata::validate`, `UOwnedFrame::try_from_parts`, or the public transport boundary.
 
 Native domain types with invariants keep their fields private. Use `UUri::try_from_parts`, `UUri::try_from`, `UUID::build`, `UUID::from_u64_pair`, and accessors such as `UUri::authority_name`, `UUri::ue_id`, `UUri::resource_id_raw`, `UUID::msb`, and `UUID::lsb` instead of struct literals or field mutation. Use `from_parts_unchecked` helpers only when an adapter has already validated data or needs to preserve wire-level values before explicit validation.
 

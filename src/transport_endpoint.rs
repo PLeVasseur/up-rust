@@ -717,7 +717,7 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn endpoint_preserves_payload_even_when_encoding_is_missing() {
+    async fn endpoint_drops_payload_when_encoding_is_missing() {
         let transport = Arc::new(MemoryZeroCopyTransport::default());
         let endpoint = UOwnedFrameEndpoint::from_zero_copy_copying_adapter(transport.clone());
         let topic = UUri::try_from_parts("vehicle", 0x4210, 1, 0x9000).expect("valid topic");
@@ -732,10 +732,6 @@ mod tests {
         transport.inject(frame).await;
 
         let frames = listener.0.lock().expect("frames lock poisoned");
-        assert_eq!(frames.len(), 1);
-        let received = frames.first().expect("one received frame");
-        assert!(received.has_payload());
-        assert_eq!(received.payload_bytes(), b"payload");
-        assert!(received.metadata().encoding().is_none());
+        assert!(frames.is_empty());
     }
 }
