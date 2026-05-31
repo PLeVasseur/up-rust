@@ -1,0 +1,5 @@
+error: StablePayload fields must not be raw pointers
+ --> tests/ui/stable_payload/stable_payload_init_unsupported_field.rs:7:12
+  |
+7 |     value: *const u32,
+  |            ^^^^^^^^^^

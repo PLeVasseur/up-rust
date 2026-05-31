@@ -67,6 +67,43 @@ Use `#[stable_payload(type_name = "...")]` on `#[repr(C)]` or
 or encode. Runtime-length slice payloads are reserved for a future API; this
 release only emits and accepts `variant=fixed`.
 
+## Choosing a payload send path
+
+Use protobuf or another owned encode/decode path for interoperability, schema
+evolution, logging, persistence, control-plane messages, and untrusted inputs.
+Use [`zero_copy::UZeroCopyTransportExt::send_loaned_payload_as`] with
+[`payload::StableContainerPayload`] for small and medium stable payloads where
+`&mut T` ergonomics matter; that helper must initialize a valid `T` before
+returning `&mut T`, which can include a full zero-initialization pass. Use
+[`zero_copy::UZeroCopyUninitTransportExt::send_uninit_loaned_payload_as`] when
+the caller already has one complete `T` value, but avoid it for huge arrays when
+constructing the temporary value is the cost you are trying to avoid. Use
+[`zero_copy::UZeroCopyUninitTransportExt::send_uninit_stable_payload_as`] with
+`#[derive(StablePayloadInit)]` for high-rate or large fixed-size stable payloads
+that should be initialized directly in uninitialized loan storage without a
+blanket zero pass.
+
+`StablePayloadInit` is not limited to `ByteBackedStablePayload`: generated
+initializers can support padded stable payloads by initializing only implicit and
+trailing padding gaps internally, while typed setters initialize semantic fields.
+The generated builder and typestate names are implementation details; user code
+should call named field setters, nested builders, array helpers, and `finish()`.
+Missing fields, duplicate setters, and incomplete nested builders are compile-time
+errors.
+
+The receive side is unchanged. Stable-container frames sent by the initialized
+helper, whole-value uninit helper, generated no-zero initializer, or expert unsafe
+path are borrowed with the existing loan-backed
+[`zero_copy::ULoanedContiguousZeroCopyRxFrame::borrow_stable_payload`] API. The
+borrowed `&T` is tied to the receive lease lifetime; copy out fields if they must
+outlive the frame. A merely contiguous owned or copied payload is not enough for
+true stable zero-copy receive. Stable borrow validates metadata, size, alignment,
+and loan provenance, but it is a trusted-domain contract rather than protobuf-style
+semantic validation of arbitrary bytes. Stable-container compatibility uses type
+name, variant, size, and alignment; use versioned stable type names for
+incompatible layout or semantic changes. Expert unsafe payload APIs remain for
+FFI/codegen specialists and are not required for ordinary large stable payloads.
+
 # Features
 
 * `util` enables in-crate utility implementations such as the local transport
@@ -100,7 +137,7 @@ Service-specific data transfer objects are grouped under modules such as
 
 extern crate self as up_rust;
 
-pub use up_rust_macros::{ByteBackedStablePayload, StablePayload};
+pub use up_rust_macros::{ByteBackedStablePayload, StablePayload, StablePayloadInit};
 
 #[cfg(feature = "util")]
 #[cfg_attr(docsrs, doc(cfg(feature = "util")))]
@@ -160,7 +197,10 @@ pub use ustatus::{UCode, UStatus};
 
 #[doc(hidden)]
 pub mod __derive_support {
-    pub use crate::uframe::ByteBackedStablePayloadField;
+    pub use crate::uframe::{
+        ByteBackedStablePayloadField, StablePayloadInitSet, StablePayloadInitSlot,
+        StablePayloadInitUnset,
+    };
 }
 
 mod utransport;
@@ -204,13 +244,14 @@ pub mod payload {
     pub use crate::uframe::{
         assert_stable_payload_byte_backed_uninit, stable_payload_supports_byte_backed_uninit,
         BorrowPayload, ByteBackedStablePayload, BytePayloadCodec, CustomPayloadEncoding,
-        DecodePayload, DynPayloadCodec, EncodePayload, EncodedPayload, LoanPayload,
-        LoanUninitPayload, LoanedInitPayload, LoanedUninitPayload, McapPayload, PayloadCodec,
-        PayloadCodecCapabilities, PayloadCodecRegistry, PayloadEncoding, PayloadEncodingError,
-        PayloadFormat, PayloadLayout, PlacementDefault, RawBytes, ReadDecodePayload,
-        StableContainerPayload, StableContainerPayloadInfo, StablePayload, StablePayloadVariant,
-        StableTypeDetail, TypedPayloadCodec, UDeserializer, UErasedSerializer, UPayloadFormat,
-        UReadDeserializer, USerializer, UWireError, ZeroCopySend,
+        DecodePayload, DynPayloadCodec, EncodePayload, EncodedPayload, InitializedStablePayload,
+        LoanPayload, LoanUninitPayload, LoanedInitPayload, LoanedUninitPayload, McapPayload,
+        PayloadCodec, PayloadCodecCapabilities, PayloadCodecRegistry, PayloadEncoding,
+        PayloadEncodingError, PayloadFormat, PayloadLayout, PlacementDefault, RawBytes,
+        ReadDecodePayload, StableContainerPayload, StableContainerPayloadInfo, StablePayload,
+        StablePayloadInit, StablePayloadInitCompleteValue, StablePayloadVariant, StableTypeDetail,
+        TypedPayloadCodec, UDeserializer, UErasedSerializer, UPayloadFormat, UReadDeserializer,
+        USerializer, UWireError, ZeroCopySend,
     };
     #[cfg(any(
         feature = "unsafe-stable-payload-tx",
@@ -268,8 +309,8 @@ pub mod prelude {
         frame_wire::{UFrameWireError, UFrameWireFormat},
         payload::{
             BorrowPayload, BytePayloadCodec, DecodePayload, EncodePayload, EncodedPayload,
-            McapPayload, PayloadCodec, PayloadEncoding, PayloadFormat, RawBytes, UDeserializer,
-            UPayloadFormat, USerializer, UWireError,
+            InitializedStablePayload, McapPayload, PayloadCodec, PayloadEncoding, PayloadFormat,
+            RawBytes, StablePayloadInit, UDeserializer, UPayloadFormat, USerializer, UWireError,
         },
         transport::{UOwnedListener, UOwnedTransport, UOwnedTransportExt},
         UCode, UStatus, UUri, UUID,

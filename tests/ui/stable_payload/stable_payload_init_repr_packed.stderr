@@ -1,0 +1,5 @@
+error: StablePayload does not support repr(packed)
+ --> tests/ui/stable_payload/stable_payload_init_repr_packed.rs:3:11
+  |
+3 | #[repr(C, packed)]
+  |           ^^^^^^

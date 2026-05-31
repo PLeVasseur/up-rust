@@ -1,0 +1,25 @@
+error[E0599]: no method named `header` found for struct `__UpRustStablePayloadInitForDuplicateNested<'_, StablePayloadInitSet>` in the current scope
+  --> tests/ui/stable_payload/stable_payload_init_duplicate_nested.rs:21:10
+   |
+11 |   #[derive(StablePayload, StablePayloadInit)]
+   |                           ----------------- method `header` not found for this struct
+...
+20 | /     init.header(|header| header.sequence(1).finish())?
+21 | |         .header(|header| header.sequence(2).finish())?
+   | |         -^^^^^^ method not found in `__UpRustStablePayloadInitForDuplicateNested<'_, StablePayloadInitSet>`
+   | |_________|
+   |
+   |
+   = note: the method was found for
+           - `__UpRustStablePayloadInitForDuplicateNested<'__up_rust_payload, StablePayloadInitUnset>`
+
+error[E0282]: type annotations needed
+  --> tests/ui/stable_payload/stable_payload_init_duplicate_nested.rs:21:18
+   |
+21 |         .header(|header| header.sequence(2).finish())?
+   |                  ^^^^^^  ------ type must be known at this point
+   |
+help: consider giving this closure parameter an explicit type
+   |
+21 |         .header(|header: /* Type */| header.sequence(2).finish())?
+   |                        ++++++++++++

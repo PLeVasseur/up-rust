@@ -1,0 +1,11 @@
+error[E0599]: no method named `checksum` found for struct `__UpRustStablePayloadInitForDuplicateScalar<'_, StablePayloadInitSet>` in the current scope
+  --> tests/ui/stable_payload/stable_payload_init_duplicate_scalar.rs:13:22
+   |
+ 4 | #[derive(StablePayload, StablePayloadInit)]
+   |                         ----------------- method `checksum` not found for this struct
+...
+13 |     init.checksum(1).checksum(2).finish()
+   |                      ^^^^^^^^ method not found in `__UpRustStablePayloadInitForDuplicateScalar<'_, StablePayloadInitSet>`
+   |
+   = note: the method was found for
+           - `__UpRustStablePayloadInitForDuplicateScalar<'__up_rust_payload, StablePayloadInitUnset>`

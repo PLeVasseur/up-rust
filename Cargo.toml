@@ -136,6 +136,10 @@ name = "stable_container_payload"
 required-features = ["util"]
 
 [[example]]
+name = "stable_payload_no_zero_init"
+required-features = ["util"]
+
+[[example]]
 name = "protobuf_payload_codec"
 required-features = ["protobuf-wire", "util"]
 

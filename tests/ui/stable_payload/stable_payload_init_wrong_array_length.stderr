@@ -1,0 +1,13 @@
+error[E0308]: mismatched types
+  --> tests/ui/stable_payload/stable_payload_init_wrong_array_length.rs:13:29
+   |
+13 |     init.payload_from_array(&[1, 2, 3]).finish()
+   |          ------------------ ^^^^^^^^^^ expected an array with a size of 4, found one with a size of 3
+   |          |
+   |          arguments to this method are incorrect
+   |
+note: method defined here
+  --> tests/ui/stable_payload/stable_payload_init_wrong_array_length.rs:7:5
+   |
+ 7 |     payload: [u8; 4],
+   |     ^^^^^^^

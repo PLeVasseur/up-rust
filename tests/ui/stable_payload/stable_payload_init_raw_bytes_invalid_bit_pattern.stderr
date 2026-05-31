@@ -1,0 +1,8 @@
+error[E0599]: no method named `flag_from_slice` found for struct `__UpRustStablePayloadInitForRawBool<'__up_rust_payload, __UpRustField0>` in the current scope
+  --> tests/ui/stable_payload/stable_payload_init_raw_bytes_invalid_bit_pattern.rs:13:10
+   |
+ 4 | #[derive(StablePayload, StablePayloadInit)]
+   |                         ----------------- method `flag_from_slice` not found for this struct
+...
+13 |     init.flag_from_slice(&[1])?.finish()
+   |          ^^^^^^^^^^^^^^^ method not found in `__UpRustStablePayloadInitForRawBool<'a, StablePayloadInitUnset>`

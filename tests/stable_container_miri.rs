@@ -21,12 +21,11 @@ use async_trait::async_trait;
 use up_rust::{
     payload::{
         EncodePayload, LoanPayload, LoanUninitPayload, PlacementDefault, StableContainerPayload,
-        StablePayload,
+        StablePayload, StablePayloadInit,
     },
     zero_copy::{
         LoanedPayload, PayloadLoanProvenance, UFrameView, ULoanedContiguousZeroCopyRxFrame,
-        UTxBuffer, UUninitTxBuffer, UVecRxLease, UVecTxBuffer, UVecUninitTxBuffer,
-        UZeroCopyRxLease,
+        UTxBuffer, UUninitTxBuffer, UVecTxBuffer, UVecUninitTxBuffer, UZeroCopyRxLease,
     },
     PayloadEncoding, UAttributes, UFrameMetadata, UMessageType, UUri, UUID,
 };
@@ -36,7 +35,7 @@ use up_rust::UStatus;
 
 #[cfg(feature = "expert-unsafe-payloads")]
 use up_rust::zero_copy::{
-    UZeroCopyTransportImpl, UZeroCopyUninitTransportExt, UZeroCopyUninitTransportImpl,
+    UVecRxLease, UZeroCopyTransportImpl, UZeroCopyUninitTransportExt, UZeroCopyUninitTransportImpl,
     ValidatedTxLoanSpec,
 };
 
@@ -60,6 +59,7 @@ fn miri_publish_metadata(topic: UUri) -> UFrameMetadata {
     PlacementDefault,
     up_rust::StablePayload,
     up_rust::ByteBackedStablePayload,
+    up_rust::StablePayloadInit,
 )]
 #[stable_payload(type_name = "example.miri.VehiclePose")]
 struct VehiclePose {
@@ -84,11 +84,25 @@ struct NonCopyPose {
 }
 
 #[repr(C)]
-#[derive(Debug, Eq, PartialEq, up_rust::StablePayload)]
+#[derive(Debug, Eq, PartialEq, up_rust::StablePayload, up_rust::StablePayloadInit)]
 #[stable_payload(type_name = "example.miri.PaddedPose")]
 struct PaddedPose {
     small: u8,
     large: u32,
+}
+
+#[repr(C)]
+#[derive(
+    Debug,
+    Eq,
+    PartialEq,
+    up_rust::StablePayload,
+    up_rust::ByteBackedStablePayload,
+    up_rust::StablePayloadInit,
+)]
+#[stable_payload(type_name = "example.miri.ByteArrayPayload")]
+struct ByteArrayPayload {
+    payload: [u8; 16],
 }
 
 struct LoanedSliceFrame<'a> {
@@ -345,6 +359,110 @@ fn uninit_buffer_initializes_hidden_padding_under_miri() {
     // initializes hidden alignment padding before conversion.
     let buffer = unsafe { buffer.assume_payload_init() };
     assert_eq!(buffer.payload(), b"abc");
+}
+
+#[test]
+fn stable_payload_init_no_zero_borrow_is_miri_friendly() {
+    let topic = UUri::try_from("//miri/4210/1/9007").unwrap();
+    let mut buffer = UVecUninitTxBuffer::with_alignment(
+        miri_publish_metadata(topic)
+            .with_encoding(StableContainerPayload::<VehiclePose>::encoding()),
+        mem::size_of::<VehiclePose>(),
+        mem::align_of::<VehiclePose>(),
+    )
+    .unwrap();
+
+    {
+        let init = VehiclePose::init_from_uninit_payload(buffer.payload_uninit_mut()).unwrap();
+        let _initialized = init.x(41).y(43).finish().unwrap();
+    }
+
+    // SAFETY: The generated initializer reached `finish()`, proving every
+    // transported byte in the visible payload range is initialized.
+    let buffer = unsafe { buffer.assume_payload_init() };
+    with_stable_payload::<VehiclePose, _>(
+        StableContainerPayload::<VehiclePose>::encoding(),
+        buffer.payload(),
+        |borrowed| assert_eq!(borrowed, &VehiclePose { x: 41, y: 43 }),
+    )
+    .unwrap();
+}
+
+#[test]
+fn padded_stable_payload_init_no_zero_borrow_is_miri_friendly() {
+    let topic = UUri::try_from("//miri/4210/1/9008").unwrap();
+    let mut buffer = UVecUninitTxBuffer::with_alignment(
+        miri_publish_metadata(topic)
+            .with_encoding(StableContainerPayload::<PaddedPose>::encoding()),
+        mem::size_of::<PaddedPose>(),
+        mem::align_of::<PaddedPose>(),
+    )
+    .unwrap();
+
+    {
+        let init = PaddedPose::init_from_uninit_payload(buffer.payload_uninit_mut()).unwrap();
+        let _initialized = init.large(47).small(45).finish().unwrap();
+    }
+
+    // SAFETY: The generated initializer reached `finish()`, including generated
+    // initialization of the implicit padding gap.
+    let buffer = unsafe { buffer.assume_payload_init() };
+    with_stable_payload::<PaddedPose, _>(
+        StableContainerPayload::<PaddedPose>::encoding(),
+        buffer.payload(),
+        |borrowed| {
+            assert_eq!(borrowed.small, 45);
+            assert_eq!(borrowed.large, 47);
+        },
+    )
+    .unwrap();
+}
+
+#[test]
+fn stable_payload_init_slice_mismatch_does_not_commit_under_miri() {
+    let topic = UUri::try_from("//miri/4210/1/9009").unwrap();
+    let mut buffer = UVecUninitTxBuffer::with_alignment(
+        miri_publish_metadata(topic)
+            .with_encoding(StableContainerPayload::<ByteArrayPayload>::encoding()),
+        mem::size_of::<ByteArrayPayload>(),
+        mem::align_of::<ByteArrayPayload>(),
+    )
+    .unwrap();
+
+    let init = ByteArrayPayload::init_from_uninit_payload(buffer.payload_uninit_mut()).unwrap();
+    let err = match init.payload_from_slice(&[0, 1, 2]) {
+        Ok(_) => panic!("wrong length unexpectedly succeeded"),
+        Err(error) => error,
+    };
+
+    assert!(err.to_string().contains("invalid payload length"));
+}
+
+#[test]
+fn stable_payload_init_array_fill_is_miri_friendly() {
+    let topic = UUri::try_from("//miri/4210/1/9010").unwrap();
+    let mut buffer = UVecUninitTxBuffer::with_alignment(
+        miri_publish_metadata(topic)
+            .with_encoding(StableContainerPayload::<ByteArrayPayload>::encoding()),
+        mem::size_of::<ByteArrayPayload>(),
+        mem::align_of::<ByteArrayPayload>(),
+    )
+    .unwrap();
+
+    {
+        let init = ByteArrayPayload::init_from_uninit_payload(buffer.payload_uninit_mut()).unwrap();
+        let _initialized = init.payload_fill(0x5a).finish().unwrap();
+    }
+
+    // SAFETY: The generated fill helper initialized the complete byte array and
+    // `finish()` returned the completion proof.
+    let buffer = unsafe { buffer.assume_payload_init() };
+    with_stable_payload::<ByteArrayPayload, _>(
+        StableContainerPayload::<ByteArrayPayload>::encoding(),
+        buffer.payload(),
+        |borrowed| assert_eq!(borrowed.payload, [0x5a; 16]),
+    )
+    .unwrap();
 }
 
 #[cfg(any(

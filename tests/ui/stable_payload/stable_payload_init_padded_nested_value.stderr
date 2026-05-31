@@ -1,0 +1,26 @@
+error[E0277]: the trait bound `PaddedHeader: StablePayloadInitCompleteValue<PaddedHeader>` is not satisfied
+  --> tests/ui/stable_payload/stable_payload_init_padded_nested_value.rs:21:23
+   |
+21 |     init.header_value(PaddedHeader { small: 1, large: 2 })
+   |          ------------ ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ unsatisfied trait bound
+   |          |
+   |          required by a bound introduced by this call
+   |
+help: the trait `ByteBackedStablePayload` is not implemented for `PaddedHeader`
+  --> tests/ui/stable_payload/stable_payload_init_padded_nested_value.rs:6:1
+   |
+ 6 | struct PaddedHeader {
+   | ^^^^^^^^^^^^^^^^^^^
+help: the trait `StablePayloadInitCompleteValue<[T; N]>` is implemented for `[T; N]`
+  --> src/uframe/payload.rs
+   |
+   | / impl<T, const N: usize> StablePayloadInitCompleteValue<[T; N]> for [T; N]
+   | | where
+   | |     T: ByteBackedStablePayloadField,
+   | |____________________________________^
+   = note: required for `PaddedHeader` to implement `StablePayloadInitCompleteValue<PaddedHeader>`
+note: required by a bound in `__UpRustStablePayloadInitForPaddedNestedValue::<'__up_rust_payload, StablePayloadInitUnset>::header_value`
+  --> tests/ui/stable_payload/stable_payload_init_padded_nested_value.rs:15:5
+   |
+15 |     header: PaddedHeader,
+   |     ^^^^^^ required by this bound in `__UpRustStablePayloadInitForPaddedNestedValue::<'__up_rust_payload, StablePayloadInitUnset>::header_value`

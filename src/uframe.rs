@@ -32,12 +32,14 @@ pub use loaned_frame::{copy_loaned_frame_payload_to_tx, LoanedFrame, ZeroCopyLoa
 pub use payload::{
     assert_stable_payload_byte_backed_uninit, stable_payload_supports_byte_backed_uninit,
     BorrowPayload, ByteBackedStablePayload, ByteBackedStablePayloadField, BytePayloadCodec,
-    DecodePayload, DynPayloadCodec, EncodePayload, EncodedPayload, LoanPayload, LoanUninitPayload,
-    LoanedInitPayload, LoanedUninitPayload, McapPayload, PayloadCodec, PayloadCodecCapabilities,
-    PayloadCodecRegistry, PayloadFormat, PayloadLayout, PlacementDefault, RawBytes,
-    ReadDecodePayload, StableContainerPayload, StableContainerPayloadInfo, StablePayload,
-    StablePayloadVariant, StableTypeDetail, TypedPayloadCodec, UDeserializer, UErasedSerializer,
-    UReadDeserializer, USerializer, UWireError, ZeroCopySend,
+    DecodePayload, DynPayloadCodec, EncodePayload, EncodedPayload, InitializedStablePayload,
+    LoanPayload, LoanUninitPayload, LoanedInitPayload, LoanedUninitPayload, McapPayload,
+    PayloadCodec, PayloadCodecCapabilities, PayloadCodecRegistry, PayloadFormat, PayloadLayout,
+    PlacementDefault, RawBytes, ReadDecodePayload, StableContainerPayload,
+    StableContainerPayloadInfo, StablePayload, StablePayloadInit, StablePayloadInitCompleteValue,
+    StablePayloadInitSet, StablePayloadInitSlot, StablePayloadInitUnset, StablePayloadVariant,
+    StableTypeDetail, TypedPayloadCodec, UDeserializer, UErasedSerializer, UReadDeserializer,
+    USerializer, UWireError, ZeroCopySend,
 };
 #[cfg(any(
     feature = "unsafe-stable-payload-tx",

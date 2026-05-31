@@ -1,0 +1,11 @@
+error[E0599]: no method named `payload_fill` found for struct `__UpRustStablePayloadInitForDuplicateArray<'_, StablePayloadInitSet>` in the current scope
+  --> tests/ui/stable_payload/stable_payload_init_duplicate_array.rs:13:26
+   |
+ 4 | #[derive(StablePayload, StablePayloadInit)]
+   |                         ----------------- method `payload_fill` not found for this struct
+...
+13 |     init.payload_fill(1).payload_fill(2).finish()
+   |                          ^^^^^^^^^^^^ method not found in `__UpRustStablePayloadInitForDuplicateArray<'_, StablePayloadInitSet>`
+   |
+   = note: the method was found for
+           - `__UpRustStablePayloadInitForDuplicateArray<'__up_rust_payload, StablePayloadInitUnset>`

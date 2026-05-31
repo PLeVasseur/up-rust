@@ -19,7 +19,7 @@ use std::{
     io::Read,
     marker::PhantomData,
     mem,
-    ptr::NonNull,
+    ptr::{self, NonNull},
     sync::Arc,
 };
 
@@ -492,6 +492,40 @@ impl<'a, T> LoanedInitPayload<'a, T> {
 impl<T> AsMut<T> for LoanedInitPayload<'_, T> {
     fn as_mut(&mut self) -> &mut T {
         LoanedInitPayload::as_mut(self)
+    }
+}
+
+/// Completion proof returned by generated stable payload initializers.
+///
+/// This token is intentionally not a typed reference into the loan. It proves
+/// that a generated typestate builder reached `finish()` after initializing all
+/// semantic fields and generated padding gaps. The transport helper consumes the
+/// token before committing the underlying uninitialized loan.
+pub struct InitializedStablePayload<T> {
+    _marker: PhantomData<fn() -> T>,
+}
+
+impl<T> InitializedStablePayload<T> {
+    /// Creates a completion proof after an expert initializer has fully initialized `T`.
+    ///
+    /// # Safety
+    ///
+    /// The caller must guarantee that the corresponding loan storage contains one
+    /// valid initialized `T`, including all implicit padding bytes, before this
+    /// token is returned to a send helper.
+    #[doc(hidden)]
+    pub unsafe fn new_unchecked() -> Self {
+        Self {
+            _marker: PhantomData,
+        }
+    }
+}
+
+impl<T> From<LoanedInitPayload<'_, T>> for InitializedStablePayload<T> {
+    fn from(_value: LoanedInitPayload<'_, T>) -> Self {
+        Self {
+            _marker: PhantomData,
+        }
     }
 }
 
@@ -1429,6 +1463,292 @@ where
     assert!(!mem::needs_drop::<T>());
     #[allow(path_statements)]
     T::BYTE_BACKED_STABLE_PAYLOAD_CHECK;
+}
+
+mod stable_payload_init_complete_value_seal {
+    pub trait Sealed {}
+
+    impl<T> Sealed for T where T: super::ByteBackedStablePayload {}
+
+    impl<T, const N: usize> Sealed for [T; N] where T: super::ByteBackedStablePayloadField {}
+}
+
+/// Hidden proof that a complete by-value nested initializer can be moved into a field.
+///
+/// This is derive support, not an application extension point. It is implemented
+/// only for byte-backed stable payloads, where moving the complete value into
+/// loan storage cannot expose uninitialized implicit padding bytes.
+#[doc(hidden)]
+#[allow(private_bounds)]
+pub trait StablePayloadInitCompleteValue<T>:
+    stable_payload_init_complete_value_seal::Sealed + Sized
+{
+    #[doc(hidden)]
+    fn into_complete_value(self) -> T;
+}
+
+impl<T> StablePayloadInitCompleteValue<T> for T
+where
+    T: ByteBackedStablePayload,
+{
+    fn into_complete_value(self) -> T {
+        self
+    }
+}
+
+impl<T, const N: usize> StablePayloadInitCompleteValue<[T; N]> for [T; N]
+where
+    T: ByteBackedStablePayloadField,
+{
+    fn into_complete_value(self) -> [T; N] {
+        self
+    }
+}
+
+/// Hidden typestate marker used by `StablePayloadInit` derive output.
+#[doc(hidden)]
+pub enum StablePayloadInitUnset {}
+
+/// Hidden typestate marker used by `StablePayloadInit` derive output.
+#[doc(hidden)]
+pub enum StablePayloadInitSet {}
+
+/// Safe generated initialization proof for stable-container payloads.
+///
+/// Derived implementations initialize one stable payload directly in
+/// uninitialized transport loan storage. Generated builders expose named typed
+/// setters and make `finish()` available only after all required fields are set.
+/// Implementations must also initialize any implicit and trailing padding bytes
+/// they own without blanket-zeroing the full payload.
+///
+/// # Safety
+///
+/// Implementors must guarantee that every successful `finish()` for `Self::Init`
+/// returns only after the full transported `size_of::<Self>()` byte range,
+/// including implicit padding, contains one valid initialized `Self` in the
+/// stable-container representation. Ordinary payload types should use the derive
+/// macro; manual implementations are an expert unsafe extension point.
+pub unsafe trait StablePayloadInit: StablePayload {
+    /// Generated any-order typestate initializer for this payload type.
+    type Init<'a>;
+
+    /// Creates a generated initializer from a transport loan's visible payload range.
+    fn init_from_uninit_payload<'a>(
+        payload: LoanedPayloadUninitMut<'a>,
+    ) -> Result<Self::Init<'a>, UWireError>;
+
+    /// Creates a generated initializer from a nested stable payload slot.
+    #[doc(hidden)]
+    fn __init_from_slot<'a>(
+        slot: StablePayloadInitSlot<'a, Self>,
+    ) -> Result<Self::Init<'a>, UWireError>;
+}
+
+/// Hidden typed view over uninitialized storage used by generated initializers.
+///
+/// The type is public only so derive output in downstream crates can name it.
+/// Application code should use `#[derive(StablePayloadInit)]` and the generated
+/// setters instead of constructing or manipulating slots directly.
+#[doc(hidden)]
+pub struct StablePayloadInitSlot<'a, T> {
+    ptr: NonNull<mem::MaybeUninit<T>>,
+    _marker: PhantomData<&'a mut mem::MaybeUninit<T>>,
+}
+
+impl<'a, T> StablePayloadInitSlot<'a, T> {
+    /// Creates a slot from a transport uninitialized payload view after exact
+    /// stable-container length and alignment validation.
+    #[doc(hidden)]
+    pub fn from_uninit_payload(mut payload: LoanedPayloadUninitMut<'a>) -> Result<Self, UWireError>
+    where
+        T: StablePayload,
+    {
+        let bytes = payload.as_uninit_bytes_mut_internal();
+        StableContainerPayload::<T>::check_uninit_layout(bytes)?;
+        let ptr =
+            NonNull::new(bytes.as_mut_ptr().cast::<mem::MaybeUninit<T>>()).ok_or_else(|| {
+                UWireError::invalid_payload("stable payload init slot pointer is null")
+            })?;
+        Ok(Self {
+            ptr,
+            _marker: PhantomData,
+        })
+    }
+
+    fn byte_ptr(&self) -> *mut mem::MaybeUninit<u8> {
+        self.ptr.as_ptr().cast::<mem::MaybeUninit<u8>>()
+    }
+
+    /// Initializes an implicit or trailing padding gap to zero.
+    ///
+    /// # Safety
+    ///
+    /// `offset..offset + len` must be in bounds for the slot and must not overlap
+    /// any semantic field that will later be initialized by a generated setter.
+    #[doc(hidden)]
+    pub unsafe fn write_padding(&mut self, offset: usize, len: usize) {
+        let start = self.byte_ptr().cast::<u8>();
+        // SAFETY: The caller guarantees the padding gap is in bounds for the
+        // slot and each byte is written at most once before commit.
+        unsafe { ptr::write_bytes(start.add(offset), 0, len) };
+    }
+
+    /// Writes one typed field at a generated byte offset.
+    ///
+    /// # Safety
+    ///
+    /// `offset` must be the start of a properly aligned `U` field within this
+    /// slot, and the field must not have been initialized before this call.
+    #[doc(hidden)]
+    pub unsafe fn write_field<U>(&mut self, offset: usize, value: U) {
+        let ptr = self.byte_ptr().cast::<u8>();
+        // SAFETY: The generated caller proves `offset` names one uninitialized
+        // field of type `U` inside this slot.
+        unsafe { ptr.add(offset).cast::<U>().write(value) };
+    }
+
+    /// Copies exact bytes into a `[u8; N]` field.
+    ///
+    /// # Safety
+    ///
+    /// `offset..offset + src.len()` must be the target byte array field and must
+    /// not overlap initialized bytes.
+    #[doc(hidden)]
+    pub unsafe fn write_bytes(&mut self, offset: usize, src: &[u8]) {
+        let ptr = self.byte_ptr().cast::<u8>();
+        // SAFETY: The generated caller proves the target byte array field is in
+        // bounds and currently uninitialized.
+        unsafe { ptr::copy_nonoverlapping(src.as_ptr(), ptr.add(offset), src.len()) };
+    }
+
+    /// Fills exact bytes in a `[u8; N]` field.
+    ///
+    /// # Safety
+    ///
+    /// `offset..offset + len` must be the target byte array field and must not
+    /// overlap initialized bytes.
+    #[doc(hidden)]
+    pub unsafe fn fill_bytes(&mut self, offset: usize, len: usize, value: u8) {
+        let ptr = self.byte_ptr().cast::<u8>();
+        // SAFETY: The generated caller proves the byte range is in bounds for
+        // the uninitialized byte array field.
+        unsafe { ptr::write_bytes(ptr.add(offset), value, len) };
+    }
+
+    /// Fills exact bytes in a `[u8; N]` field using an index-based generator.
+    ///
+    /// # Safety
+    ///
+    /// `offset..offset + len` must be the target byte array field and must not
+    /// overlap initialized bytes.
+    #[doc(hidden)]
+    pub unsafe fn fill_bytes_with(
+        &mut self,
+        offset: usize,
+        len: usize,
+        mut value: impl FnMut(usize) -> u8,
+    ) {
+        let ptr = self.byte_ptr().cast::<u8>();
+        for index in 0..len {
+            // SAFETY: The generated caller proves the target byte is in bounds
+            // for the uninitialized byte array field.
+            unsafe { ptr.add(offset + index).write(value(index)) };
+        }
+    }
+
+    /// Copies a typed array field from a slice after an exact length check.
+    ///
+    /// # Safety
+    ///
+    /// `offset` must be the start of an uninitialized `[U; expected]` field.
+    #[doc(hidden)]
+    pub unsafe fn copy_array_from_slice<U: Copy>(
+        &mut self,
+        offset: usize,
+        src: &[U],
+        expected: usize,
+    ) -> Result<(), UWireError> {
+        if src.len() != expected {
+            return Err(UWireError::invalid_payload_length(expected, src.len()));
+        }
+        let dst = self.byte_ptr().cast::<u8>();
+        // SAFETY: The generated caller proves the target array field is in
+        // bounds and uninitialized. `src` contains valid initialized `U` values.
+        unsafe { ptr::copy_nonoverlapping(src.as_ptr(), dst.add(offset).cast::<U>(), expected) };
+        Ok(())
+    }
+
+    /// Fills a typed array field with a valid copied element value.
+    ///
+    /// # Safety
+    ///
+    /// `offset` must be the start of an uninitialized `[U; len]` field.
+    #[doc(hidden)]
+    pub unsafe fn fill_array<U: Copy>(&mut self, offset: usize, len: usize, value: U) {
+        let dst = self.byte_ptr().cast::<u8>();
+        for index in 0..len {
+            // SAFETY: The generated caller proves the target element is in
+            // bounds for the uninitialized array field.
+            unsafe { dst.add(offset).cast::<U>().add(index).write(value) };
+        }
+    }
+
+    /// Returns a typed nested field slot.
+    ///
+    /// # Safety
+    ///
+    /// `offset` must be the start of a properly aligned uninitialized `U` field
+    /// inside this slot.
+    #[doc(hidden)]
+    pub unsafe fn field_slot<U>(&mut self, offset: usize) -> StablePayloadInitSlot<'a, U> {
+        let ptr = self.byte_ptr().cast::<u8>();
+        // SAFETY: The generated caller proves `offset` names a nested field of
+        // type `U` in this slot.
+        let ptr = unsafe { ptr.add(offset).cast::<mem::MaybeUninit<U>>() };
+        let ptr = NonNull::new(ptr).expect("stable payload nested field slot pointer is null");
+        StablePayloadInitSlot {
+            ptr,
+            _marker: PhantomData,
+        }
+    }
+
+    /// Returns a typed nested array element slot.
+    ///
+    /// # Safety
+    ///
+    /// `offset` must be the start of an array field, and `index` must be in
+    /// bounds for that array.
+    #[doc(hidden)]
+    pub unsafe fn array_element_slot<U>(
+        &mut self,
+        offset: usize,
+        index: usize,
+    ) -> StablePayloadInitSlot<'a, U> {
+        let ptr = self.byte_ptr().cast::<u8>();
+        let element_offset = offset + index * mem::size_of::<U>();
+        // SAFETY: The generated caller proves `element_offset` names one nested
+        // element of type `U` in this slot.
+        let ptr = unsafe { ptr.add(element_offset).cast::<mem::MaybeUninit<U>>() };
+        let ptr = NonNull::new(ptr).expect("stable payload array element slot pointer is null");
+        StablePayloadInitSlot {
+            ptr,
+            _marker: PhantomData,
+        }
+    }
+
+    /// Marks the slot as initialized after generated typestate completion.
+    ///
+    /// # Safety
+    ///
+    /// Every byte in the slot, including implicit padding, must contain one valid
+    /// initialized `T`.
+    #[doc(hidden)]
+    pub unsafe fn assume_init(self) -> LoanedInitPayload<'a, T> {
+        // SAFETY: The generated caller invokes this only from the all-set
+        // typestate state after all semantic fields and generated padding gaps
+        // have been initialized.
+        unsafe { LoanedInitPayload::new_unchecked(self.ptr.cast()) }
+    }
 }
 
 /// Unsafe non-byte-backed stable-container TX slot.
