@@ -23,6 +23,7 @@ include = [
     "/macros/**",
     "/README.md",
     "/src/**",
+    "/test-fixtures/**",
     "/up-spec/up-core-api/uprotocol/*",
 ]
 keywords = ["uProtocol", "SDK", "communication"]
@@ -37,6 +38,9 @@ version = "0.11.0-SNAPSHOT"
 default = ["util"]
 cloudevents = []
 protobuf-wire = ["dep:protobuf", "dep:protobuf-codegen", "dep:protoc-bin-vendored"]
+payload-contract-fixtures = ["protobuf-wire", "dep:serde", "dep:serde_json", "dep:sha2"]
+payload-contract-large-fixtures = ["payload-contract-fixtures"]
+payload-contract-simulator-fixtures = ["payload-contract-large-fixtures"]
 symphony = ["util", "dep:serde", "dep:serde_json", "dep:symphony"]
 util = ["tokio/sync", "tokio/time"]
 test-util = ["mockall"]
@@ -63,6 +67,7 @@ rand = { version = "0.9" }
 regex = { version = "1.11" }
 serde = { version = "1.0", features = ["derive"], optional = true }
 serde_json = { version = "1.0", optional = true }
+sha2 = { version = "0.10", optional = true }
 symphony = { version = "0.1", optional = true }
 tokio = { version = "1.45.1", default-features = false, optional = true }
 tracing = { version = "0.1", default-features = false, features = ["log", "std"] }

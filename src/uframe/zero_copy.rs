@@ -920,6 +920,19 @@ impl UContiguousZeroCopyRxFrame for UVecRxLease {
     }
 }
 
+impl ULoanedContiguousZeroCopyRxFrame for UVecRxLease {
+    fn loaned_contiguous_payload(&self) -> Result<LoanedPayload<'_>, UWireError> {
+        // SAFETY: `UVecRxLease` owns the frame bytes for the lifetime of `&self`
+        // and exposes exactly the visible application payload slice.
+        Ok(unsafe {
+            LoanedPayload::new_unchecked(
+                self.frame.payload_bytes(),
+                PayloadLoanProvenance::OpaqueTransportLoan,
+            )
+        })
+    }
+}
+
 impl UVecUninitTxBuffer {
     /// Creates an owned uninitialized transmit buffer.
     pub fn new(metadata: UFrameMetadata, payload_len: usize) -> Self {

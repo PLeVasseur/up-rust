@@ -110,6 +110,9 @@ FFI/codegen specialists and are not required for ordinary large stable payloads.
   and communication-layer helpers. It is enabled by default.
 * `protobuf-wire` enables optional Protocol Buffers support for both the
   generated `UMessage` frame wire format and Protocol Buffers payload codec.
+* `payload-contract-fixtures` exposes representative benchmark payload fixtures,
+  schemas, stable structs, validators, and manifests for transport benchmarks.
+  `payload-contract-large-fixtures` adds LiDAR and camera-sized fixtures.
 * `cloudevents` enables native-frame mapping to and from CloudEvents. It is
   optional, matching mainline behavior, because most applications and transport
   bindings do not need CloudEvents support in the common path.
@@ -138,6 +141,10 @@ Service-specific data transfer objects are grouped under modules such as
 extern crate self as up_rust;
 
 pub use up_rust_macros::{ByteBackedStablePayload, StablePayload, StablePayloadInit};
+
+#[cfg(feature = "payload-contract-fixtures")]
+#[cfg_attr(docsrs, doc(cfg(feature = "payload-contract-fixtures")))]
+pub mod bench_fixtures;
 
 #[cfg(feature = "util")]
 #[cfg_attr(docsrs, doc(cfg(feature = "util")))]
