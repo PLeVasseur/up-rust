@@ -77,6 +77,12 @@ pub mod symphony;
 
 use protobuf::{well_known_types::any::Any, Message, MessageFull};
 
+mod frame_metadata;
+pub use frame_metadata::{
+    try_project_frame_to_umessage, try_project_umessage_to_frame_metadata, PayloadEncoding,
+    UFrameMetadata, UFrameMetadataError,
+};
+
 mod uattributes;
 pub use uattributes::{
     NotificationValidator, PublishValidator, RequestValidator, ResponseValidator, UAttributes,
