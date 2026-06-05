@@ -11,9 +11,11 @@
  * SPDX-License-Identifier: Apache-2.0
  ********************************************************************************/
 
+use std::mem::{self, MaybeUninit};
+
 use up_rust::{
-    StableContainerPayload, UFrameMetadata, ULoanedContiguousZeroCopyRxFrame, UMessageBuilder,
-    UUri, UVecRxLease, UUID,
+    StableContainerPayload, StablePayloadInit, UFrameMetadata, ULoanedContiguousZeroCopyRxFrame,
+    UMessageBuilder, UUri, UVecRxLease, UUID,
 };
 
 #[repr(C)]
@@ -23,6 +25,35 @@ use up_rust::{
 #[stable_payload(type_name = "example.miri.StableBytes")]
 struct StableBytes {
     bytes: [u8; 4],
+}
+
+#[repr(C)]
+#[derive(
+    Clone,
+    Copy,
+    Debug,
+    Eq,
+    PartialEq,
+    up_rust::StablePayload,
+    up_rust::ByteBackedStablePayload,
+    up_rust::StablePayloadInit,
+)]
+#[stable_payload(type_name = "example.miri.InitLeaf")]
+struct InitLeaf {
+    x: u16,
+    y: u16,
+}
+
+#[repr(C)]
+#[derive(Clone, Copy, Debug, Eq, PartialEq, up_rust::StablePayload, up_rust::StablePayloadInit)]
+#[stable_payload(type_name = "example.miri.InitMessage")]
+struct InitMessage {
+    tag: u8,
+    count: u32,
+    leaf: InitLeaf,
+    bytes: [u8; 4],
+    words: [u16; 2],
+    leaves: [InitLeaf; 2],
 }
 
 fn topic() -> UUri {
@@ -55,6 +86,17 @@ fn stable_bytes(value: &StableBytes) -> Vec<u8> {
     }
 }
 
+fn uninit_bytes<T>(storage: &mut MaybeUninit<T>) -> &mut [MaybeUninit<u8>] {
+    // SAFETY: The returned byte slice covers exactly the uninitialized storage
+    // for `T` and inherits its alignment.
+    unsafe {
+        std::slice::from_raw_parts_mut(
+            std::ptr::from_mut(storage).cast::<MaybeUninit<u8>>(),
+            mem::size_of::<T>(),
+        )
+    }
+}
+
 #[test]
 fn stable_payload_derive_loan_borrow_is_miri_friendly() {
     up_rust::assert_stable_payload_byte_backed_uninit::<StableBytes>();
@@ -68,4 +110,39 @@ fn stable_payload_derive_loan_borrow_is_miri_friendly() {
         .expect("borrow stable payload");
 
     assert_eq!(borrowed, &value);
+}
+
+#[test]
+fn stable_payload_init_builder_initializes_fields_and_padding() -> Result<(), up_rust::UWireError> {
+    let mut storage = MaybeUninit::<InitMessage>::uninit();
+    let init = InitMessage::init_from_uninit_bytes(uninit_bytes(&mut storage))?;
+    let init = init
+        .tag(7)
+        .count(42)
+        .leaf_value(InitLeaf { x: 1, y: 2 })
+        .bytes_from_array(b"miri")
+        .words_from_slice(&[10, 11])?
+        .leaves(|index, leaf| leaf.x(index as u16).y(9).finish())?;
+    let _finished = init.finish()?;
+
+    // SAFETY: `finish()` proves every semantic field and generated padding gap
+    // has been initialized.
+    let raw = unsafe {
+        std::slice::from_raw_parts(storage.as_ptr().cast::<u8>(), mem::size_of::<InitMessage>())
+    };
+    assert_eq!(raw.get(1..4).expect("padding bytes"), &[0, 0, 0]);
+
+    // SAFETY: The builder completion proof above initialized one `InitMessage`.
+    let value = unsafe { storage.assume_init() };
+    assert_eq!(value.tag, 7);
+    assert_eq!(value.count, 42);
+    assert_eq!(value.leaf, InitLeaf { x: 1, y: 2 });
+    assert_eq!(value.bytes, *b"miri");
+    assert_eq!(value.words, [10, 11]);
+    assert_eq!(
+        value.leaves,
+        [InitLeaf { x: 0, y: 9 }, InitLeaf { x: 1, y: 9 }]
+    );
+
+    Ok(())
 }
