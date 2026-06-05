@@ -11,11 +11,15 @@
  * SPDX-License-Identifier: Apache-2.0
  ********************************************************************************/
 
-use std::{error::Error, fmt::Display, io::Read};
+use std::{error::Error, fmt::Display, io::Read, marker::PhantomData, mem};
 
 use bytes::Bytes;
+use mediatype::ReadParams;
 
 use crate::{PayloadEncoding, ProtobufMappable, UCode, UPayloadFormat, UStatus};
+
+const STABLE_CONTAINER_ENCODING_ID: &str = "up.stable-container";
+const STABLE_CONTAINER_MEDIA_TYPE: &str = "application/vnd.uprotocol.stable-container";
 
 /// Error type used by serialization-neutral payload helpers.
 #[derive(Clone, Debug, Eq, PartialEq)]
@@ -331,6 +335,305 @@ impl ReadDecodePayload<Bytes> for RawBytes {
     }
 }
 
+/// Stable payload type variant used in stable-container metadata.
+///
+/// Phase 05A supports one fixed-size value per payload. Runtime-length stable
+/// slices are intentionally left for a later API.
+#[derive(Clone, Copy, Debug, Eq, Hash, PartialEq)]
+pub enum StablePayloadVariant {
+    /// One fixed-size `T` value with exact payload length `size_of::<T>()`.
+    FixedSize,
+}
+
+impl StablePayloadVariant {
+    /// Returns the stable media-type spelling for this variant.
+    #[must_use]
+    pub const fn as_str(self) -> &'static str {
+        match self {
+            Self::FixedSize => "fixed",
+        }
+    }
+
+    fn parse(value: &str) -> Option<Self> {
+        match value {
+            "fixed" => Some(Self::FixedSize),
+            _ => None,
+        }
+    }
+}
+
+impl Display for StablePayloadVariant {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.write_str(self.as_str())
+    }
+}
+
+/// Runtime type detail carried by stable-container metadata.
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub struct StableTypeDetail<'a> {
+    /// Fixed-size stable-container payload variant.
+    pub variant: StablePayloadVariant,
+    /// Cross-process and cross-language stable type identity.
+    pub type_name: &'a str,
+    /// Payload value size in bytes.
+    pub size: usize,
+    /// Required payload value alignment in bytes.
+    pub alignment: usize,
+}
+
+impl Display for StableTypeDetail<'_> {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(
+            f,
+            "type={};variant={};size={};align={}",
+            self.type_name, self.variant, self.size, self.alignment
+        )
+    }
+}
+
+/// Stable payload identity used by `StableContainerPayload<T>`.
+///
+/// This phase uses the trait only to build and verify stable-container metadata.
+/// Future borrow/no-zero phases consume the same identity when proving that bytes
+/// may safely be viewed as `T`.
+///
+/// # Safety
+///
+/// Implementors must choose a stable cross-process type name and only implement
+/// the trait for types whose size/alignment and initialized byte representation
+/// are suitable for the stable-container contract used by the application.
+pub unsafe trait StablePayload: Sized + 'static {
+    /// Stable-container variant supported by this type.
+    const VARIANT: StablePayloadVariant = StablePayloadVariant::FixedSize;
+
+    /// Stable cross-process type name.
+    const TYPE_NAME: &'static str;
+
+    /// Returns the stable cross-process type name.
+    #[must_use]
+    fn stable_type_name() -> &'static str {
+        Self::TYPE_NAME
+    }
+
+    /// Returns the stable metadata detail for this type.
+    #[must_use]
+    fn stable_type_detail() -> StableTypeDetail<'static> {
+        StableTypeDetail {
+            variant: Self::VARIANT,
+            type_name: Self::stable_type_name(),
+            size: mem::size_of::<Self>(),
+            alignment: mem::align_of::<Self>(),
+        }
+    }
+}
+
+/// Type-agnostic stable-container metadata parsed from a payload encoding.
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct StableContainerPayloadInfo {
+    /// Cross-process and cross-language stable type identity.
+    pub type_name: String,
+    /// Stable-container payload variant.
+    pub variant: StablePayloadVariant,
+    /// Exact payload size in bytes.
+    pub size: usize,
+    /// Advertised payload alignment in bytes.
+    pub alignment: usize,
+}
+
+impl StableContainerPayloadInfo {
+    /// Native custom encoding id for stable-container payloads.
+    pub const ENCODING_ID: &'static str = STABLE_CONTAINER_ENCODING_ID;
+
+    /// Parses stable-container metadata from a payload encoding.
+    ///
+    /// # Errors
+    ///
+    /// Returns an error if the encoding is not stable-container metadata or if
+    /// the stable-container content type is malformed.
+    pub fn parse(encoding: &PayloadEncoding) -> Result<Self, UWireError> {
+        let expected = PayloadEncoding::custom(Self::ENCODING_ID, STABLE_CONTAINER_MEDIA_TYPE)
+            .expect("stable-container media type is valid");
+        let Some((id, content_type)) = encoding.custom_identity() else {
+            return Err(UWireError::UnsupportedEncoding {
+                expected: Box::new(expected),
+                actual: Box::new(encoding.clone()),
+            });
+        };
+        if id != Self::ENCODING_ID {
+            return Err(UWireError::UnsupportedEncoding {
+                expected: Box::new(expected),
+                actual: Box::new(encoding.clone()),
+            });
+        }
+        Self::parse_content_type(content_type).map_err(UWireError::invalid_payload)
+    }
+
+    /// Returns whether this metadata is compatible with local stable payload `T`.
+    #[must_use]
+    pub fn is_compatible_with<T>(&self) -> bool
+    where
+        T: StablePayload,
+    {
+        let expected = T::stable_type_detail();
+        self.type_name == expected.type_name
+            && self.variant == expected.variant
+            && self.size == expected.size
+            && self.alignment >= expected.alignment
+    }
+
+    fn parse_content_type(content_type: &str) -> Result<Self, String> {
+        let media_type = mediatype::MediaType::parse(content_type)
+            .map_err(|error| format!("invalid media type: {error}"))?;
+        let expected_media_type = mediatype::MediaType::parse(STABLE_CONTAINER_MEDIA_TYPE)
+            .expect("stable-container media type is valid");
+        if media_type.essence() != expected_media_type {
+            return Err(format!(
+                "media type must be {}",
+                expected_media_type.essence()
+            ));
+        }
+
+        let type_name = required_stable_parameter(&media_type, "type")?;
+        if type_name.is_empty() {
+            return Err("type parameter must not be empty".to_string());
+        }
+        let variant = required_stable_parameter(&media_type, "variant")?;
+        let variant = StablePayloadVariant::parse(&variant).ok_or_else(|| {
+            format!(
+                "variant parameter must be {}",
+                StablePayloadVariant::FixedSize
+            )
+        })?;
+        let size = required_stable_parameter(&media_type, "size")?
+            .parse::<usize>()
+            .map_err(|error| format!("invalid size parameter: {error}"))?;
+        let alignment = required_stable_parameter(&media_type, "align")?
+            .parse::<usize>()
+            .map_err(|error| format!("invalid align parameter: {error}"))?;
+        PayloadLayout::new(size, alignment).map_err(|error| error.to_string())?;
+
+        Ok(Self {
+            type_name,
+            variant,
+            size,
+            alignment,
+        })
+    }
+}
+
+fn required_stable_parameter(
+    media_type: &mediatype::MediaType<'_>,
+    name: &'static str,
+) -> Result<String, String> {
+    media_type
+        .get_param(mediatype::Name::new_unchecked(name))
+        .map(|value| value.unquoted_str().into_owned())
+        .ok_or_else(|| format!("missing {name} parameter"))
+}
+
+/// Transport-independent stable-container payload identity.
+///
+/// Phase 05A uses this type for metadata and owned-byte preservation. Typed
+/// zero-copy borrows are intentionally deferred to the Phase 05B loan-backed
+/// receive proof API.
+pub struct StableContainerPayload<T>(PhantomData<T>);
+
+impl<T: StablePayload> StableContainerPayload<T> {
+    /// Native custom encoding id for stable-container payloads.
+    pub const ENCODING_ID: &'static str = STABLE_CONTAINER_ENCODING_ID;
+
+    const MEDIA_TYPE: &'static str = STABLE_CONTAINER_MEDIA_TYPE;
+
+    /// Returns the stable-container payload encoding for `T`.
+    #[must_use]
+    pub fn encoding() -> PayloadEncoding {
+        <Self as PayloadCodec>::payload_encoding()
+    }
+
+    fn stable_content_type() -> String {
+        let detail = T::stable_type_detail();
+        format!(
+            "{};type={};variant={};size={};align={}",
+            Self::MEDIA_TYPE,
+            Self::quote_parameter(detail.type_name),
+            detail.variant,
+            detail.size,
+            detail.alignment
+        )
+    }
+
+    fn quote_parameter(value: &str) -> String {
+        let quoted = mediatype::Value::quote(value);
+        if quoted.starts_with('"') {
+            quoted.into_owned()
+        } else {
+            format!("\"{quoted}\"")
+        }
+    }
+
+    fn verify_content_type(content_type: &str) -> Result<(), String> {
+        let info = StableContainerPayloadInfo::parse_content_type(content_type)?;
+        let expected = T::stable_type_detail();
+        if info.type_name != expected.type_name {
+            return Err(format!("type parameter must be {}", expected.type_name));
+        }
+        if info.variant != expected.variant {
+            return Err(format!(
+                "variant parameter must be {}",
+                expected.variant.as_str()
+            ));
+        }
+        if info.size != expected.size {
+            return Err(format!("size parameter must be {}", expected.size));
+        }
+        if info.alignment < expected.alignment {
+            return Err(format!(
+                "align parameter must be at least {}",
+                expected.alignment
+            ));
+        }
+        Ok(())
+    }
+}
+
+impl<T> PayloadCodec for StableContainerPayload<T>
+where
+    T: StablePayload,
+{
+    fn codec_name() -> &'static str {
+        "stable-container"
+    }
+
+    fn payload_encoding() -> PayloadEncoding {
+        PayloadEncoding::custom(Self::ENCODING_ID, Self::stable_content_type())
+            .expect("stable-container payload encoding is valid")
+    }
+
+    fn verify_encoding(actual: Option<&PayloadEncoding>) -> Result<(), UWireError> {
+        let expected = Self::payload_encoding();
+        let actual = actual.ok_or(UWireError::MissingEncoding)?;
+        let Some((id, content_type)) = actual.custom_identity() else {
+            return Err(UWireError::UnsupportedEncoding {
+                expected: Box::new(expected),
+                actual: Box::new(actual.clone()),
+            });
+        };
+        if id != Self::ENCODING_ID {
+            return Err(UWireError::UnsupportedEncoding {
+                expected: Box::new(expected),
+                actual: Box::new(actual.clone()),
+            });
+        }
+        Self::verify_content_type(content_type).map_err(|reason| {
+            UWireError::invalid_payload(format!(
+                "incompatible stable payload: expected {}; actual {} ({reason})",
+                T::stable_type_detail(),
+                content_type
+            ))
+        })
+    }
+}
+
 /// Protocol Buffers application payload codec.
 ///
 /// `ProtobufPayload` serializes and deserializes only application payload bytes.
@@ -489,6 +792,8 @@ mod tests {
 
     use protobuf::well_known_types::wrappers::StringValue;
 
+    #[cfg(feature = "owned-frame-transport")]
+    use crate::UOwnedFrame;
     use crate::{UFrameMetadata, UFrameView, UMessageBuilder, UUri};
 
     use super::*;
@@ -502,6 +807,32 @@ mod tests {
             value: value.to_string(),
             ..Default::default()
         }
+    }
+
+    #[repr(C)]
+    #[derive(Clone, Copy, Debug, Eq, PartialEq)]
+    struct VehiclePose {
+        x: i32,
+        y: i32,
+    }
+
+    unsafe impl StablePayload for VehiclePose {
+        const TYPE_NAME: &'static str = "example.vehicle.VehiclePose";
+    }
+
+    fn stable_container_encoding(
+        type_name: &str,
+        variant: &str,
+        size: usize,
+        align: usize,
+    ) -> PayloadEncoding {
+        PayloadEncoding::custom(
+            StableContainerPayload::<VehiclePose>::ENCODING_ID,
+            format!(
+                "application/vnd.uprotocol.stable-container;type=\"{type_name}\";variant={variant};size={size};align={align}"
+            ),
+        )
+        .expect("valid custom encoding")
     }
 
     #[test]
@@ -530,6 +861,116 @@ mod tests {
                 actual: 3,
             }
         );
+    }
+
+    #[test]
+    fn stable_payload_type_detail_is_used_in_encoding() {
+        let detail = VehiclePose::stable_type_detail();
+
+        assert_eq!(detail.variant, StablePayloadVariant::FixedSize);
+        assert_eq!(detail.type_name, "example.vehicle.VehiclePose");
+        assert_eq!(detail.size, mem::size_of::<VehiclePose>());
+        assert_eq!(detail.alignment, mem::align_of::<VehiclePose>());
+
+        let encoding = StableContainerPayload::<VehiclePose>::encoding();
+        let (id, content_type) = encoding.custom_identity().expect("custom encoding");
+        assert_eq!(id, StableContainerPayload::<VehiclePose>::ENCODING_ID);
+        assert_eq!(
+            content_type,
+            "application/vnd.uprotocol.stable-container;type=\"example.vehicle.VehiclePose\";variant=fixed;size=8;align=4"
+        );
+    }
+
+    #[test]
+    fn stable_container_payload_info_parses_type_agnostic_metadata() {
+        let info =
+            StableContainerPayloadInfo::parse(&StableContainerPayload::<VehiclePose>::encoding())
+                .expect("parse stable metadata");
+
+        assert_eq!(info.type_name, "example.vehicle.VehiclePose");
+        assert_eq!(info.variant, StablePayloadVariant::FixedSize);
+        assert_eq!(info.size, mem::size_of::<VehiclePose>());
+        assert_eq!(info.alignment, mem::align_of::<VehiclePose>());
+        assert!(info.is_compatible_with::<VehiclePose>());
+    }
+
+    #[test]
+    fn stable_container_payload_info_rejects_malformed_metadata() {
+        let encoding = PayloadEncoding::custom(
+            StableContainerPayloadInfo::ENCODING_ID,
+            "application/vnd.uprotocol.stable-container;variant=fixed;size=8;align=4",
+        )
+        .expect("custom encoding");
+
+        let error = StableContainerPayloadInfo::parse(&encoding).unwrap_err();
+
+        assert!(
+            matches!(error, UWireError::InvalidPayload(message) if message.contains("missing type"))
+        );
+    }
+
+    #[test]
+    fn stable_container_verify_accepts_larger_advertised_alignment() {
+        let encoding = stable_container_encoding(
+            "example.vehicle.VehiclePose",
+            "fixed",
+            mem::size_of::<VehiclePose>(),
+            mem::align_of::<VehiclePose>() * 2,
+        );
+
+        StableContainerPayload::<VehiclePose>::verify_encoding(Some(&encoding))
+            .expect("larger alignment is compatible");
+    }
+
+    #[test]
+    fn stable_container_verify_rejects_incompatible_metadata() {
+        let wrong_type = stable_container_encoding(
+            "example.vehicle.OtherPose",
+            "fixed",
+            mem::size_of::<VehiclePose>(),
+            mem::align_of::<VehiclePose>(),
+        );
+        let wrong_size = stable_container_encoding(
+            "example.vehicle.VehiclePose",
+            "fixed",
+            mem::size_of::<VehiclePose>() + 1,
+            mem::align_of::<VehiclePose>(),
+        );
+        let insufficient_alignment = stable_container_encoding(
+            "example.vehicle.VehiclePose",
+            "fixed",
+            mem::size_of::<VehiclePose>(),
+            mem::align_of::<VehiclePose>() / 2,
+        );
+
+        for encoding in [wrong_type, wrong_size, insufficient_alignment] {
+            assert!(matches!(
+                StableContainerPayload::<VehiclePose>::verify_encoding(Some(&encoding)),
+                Err(UWireError::InvalidPayload(_))
+            ));
+        }
+    }
+
+    #[cfg(feature = "owned-frame-transport")]
+    #[test]
+    fn stable_container_owned_frame_preserves_bytes_and_custom_metadata() {
+        let payload = Bytes::from_static(b"\x0a\x00\x00\x00\x14\x00\x00\x00");
+        assert_eq!(payload.len(), mem::size_of::<VehiclePose>());
+        let message = UMessageBuilder::publish(topic()).build().expect("message");
+        let metadata = UFrameMetadata::new(
+            message.attributes().clone(),
+            Some(StableContainerPayload::<VehiclePose>::encoding()),
+        )
+        .expect("metadata");
+
+        let frame = UOwnedFrame::with_payload(metadata, payload.clone()).expect("owned frame");
+
+        assert_eq!(
+            frame.metadata().payload_encoding(),
+            Some(&StableContainerPayload::<VehiclePose>::encoding())
+        );
+        assert_eq!(frame.payload(), Some(&payload));
+        assert_eq!(frame.payload_bytes(), payload.as_ref());
     }
 
     #[test]
