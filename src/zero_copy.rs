@@ -29,7 +29,9 @@ use tracing::warn;
 #[cfg(feature = "owned-frame-transport")]
 use crate::UOwnedFrame;
 use crate::{
-    utransport::verify_filter_criteria, UCode, UFrameMetadata, UFrameMetadataError, UStatus, UUri,
+    payload::{PayloadCodec, ReadDecodePayload, UWireError},
+    utransport::verify_filter_criteria,
+    UCode, UFrameMetadata, UFrameMetadataError, UStatus, UUri,
 };
 
 mod zero_copy_transport_sealed {
@@ -318,6 +320,26 @@ pub trait UFrameView {
     /// Returns a contiguous borrowed payload view when this view can provide one without copying.
     fn try_contiguous_payload(&self) -> Option<&[u8]> {
         None
+    }
+
+    /// Decodes this frame view from its ordered payload reader with codec `C`.
+    ///
+    /// This path works for both contiguous and segmented receive storage without
+    /// forcing a coalescing copy before the selected codec sees the bytes.
+    ///
+    /// # Errors
+    ///
+    /// Returns an error if the frame has no payload, has missing or incompatible
+    /// encoding metadata, or if the codec cannot decode the payload bytes.
+    fn decode_payload_from_reader_as<C, T>(&self) -> Result<T, UWireError>
+    where
+        C: PayloadCodec + ReadDecodePayload<T>,
+    {
+        C::verify_encoding(self.metadata().payload_encoding())?;
+        if !self.has_payload() {
+            return Err(UWireError::MissingPayload);
+        }
+        C::decode_payload_from_reader(self.payload_reader(), self.payload_len())
     }
 }
 

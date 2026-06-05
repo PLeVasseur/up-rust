@@ -67,6 +67,12 @@ impl PayloadEncoding {
         }
     }
 
+    /// Returns whether this encoding can be decoded by a codec expecting `expected`.
+    #[must_use]
+    pub fn is_compatible_with(&self, expected: &Self) -> bool {
+        self == expected
+    }
+
     fn validate(&self) -> Result<(), UFrameMetadataError> {
         match self {
             Self::Standard(UPayloadFormat::Unspecified) => {

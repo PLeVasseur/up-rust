@@ -85,9 +85,20 @@ pub use frame_metadata::{
 };
 
 #[cfg(feature = "owned-frame-transport")]
+pub mod frame_wire;
+#[cfg(feature = "owned-frame-transport")]
+pub use frame_wire::{ProtobufUMessageFrame, UFrameWireError, UFrameWireFormat};
+
+#[cfg(feature = "owned-frame-transport")]
 mod owned_frame;
 #[cfg(feature = "owned-frame-transport")]
 pub use owned_frame::UOwnedFrame;
+
+pub mod payload;
+pub use payload::{
+    BytePayloadCodec, DecodePayload, EncodePayload, PayloadCodec, PayloadFormat, PayloadLayout,
+    ProtobufAnyPayload, ProtobufPayload, RawBytes, ReadDecodePayload, UWireError,
+};
 
 mod zero_copy;
 #[cfg(feature = "test-util")]
