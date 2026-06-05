@@ -106,8 +106,9 @@ mod zero_copy;
 pub use zero_copy::InMemoryZeroCopyTransport;
 pub use zero_copy::{
     validate_frame_view_for_transport, validate_tx_buffer_for_transport,
-    verify_tx_buffer_payload_layout, verify_uninit_tx_buffer_payload_layout, UFrameView, UTxBuffer,
-    UTxLoanSpec, UTxPayloadSpec, UUninitTxBuffer, UVecRxLease, UVecTxBuffer, UVecUninitTxBuffer,
+    verify_tx_buffer_payload_layout, verify_uninit_tx_buffer_payload_layout, LoanedPayload,
+    PayloadLoanProvenance, UFrameView, ULoanedContiguousZeroCopyRxFrame, UTxBuffer, UTxLoanSpec,
+    UTxPayloadSpec, UUninitTxBuffer, UVecRxLease, UVecTxBuffer, UVecUninitTxBuffer,
     UZeroCopyListener, UZeroCopyRxLease, UZeroCopyTransport, UZeroCopyTransportImpl,
     UZeroCopyUninitTransport, UZeroCopyUninitTransportImpl, ValidatedTxLoanSpec,
 };
