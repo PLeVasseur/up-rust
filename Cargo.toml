@@ -19,9 +19,11 @@ include = [
     "/build.rs",
     "/Cargo.toml",
     "/examples/*",
+    "/macros/**",
     "/proto/*",
     "/README.md",
     "/src/*",
+    "/tests/**",
     "/up-spec/up-core-api/uprotocol/*",
 ]
 keywords = ["uProtocol", "SDK", "communication"]
@@ -59,6 +61,7 @@ symphony = { version = "0.1", optional = true }
 thiserror = { version = "1.0.69", optional = true }
 tokio = { version = "1.45.1", default-features = false, optional = true }
 tracing = { version = "0.1", default-features = false, features = ["log", "std"] }
+up-rust-macros = { path = "macros", version = "0.10.0-SNAPSHOT" }
 uriparse = { version = "0.6" }
 uuid-simd = { version = "0.8", default-features = false, features = ["std", "detect"] }
 
@@ -80,6 +83,7 @@ tokio = { version = "1.45.1", default-features = false, features = [
     "sync",
     "time",
 ] }
+trybuild = "1.0"
 
 [profile.release]
 opt-level = 3

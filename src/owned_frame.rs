@@ -186,7 +186,7 @@ mod tests {
         let frame = UOwnedFrame::without_payload(metadata_without_encoding()).unwrap();
 
         assert!(!frame.has_payload());
-        assert_eq!(frame.payload_bytes(), [].as_slice());
+        assert_eq!(frame.payload_bytes(), &[] as &[u8]);
         assert!(frame.metadata().payload_encoding().is_none());
     }
 
@@ -196,7 +196,7 @@ mod tests {
 
         assert!(frame.has_payload());
         assert_eq!(frame.payload(), Some(&Bytes::new()));
-        assert_eq!(frame.payload_bytes(), [].as_slice());
+        assert_eq!(frame.payload_bytes(), &[] as &[u8]);
         assert_eq!(
             frame.metadata().payload_encoding(),
             Some(&PayloadEncoding::Standard(UPayloadFormat::Raw))
