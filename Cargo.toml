@@ -41,6 +41,7 @@ usubscription = []
 utwin = []
 util = ["tokio/sync"]
 test-util = ["mockall"]
+owned-frame-transport = []
 symphony = ["communication", "dep:serde", "dep:serde_json", "dep:symphony"]
 
 [dependencies]

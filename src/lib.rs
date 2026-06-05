@@ -50,6 +50,7 @@ For user convenience, all of these modules export their types on up_rust top-lev
 * `utwin` enables support for types required to interact with [uTwin service](https://github.com/eclipse-uprotocol/up-spec/blob/v1.6.0-alpha.7/up-l3/utwin/v2/README.adoc)
   implementations.
 * `test-util` provides some useful mock implementations for testing. In particular, provides mock implementations of UTransport and Communication Layer API traits which make implementing unit tests a lot easier.
+* `owned-frame-transport` enables an experimental native owned-frame transport API. This is additive to `UTransport` and does not replace the ordinary `UMessage` compatibility path.
 * `util` provides some useful helper structs. In particular, provides a local, in-memory UTransport for exchanging messages within a single process. This transport is also used by the examples illustrating usage of the Communication Layer API.
 * `symphony` enables support for implementing an [Eclipse Symphony](https://github.com/eclipse-symphony) Target Provider as a uService exposed via the Communication Layer API's `RpcServer`.
 
@@ -83,6 +84,11 @@ pub use frame_metadata::{
     UFrameMetadata, UFrameMetadataError,
 };
 
+#[cfg(feature = "owned-frame-transport")]
+mod owned_frame;
+#[cfg(feature = "owned-frame-transport")]
+pub use owned_frame::UOwnedFrame;
+
 mod uattributes;
 pub use uattributes::{
     NotificationValidator, PublishValidator, RequestValidator, ResponseValidator, UAttributes,
@@ -106,6 +112,12 @@ pub use utransport::{
 };
 #[cfg(feature = "test-util")]
 pub use utransport::{MockLocalUriProvider, MockTransport, MockUListener};
+#[cfg(all(feature = "owned-frame-transport", feature = "test-util"))]
+pub use utransport::{MockUOwnedListener, MockUOwnedTransport};
+#[cfg(feature = "owned-frame-transport")]
+pub use utransport::{
+    UOwnedListener, UOwnedTransport, UOwnedTransportExt, UOwnedTransportImpl, ValidatedOwnedFrame,
+};
 
 mod uuid;
 pub use uuid::UUID;
