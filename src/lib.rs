@@ -77,7 +77,7 @@ pub mod local_transport;
 pub mod symphony;
 
 use protobuf::{well_known_types::any::Any, Message, MessageFull};
-pub use up_rust_macros::StablePayload;
+pub use up_rust_macros::{ByteBackedStablePayload, StablePayload};
 
 mod frame_metadata;
 pub use frame_metadata::{
@@ -97,9 +97,11 @@ pub use owned_frame::UOwnedFrame;
 
 pub mod payload;
 pub use payload::{
-    BytePayloadCodec, DecodePayload, EncodePayload, PayloadCodec, PayloadFormat, PayloadLayout,
-    ProtobufAnyPayload, ProtobufPayload, RawBytes, ReadDecodePayload, StableContainerPayload,
-    StableContainerPayloadInfo, StablePayload, StablePayloadVariant, StableTypeDetail, UWireError,
+    assert_stable_payload_byte_backed_uninit, stable_payload_supports_byte_backed_uninit,
+    ByteBackedStablePayload, BytePayloadCodec, DecodePayload, EncodePayload, PayloadCodec,
+    PayloadFormat, PayloadLayout, ProtobufAnyPayload, ProtobufPayload, RawBytes, ReadDecodePayload,
+    StableContainerPayload, StableContainerPayloadInfo, StablePayload, StablePayloadVariant,
+    StableTypeDetail, UWireError,
 };
 
 mod zero_copy;

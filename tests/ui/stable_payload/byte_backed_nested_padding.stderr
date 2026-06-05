@@ -1,0 +1,26 @@
+error[E0277]: the trait bound `PaddedNested: payload::byte_backed_stable_field_seal::Sealed` is not satisfied
+  --> tests/ui/stable_payload/byte_backed_nested_padding.rs:19:13
+   |
+19 |     nested: PaddedNested,
+   |             ^^^^^^^^^^^^ unsatisfied trait bound
+   |
+help: the trait `ByteBackedStablePayload` is not implemented for `PaddedNested`
+  --> tests/ui/stable_payload/byte_backed_nested_padding.rs:10:1
+   |
+10 | struct PaddedNested {
+   | ^^^^^^^^^^^^^^^^^^^
+help: the trait `ByteBackedStablePayload` is implemented for `OuterWithPaddedNested`
+  --> tests/ui/stable_payload/byte_backed_nested_padding.rs:16:34
+   |
+16 | #[derive(up_rust::StablePayload, up_rust::ByteBackedStablePayload)]
+   |                                  ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+   = note: required for `PaddedNested` to implement `payload::byte_backed_stable_field_seal::Sealed`
+note: required by a bound in `SUPPORTS_BYTE_BACKED_STABLE_FIELD`
+  --> src/payload.rs
+   |
+   |     byte_backed_stable_field_seal::Sealed + Sized + 'static
+   |     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ required by this bound in `ByteBackedStablePayloadField::SUPPORTS_BYTE_BACKED_STABLE_FIELD`
+...
+   |     const SUPPORTS_BYTE_BACKED_STABLE_FIELD: bool;
+   |           --------------------------------- required by a bound in this associated constant
+   = note: this error originates in the derive macro `up_rust::ByteBackedStablePayload` (in Nightly builds, run with -Z macro-backtrace for more info)
