@@ -14,8 +14,9 @@
 use std::mem::{self, MaybeUninit};
 
 use up_rust::{
-    LoanPayload, StableContainerPayload, StablePayloadInit, UFrameMetadata,
-    ULoanedContiguousZeroCopyRxFrame, UMessageBuilder, UUri, UVecRxLease, UUID,
+    LoanPayload, LoanUninitPayload, LoanedPayloadUninitMut, PayloadLoanProvenance,
+    StableContainerPayload, StablePayloadInit, UFrameMetadata, ULoanedContiguousZeroCopyRxFrame,
+    UMessageBuilder, UUri, UVecRxLease, UUID,
 };
 
 #[repr(C)]
@@ -181,5 +182,23 @@ fn stable_initialized_tx_loan_payload_is_miri_friendly() -> Result<(), up_rust::
         .expect("borrow sent stable payload");
 
     assert_eq!(borrowed.bytes, *b"send");
+    Ok(())
+}
+
+#[test]
+fn stable_uninit_tx_loan_payload_is_miri_friendly() -> Result<(), up_rust::UWireError> {
+    let mut storage = MaybeUninit::<StableBytes>::uninit();
+    let payload = uninit_bytes(&mut storage);
+    // SAFETY: `payload` covers exactly the uninitialized storage for one
+    // `StableBytes` value and is uniquely borrowed for this test.
+    let payload = unsafe {
+        LoanedPayloadUninitMut::new_unchecked(payload, PayloadLoanProvenance::OpaqueTransportLoan)
+    };
+    let slot = StableContainerPayload::<StableBytes>::loan_uninit_payload(payload)?;
+    let _initialized = slot.write(StableBytes { bytes: *b"zero" });
+
+    // SAFETY: the loaned uninit slot wrote one initialized `StableBytes` value.
+    let value = unsafe { storage.assume_init() };
+    assert_eq!(value.bytes, *b"zero");
     Ok(())
 }
