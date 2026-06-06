@@ -99,8 +99,8 @@ pub mod payload;
 pub use payload::{
     assert_stable_payload_byte_backed_uninit, stable_payload_supports_byte_backed_uninit,
     ByteBackedStablePayload, BytePayloadCodec, DecodePayload, EncodePayload,
-    InitializedStablePayload, PayloadCodec, PayloadFormat, PayloadLayout, ProtobufAnyPayload,
-    ProtobufPayload, RawBytes, ReadDecodePayload, StableContainerPayload,
+    InitializedStablePayload, LoanPayload, PayloadCodec, PayloadFormat, PayloadLayout,
+    ProtobufAnyPayload, ProtobufPayload, RawBytes, ReadDecodePayload, StableContainerPayload,
     StableContainerPayloadInfo, StablePayload, StablePayloadInit, StablePayloadInitCompleteValue,
     StablePayloadVariant, StableTypeDetail, UWireError,
 };
@@ -121,8 +121,9 @@ pub use zero_copy::{
     verify_tx_buffer_payload_layout, verify_uninit_tx_buffer_payload_layout, LoanedPayload,
     PayloadLoanProvenance, UFrameView, ULoanedContiguousZeroCopyRxFrame, UTxBuffer, UTxLoanSpec,
     UTxPayloadSpec, UUninitTxBuffer, UVecRxLease, UVecTxBuffer, UVecUninitTxBuffer,
-    UZeroCopyListener, UZeroCopyRxLease, UZeroCopyTransport, UZeroCopyTransportImpl,
-    UZeroCopyUninitTransport, UZeroCopyUninitTransportImpl, ValidatedTxLoanSpec,
+    UZeroCopyListener, UZeroCopyRxLease, UZeroCopyTransport, UZeroCopyTransportExt,
+    UZeroCopyTransportImpl, UZeroCopyUninitTransport, UZeroCopyUninitTransportImpl,
+    ValidatedTxLoanSpec,
 };
 
 mod uattributes;
