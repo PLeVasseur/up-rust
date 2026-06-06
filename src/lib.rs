@@ -51,6 +51,8 @@ For user convenience, all of these modules export their types on up_rust top-lev
   implementations.
 * `test-util` provides some useful mock implementations for testing. In particular, provides mock implementations of UTransport and Communication Layer API traits which make implementing unit tests a lot easier.
 * `owned-frame-transport` enables an experimental native owned-frame transport API. This is additive to `UTransport` and does not replace the ordinary `UMessage` compatibility path.
+* `unsafe-stable-payload-tx`, `unsafe-stable-payload-init`, and `unsafe-uninit-payload-bytes` are reserved for expert stable-payload transmit APIs
+  with caller-side initialization obligations. `expert-unsafe-payloads` enables all of them once the expert APIs are implemented.
 * `util` provides some useful helper structs. In particular, provides a local, in-memory UTransport for exchanging messages within a single process. This transport is also used by the examples illustrating usage of the Communication Layer API.
 * `symphony` enables support for implementing an [Eclipse Symphony](https://github.com/eclipse-symphony) Target Provider as a uService exposed via the Communication Layer API's `RpcServer`.
 

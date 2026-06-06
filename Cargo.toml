@@ -45,6 +45,14 @@ util = ["tokio/sync"]
 test-util = ["mockall"]
 owned-frame-transport = []
 symphony = ["communication", "dep:serde", "dep:serde_json", "dep:symphony"]
+unsafe-stable-payload-tx = []
+unsafe-stable-payload-init = []
+unsafe-uninit-payload-bytes = []
+expert-unsafe-payloads = [
+    "unsafe-stable-payload-tx",
+    "unsafe-stable-payload-init",
+    "unsafe-uninit-payload-bytes",
+]
 
 [dependencies]
 async-trait = { version = "0.1" }
