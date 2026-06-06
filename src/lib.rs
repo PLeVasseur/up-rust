@@ -51,6 +51,8 @@ For user convenience, all of these modules export their types on up_rust top-lev
   implementations.
 * `test-util` provides some useful mock implementations for testing. In particular, provides mock implementations of UTransport and Communication Layer API traits which make implementing unit tests a lot easier.
 * `owned-frame-transport` enables an experimental native owned-frame transport API. This is additive to `UTransport` and does not replace the ordinary `UMessage` compatibility path.
+* `payload-contract-fixtures` exposes representative benchmark payload fixtures,
+  stable structs, validators, manifests, and protobuf schemas for transport benchmarks.
 * `unsafe-stable-payload-tx`, `unsafe-stable-payload-init`, and `unsafe-uninit-payload-bytes` enable expert stable-payload transmit APIs
   with caller-side initialization obligations. `expert-unsafe-payloads` enables all of them.
 * `util` provides some useful helper structs. In particular, provides a local, in-memory UTransport for exchanging messages within a single process. This transport is also used by the examples illustrating usage of the Communication Layer API.
@@ -61,6 +63,8 @@ For user convenience, all of these modules export their types on up_rust top-lev
 * [uProtocol Specification](https://github.com/eclipse-uprotocol/up-spec/tree/v1.6.0-alpha.7)
 
 */
+
+extern crate self as up_rust;
 
 // up_core_api types used and augmented by up_rust - symbols re-exported to toplevel, errors are module-specific
 #[cfg(feature = "cloudevents")]
@@ -80,6 +84,9 @@ pub mod symphony;
 
 use protobuf::{well_known_types::any::Any, Message, MessageFull};
 pub use up_rust_macros::{ByteBackedStablePayload, StablePayload, StablePayloadInit};
+
+#[cfg(feature = "payload-contract-fixtures")]
+pub mod bench_fixtures;
 
 mod frame_metadata;
 pub use frame_metadata::{
