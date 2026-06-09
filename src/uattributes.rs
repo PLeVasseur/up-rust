@@ -101,6 +101,90 @@ pub struct UAttributes {
 }
 
 impl UAttributes {
+    /// Creates attributes without validating message-type-specific invariants.
+    ///
+    /// This is intended for transport/header code that reconstructs attributes
+    /// from an already trusted representation and then validates at the frame or
+    /// message boundary.
+    ///
+    /// # Preconditions
+    ///
+    /// Before the attributes are used as valid uProtocol metadata, callers must
+    /// ensure that [`UAttributesValidators::get_validator_for_attributes`] would
+    /// accept them. When the attributes are wrapped in [`crate::UFrameMetadata`],
+    /// callers must also satisfy the frame metadata `payload_format` /
+    /// `PayloadEncoding` invariant enforced by [`crate::UFrameMetadata::validate`].
+    #[must_use]
+    pub fn new_unchecked(
+        id: UUID,
+        source: UUri,
+        sink: Option<UUri>,
+        message_type: UMessageType,
+    ) -> Self {
+        Self {
+            type_: message_type,
+            id,
+            source,
+            sink,
+            priority: None,
+            commstatus: None,
+            ttl: None,
+            permission_level: None,
+            token: None,
+            traceparent: None,
+            reqid: None,
+            payload_format: None,
+        }
+    }
+
+    /// Sets the priority without validating message-type-specific invariants.
+    pub fn set_priority(&mut self, priority: UPriority) -> &mut Self {
+        self.priority = Some(priority);
+        self
+    }
+
+    /// Sets the time-to-live without validating message-type-specific invariants.
+    pub fn set_ttl(&mut self, ttl: u32) -> &mut Self {
+        self.ttl = Some(ttl);
+        self
+    }
+
+    /// Sets the request ID without validating message-type-specific invariants.
+    pub fn set_request_id(&mut self, request_id: UUID) -> &mut Self {
+        self.reqid = Some(request_id);
+        self
+    }
+
+    /// Sets the permission level without validating message-type-specific invariants.
+    pub fn set_permission_level(&mut self, permission_level: u32) -> &mut Self {
+        self.permission_level = Some(permission_level);
+        self
+    }
+
+    /// Sets the communication status without validating message-type-specific invariants.
+    pub fn set_comm_status(&mut self, comm_status: UCode) -> &mut Self {
+        self.commstatus = Some(comm_status);
+        self
+    }
+
+    /// Sets the traceparent without validating message-type-specific invariants.
+    pub fn set_traceparent<T: Into<String>>(&mut self, traceparent: T) -> &mut Self {
+        self.traceparent = Some(traceparent.into());
+        self
+    }
+
+    /// Sets the token without validating message-type-specific invariants.
+    pub fn set_token<T: Into<String>>(&mut self, token: T) -> &mut Self {
+        self.token = Some(token.into());
+        self
+    }
+
+    /// Sets the payload format without validating frame payload-encoding invariants.
+    pub fn set_payload_format(&mut self, payload_format: UPayloadFormat) -> &mut Self {
+        self.payload_format = Some(payload_format);
+        self
+    }
+
     /// Gets the type of message these are the attributes of.
     ///
     /// # Example
@@ -825,6 +909,99 @@ mod tests {
             .checked_add_signed(offset_millis)
             .unwrap();
         UUID::build_for_timestamp_millis(creation_timestamp)
+    }
+
+    fn publish_topic() -> UUri {
+        UUri::try_from("//my-vehicle/D45/23/A001").unwrap()
+    }
+
+    fn method_to_invoke() -> UUri {
+        UUri::try_from("//my-vehicle/D45/2/101").unwrap()
+    }
+
+    fn reply_to_address() -> UUri {
+        UUri::try_from("//other-vehicle/D10/3/0").unwrap()
+    }
+
+    #[test]
+    fn test_new_unchecked_populates_required_fields_only() {
+        let id = UUID::build();
+        let source = publish_topic();
+        let attributes =
+            UAttributes::new_unchecked(id.clone(), source.clone(), None, UMessageType::Publish);
+
+        assert_eq!(attributes.type_(), UMessageType::Publish);
+        assert_eq!(attributes.id(), &id);
+        assert_eq!(attributes.source(), &source);
+        assert!(attributes.sink().is_none());
+        assert!(attributes.priority().is_none());
+        assert!(attributes.commstatus().is_none());
+        assert!(attributes.ttl().is_none());
+        assert!(attributes.permission_level().is_none());
+        assert!(attributes.token().is_none());
+        assert!(attributes.traceparent().is_none());
+        assert!(attributes.request_id().is_none());
+        assert!(attributes.payload_format().is_none());
+        UAttributesValidators::Publish
+            .validator()
+            .validate(&attributes)
+            .unwrap();
+    }
+
+    #[test]
+    fn test_unchecked_setters_populate_optional_fields() {
+        let request_id = UUID::build();
+        let mut attributes = UAttributes::new_unchecked(
+            UUID::build(),
+            method_to_invoke(),
+            Some(reply_to_address()),
+            UMessageType::Response,
+        );
+
+        attributes
+            .set_priority(UPriority::CS4)
+            .set_ttl(2_000)
+            .set_request_id(request_id.clone())
+            .set_permission_level(7)
+            .set_comm_status(UCode::Ok)
+            .set_traceparent("00-4bf92f3577b34da6a3ce929d0e0e4736-00f067aa0ba902b7-01")
+            .set_token("token")
+            .set_payload_format(UPayloadFormat::Text);
+
+        assert_eq!(attributes.priority(), Some(UPriority::CS4));
+        assert_eq!(attributes.ttl(), Some(2_000));
+        assert_eq!(attributes.request_id(), Some(&request_id));
+        assert_eq!(attributes.permission_level(), Some(7));
+        assert_eq!(attributes.commstatus(), Some(UCode::Ok));
+        assert_eq!(
+            attributes.traceparent(),
+            Some("00-4bf92f3577b34da6a3ce929d0e0e4736-00f067aa0ba902b7-01")
+        );
+        assert_eq!(attributes.token(), Some("token"));
+        assert_eq!(attributes.payload_format(), Some(UPayloadFormat::Text));
+        UAttributesValidators::Response
+            .validator()
+            .validate(&attributes)
+            .unwrap();
+    }
+
+    #[test]
+    fn test_new_unchecked_does_not_replace_validator_preconditions() {
+        let attributes = UAttributes::new_unchecked(
+            UUID::build(),
+            reply_to_address(),
+            Some(method_to_invoke()),
+            UMessageType::Request,
+        );
+
+        let error = UAttributesValidators::Request
+            .validator()
+            .validate(&attributes)
+            .unwrap_err()
+            .to_string();
+
+        assert!(error.contains("TTL"));
+        assert!(error.contains("priority"));
     }
 
     #[test_case(build_for_time_offset(-1000), None, false; "for past message without TTL")]
