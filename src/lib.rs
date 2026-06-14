@@ -148,6 +148,16 @@ pub use utransport::{
     UOwnedListener, UOwnedTransport, UOwnedTransportExt, UOwnedTransportImpl, ValidatedOwnedFrame,
 };
 
+mod wire_transport;
+#[cfg(feature = "owned-frame-transport")]
+pub use wire_transport::{
+    EncodedOwnedFrame, PreparedOwnedFrame, UEncodedOwnedListener, UOwnedTransportCore,
+};
+pub use wire_transport::{
+    PreparedTxLoanSpec, UEncodedRxFrame, UEncodedZeroCopyListener, UHasWire, UWireRx,
+    UWireTransport, UWithWire, UZeroCopyTransportCore, UZeroCopyUninitTransportCore,
+};
+
 mod uuid;
 pub use uuid::UUID;
 
