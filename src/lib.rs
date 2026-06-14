@@ -104,7 +104,8 @@ pub use owned_frame::UOwnedFrame;
 pub mod payload;
 pub use payload::{
     BytePayloadCodec, DecodePayload, EncodePayload, PayloadCodec, PayloadFormat, PayloadLayout,
-    ProtobufAnyPayload, ProtobufPayload, RawBytes, ReadDecodePayload, UWireError,
+    ProtobufAnyPayload, ProtobufPayload, RawBytes, ReadDecodePayload, StableContainerPayload,
+    StableContainerPayloadInfo, StablePayload, StablePayloadVariant, StableTypeDetail, UWireError,
 };
 
 mod zero_copy;
