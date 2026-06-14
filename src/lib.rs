@@ -84,6 +84,13 @@ pub use frame_metadata::{
     UFrameMetadata, UFrameMetadataError,
 };
 
+pub mod wire;
+pub use wire::{
+    decode_frame_metadata, encode_frame_metadata, UProtocolNativeWire, UWire, UWireDecode,
+    UWireDecodeOwned, UWireEncode, UWireMetadata, UWireMetadataError, UWireReadDecode,
+    WireCompatibility, WireIdentity, WireIdentityRef,
+};
+
 #[cfg(feature = "owned-frame-transport")]
 pub mod frame_wire;
 #[cfg(feature = "owned-frame-transport")]
