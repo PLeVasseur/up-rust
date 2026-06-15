@@ -29,7 +29,7 @@ use tracing::warn;
 #[cfg(feature = "owned-frame-transport")]
 use crate::UOwnedFrame;
 use crate::{
-    payload::{PayloadCodec, ReadDecodePayload, UWireError},
+    payload::{PayloadCodec, ReadDecodePayload, StableContainerPayload, StablePayload, UWireError},
     utransport::verify_filter_criteria,
     UCode, UFrameMetadata, UFrameMetadataError, UStatus, UUri,
 };
@@ -381,6 +381,101 @@ impl UFrameView for UOwnedFrame {
 
 /// Receive-side zero-copy frame lease returned by a transport.
 pub trait UZeroCopyRxLease: UFrameView {}
+
+/// Diagnostic provenance for loan-backed payload storage.
+#[derive(Clone, Copy, Debug, Eq, Hash, PartialEq)]
+pub enum PayloadLoanProvenance {
+    /// Payload bytes are backed by a transport loan whose domain is opaque to up-rust.
+    OpaqueTransportLoan,
+}
+
+/// Immutable payload bytes with explicit transport-loan provenance.
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub struct LoanedPayload<'a> {
+    bytes: &'a [u8],
+    provenance: PayloadLoanProvenance,
+}
+
+impl<'a> LoanedPayload<'a> {
+    /// Creates a loaned payload view from transport-owned storage.
+    ///
+    /// # Safety
+    ///
+    /// Callers must guarantee `bytes` stays valid and immutable for `'a`, and
+    /// that the storage was not allocated or coalesced solely to manufacture a
+    /// zero-copy receive proof.
+    #[must_use]
+    pub unsafe fn new_unchecked(bytes: &'a [u8], provenance: PayloadLoanProvenance) -> Self {
+        Self { bytes, provenance }
+    }
+
+    /// Returns diagnostic storage provenance.
+    #[must_use]
+    pub fn provenance(self) -> PayloadLoanProvenance {
+        self.provenance
+    }
+
+    /// Returns the payload bytes.
+    #[must_use]
+    pub fn as_bytes(self) -> &'a [u8] {
+        self.bytes
+    }
+
+    /// Returns the payload length in bytes.
+    #[must_use]
+    pub fn len(self) -> usize {
+        self.bytes.len()
+    }
+
+    /// Returns whether the payload is empty.
+    #[must_use]
+    pub fn is_empty(self) -> bool {
+        self.bytes.is_empty()
+    }
+}
+
+impl AsRef<[u8]> for LoanedPayload<'_> {
+    fn as_ref(&self) -> &[u8] {
+        self.bytes
+    }
+}
+
+impl Deref for LoanedPayload<'_> {
+    type Target = [u8];
+
+    fn deref(&self) -> &Self::Target {
+        self.bytes
+    }
+}
+
+/// Receive lease that can expose a contiguous payload from loan-backed storage.
+pub trait ULoanedContiguousZeroCopyRxFrame: UZeroCopyRxLease {
+    /// Returns one contiguous loan-backed application payload view.
+    ///
+    /// Implementations must not allocate, copy, or coalesce payload bytes to
+    /// satisfy this method.
+    fn loaned_contiguous_payload(&self) -> Result<LoanedPayload<'_>, UWireError>;
+
+    /// Returns diagnostic provenance for successful loaned payload borrows.
+    fn payload_loan_provenance(&self) -> Result<PayloadLoanProvenance, UWireError> {
+        Ok(self.loaned_contiguous_payload()?.provenance())
+    }
+
+    /// Returns only loan-backed contiguous payload bytes.
+    fn try_loaned_contiguous_payload(&self) -> Result<&[u8], UWireError> {
+        Ok(self.loaned_contiguous_payload()?.as_bytes())
+    }
+
+    /// Borrows one stable-container value from loan-backed contiguous storage.
+    fn borrow_stable_payload<T>(&self) -> Result<&T, UWireError>
+    where
+        T: StablePayload,
+    {
+        StableContainerPayload::<T>::verify_encoding(self.metadata().payload_encoding())?;
+        let payload = self.loaned_contiguous_payload()?;
+        StableContainerPayload::<T>::borrow_checked_payload(payload.as_bytes())
+    }
+}
 
 /// A handler for processing zero-copy receive leases.
 #[async_trait]
@@ -997,6 +1092,17 @@ impl UFrameView for UVecRxLease {
 
 impl UZeroCopyRxLease for UVecRxLease {}
 
+impl ULoanedContiguousZeroCopyRxFrame for UVecRxLease {
+    fn loaned_contiguous_payload(&self) -> Result<LoanedPayload<'_>, UWireError> {
+        let payload = self.payload.as_deref().ok_or(UWireError::MissingPayload)?;
+        // SAFETY: `UVecRxLease` is the local vector-backed test receive lease
+        // selected in `USR-04B` preflight as the positive fake loan proof.
+        Ok(unsafe {
+            LoanedPayload::new_unchecked(payload, PayloadLoanProvenance::OpaqueTransportLoan)
+        })
+    }
+}
+
 #[cfg(any(test, feature = "test-util"))]
 #[derive(Default)]
 struct InMemoryState {
@@ -1338,8 +1444,38 @@ fn internal_zero_copy_error(message: impl Into<String>) -> UStatus {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::{PayloadEncoding, UMessageBuilder, UPayloadFormat};
+    use crate::{PayloadEncoding, StablePayloadVariant, UMessageBuilder, UPayloadFormat};
     use std::sync::Mutex as StdMutex;
+
+    #[repr(C)]
+    #[derive(Clone, Copy, Debug, Eq, PartialEq)]
+    struct StableBytes {
+        bytes: [u8; 4],
+    }
+
+    unsafe impl StablePayload for StableBytes {
+        const TYPE_NAME: &'static str = "uprotocol.test.StableBytes";
+    }
+
+    #[repr(C)]
+    #[derive(Clone, Copy, Debug, Eq, PartialEq)]
+    struct OtherStableBytes {
+        bytes: [u8; 4],
+    }
+
+    unsafe impl StablePayload for OtherStableBytes {
+        const TYPE_NAME: &'static str = "uprotocol.test.OtherStableBytes";
+    }
+
+    #[repr(C, align(4))]
+    #[derive(Clone, Copy, Debug, Eq, PartialEq)]
+    struct AlignedStableBytes {
+        bytes: [u8; 4],
+    }
+
+    unsafe impl StablePayload for AlignedStableBytes {
+        const TYPE_NAME: &'static str = "uprotocol.test.AlignedStableBytes";
+    }
 
     fn topic() -> UUri {
         UUri::try_from_parts("vehicle", 0x4210, 0x01, 0x9000).expect("failed to create topic")
@@ -1361,6 +1497,42 @@ mod tests {
             Some(PayloadEncoding::Standard(UPayloadFormat::Raw)),
         )
         .expect("metadata")
+    }
+
+    fn stable_metadata<T: StablePayload>() -> UFrameMetadata {
+        let message = UMessageBuilder::publish(topic()).build().expect("message");
+        UFrameMetadata::new(
+            message.attributes().clone(),
+            Some(StableContainerPayload::<T>::encoding()),
+        )
+        .expect("metadata")
+    }
+
+    fn stable_bytes(value: &StableBytes) -> Vec<u8> {
+        // SAFETY: `StableBytes` is `repr(C)` over `[u8; 4]`, has no padding or
+        // drop glue, and every byte pattern is valid for the test type.
+        unsafe {
+            std::slice::from_raw_parts(
+                std::ptr::from_ref(value).cast::<u8>(),
+                std::mem::size_of::<StableBytes>(),
+            )
+            .to_vec()
+        }
+    }
+
+    fn stable_encoding_with<T: StablePayload>(
+        type_name: &str,
+        variant: StablePayloadVariant,
+        size: usize,
+        alignment: usize,
+    ) -> PayloadEncoding {
+        PayloadEncoding::custom(
+            StableContainerPayload::<T>::ENCODING_ID,
+            format!(
+                "application/vnd.uprotocol.stable-container;type=\"{type_name}\";variant={variant};size={size};align={alignment}"
+            ),
+        )
+        .expect("stable encoding")
     }
 
     #[test]
@@ -1532,6 +1704,111 @@ mod tests {
 
         assert_eq!(from_reader, b"abcdef");
         assert_eq!(from_slices, b"abcdef");
+        validate_frame_view_for_transport(&frame).unwrap();
+    }
+
+    #[test]
+    fn stable_borrow_accepts_loan_backed_contiguous_payload() {
+        let value = StableBytes { bytes: *b"loan" };
+        let frame = UVecRxLease::new(stable_metadata::<StableBytes>(), Some(stable_bytes(&value)))
+            .expect("stable frame");
+
+        let borrowed = frame.borrow_stable_payload::<StableBytes>().unwrap();
+
+        assert_eq!(borrowed, &value);
+        assert_eq!(
+            frame.payload_loan_provenance().unwrap(),
+            PayloadLoanProvenance::OpaqueTransportLoan
+        );
+    }
+
+    #[test]
+    fn stable_borrow_rejects_wrong_type_metadata() {
+        let value = StableBytes { bytes: *b"loan" };
+        let frame = UVecRxLease::new(
+            stable_metadata::<OtherStableBytes>(),
+            Some(stable_bytes(&value)),
+        )
+        .expect("stable frame");
+
+        let error = frame.borrow_stable_payload::<StableBytes>().unwrap_err();
+
+        assert!(matches!(error, UWireError::InvalidPayload(_)));
+    }
+
+    #[test]
+    fn stable_borrow_rejects_wrong_size_metadata() {
+        let value = StableBytes { bytes: *b"loan" };
+        let message = UMessageBuilder::publish(topic()).build().expect("message");
+        let metadata = UFrameMetadata::new(
+            message.attributes().clone(),
+            Some(stable_encoding_with::<StableBytes>(
+                StableBytes::TYPE_NAME,
+                StablePayloadVariant::FixedSize,
+                std::mem::size_of::<StableBytes>() + 1,
+                std::mem::align_of::<StableBytes>(),
+            )),
+        )
+        .expect("metadata");
+        let frame = UVecRxLease::new(metadata, Some(stable_bytes(&value))).expect("stable frame");
+
+        let error = frame.borrow_stable_payload::<StableBytes>().unwrap_err();
+
+        assert!(matches!(error, UWireError::InvalidPayload(_)));
+    }
+
+    #[test]
+    fn stable_borrow_rejects_insufficient_advertised_alignment() {
+        let message = UMessageBuilder::publish(topic()).build().expect("message");
+        let metadata = UFrameMetadata::new(
+            message.attributes().clone(),
+            Some(stable_encoding_with::<AlignedStableBytes>(
+                AlignedStableBytes::TYPE_NAME,
+                StablePayloadVariant::FixedSize,
+                std::mem::size_of::<AlignedStableBytes>(),
+                1,
+            )),
+        )
+        .expect("metadata");
+        let frame = UVecRxLease::new(metadata, Some(vec![0_u8; 4])).expect("stable frame");
+
+        let error = frame
+            .borrow_stable_payload::<AlignedStableBytes>()
+            .unwrap_err();
+
+        assert!(matches!(error, UWireError::InvalidPayload(_)));
+    }
+
+    #[test]
+    fn stable_borrow_rejects_payload_length_mismatch() {
+        let frame = UVecRxLease::new(stable_metadata::<StableBytes>(), Some(vec![1, 2, 3]))
+            .expect("stable frame");
+
+        let error = frame.borrow_stable_payload::<StableBytes>().unwrap_err();
+
+        assert!(
+            matches!(error, UWireError::InvalidPayload(message) if message.contains("payload length"))
+        );
+    }
+
+    #[test]
+    fn stable_borrow_rejects_absent_payload() {
+        let frame = UVecRxLease::new_unchecked(stable_metadata::<StableBytes>(), None);
+
+        let error = frame.borrow_stable_payload::<StableBytes>().unwrap_err();
+
+        assert_eq!(error, UWireError::MissingPayload);
+    }
+
+    #[test]
+    fn segmented_frame_is_not_loan_backed_proof() {
+        let frame = SegmentedFrame {
+            metadata: stable_metadata::<StableBytes>(),
+            first: vec![1, 2],
+            second: vec![3, 4],
+        };
+
+        assert_eq!(frame.try_contiguous_payload(), None);
         validate_frame_view_for_transport(&frame).unwrap();
     }
 

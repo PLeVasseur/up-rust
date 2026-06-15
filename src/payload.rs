@@ -593,6 +593,29 @@ impl<T: StablePayload> StableContainerPayload<T> {
         }
         Ok(())
     }
+
+    pub(crate) fn borrow_checked_payload(src: &[u8]) -> Result<&T, UWireError> {
+        let expected_len = mem::size_of::<T>();
+        if src.len() != expected_len {
+            return Err(UWireError::invalid_payload(format!(
+                "payload length must be {expected_len}, got {}",
+                src.len()
+            )));
+        }
+
+        let alignment = mem::align_of::<T>();
+        let address = src.as_ptr() as usize;
+        if !address.is_multiple_of(alignment) {
+            return Err(UWireError::invalid_payload(format!(
+                "payload address {address} is not aligned to {alignment}"
+            )));
+        }
+
+        // SAFETY: length and alignment were verified above. Reaching this helper
+        // requires the loan-backed receive proof, and `T: StablePayload` is the
+        // unsafe contract that the bytes represent one initialized `T`.
+        Ok(unsafe { &*src.as_ptr().cast::<T>() })
+    }
 }
 
 impl<T> PayloadCodec for StableContainerPayload<T>

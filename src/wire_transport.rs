@@ -35,9 +35,10 @@ use bytes::Bytes;
 use tracing::warn;
 
 use crate::{
-    validate_frame_view_for_transport, UCode, UFrameMetadata, UFrameView, UStatus, UTxBuffer,
-    UUninitTxBuffer, UUri, UWire, UWireMetadata, UZeroCopyListener, UZeroCopyRxLease,
-    UZeroCopyTransportImpl, UZeroCopyUninitTransportImpl, ValidatedTxLoanSpec,
+    validate_frame_view_for_transport, LoanedPayload, UCode, UFrameMetadata, UFrameView,
+    ULoanedContiguousZeroCopyRxFrame, UStatus, UTxBuffer, UUninitTxBuffer, UUri, UWire, UWireError,
+    UWireMetadata, UZeroCopyListener, UZeroCopyRxLease, UZeroCopyTransportImpl,
+    UZeroCopyUninitTransportImpl, ValidatedTxLoanSpec,
 };
 #[cfg(feature = "owned-frame-transport")]
 use crate::{UOwnedFrame, UOwnedListener, UOwnedTransportImpl, ValidatedOwnedFrame};
@@ -232,6 +233,15 @@ pub trait UEncodedRxFrame {
     }
 }
 
+/// Raw encoded receive object that can prove its contiguous payload is loan-backed.
+pub trait UEncodedLoanedRxFrame: UEncodedRxFrame {
+    /// Returns one contiguous loan-backed application payload view.
+    ///
+    /// Implementations must not allocate, copy, or coalesce payload bytes to
+    /// satisfy this method.
+    fn loaned_contiguous_payload(&self) -> Result<LoanedPayload<'_>, UWireError>;
+}
+
 /// Public zero-copy receive lease after selected-wire metadata validation.
 pub struct UWireRx<Rx, W>
 where
@@ -321,6 +331,16 @@ where
     Rx: UEncodedRxFrame,
     W: UWireMetadata,
 {
+}
+
+impl<Rx, W> ULoanedContiguousZeroCopyRxFrame for UWireRx<Rx, W>
+where
+    Rx: UEncodedLoanedRxFrame,
+    W: UWireMetadata,
+{
+    fn loaned_contiguous_payload(&self) -> Result<LoanedPayload<'_>, UWireError> {
+        self.raw.loaned_contiguous_payload()
+    }
 }
 
 /// Listener used by cores to deliver raw encoded zero-copy receive objects.
@@ -537,15 +557,12 @@ where
                     .downcast::<WireZeroCopyListener<TCore::Rx, W>>()
                     .ok()
             })
-            .map_or_else(
-                || {
-                    Arc::new(WireZeroCopyListener::<TCore::Rx, W> {
-                        listener: fallback,
-                        _wire: PhantomData,
-                    })
-                },
-                |listener| listener,
-            )
+            .unwrap_or_else(|| {
+                Arc::new(WireZeroCopyListener::<TCore::Rx, W> {
+                    listener: fallback,
+                    _wire: PhantomData,
+                })
+            })
     }
 }
 
@@ -836,15 +853,12 @@ where
             .expect("wire owned listener registry lock poisoned")
             .get(key)
             .and_then(|listener| listener.clone().downcast::<WireOwnedListener<W>>().ok())
-            .map_or_else(
-                || {
-                    Arc::new(WireOwnedListener::<W> {
-                        listener: fallback,
-                        _wire: PhantomData,
-                    })
-                },
-                |listener| listener,
-            )
+            .unwrap_or_else(|| {
+                Arc::new(WireOwnedListener::<W> {
+                    listener: fallback,
+                    _wire: PhantomData,
+                })
+            })
     }
 }
 
@@ -922,9 +936,20 @@ mod tests {
 
     use super::*;
     use crate::{
-        PayloadEncoding, UMessageBuilder, UPayloadFormat, UProtocolNativeWire, UTxPayloadSpec,
-        UVecRxLease, UVecTxBuffer, UVecUninitTxBuffer,
+        PayloadEncoding, PayloadLoanProvenance, StableContainerPayload, StablePayload,
+        UMessageBuilder, UPayloadFormat, UProtocolNativeWire, UTxPayloadSpec, UVecRxLease,
+        UVecTxBuffer, UVecUninitTxBuffer,
     };
+
+    #[repr(C)]
+    #[derive(Clone, Copy, Debug, Eq, PartialEq)]
+    struct WireStableBytes {
+        bytes: [u8; 4],
+    }
+
+    unsafe impl StablePayload for WireStableBytes {
+        const TYPE_NAME: &'static str = "uprotocol.test.WireStableBytes";
+    }
 
     struct RawRx {
         encoded_metadata: Vec<u8>,
@@ -959,6 +984,19 @@ mod tests {
 
         fn try_contiguous_payload(&self) -> Option<&[u8]> {
             Some(&self.payload)
+        }
+    }
+
+    impl UEncodedLoanedRxFrame for RawRx {
+        fn loaned_contiguous_payload(&self) -> Result<LoanedPayload<'_>, UWireError> {
+            // SAFETY: This test raw receive type models a transport-owned
+            // contiguous receive loan for the selected-wire wrapper proof.
+            Ok(unsafe {
+                LoanedPayload::new_unchecked(
+                    self.payload.as_slice(),
+                    PayloadLoanProvenance::OpaqueTransportLoan,
+                )
+            })
         }
     }
 
@@ -1016,6 +1054,28 @@ mod tests {
         .expect("metadata")
     }
 
+    fn stable_metadata<T: StablePayload>() -> UFrameMetadata {
+        let topic = UUri::try_from_parts("vehicle", 0x4210, 0x01, 0x9000).expect("topic URI");
+        let message = UMessageBuilder::publish(topic).build().expect("message");
+        UFrameMetadata::new(
+            message.attributes().clone(),
+            Some(StableContainerPayload::<T>::encoding()),
+        )
+        .expect("metadata")
+    }
+
+    fn stable_bytes(value: &WireStableBytes) -> Vec<u8> {
+        // SAFETY: `WireStableBytes` is `repr(C)` over `[u8; 4]`, has no padding
+        // or drop glue, and every byte pattern is valid for the test type.
+        unsafe {
+            std::slice::from_raw_parts(
+                std::ptr::from_ref(value).cast::<u8>(),
+                std::mem::size_of::<WireStableBytes>(),
+            )
+            .to_vec()
+        }
+    }
+
     #[test]
     fn wire_rx_decodes_metadata_and_delegates_payload() {
         let metadata = metadata_with_payload();
@@ -1030,6 +1090,29 @@ mod tests {
         assert_eq!(rx.metadata(), &metadata);
         assert_eq!(rx.payload_len(), 3);
         assert_eq!(rx.try_contiguous_payload(), Some(&b"abc"[..]));
+    }
+
+    #[test]
+    fn stable_borrow_accepts_wire_rx_with_loaned_raw_frame() {
+        fn assert_loaned_rx<T: ULoanedContiguousZeroCopyRxFrame>() {}
+        assert_loaned_rx::<UWireRx<RawRx, UProtocolNativeWire>>();
+
+        let value = WireStableBytes { bytes: *b"wire" };
+        let metadata = stable_metadata::<WireStableBytes>();
+        let encoded_metadata = UProtocolNativeWire::encode_frame_metadata(&metadata).unwrap();
+        let raw = RawRx {
+            encoded_metadata,
+            payload: stable_bytes(&value),
+        };
+
+        let rx = UWireRx::<RawRx, UProtocolNativeWire>::try_from_encoded(raw).unwrap();
+        let borrowed = rx.borrow_stable_payload::<WireStableBytes>().unwrap();
+
+        assert_eq!(borrowed, &value);
+        assert_eq!(
+            rx.payload_loan_provenance().unwrap(),
+            PayloadLoanProvenance::OpaqueTransportLoan
+        );
     }
 
     #[test]
