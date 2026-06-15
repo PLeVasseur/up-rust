@@ -491,6 +491,146 @@ pub unsafe trait StablePayload: Sized + 'static {
     fn __stable_payload_field_check(&self) {}
 }
 
+mod byte_backed_stable_field_seal {
+    pub trait Sealed {}
+
+    macro_rules! impl_sealed_field {
+        ($($ty:ty),* $(,)?) => {
+            $(
+                impl Sealed for $ty {}
+            )*
+        };
+    }
+
+    impl_sealed_field!(
+        (),
+        bool,
+        char,
+        u8,
+        u16,
+        u32,
+        u64,
+        u128,
+        usize,
+        i8,
+        i16,
+        i32,
+        i64,
+        i128,
+        isize,
+        f32,
+        f64,
+    );
+
+    impl<T, const N: usize> Sealed for [T; N] where T: Sealed {}
+
+    impl<T> Sealed for T where T: super::ByteBackedStablePayload {}
+}
+
+/// Hidden recursive proof that a field is safe for byte-backed stable payloads.
+///
+/// This trait is derive-support plumbing, not an application extension point.
+/// Use [`ByteBackedStablePayload`] for payload-level public bounds.
+#[doc(hidden)]
+#[allow(private_bounds)]
+pub trait ByteBackedStablePayloadField:
+    byte_backed_stable_field_seal::Sealed + Sized + 'static
+{
+    #[doc(hidden)]
+    const SUPPORTS_BYTE_BACKED_STABLE_FIELD: bool;
+}
+
+macro_rules! impl_byte_backed_stable_field {
+    ($($ty:ty),* $(,)?) => {
+        $(
+            impl ByteBackedStablePayloadField for $ty {
+                const SUPPORTS_BYTE_BACKED_STABLE_FIELD: bool = true;
+            }
+        )*
+    };
+}
+
+impl_byte_backed_stable_field!(
+    (),
+    bool,
+    char,
+    u8,
+    u16,
+    u32,
+    u64,
+    u128,
+    usize,
+    i8,
+    i16,
+    i32,
+    i64,
+    i128,
+    isize,
+    f32,
+    f64,
+);
+
+impl<T, const N: usize> ByteBackedStablePayloadField for [T; N]
+where
+    T: ByteBackedStablePayloadField,
+{
+    const SUPPORTS_BYTE_BACKED_STABLE_FIELD: bool = T::SUPPORTS_BYTE_BACKED_STABLE_FIELD;
+}
+
+impl<T> ByteBackedStablePayloadField for T
+where
+    T: ByteBackedStablePayload,
+{
+    const SUPPORTS_BYTE_BACKED_STABLE_FIELD: bool = true;
+}
+
+/// Stronger stable payload proof for byte-backed stable-container paths.
+///
+/// `StablePayload` proves stable type identity, representation eligibility, and
+/// receive-side metadata compatibility. `ByteBackedStablePayload` additionally
+/// proves that the type has no implicit inter-field or trailing padding and that
+/// every field is recursively byte-backed.
+///
+/// Prefer `#[derive(StablePayload, ByteBackedStablePayload)]` for hand-written
+/// payload types. Manual implementations are reserved for externally audited FFI
+/// or code-generated layouts with an equivalent whole-object initialization
+/// proof.
+///
+/// # Safety
+///
+/// Implementors must guarantee that copying or initializing exactly
+/// `size_of::<Self>()` bytes is a sound representation of one valid `Self` for
+/// stable-container paths. That requires stable layout, no implicit padding, no
+/// drop glue, and recursively byte-backed fields.
+pub unsafe trait ByteBackedStablePayload: StablePayload {
+    /// Whether this type's full object representation can be used by
+    /// byte-backed stable-container paths.
+    const SUPPORTS_BYTE_BACKED_UNINIT: bool = true;
+
+    #[doc(hidden)]
+    const BYTE_BACKED_STABLE_PAYLOAD_CHECK: () = {
+        assert!(Self::SUPPORTS_BYTE_BACKED_UNINIT);
+        assert!(!mem::needs_drop::<Self>());
+    };
+}
+
+/// Returns whether `T` can use byte-backed stable-container paths.
+#[must_use]
+pub const fn stable_payload_supports_byte_backed_uninit<T: ByteBackedStablePayload>() -> bool {
+    T::SUPPORTS_BYTE_BACKED_UNINIT && !mem::needs_drop::<T>()
+}
+
+/// Compile-time assertion for byte-backed stable-container eligibility.
+pub const fn assert_stable_payload_byte_backed_uninit<T>()
+where
+    T: ByteBackedStablePayload,
+{
+    assert!(T::SUPPORTS_BYTE_BACKED_UNINIT);
+    assert!(!mem::needs_drop::<T>());
+    #[allow(path_statements)]
+    T::BYTE_BACKED_STABLE_PAYLOAD_CHECK;
+}
+
 /// Type-agnostic stable-container metadata parsed from a payload encoding.
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub struct StableContainerPayloadInfo {

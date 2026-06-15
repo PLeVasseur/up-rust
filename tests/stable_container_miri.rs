@@ -17,7 +17,9 @@ use up_rust::{
 };
 
 #[repr(C)]
-#[derive(Clone, Copy, Debug, Eq, PartialEq, up_rust::StablePayload)]
+#[derive(
+    Clone, Copy, Debug, Eq, PartialEq, up_rust::StablePayload, up_rust::ByteBackedStablePayload,
+)]
 #[stable_payload(type_name = "example.miri.StableBytes")]
 struct StableBytes {
     bytes: [u8; 4],
@@ -55,6 +57,8 @@ fn stable_bytes(value: &StableBytes) -> Vec<u8> {
 
 #[test]
 fn stable_payload_derive_loan_borrow_is_miri_friendly() {
+    up_rust::assert_stable_payload_byte_backed_uninit::<StableBytes>();
+
     let value = StableBytes { bytes: *b"miri" };
     let frame = UVecRxLease::new(metadata::<StableBytes>(), Some(stable_bytes(&value)))
         .expect("loan-backed stable frame");

@@ -6,7 +6,7 @@
 
 use proc_macro::TokenStream;
 use quote::{quote, quote_spanned};
-use syn::{parse_macro_input, spanned::Spanned, Data, DeriveInput, Fields, Lit, Type};
+use syn::{parse_macro_input, spanned::Spanned, Data, DeriveInput, Fields, Lit, LitStr, Type};
 
 struct StablePayloadArgs {
     type_name: String,
@@ -19,19 +19,18 @@ pub fn derive_stable_payload(input: TokenStream) -> TokenStream {
         .into()
 }
 
+#[proc_macro_derive(ByteBackedStablePayload, attributes(stable_payload))]
+pub fn derive_byte_backed_stable_payload(input: TokenStream) -> TokenStream {
+    expand_byte_backed_stable_payload(parse_macro_input!(input as DeriveInput))
+        .unwrap_or_else(syn::Error::into_compile_error)
+        .into()
+}
+
 fn expand_stable_payload(input: DeriveInput) -> syn::Result<proc_macro2::TokenStream> {
     let args = parse_args(&input)?;
-    ensure_repr_c_or_transparent(&input)?;
-
-    if !input.generics.params.is_empty() {
-        return Err(syn::Error::new_spanned(
-            &input.generics,
-            "StablePayload derive does not support generic types yet",
-        ));
-    }
-
     let name = &input.ident;
-    let field_checks = stable_field_checks(&input)?;
+    let shape = analyze_stable_payload_shape(&input)?;
+    let field_checks = shape.field_checks;
     let type_name = args.type_name;
 
     Ok(quote! {
@@ -62,39 +61,142 @@ fn expand_stable_payload(input: DeriveInput) -> syn::Result<proc_macro2::TokenSt
     })
 }
 
-fn stable_field_checks(input: &DeriveInput) -> syn::Result<proc_macro2::TokenStream> {
+fn expand_byte_backed_stable_payload(input: DeriveInput) -> syn::Result<proc_macro2::TokenStream> {
+    let name = &input.ident;
+    let shape = analyze_stable_payload_shape(&input)?;
+    let field_size_sum = shape.field_size_sum;
+    let byte_backed_field_checks = shape.byte_backed_field_checks;
+    let field_offset_checks = shape.field_offset_checks;
+
+    Ok(quote! {
+        const _: () = {
+            #field_offset_checks
+            #byte_backed_field_checks
+            assert!(
+                !::core::mem::needs_drop::<#name>(),
+                "ByteBackedStablePayload types must not implement Drop or contain fields that need drop"
+            );
+            assert!(
+                ::core::mem::size_of::<#name>() == (#field_size_sum),
+                "ByteBackedStablePayload types must not have implicit trailing padding; use explicit initialized padding fields"
+            );
+        };
+
+        // SAFETY:
+        // - The derive checked that fields exactly cover `size_of::<Self>()`, so
+        //   there is no implicit inter-field or trailing padding.
+        // - Every field is recursively byte-backed and `Self` does not need drop
+        //   glue, so safe construction initializes every transported byte.
+        unsafe impl ::up_rust::payload::ByteBackedStablePayload for #name {}
+    })
+}
+
+struct StablePayloadShape {
+    field_checks: proc_macro2::TokenStream,
+    field_size_sum: proc_macro2::TokenStream,
+    byte_backed_field_checks: proc_macro2::TokenStream,
+    field_offset_checks: proc_macro2::TokenStream,
+}
+
+fn analyze_stable_payload_shape(input: &DeriveInput) -> syn::Result<StablePayloadShape> {
+    ensure_repr_c_or_transparent(input)?;
+    if !input.generics.params.is_empty() {
+        return Err(syn::Error::new_spanned(
+            &input.generics,
+            "StablePayload derive does not support generic types yet",
+        ));
+    }
+
     match &input.data {
         Data::Struct(data) => match &data.fields {
             Fields::Named(fields) => {
-                let checks = fields
-                    .named
-                    .iter()
-                    .map(|field| {
-                        let ident = field.ident.as_ref().expect("named fields have identifiers");
-                        validate_stable_field_type(&field.ty)?;
-                        let ty = &field.ty;
-                        Ok(quote_spanned! {ty.span()=>
-                            <#ty as ::up_rust::payload::StablePayloadField>::__stable_payload_field_check(&self.#ident);
-                        })
-                    })
-                    .collect::<syn::Result<Vec<_>>>()?;
-                Ok(quote! { #(#checks)* })
+                let name = &input.ident;
+                let mut checks = Vec::new();
+                let mut field_types = Vec::new();
+                let mut preceding_sizes = Vec::new();
+                let mut field_offset_checks = Vec::new();
+                let mut byte_backed_field_checks = Vec::new();
+
+                for field in &fields.named {
+                    let ident = field.ident.as_ref().expect("named fields have identifiers");
+                    validate_stable_field_type(&field.ty)?;
+                    let ty = &field.ty;
+                    checks.push(quote_spanned! {ty.span()=>
+                        <#ty as ::up_rust::payload::StablePayloadField>::__stable_payload_field_check(&self.#ident);
+                    });
+
+                    let expected_offset =
+                        quote! { 0_usize #(+ ::core::mem::size_of::<#preceding_sizes>())* };
+                    let padding_message = LitStr::new(
+                        &format!(
+                            "ByteBackedStablePayload field `{ident}` has implicit padding before it; add explicit initialized padding fields"
+                        ),
+                        ident.span(),
+                    );
+                    field_offset_checks.push(quote_spanned! {ident.span()=>
+                        assert!(
+                            ::core::mem::offset_of!(#name, #ident) == (#expected_offset),
+                            #padding_message
+                        );
+                    });
+
+                    let byte_backed_message = LitStr::new(
+                        &format!(
+                            "ByteBackedStablePayload field `{ident}` must be recursively byte-backed"
+                        ),
+                        ident.span(),
+                    );
+                    byte_backed_field_checks.push(quote_spanned! {ty.span()=>
+                        assert!(
+                            <#ty as ::up_rust::payload::ByteBackedStablePayloadField>::SUPPORTS_BYTE_BACKED_STABLE_FIELD,
+                            #byte_backed_message
+                        );
+                    });
+                    preceding_sizes.push(ty);
+                    field_types.push(ty);
+                }
+
+                Ok(StablePayloadShape {
+                    field_checks: quote! { #(#checks)* },
+                    field_size_sum: quote! { 0_usize #(+ ::core::mem::size_of::<#field_types>())* },
+                    byte_backed_field_checks: quote! { #(#byte_backed_field_checks)* },
+                    field_offset_checks: quote! { #(#field_offset_checks)* },
+                })
             }
             Fields::Unnamed(fields) if fields.unnamed.len() == 1 => {
-                let checks = fields
-                    .unnamed
-                    .iter()
-                    .enumerate()
-                    .map(|(index, field)| {
-                        validate_stable_field_type(&field.ty)?;
-                        let index = syn::Index::from(index);
-                        let ty = &field.ty;
-                        Ok(quote_spanned! {ty.span()=>
-                            <#ty as ::up_rust::payload::StablePayloadField>::__stable_payload_field_check(&self.#index);
-                        })
-                    })
-                    .collect::<syn::Result<Vec<_>>>()?;
-                Ok(quote! { #(#checks)* })
+                let mut checks = Vec::new();
+                let mut field_types = Vec::new();
+                let mut byte_backed_field_checks = Vec::new();
+
+                for (field_index, field) in fields.unnamed.iter().enumerate() {
+                    validate_stable_field_type(&field.ty)?;
+                    let index = syn::Index::from(field_index);
+                    let ty = &field.ty;
+                    checks.push(quote_spanned! {ty.span()=>
+                        <#ty as ::up_rust::payload::StablePayloadField>::__stable_payload_field_check(&self.#index);
+                    });
+
+                    let byte_backed_message = LitStr::new(
+                        &format!(
+                            "ByteBackedStablePayload tuple field `{field_index}` must be recursively byte-backed"
+                        ),
+                        field.span(),
+                    );
+                    byte_backed_field_checks.push(quote_spanned! {ty.span()=>
+                        assert!(
+                            <#ty as ::up_rust::payload::ByteBackedStablePayloadField>::SUPPORTS_BYTE_BACKED_STABLE_FIELD,
+                            #byte_backed_message
+                        );
+                    });
+                    field_types.push(ty);
+                }
+
+                Ok(StablePayloadShape {
+                    field_checks: quote! { #(#checks)* },
+                    field_size_sum: quote! { 0_usize #(+ ::core::mem::size_of::<#field_types>())* },
+                    byte_backed_field_checks: quote! { #(#byte_backed_field_checks)* },
+                    field_offset_checks: quote! {},
+                })
             }
             Fields::Unnamed(fields) => {
                 for field in &fields.unnamed {
@@ -105,7 +207,12 @@ fn stable_field_checks(input: &DeriveInput) -> syn::Result<proc_macro2::TokenStr
                     "StablePayload supports named structs or one-field repr(transparent) structs",
                 ))
             }
-            Fields::Unit => Ok(quote! {}),
+            Fields::Unit => Ok(StablePayloadShape {
+                field_checks: quote! {},
+                field_size_sum: quote! { 0_usize },
+                byte_backed_field_checks: quote! {},
+                field_offset_checks: quote! {},
+            }),
         },
         Data::Enum(data) => Err(syn::Error::new_spanned(
             data.enum_token,
