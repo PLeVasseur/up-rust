@@ -11,12 +11,13 @@
  * SPDX-License-Identifier: Apache-2.0
  ********************************************************************************/
 
-use std::{error::Error, fmt::Display};
+use std::{error::Error, fmt::Display, io::Read};
 
 use crate::{
-    DecodePayload, EncodePayload, PayloadEncoding, ProtobufMappable, ReadDecodePayload,
-    SerializationError, UAttributes, UCode, UFrameMetadata, UFrameMetadataError, UPayloadFormat,
-    UStatus,
+    ByteBackedStablePayload, DecodePayload, EncodePayload, LoanPayload, LoanUninitPayload,
+    PayloadEncoding, PayloadFormat, PayloadLayout, ProtobufMappable, ProtobufPayload,
+    ReadDecodePayload, SerializationError, StableContainerPayload, UAttributes, UCode,
+    UFrameMetadata, UFrameMetadataError, UPayloadFormat, UStatus, UWireError,
 };
 
 const MAGIC: &[u8; 4] = b"UPWM";
@@ -45,6 +46,31 @@ pub const UPROTOCOL_NATIVE_WIRE_ID: WireIdentity =
 /// Payload-family identity for explicit native payload bytes.
 pub const NATIVE_EXPLICIT_PAYLOAD_FAMILY_ID: WireIdentity =
     WireIdentity::new("native-explicit", 0x0001);
+
+/// Identity for the first-wave Protocol Buffers selected wire.
+pub const PROTOBUF_WIRE_ID: WireIdentity =
+    WireIdentity::new("org.eclipse.uprotocol.wire.protobuf", 0x0002);
+
+/// Payload-family identity for Protocol Buffers application payload bytes.
+pub const PROTOBUF_PAYLOAD_FAMILY_ID: WireIdentity = WireIdentity::new("protobuf", 0x0002);
+
+/// Identity reserved for the external first-wave XCDRv2 selected wire.
+///
+/// The production `XcdrV2Wire` type is intentionally owned by the external
+/// `up-wire-xcdrv2-rust` crate. `up-rust` exposes only the shared identity.
+pub const XCDR_V2_WIRE_ID: WireIdentity =
+    WireIdentity::new("org.eclipse.uprotocol.wire.xcdr-v2", 0x0003);
+
+/// Payload-family identity reserved for external XCDRv2 payload bytes.
+pub const XCDR_V2_PAYLOAD_FAMILY_ID: WireIdentity = WireIdentity::new("xcdr-v2", 0x0003);
+
+/// Identity for the first-wave stable-container selected wire.
+pub const STABLE_CONTAINER_WIRE_ID: WireIdentity =
+    WireIdentity::new("org.eclipse.uprotocol.wire.stable-container", 0x0004);
+
+/// Payload-family identity for stable-container payloads.
+pub const STABLE_CONTAINER_PAYLOAD_FAMILY_ID: WireIdentity =
+    WireIdentity::new("stable-container", 0x0004);
 
 /// Identity for the first-wave native-prefix metadata layout.
 pub const NATIVE_PREFIX_METADATA_LAYOUT_ID: WireIdentity =
@@ -148,11 +174,75 @@ pub trait UWire {
 }
 
 /// Default first-wave native wire for explicit native payload paths.
+#[derive(Clone, Copy, Debug, Default, Eq, PartialEq)]
 pub struct UProtocolNativeWire;
 
 impl UWire for UProtocolNativeWire {
     const WIRE_ID: WireIdentity = UPROTOCOL_NATIVE_WIRE_ID;
     const PAYLOAD_FAMILY_ID: WireIdentity = NATIVE_EXPLICIT_PAYLOAD_FAMILY_ID;
+    const METADATA_LAYOUT_ID: WireIdentity = NATIVE_PREFIX_METADATA_LAYOUT_ID;
+    const FORMAT_VERSION: u16 = FORMAT_VERSION;
+}
+
+/// Selected wire for Protocol Buffers application payloads.
+#[derive(Clone, Copy, Debug, Default, Eq, PartialEq)]
+pub struct ProtobufWire;
+
+impl UWire for ProtobufWire {
+    const WIRE_ID: WireIdentity = PROTOBUF_WIRE_ID;
+    const PAYLOAD_FAMILY_ID: WireIdentity = PROTOBUF_PAYLOAD_FAMILY_ID;
+    const METADATA_LAYOUT_ID: WireIdentity = NATIVE_PREFIX_METADATA_LAYOUT_ID;
+    const FORMAT_VERSION: u16 = FORMAT_VERSION;
+}
+
+impl PayloadFormat for ProtobufWire {
+    fn name() -> &'static str {
+        ProtobufPayload::name()
+    }
+
+    fn encoding() -> PayloadEncoding {
+        ProtobufPayload::encoding()
+    }
+}
+
+impl<T> EncodePayload<T> for ProtobufWire
+where
+    T: ProtobufMappable,
+{
+    fn payload_layout(value: &T) -> Result<PayloadLayout, UWireError> {
+        ProtobufPayload::payload_layout(value)
+    }
+
+    fn encode_payload(value: &T, dst: &mut [u8]) -> Result<(), UWireError> {
+        ProtobufPayload::encode_payload(value, dst)
+    }
+}
+
+impl<'a, T> DecodePayload<'a, T> for ProtobufWire
+where
+    T: ProtobufMappable,
+{
+    fn decode_payload(src: &'a [u8]) -> Result<T, UWireError> {
+        ProtobufPayload::decode_payload(src)
+    }
+}
+
+impl<T> ReadDecodePayload<T> for ProtobufWire
+where
+    T: ProtobufMappable,
+{
+    fn decode_payload_from_reader<R: Read>(reader: R, payload_len: usize) -> Result<T, UWireError> {
+        ProtobufPayload::decode_payload_from_reader(reader, payload_len)
+    }
+}
+
+/// Selected wire for stable-container payloads.
+#[derive(Clone, Copy, Debug, Default, Eq, PartialEq)]
+pub struct StableContainerWireFormat;
+
+impl UWire for StableContainerWireFormat {
+    const WIRE_ID: WireIdentity = STABLE_CONTAINER_WIRE_ID;
+    const PAYLOAD_FAMILY_ID: WireIdentity = STABLE_CONTAINER_PAYLOAD_FAMILY_ID;
     const METADATA_LAYOUT_ID: WireIdentity = NATIVE_PREFIX_METADATA_LAYOUT_ID;
     const FORMAT_VERSION: u16 = FORMAT_VERSION;
 }
@@ -206,6 +296,36 @@ impl<C, T> UWireDecodeOwned<T> for C where C: for<'a> DecodePayload<'a, T> {}
 pub trait UWireReadDecode<T>: ReadDecodePayload<T> {}
 
 impl<C, T> UWireReadDecode<T> for C where C: ReadDecodePayload<T> {}
+
+/// Wire-level initialized loan support for typed payloads.
+///
+/// The selected wire chooses the concrete payload codec used for the typed loan.
+/// This keeps non-generic wire markers such as [`StableContainerWireFormat`]
+/// usable with type-specific stable-container metadata.
+pub trait UWireLoan<T>: UWire {
+    /// Concrete payload codec used by this selected wire for `T` loans.
+    type Codec: LoanPayload<T>;
+}
+
+/// Wire-level uninitialized loan support for typed payloads.
+pub trait UWireLoanUninit<T>: UWire {
+    /// Concrete payload codec used by this selected wire for `T` uninitialized loans.
+    type Codec: LoanUninitPayload<T>;
+}
+
+impl<T> UWireLoan<T> for StableContainerWireFormat
+where
+    T: ByteBackedStablePayload + Default,
+{
+    type Codec = StableContainerPayload<T>;
+}
+
+impl<T> UWireLoanUninit<T> for StableContainerWireFormat
+where
+    T: ByteBackedStablePayload,
+{
+    type Codec = StableContainerPayload<T>;
+}
 
 /// Errors returned by native-prefix selected-wire metadata handling.
 #[derive(Clone, Debug, Eq, PartialEq)]
@@ -557,5 +677,97 @@ impl<'a> MetadataReader<'a> {
                 "unknown payload encoding tag {tag}"
             ))),
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use protobuf::well_known_types::wrappers::StringValue;
+
+    use super::*;
+    use crate::{PayloadCodec, StablePayload};
+
+    #[repr(C)]
+    #[derive(Clone, Copy, Debug, Default, Eq, PartialEq)]
+    struct WireStableBytes {
+        bytes: [u8; 4],
+    }
+
+    // SAFETY: `WireStableBytes` is a fixed `repr(C)` test type containing only
+    // byte-backed fields and no padding-sensitive invariants.
+    unsafe impl StablePayload for WireStableBytes {
+        const TYPE_NAME: &'static str = "example.wire.WireStableBytes";
+    }
+
+    // SAFETY: The type has no drop glue and its full object representation is
+    // exactly the byte array field.
+    unsafe impl ByteBackedStablePayload for WireStableBytes {}
+
+    fn assert_wire_loan<T, W>()
+    where
+        W: UWireLoan<T>,
+    {
+    }
+
+    fn assert_wire_uninit_loan<T, W>()
+    where
+        W: UWireLoanUninit<T>,
+    {
+    }
+
+    #[test]
+    fn first_wave_wire_identity_constants_match_register() {
+        assert_eq!(
+            PROTOBUF_WIRE_ID.literal_id(),
+            "org.eclipse.uprotocol.wire.protobuf"
+        );
+        assert_eq!(PROTOBUF_WIRE_ID.compact_id(), 0x0002);
+        assert_eq!(PROTOBUF_PAYLOAD_FAMILY_ID.literal_id(), "protobuf");
+        assert_eq!(PROTOBUF_PAYLOAD_FAMILY_ID.compact_id(), 0x0002);
+        assert_eq!(
+            XCDR_V2_WIRE_ID.literal_id(),
+            "org.eclipse.uprotocol.wire.xcdr-v2"
+        );
+        assert_eq!(XCDR_V2_WIRE_ID.compact_id(), 0x0003);
+        assert_eq!(XCDR_V2_PAYLOAD_FAMILY_ID.literal_id(), "xcdr-v2");
+        assert_eq!(XCDR_V2_PAYLOAD_FAMILY_ID.compact_id(), 0x0003);
+        assert_eq!(
+            STABLE_CONTAINER_WIRE_ID.literal_id(),
+            "org.eclipse.uprotocol.wire.stable-container"
+        );
+        assert_eq!(STABLE_CONTAINER_WIRE_ID.compact_id(), 0x0004);
+        assert_eq!(
+            STABLE_CONTAINER_PAYLOAD_FAMILY_ID.literal_id(),
+            "stable-container"
+        );
+        assert_eq!(STABLE_CONTAINER_PAYLOAD_FAMILY_ID.compact_id(), 0x0004);
+    }
+
+    #[test]
+    fn protobuf_wire_delegates_application_payload_codec() {
+        let value = StringValue {
+            value: "wire".to_string(),
+            special_fields: Default::default(),
+        };
+
+        let encoded = ProtobufWire::encode_payload_owned(&value).expect("encode protobuf wire");
+        let decoded: StringValue =
+            ProtobufWire::decode_payload(&encoded).expect("decode protobuf wire");
+        assert_eq!(decoded.value, "wire");
+        assert_eq!(
+            ProtobufWire::payload_encoding(),
+            ProtobufPayload::payload_encoding()
+        );
+    }
+
+    #[test]
+    fn stable_container_wire_exposes_type_specific_loan_codecs() {
+        assert_wire_loan::<WireStableBytes, StableContainerWireFormat>();
+        assert_wire_uninit_loan::<WireStableBytes, StableContainerWireFormat>();
+
+        let encoding =
+            <StableContainerWireFormat as UWireLoan<WireStableBytes>>::Codec::payload_encoding();
+        let expected = StableContainerPayload::<WireStableBytes>::payload_encoding();
+        assert_eq!(encoding, expected);
     }
 }

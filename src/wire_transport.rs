@@ -35,10 +35,10 @@ use bytes::Bytes;
 use tracing::warn;
 
 use crate::{
-    validate_frame_view_for_transport, LoanedPayload, UCode, UFrameMetadata, UFrameView,
-    ULoanedContiguousZeroCopyRxFrame, UStatus, UTxBuffer, UUninitTxBuffer, UUri, UWire, UWireError,
-    UWireMetadata, UZeroCopyListener, UZeroCopyRxLease, UZeroCopyTransportImpl,
-    UZeroCopyUninitTransportImpl, ValidatedTxLoanSpec,
+    validate_frame_view_for_transport, LoanedPayload, PayloadCodec, ReadDecodePayload, UCode,
+    UFrameMetadata, UFrameView, ULoanedContiguousZeroCopyRxFrame, UStatus, UTxBuffer,
+    UUninitTxBuffer, UUri, UWire, UWireError, UWireMetadata, UZeroCopyListener, UZeroCopyRxLease,
+    UZeroCopyTransportImpl, UZeroCopyUninitTransportImpl, ValidatedTxLoanSpec,
 };
 #[cfg(feature = "owned-frame-transport")]
 use crate::{UOwnedFrame, UOwnedListener, UOwnedTransportImpl, ValidatedOwnedFrame};
@@ -284,6 +284,27 @@ where
     #[must_use]
     pub fn into_raw(self) -> Rx {
         self.raw
+    }
+
+    /// Decodes this frame's payload using the selected wire `W`.
+    ///
+    /// Prefer this selected-wire helper on receive values produced by
+    /// `.with_wire(W)`. Use [`UFrameView::decode_payload_from_reader_as`] only for
+    /// low-level codec escape hatches.
+    ///
+    /// # Errors
+    ///
+    /// Returns an error if the frame has missing or incompatible payload encoding,
+    /// has no payload, or if the selected wire cannot decode the payload bytes.
+    pub fn decode_payload<T>(&self) -> Result<T, UWireError>
+    where
+        W: PayloadCodec + ReadDecodePayload<T>,
+    {
+        W::verify_encoding(self.metadata.payload_encoding())?;
+        if !self.has_payload() {
+            return Err(UWireError::MissingPayload);
+        }
+        W::decode_payload_from_reader(self.payload_reader(), self.payload_len())
     }
 }
 
@@ -934,11 +955,14 @@ fn invalid_metadata(error: crate::UFrameMetadataError) -> UStatus {
 mod tests {
     use std::{io::Cursor, sync::Mutex as StdMutex};
 
+    use protobuf::well_known_types::wrappers::StringValue;
+
     use super::*;
     use crate::{
-        ByteBackedStablePayload, PayloadEncoding, PayloadLoanProvenance, StableContainerPayload,
-        StablePayload, UMessageBuilder, UPayloadFormat, UProtocolNativeWire, UTxPayloadSpec,
-        UVecRxLease, UVecTxBuffer, UVecUninitTxBuffer, UZeroCopyTransportExt,
+        ByteBackedStablePayload, EncodePayload, PayloadEncoding, PayloadLoanProvenance,
+        ProtobufWire, StableContainerPayload, StableContainerWireFormat, StablePayload,
+        UMessageBuilder, UPayloadFormat, UProtocolNativeWire, UTxPayloadSpec, UVecRxLease,
+        UVecTxBuffer, UVecUninitTxBuffer, UZeroCopyTransportExt,
     };
 
     #[repr(C)]
@@ -1073,13 +1097,13 @@ mod tests {
     }
 
     fn metadata_with_payload() -> UFrameMetadata {
+        metadata_with_payload_encoding(PayloadEncoding::Standard(UPayloadFormat::Raw))
+    }
+
+    fn metadata_with_payload_encoding(payload_encoding: PayloadEncoding) -> UFrameMetadata {
         let topic = UUri::try_from_parts("vehicle", 0x4210, 0x01, 0x9000).expect("topic URI");
         let message = UMessageBuilder::publish(topic).build().expect("message");
-        UFrameMetadata::new(
-            message.attributes().clone(),
-            Some(PayloadEncoding::Standard(UPayloadFormat::Raw)),
-        )
-        .expect("metadata")
+        UFrameMetadata::new(message.attributes().clone(), Some(payload_encoding)).expect("metadata")
     }
 
     fn stable_metadata<T: StablePayload>() -> UFrameMetadata {
@@ -1121,6 +1145,26 @@ mod tests {
     }
 
     #[test]
+    fn wire_rx_decodes_payload_with_selected_wire() {
+        let value = StringValue {
+            value: "selected-wire".to_string(),
+            special_fields: Default::default(),
+        };
+        let payload = ProtobufWire::encode_payload_owned(&value).unwrap();
+        let metadata = metadata_with_payload_encoding(ProtobufWire::payload_encoding());
+        let encoded_metadata = ProtobufWire::encode_frame_metadata(&metadata).unwrap();
+        let raw = RawRx {
+            encoded_metadata,
+            payload: payload.to_vec(),
+        };
+
+        let rx = UWireRx::<RawRx, ProtobufWire>::try_from_encoded(raw).unwrap();
+        let decoded: StringValue = rx.decode_payload().unwrap();
+
+        assert_eq!(decoded.value, "selected-wire");
+    }
+
+    #[test]
     fn stable_borrow_accepts_wire_rx_with_loaned_raw_frame() {
         fn assert_loaned_rx<T: ULoanedContiguousZeroCopyRxFrame>() {}
         assert_loaned_rx::<UWireRx<RawRx, UProtocolNativeWire>>();
@@ -1145,10 +1189,10 @@ mod tests {
 
     #[tokio::test]
     async fn stable_initialized_tx_helper_sends_through_selected_wire_transport() {
-        let transport = RecordingCore::default().with_wire(UProtocolNativeWire);
+        let transport = RecordingCore::default().with_wire(StableContainerWireFormat);
 
         transport
-            .send_loaned_payload_as::<StableContainerPayload<WireStableBytes>, WireStableBytes>(
+            .send_loaned_payload::<WireStableBytes>(
                 stable_metadata::<WireStableBytes>(),
                 |payload| payload.bytes.copy_from_slice(b"wire"),
             )
@@ -1158,8 +1202,9 @@ mod tests {
         let prepared = transport.core().prepared.lock().unwrap();
         assert_eq!(prepared.len(), 1);
         let prepared_frame = prepared.first().expect("one prepared frame");
-        let decoded = UProtocolNativeWire::decode_frame_metadata(prepared_frame.encoded_metadata())
-            .expect("decode selected-wire metadata");
+        let decoded =
+            StableContainerWireFormat::decode_frame_metadata(prepared_frame.encoded_metadata())
+                .expect("decode selected-wire metadata");
         assert_eq!(
             decoded.payload_encoding(),
             Some(&StableContainerPayload::<WireStableBytes>::encoding())

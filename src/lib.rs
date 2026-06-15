@@ -89,9 +89,13 @@ pub use frame_metadata::{
 
 pub mod wire;
 pub use wire::{
-    decode_frame_metadata, encode_frame_metadata, UProtocolNativeWire, UWire, UWireDecode,
-    UWireDecodeOwned, UWireEncode, UWireMetadata, UWireMetadataError, UWireReadDecode,
-    WireCompatibility, WireIdentity, WireIdentityRef,
+    decode_frame_metadata, encode_frame_metadata, ProtobufWire, StableContainerWireFormat,
+    UProtocolNativeWire, UWire, UWireDecode, UWireDecodeOwned, UWireEncode, UWireLoan,
+    UWireLoanUninit, UWireMetadata, UWireMetadataError, UWireReadDecode, WireCompatibility,
+    WireIdentity, WireIdentityRef, NATIVE_EXPLICIT_PAYLOAD_FAMILY_ID,
+    NATIVE_PREFIX_METADATA_LAYOUT_ID, PROTOBUF_PAYLOAD_FAMILY_ID, PROTOBUF_WIRE_ID,
+    STABLE_CONTAINER_PAYLOAD_FAMILY_ID, STABLE_CONTAINER_WIRE_ID, UPROTOCOL_NATIVE_WIRE_ID,
+    XCDR_V2_PAYLOAD_FAMILY_ID, XCDR_V2_WIRE_ID,
 };
 
 #[cfg(feature = "owned-frame-transport")]

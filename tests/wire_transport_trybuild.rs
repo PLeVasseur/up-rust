@@ -15,5 +15,6 @@
 #[test]
 fn wire_transport_compile_failures() {
     let tests = trybuild::TestCases::new();
-    tests.compile_fail("tests/ui/wire_transport/raw_encoded_rx_frame_public_view.rs");
+    tests.pass("tests/ui/wire_transport_pass/*.rs");
+    tests.compile_fail("tests/ui/wire_transport/*.rs");
 }

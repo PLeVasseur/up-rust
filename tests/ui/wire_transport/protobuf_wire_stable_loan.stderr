@@ -1,0 +1,21 @@
+error[E0277]: the trait bound `ProtobufWire: UWireLoan<UnsupportedProtobufStableLoan>` is not satisfied
+  --> tests/ui/wire_transport/protobuf_wire_stable_loan.rs:23:25
+   |
+23 |     needs_stable_loan::<ProtobufWire, UnsupportedProtobufStableLoan>();
+   |                         ^^^^^^^^^^^^ the trait `UWireLoan<UnsupportedProtobufStableLoan>` is not implemented for `ProtobufWire`
+   |
+help: the trait `UWireLoan<T>` is implemented for `StableContainerWireFormat`
+  --> src/wire.rs
+   |
+   | / impl<T> UWireLoan<T> for StableContainerWireFormat
+   | | where
+   | |     T: ByteBackedStablePayload + Default,
+   | |_________________________________________^
+note: required by a bound in `needs_stable_loan`
+  --> tests/ui/wire_transport/protobuf_wire_stable_loan.rs:18:8
+   |
+16 | fn needs_stable_loan<W, T>()
+   |    ----------------- required by a bound in this function
+17 | where
+18 |     W: UWireLoan<T>,
+   |        ^^^^^^^^^^^^ required by this bound in `needs_stable_loan`

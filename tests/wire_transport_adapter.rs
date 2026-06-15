@@ -22,10 +22,11 @@ use async_trait::async_trait;
 #[cfg(feature = "owned-frame-transport")]
 use bytes::Bytes;
 use up_rust::{
-    PayloadEncoding, PreparedTxLoanSpec, UCode, UEncodedRxFrame, UEncodedZeroCopyListener,
-    UFrameMetadata, UFrameView, UMessageBuilder, UPayloadFormat, UProtocolNativeWire, UStatus,
-    UTxBuffer, UTxLoanSpec, UTxPayloadSpec, UUri, UVecTxBuffer, UWire, UWireMetadata, UWireRx,
-    UWithWire, UZeroCopyListener, UZeroCopyTransport, UZeroCopyTransportCore, WireIdentity,
+    PayloadCodec, PayloadEncoding, PreparedTxLoanSpec, ProtobufWire, UCode, UEncodedRxFrame,
+    UEncodedZeroCopyListener, UFrameMetadata, UFrameView, UMessageBuilder, UPayloadFormat,
+    UProtocolNativeWire, UStatus, UTxBuffer, UTxLoanSpec, UTxPayloadSpec, UUri, UVecTxBuffer,
+    UWire, UWireMetadata, UWireRx, UWithWire, UZeroCopyListener, UZeroCopyTransport,
+    UZeroCopyTransportCore, WireIdentity,
 };
 
 #[cfg(feature = "owned-frame-transport")]
@@ -370,12 +371,16 @@ fn invalid_source_filter() -> UUri {
 }
 
 fn metadata_with_payload() -> UFrameMetadata {
+    metadata_with_payload_encoding(PayloadEncoding::Standard(UPayloadFormat::Raw))
+}
+
+fn metadata_with_payload_encoding(payload_encoding: PayloadEncoding) -> UFrameMetadata {
     let message = UMessageBuilder::publish(topic()).build().expect("message");
-    UFrameMetadata::new(
-        message.attributes().clone(),
-        Some(PayloadEncoding::Standard(UPayloadFormat::Raw)),
-    )
-    .expect("metadata")
+    UFrameMetadata::new(message.attributes().clone(), Some(payload_encoding)).expect("metadata")
+}
+
+fn metadata_with_protobuf_payload() -> UFrameMetadata {
+    metadata_with_payload_encoding(ProtobufWire::payload_encoding())
 }
 
 fn tx_spec(metadata: UFrameMetadata, len: usize) -> UTxLoanSpec {
@@ -393,12 +398,11 @@ where
 }
 
 #[tokio::test]
-async fn zero_copy_loan_passes_encoded_metadata_to_core_for_two_wires() {
-    async fn assert_wire<W>(wire: W)
+async fn zero_copy_loan_passes_encoded_metadata_to_core_for_selected_wires() {
+    async fn assert_wire<W>(wire: W, metadata: UFrameMetadata)
     where
         W: UWireMetadata + Send + Sync + 'static,
     {
-        let metadata = metadata_with_payload();
         let core = InMemoryWireCore::default();
         let transport = core.clone().with_wire(wire);
 
@@ -419,8 +423,9 @@ async fn zero_copy_loan_passes_encoded_metadata_to_core_for_two_wires() {
         );
     }
 
-    assert_wire(UProtocolNativeWire).await;
-    assert_wire(SecondTestWire).await;
+    assert_wire(UProtocolNativeWire, metadata_with_payload()).await;
+    assert_wire(SecondTestWire, metadata_with_payload()).await;
+    assert_wire(ProtobufWire, metadata_with_protobuf_payload()).await;
 }
 
 #[tokio::test]

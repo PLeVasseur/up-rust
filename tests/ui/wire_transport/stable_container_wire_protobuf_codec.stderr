@@ -1,0 +1,36 @@
+error[E0277]: the trait bound `StableContainerWireFormat: EncodePayload<protobuf::well_known_types::wrappers::StringValue>` is not satisfied
+  --> tests/ui/wire_transport/stable_container_wire_protobuf_codec.rs:17:29
+   |
+17 |     needs_protobuf_encode::<StableContainerWireFormat, StringValue>();
+   |                             ^^^^^^^^^^^^^^^^^^^^^^^^^ the trait `EncodePayload<protobuf::well_known_types::wrappers::StringValue>` is not implemented for `StableContainerWireFormat`
+   |
+help: the following other types implement trait `EncodePayload<T>`
+  --> src/payload.rs
+   |
+   |   impl EncodePayload<[u8]> for RawBytes {
+   |   ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ `RawBytes` implements `EncodePayload<[u8]>`
+...
+   | / impl<T> EncodePayload<T> for ProtobufPayload
+   | | where
+   | |     T: ProtobufMappable,
+   | |________________________^ `ProtobufPayload` implements `EncodePayload<T>`
+...
+   | / impl<T> EncodePayload<T> for ProtobufAnyPayload
+   | | where
+   | |     T: ProtobufMappable,
+   | |________________________^ `ProtobufAnyPayload` implements `EncodePayload<T>`
+   |
+  ::: src/wire.rs
+   |
+   | / impl<T> EncodePayload<T> for ProtobufWire
+   | | where
+   | |     T: ProtobufMappable,
+   | |________________________^ `ProtobufWire` implements `EncodePayload<T>`
+note: required by a bound in `needs_protobuf_encode`
+  --> tests/ui/wire_transport/stable_container_wire_protobuf_codec.rs:12:8
+   |
+10 | fn needs_protobuf_encode<W, T>()
+   |    --------------------- required by a bound in this function
+11 | where
+12 |     W: EncodePayload<T>,
+   |        ^^^^^^^^^^^^^^^^ required by this bound in `needs_protobuf_encode`
