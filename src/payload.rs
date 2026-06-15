@@ -392,6 +392,57 @@ impl<'a, T> LoanedUninitPayload<'a, T> {
     pub(crate) fn uninit_ptr(&self) -> NonNull<mem::MaybeUninit<T>> {
         self.ptr
     }
+
+    /// Returns the raw typed pointer for field-by-field initialization.
+    ///
+    /// # Safety
+    ///
+    /// The returned pointer must not be read until a valid `T` has been fully
+    /// initialized. Callers must initialize every byte required by `T`, including
+    /// padding, before calling [`Self::assume_init`].
+    #[cfg(any(
+        feature = "unsafe-stable-payload-init",
+        feature = "expert-unsafe-payloads"
+    ))]
+    #[must_use]
+    pub unsafe fn as_mut_ptr(&mut self) -> *mut T {
+        self.ptr.as_ptr().cast::<T>()
+    }
+
+    /// Returns raw uninitialized payload bytes for custom initialization.
+    ///
+    /// # Safety
+    ///
+    /// The caller must initialize every returned byte before committing this slot.
+    /// Prefer generated [`StablePayloadInit`] builders or [`Self::write`] unless
+    /// byte-level initialization is explicitly required.
+    #[cfg(any(
+        feature = "unsafe-uninit-payload-bytes",
+        feature = "expert-unsafe-payloads"
+    ))]
+    pub unsafe fn as_uninit_bytes_mut(&mut self) -> &mut [mem::MaybeUninit<u8>] {
+        let ptr = self.ptr.as_ptr().cast::<mem::MaybeUninit<u8>>();
+        // SAFETY: `self.ptr` is a checked loan-backed slot for one
+        // `MaybeUninit<T>`, and `MaybeUninit<u8>` has byte layout.
+        unsafe { std::slice::from_raw_parts_mut(ptr, mem::size_of::<T>()) }
+    }
+
+    /// Marks the slot initialized after custom field or byte construction.
+    ///
+    /// # Safety
+    ///
+    /// The caller must guarantee the slot contains one fully initialized valid
+    /// `T`. Calling this before full initialization is undefined behavior.
+    #[cfg(any(
+        feature = "unsafe-stable-payload-init",
+        feature = "expert-unsafe-payloads"
+    ))]
+    #[must_use]
+    pub unsafe fn assume_init(self) -> LoanedInitPayload<'a, T> {
+        // SAFETY: the caller of this unsafe method guarantees the slot contains
+        // one initialized `T` and the pointer is the original loan-backed slot.
+        unsafe { LoanedInitPayload::new_unchecked(self.ptr.cast::<T>()) }
+    }
 }
 
 /// Initialized typed payload marker returned after constructing a loaned value.
@@ -1430,6 +1481,144 @@ where
         // SAFETY: `check_uninit_layout` verified exact `T` length and alignment,
         // and the loan wrapper preserves unique mutable access for `'a`.
         Ok(unsafe { LoanedUninitPayload::new_unchecked(ptr) })
+    }
+}
+
+/// Unsafe non-byte-backed stable-container TX slot.
+///
+/// This type is exposed only for the expert unsafe TX hatch. Safe byte-backed TX
+/// should use [`LoanedUninitPayload`] through [`LoanUninitPayload`] instead.
+#[cfg(any(
+    feature = "unsafe-stable-payload-tx",
+    feature = "expert-unsafe-payloads"
+))]
+pub struct UnsafeStablePayloadTxSlot<'a, T> {
+    payload: LoanedPayloadUninitMut<'a>,
+    _marker: PhantomData<&'a mut mem::MaybeUninit<T>>,
+}
+
+/// Zero-initialized non-byte-backed stable-container TX slot.
+///
+/// This is the preferred state for padded stable payloads: every transported
+/// byte starts initialized to zero, and callers then use raw field writes to
+/// construct a valid `T` without leaving uninitialized implicit padding.
+#[cfg(any(
+    feature = "unsafe-stable-payload-tx",
+    feature = "expert-unsafe-payloads"
+))]
+pub struct ZeroedStablePayloadTxSlot<'a, T> {
+    payload: LoanedPayloadUninitMut<'a>,
+    _marker: PhantomData<&'a mut mem::MaybeUninit<T>>,
+}
+
+#[cfg(any(
+    feature = "unsafe-stable-payload-tx",
+    feature = "expert-unsafe-payloads"
+))]
+impl<'a, T> UnsafeStablePayloadTxSlot<'a, T>
+where
+    T: StablePayload,
+{
+    pub(crate) fn new(mut payload: LoanedPayloadUninitMut<'a>) -> Result<Self, UWireError> {
+        StableContainerPayload::<T>::check_uninit_layout(payload.as_uninit_bytes_mut_internal())?;
+        Ok(Self {
+            payload,
+            _marker: PhantomData,
+        })
+    }
+
+    /// Zero-initializes every transported byte, including implicit padding.
+    #[must_use]
+    pub fn zeroed(mut self) -> ZeroedStablePayloadTxSlot<'a, T> {
+        for slot in self.payload.as_uninit_bytes_mut_internal() {
+            slot.write(0);
+        }
+        ZeroedStablePayloadTxSlot {
+            payload: self.payload,
+            _marker: PhantomData,
+        }
+    }
+
+    /// Returns raw uninitialized payload bytes for custom initialization.
+    ///
+    /// # Safety
+    ///
+    /// The caller must initialize every byte before committing the loan. Prefer
+    /// [`Self::zeroed`] plus typed raw field writes when using padded types.
+    #[cfg(any(
+        feature = "unsafe-uninit-payload-bytes",
+        feature = "expert-unsafe-payloads"
+    ))]
+    pub unsafe fn as_uninit_bytes_mut(&mut self) -> &mut [mem::MaybeUninit<u8>] {
+        self.payload.as_uninit_bytes_mut_internal()
+    }
+
+    /// Marks the slot initialized after custom byte construction.
+    ///
+    /// # Safety
+    ///
+    /// The caller must guarantee the full `size_of::<T>()` transported byte
+    /// range, including padding, contains one valid initialized `T`.
+    #[must_use]
+    pub unsafe fn assume_init(mut self) -> LoanedInitPayload<'a, T> {
+        let ptr = NonNull::new(
+            self.payload
+                .as_uninit_bytes_mut_internal()
+                .as_mut_ptr()
+                .cast::<mem::MaybeUninit<T>>(),
+        )
+        .expect("stable payload slot pointer is not null");
+        // SAFETY: the caller guarantees the layout-checked loan contains one
+        // initialized `T` before returning the marker.
+        unsafe { LoanedInitPayload::new_unchecked(ptr.cast::<T>()) }
+    }
+}
+
+#[cfg(any(
+    feature = "unsafe-stable-payload-tx",
+    feature = "expert-unsafe-payloads"
+))]
+impl<'a, T> ZeroedStablePayloadTxSlot<'a, T>
+where
+    T: StablePayload,
+{
+    /// Returns a raw typed pointer for field-by-field initialization.
+    ///
+    /// # Safety
+    ///
+    /// The pointer must not be read until a valid `T` has been fully initialized.
+    /// Callers must preserve initialization of every transported byte, including
+    /// implicit padding, before calling [`Self::assume_init`].
+    #[cfg(any(
+        feature = "unsafe-stable-payload-init",
+        feature = "expert-unsafe-payloads"
+    ))]
+    #[must_use]
+    pub unsafe fn as_mut_ptr(&mut self) -> *mut T {
+        self.payload
+            .as_uninit_bytes_mut_internal()
+            .as_mut_ptr()
+            .cast::<T>()
+    }
+
+    /// Marks the slot initialized after custom byte/field construction.
+    ///
+    /// # Safety
+    ///
+    /// The caller must guarantee the full `size_of::<T>()` transported byte
+    /// range, including padding, contains one valid initialized `T`.
+    #[must_use]
+    pub unsafe fn assume_init(mut self) -> LoanedInitPayload<'a, T> {
+        let ptr = NonNull::new(
+            self.payload
+                .as_uninit_bytes_mut_internal()
+                .as_mut_ptr()
+                .cast::<mem::MaybeUninit<T>>(),
+        )
+        .expect("stable payload slot pointer is not null");
+        // SAFETY: the caller guarantees `zeroed()` plus any raw field writes left
+        // the layout-checked loan as one initialized `T`.
+        unsafe { LoanedInitPayload::new_unchecked(ptr.cast::<T>()) }
     }
 }
 
