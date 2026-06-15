@@ -391,6 +391,66 @@ impl Display for StableTypeDetail<'_> {
     }
 }
 
+/// Hidden recursive field proof used by the `StablePayload` derive.
+///
+/// Application code should use `#[derive(StablePayload)]` instead of naming this
+/// trait directly. Manual implementations are only for externally-audited FFI or
+/// codegen payload fields whose layout and ownership are known to be stable.
+///
+/// # Safety
+///
+/// Implementors must not contain process-local references, raw pointers,
+/// function pointers, heap ownership, or drop glue that would make the value
+/// invalid as part of a stable-container payload representation.
+#[doc(hidden)]
+pub unsafe trait StablePayloadField: Sized + 'static {
+    #[doc(hidden)]
+    fn __stable_payload_field_check(&self) {}
+}
+
+macro_rules! impl_stable_payload_field {
+    ($($ty:ty),* $(,)?) => {
+        $(
+            // SAFETY: Primitive scalar values have no process-local ownership or
+            // drop glue, and arrays recurse through this field proof below.
+            unsafe impl StablePayloadField for $ty {}
+        )*
+    };
+}
+
+impl_stable_payload_field!(
+    (),
+    bool,
+    char,
+    u8,
+    u16,
+    u32,
+    u64,
+    u128,
+    usize,
+    i8,
+    i16,
+    i32,
+    i64,
+    i128,
+    isize,
+    f32,
+    f64,
+);
+
+// SAFETY: Arrays are stable fields when their element type is stable by the same
+// recursive field proof.
+unsafe impl<T, const N: usize> StablePayloadField for [T; N]
+where
+    T: StablePayloadField,
+{
+    fn __stable_payload_field_check(&self) {
+        for item in self {
+            item.__stable_payload_field_check();
+        }
+    }
+}
+
 /// Stable payload identity used by `StableContainerPayload<T>`.
 ///
 /// This phase uses the trait only to build and verify stable-container metadata.
@@ -425,6 +485,10 @@ pub unsafe trait StablePayload: Sized + 'static {
             alignment: mem::align_of::<Self>(),
         }
     }
+
+    /// Hidden recursive field check emitted by the `StablePayload` derive.
+    #[doc(hidden)]
+    fn __stable_payload_field_check(&self) {}
 }
 
 /// Type-agnostic stable-container metadata parsed from a payload encoding.

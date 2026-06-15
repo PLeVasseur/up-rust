@@ -77,6 +77,7 @@ pub mod local_transport;
 pub mod symphony;
 
 use protobuf::{well_known_types::any::Any, Message, MessageFull};
+pub use up_rust_macros::StablePayload;
 
 mod frame_metadata;
 pub use frame_metadata::{
