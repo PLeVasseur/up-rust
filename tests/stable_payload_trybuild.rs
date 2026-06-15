@@ -10,3 +10,10 @@ fn stable_payload_layout_compile_tests() {
     cases.pass("tests/ui/stable_payload_pass/*.rs");
     cases.compile_fail("tests/ui/stable_payload/*.rs");
 }
+
+#[cfg(feature = "owned-frame-transport")]
+#[test]
+fn unsafe_feature_disabled_compile_tests() {
+    let cases = trybuild::TestCases::new();
+    cases.compile_fail("tests/ui/unsafe_feature_disabled/*.rs");
+}

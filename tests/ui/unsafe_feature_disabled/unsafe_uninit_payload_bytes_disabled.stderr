@@ -1,0 +1,16 @@
+error[E0599]: no function or associated item named `as_uninit_bytes_mut` found for struct `LoanedUninitPayload<'a, T>` in the current scope
+  --> tests/ui/unsafe_feature_disabled/unsafe_uninit_payload_bytes_disabled.rs:15:46
+   |
+15 |     let _raw = unsafe { LoanedUninitPayload::as_uninit_bytes_mut(&mut slot) };
+   |                                              ^^^^^^^^^^^^^^^^^^^ function or associated item not found in `LoanedUninitPayload<'_, _>`
+   |
+note: if you're trying to build a new `LoanedUninitPayload<'_, _>`, consider using `LoanedUninitPayload::<'a, T>::new_unchecked` which returns `LoanedUninitPayload<'_, _>`
+  --> src/payload.rs
+   |
+   |     pub unsafe fn new_unchecked(ptr: NonNull<mem::MaybeUninit<T>>) -> Self {
+   |     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+help: there is a method `as_any_mut` with a similar name, but with different arguments
+  --> $CARGO/downcast-$VERSION/src/lib.rs
+   |
+   |     fn as_any_mut(&mut self) -> &mut dyn StdAny;
+   |     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
