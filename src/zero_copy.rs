@@ -17,6 +17,7 @@ use std::{
     io::{Cursor, Read},
     mem::MaybeUninit,
     ops::Deref,
+    ptr::NonNull,
     sync::{Arc, LazyLock, Mutex},
 };
 
@@ -30,8 +31,9 @@ use tracing::warn;
 use crate::UOwnedFrame;
 use crate::{
     payload::{
-        LoanPayload, PayloadCodec, ReadDecodePayload, StableContainerPayload, StablePayload,
-        UWireError,
+        InitializedStablePayload, LoanPayload, LoanUninitPayload, LoanedInitPayload,
+        LoanedUninitPayload, PayloadCodec, ReadDecodePayload, StableContainerPayload,
+        StablePayload, StablePayloadInit, UWireError,
     },
     utransport::verify_filter_criteria,
     UCode, UFrameMetadata, UFrameMetadataError, UStatus, UUri,
@@ -451,6 +453,55 @@ impl Deref for LoanedPayload<'_> {
     }
 }
 
+/// Mutable uninitialized payload bytes with explicit transport-loan provenance.
+pub struct LoanedPayloadUninitMut<'a> {
+    bytes: &'a mut [MaybeUninit<u8>],
+    provenance: PayloadLoanProvenance,
+}
+
+impl<'a> LoanedPayloadUninitMut<'a> {
+    /// Creates a mutable uninitialized loaned payload view from transport-owned storage.
+    ///
+    /// # Safety
+    ///
+    /// `bytes` must be a valid mutable uninitialized byte slice for `'a`, with no
+    /// other active access path, and must be the exact visible application
+    /// payload range for the loan described by `provenance`.
+    #[must_use]
+    pub unsafe fn new_unchecked(
+        bytes: &'a mut [MaybeUninit<u8>],
+        provenance: PayloadLoanProvenance,
+    ) -> Self {
+        Self { bytes, provenance }
+    }
+
+    /// Returns diagnostic storage provenance.
+    #[must_use]
+    pub fn provenance(&self) -> PayloadLoanProvenance {
+        self.provenance
+    }
+
+    /// Returns the payload length in bytes.
+    #[must_use]
+    pub fn len(&self) -> usize {
+        self.bytes.len()
+    }
+
+    /// Returns whether the payload is empty.
+    #[must_use]
+    pub fn is_empty(&self) -> bool {
+        self.bytes.is_empty()
+    }
+
+    pub(crate) fn as_uninit_bytes_mut_internal(&mut self) -> &mut [MaybeUninit<u8>] {
+        self.bytes
+    }
+
+    pub(crate) fn into_uninit_bytes_mut_internal(self) -> &'a mut [MaybeUninit<u8>] {
+        self.bytes
+    }
+}
+
 /// Receive lease that can expose a contiguous payload from loan-backed storage.
 pub trait ULoanedContiguousZeroCopyRxFrame: UZeroCopyRxLease {
     /// Returns one contiguous loan-backed application payload view.
@@ -714,6 +765,126 @@ pub trait UZeroCopyTransportExt: UZeroCopyTransport {
 }
 
 impl<T> UZeroCopyTransportExt for T where T: UZeroCopyTransport + ?Sized {}
+
+/// Convenience methods for zero-copy transports with uninitialized TX storage.
+#[async_trait]
+pub trait UZeroCopyUninitTransportExt: UZeroCopyUninitTransport {
+    /// Constructs a typed payload directly in uninitialized transmit storage and sends it.
+    ///
+    /// # Errors
+    ///
+    /// Returns an error if metadata validation fails, the transport cannot loan
+    /// the requested uninitialized layout, the codec rejects the loaned storage,
+    /// the initializer fails, or sending the committed loan fails.
+    async fn send_uninit_loaned_payload_as<C, T>(
+        &self,
+        metadata: UFrameMetadata,
+        init: impl for<'payload> FnOnce(
+                LoanedUninitPayload<'payload, T>,
+            ) -> Result<LoanedInitPayload<'payload, T>, UWireError>
+            + Send,
+    ) -> Result<(), UStatus>
+    where
+        C: PayloadCodec + LoanUninitPayload<T> + Send + Sync,
+        T: Send,
+    {
+        let metadata = UFrameMetadata::new(metadata.into_attributes(), Some(C::payload_encoding()))
+            .map_err(frame_metadata_error)?;
+        let layout = C::loan_uninit_layout().map_err(UStatus::from)?;
+        let mut buffer = self
+            .loan_uninit_tx(UTxLoanSpec::payload(
+                metadata,
+                layout.len(),
+                layout.align(),
+            )?)
+            .await?;
+        verify_uninit_tx_buffer_payload_layout(&mut buffer, layout.len(), layout.align())?;
+        {
+            let payload = buffer.payload_uninit_mut();
+            // SAFETY: `UZeroCopyUninitTransport::loan_uninit_tx` returned this
+            // buffer as the transport loan for the validated spec. The public
+            // verifier above checked that this visible range matches the request.
+            let loaned = unsafe {
+                LoanedPayloadUninitMut::new_unchecked(
+                    payload,
+                    PayloadLoanProvenance::OpaqueTransportLoan,
+                )
+            };
+            let loaned = C::loan_uninit_payload(loaned).map_err(UStatus::from)?;
+            let expected = loaned.uninit_ptr();
+            let initialized = init(loaned).map_err(UStatus::from)?;
+            if initialized.initialized_ptr().cast::<MaybeUninit<T>>() != expected {
+                return Err(invalid_argument(
+                    "initialized payload proof does not match the TX loan",
+                ));
+            }
+        }
+        // SAFETY: the initializer returned a marker tied to the same checked
+        // loan slot, proving the visible payload bytes have been initialized.
+        let buffer = unsafe { buffer.assume_payload_init() };
+        self.send_zero_copy(buffer).await
+    }
+
+    /// Initializes a stable-container payload directly in uninitialized transmit storage.
+    ///
+    /// The initializer is generated by `#[derive(StablePayloadInit)]`; it exposes
+    /// named typed setters and returns a completion token only after all required
+    /// fields and generated padding gaps are initialized.
+    ///
+    /// # Errors
+    ///
+    /// Returns an error if metadata validation fails, the transport cannot loan
+    /// the requested stable layout, initialization fails, the completion token is
+    /// not tied to the loaned slot, or sending the committed loan fails.
+    async fn send_uninit_stable_payload_as<T>(
+        &self,
+        metadata: UFrameMetadata,
+        init: impl for<'payload> FnOnce(
+                T::Init<'payload>,
+            ) -> Result<InitializedStablePayload<T>, UWireError>
+            + Send,
+    ) -> Result<(), UStatus>
+    where
+        T: StablePayloadInit + Send,
+    {
+        let metadata = UFrameMetadata::new(
+            metadata.into_attributes(),
+            Some(StableContainerPayload::<T>::encoding()),
+        )
+        .map_err(frame_metadata_error)?;
+        let layout_len = std::mem::size_of::<T>();
+        let layout_align = std::mem::align_of::<T>();
+        let mut buffer = self
+            .loan_uninit_tx(UTxLoanSpec::payload(metadata, layout_len, layout_align)?)
+            .await?;
+        verify_uninit_tx_buffer_payload_layout(&mut buffer, layout_len, layout_align)?;
+        {
+            let payload = buffer.payload_uninit_mut();
+            // SAFETY: same loan/provenance argument as the typed uninit helper;
+            // `StablePayloadInit` validates the stable-container layout below.
+            let mut loaned = unsafe {
+                LoanedPayloadUninitMut::new_unchecked(
+                    payload,
+                    PayloadLoanProvenance::OpaqueTransportLoan,
+                )
+            };
+            let expected = stable_uninit_payload_ptr::<T>(&mut loaned).map_err(UStatus::from)?;
+            let initializer = T::init_from_uninit_payload(loaned).map_err(UStatus::from)?;
+            let initialized = init(initializer).map_err(UStatus::from)?;
+            if initialized.initialized_ptr() != expected {
+                return Err(invalid_argument(
+                    "stable payload init proof does not match the TX loan",
+                ));
+            }
+        }
+        // SAFETY: the generated stable initializer returned a completion proof
+        // for the same loan slot after all fields and padding were initialized.
+        let buffer = unsafe { buffer.assume_payload_init() };
+        self.send_zero_copy(buffer).await
+    }
+}
+
+impl<T> UZeroCopyUninitTransportExt for T where T: UZeroCopyUninitTransport + ?Sized {}
 
 /// Implementation boundary for transports that can expose uninitialized TX payload storage.
 #[async_trait]
@@ -1483,12 +1654,24 @@ fn internal_zero_copy_error(message: impl Into<String>) -> UStatus {
     UStatus::fail_with_code(UCode::Internal, message.into())
 }
 
+fn stable_uninit_payload_ptr<T>(
+    payload: &mut LoanedPayloadUninitMut<'_>,
+) -> Result<NonNull<MaybeUninit<T>>, UWireError>
+where
+    T: StablePayload,
+{
+    let bytes = payload.as_uninit_bytes_mut_internal();
+    StableContainerPayload::<T>::check_uninit_layout(bytes)?;
+    NonNull::new(bytes.as_mut_ptr().cast::<MaybeUninit<T>>())
+        .ok_or_else(|| UWireError::invalid_payload("stable payload slot pointer is null"))
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
     use crate::{
-        ByteBackedStablePayload, PayloadEncoding, StablePayloadVariant, UMessageBuilder,
-        UPayloadFormat,
+        payload::StablePayloadInitSlot, ByteBackedStablePayload, PayloadEncoding,
+        StablePayloadVariant, UMessageBuilder, UPayloadFormat,
     };
     use std::sync::Mutex as StdMutex;
 
@@ -1503,6 +1686,55 @@ mod tests {
     }
 
     unsafe impl ByteBackedStablePayload for StableBytes {}
+
+    struct StableBytesInit<'a> {
+        slot: StablePayloadInitSlot<'a, StableBytes>,
+        written: bool,
+    }
+
+    impl StableBytesInit<'_> {
+        fn bytes_from_array(mut self, bytes: &[u8; 4]) -> Self {
+            // SAFETY: `StableBytes` is `repr(C)` over exactly one `[u8; 4]` field
+            // at offset zero, and this setter is the only write to that field.
+            unsafe { self.slot.write_bytes(0, bytes) };
+            self.written = true;
+            self
+        }
+
+        fn finish(self) -> Result<InitializedStablePayload<StableBytes>, UWireError> {
+            if !self.written {
+                return Err(UWireError::invalid_payload(
+                    "StableBytes.bytes was not initialized",
+                ));
+            }
+            // SAFETY: the only field spans the full payload and has been written.
+            Ok(unsafe { self.slot.assume_init() })
+        }
+    }
+
+    // SAFETY: `StableBytesInit::finish` is available only after construction via
+    // this test builder path and writes the complete `[u8; 4]` payload field.
+    unsafe impl StablePayloadInit for StableBytes {
+        type Init<'a> = StableBytesInit<'a>;
+
+        fn init_from_uninit_bytes<'a>(
+            payload: &'a mut [MaybeUninit<u8>],
+        ) -> Result<Self::Init<'a>, UWireError> {
+            Ok(StableBytesInit {
+                slot: StablePayloadInitSlot::from_uninit_bytes(payload)?,
+                written: false,
+            })
+        }
+
+        fn __init_from_slot<'a>(
+            slot: StablePayloadInitSlot<'a, Self>,
+        ) -> Result<Self::Init<'a>, UWireError> {
+            Ok(StableBytesInit {
+                slot,
+                written: false,
+            })
+        }
+    }
 
     #[repr(C)]
     #[derive(Clone, Copy, Debug, Eq, PartialEq)]
@@ -1908,6 +2140,70 @@ mod tests {
             sent.borrow_stable_payload::<StableBytes>().unwrap(),
             &StableBytes { bytes: *b"init" }
         );
+    }
+
+    #[tokio::test]
+    async fn stable_uninit_tx_helper_sends_byte_backed_payload() {
+        let transport = InMemoryZeroCopyTransport::default();
+
+        transport
+            .send_uninit_loaned_payload_as::<StableContainerPayload<StableBytes>, StableBytes>(
+                stable_metadata::<StableBytes>(),
+                |slot| Ok(slot.write(StableBytes { bytes: *b"noze" })),
+            )
+            .await
+            .expect("send uninit stable payload");
+
+        let sent = transport.sent_frames();
+        assert_eq!(sent.len(), 1);
+        let sent = sent.first().expect("one sent frame");
+        assert_eq!(
+            sent.borrow_stable_payload::<StableBytes>().unwrap(),
+            &StableBytes { bytes: *b"noze" }
+        );
+    }
+
+    #[tokio::test]
+    async fn stable_uninit_tx_helper_uses_stable_payload_init_builder() {
+        let transport = InMemoryZeroCopyTransport::default();
+
+        transport
+            .send_uninit_stable_payload_as::<StableBytes>(
+                stable_metadata::<StableBytes>(),
+                |init| init.bytes_from_array(b"zcpy").finish(),
+            )
+            .await
+            .expect("send stable init payload");
+
+        let sent = transport.sent_frames();
+        assert_eq!(sent.len(), 1);
+        let sent = sent.first().expect("one sent frame");
+        assert_eq!(
+            sent.borrow_stable_payload::<StableBytes>().unwrap(),
+            &StableBytes { bytes: *b"zcpy" }
+        );
+    }
+
+    #[tokio::test]
+    async fn stable_uninit_tx_rejects_detached_init_proof() {
+        let transport = InMemoryZeroCopyTransport::default();
+
+        let error = transport
+            .send_uninit_stable_payload_as::<StableBytes>(
+                stable_metadata::<StableBytes>(),
+                |_init| {
+                    let mut detached =
+                        vec![MaybeUninit::<u8>::uninit(); std::mem::size_of::<StableBytes>()];
+                    StableBytes::init_from_uninit_bytes(&mut detached)?
+                        .bytes_from_array(b"bad!")
+                        .finish()
+                },
+            )
+            .await
+            .expect_err("detached init proof must not commit loan");
+
+        assert_eq!(error.get_code(), UCode::InvalidArgument);
+        assert!(transport.sent_frames().is_empty());
     }
 
     #[cfg(feature = "owned-frame-transport")]

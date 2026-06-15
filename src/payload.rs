@@ -23,7 +23,10 @@ use std::{
 use bytes::Bytes;
 use mediatype::ReadParams;
 
-use crate::{PayloadEncoding, ProtobufMappable, UCode, UPayloadFormat, UStatus};
+use crate::{
+    zero_copy::LoanedPayloadUninitMut, PayloadEncoding, ProtobufMappable, UCode, UPayloadFormat,
+    UStatus,
+};
 
 const STABLE_CONTAINER_ENCODING_ID: &str = "up.stable-container";
 const STABLE_CONTAINER_MEDIA_TYPE: &str = "application/vnd.uprotocol.stable-container";
@@ -162,6 +165,7 @@ impl PayloadLayout {
 /// that a generated typestate builder reached `finish()` after initializing all
 /// semantic fields and generated padding gaps.
 pub struct InitializedStablePayload<T> {
+    ptr: NonNull<mem::MaybeUninit<T>>,
     _marker: PhantomData<fn() -> T>,
 }
 
@@ -175,10 +179,15 @@ impl<T> InitializedStablePayload<T> {
     /// token is returned to a send helper.
     #[doc(hidden)]
     #[must_use]
-    pub unsafe fn new_unchecked() -> Self {
+    pub unsafe fn new_unchecked(ptr: NonNull<mem::MaybeUninit<T>>) -> Self {
         Self {
+            ptr,
             _marker: PhantomData,
         }
+    }
+
+    pub(crate) fn initialized_ptr(&self) -> NonNull<mem::MaybeUninit<T>> {
+        self.ptr
     }
 }
 
@@ -319,6 +328,109 @@ pub unsafe trait LoanPayload<T>: PayloadCodec {
     ///
     /// Returns an error if `dst` does not have the required length or alignment.
     fn loan_payload(dst: &mut [u8]) -> Result<&mut T, UWireError>;
+}
+
+/// Initializes a typed value directly in uninitialized transmit storage.
+///
+/// # Safety
+///
+/// Implementors must guarantee that [`LoanUninitPayload::loan_uninit_payload`]
+/// validates the destination range and only returns a slot when the range is one
+/// uniquely borrowed allocation, has the exact layout returned by
+/// [`LoanUninitPayload::loan_uninit_layout`], and is valid for writes of one
+/// `MaybeUninit<T>`.
+pub unsafe trait LoanUninitPayload<T>: PayloadCodec {
+    /// Returns the exact layout required for a typed uninitialized transmit loan.
+    ///
+    /// # Errors
+    ///
+    /// Returns an error if this codec cannot loan `T` into uninitialized TX storage.
+    fn loan_uninit_layout() -> Result<PayloadLayout, UWireError>;
+
+    /// Validates `dst` and returns an uninitialized typed payload slot.
+    ///
+    /// # Errors
+    ///
+    /// Returns an error if `dst` does not have the required length or alignment.
+    fn loan_uninit_payload<'a>(
+        dst: LoanedPayloadUninitMut<'a>,
+    ) -> Result<LoanedUninitPayload<'a, T>, UWireError>;
+}
+
+/// Uninitialized typed payload slot borrowed from a transmit loan.
+pub struct LoanedUninitPayload<'a, T> {
+    ptr: NonNull<mem::MaybeUninit<T>>,
+    _marker: PhantomData<&'a mut mem::MaybeUninit<T>>,
+}
+
+impl<'a, T> LoanedUninitPayload<'a, T> {
+    /// Creates an uninitialized typed payload slot.
+    ///
+    /// # Safety
+    ///
+    /// `ptr` must be non-null, valid for writes of one `MaybeUninit<T>`,
+    /// correctly aligned for `T`, and backed by the transmit loan for `'a`.
+    #[must_use]
+    pub unsafe fn new_unchecked(ptr: NonNull<mem::MaybeUninit<T>>) -> Self {
+        Self {
+            ptr,
+            _marker: PhantomData,
+        }
+    }
+
+    /// Writes `value` into the loaned slot and marks it initialized.
+    #[must_use]
+    pub fn write(self, value: T) -> LoanedInitPayload<'a, T> {
+        let ptr = self.ptr.as_ptr();
+        // SAFETY: `self.ptr` was created from a layout-checked loan-backed slot
+        // valid for writes of one `MaybeUninit<T>` and is consumed here.
+        unsafe { (*ptr).write(value) };
+        // SAFETY: the write above initialized one valid `T` in the loaned slot.
+        unsafe { LoanedInitPayload::new_unchecked(self.ptr.cast::<T>()) }
+    }
+
+    pub(crate) fn uninit_ptr(&self) -> NonNull<mem::MaybeUninit<T>> {
+        self.ptr
+    }
+}
+
+/// Initialized typed payload marker returned after constructing a loaned value.
+pub struct LoanedInitPayload<'a, T> {
+    ptr: NonNull<T>,
+    _marker: PhantomData<&'a mut T>,
+}
+
+impl<'a, T> LoanedInitPayload<'a, T> {
+    /// Creates an initialized typed payload marker.
+    ///
+    /// # Safety
+    ///
+    /// `ptr` must point at a valid initialized `T` borrowed from the transmit loan.
+    #[must_use]
+    pub unsafe fn new_unchecked(ptr: NonNull<T>) -> Self {
+        Self {
+            ptr,
+            _marker: PhantomData,
+        }
+    }
+
+    /// Returns the initialized payload as a mutable reference.
+    #[allow(clippy::should_implement_trait)]
+    pub fn as_mut(&mut self) -> &mut T {
+        // SAFETY: `self.ptr` was created only after the slot was marked initialized
+        // and `&mut self` guarantees unique access through this marker.
+        unsafe { self.ptr.as_mut() }
+    }
+
+    pub(crate) fn initialized_ptr(&self) -> NonNull<T> {
+        self.ptr
+    }
+}
+
+impl<T> AsMut<T> for LoanedInitPayload<'_, T> {
+    fn as_mut(&mut self) -> &mut T {
+        LoanedInitPayload::as_mut(self)
+    }
 }
 
 /// Marker for codecs whose payload value is already an opaque byte sequence.
@@ -771,6 +883,18 @@ pub unsafe trait StablePayloadInit: StablePayload {
         payload: &'a mut [mem::MaybeUninit<u8>],
     ) -> Result<Self::Init<'a>, UWireError>;
 
+    /// Creates a generated initializer from a transport loan's visible payload range.
+    ///
+    /// # Errors
+    ///
+    /// Returns an error if the payload range does not match this stable payload's
+    /// size and alignment.
+    fn init_from_uninit_payload<'a>(
+        payload: LoanedPayloadUninitMut<'a>,
+    ) -> Result<Self::Init<'a>, UWireError> {
+        Self::init_from_uninit_bytes(payload.into_uninit_bytes_mut_internal())
+    }
+
     /// Creates a generated initializer from a nested stable payload slot.
     #[doc(hidden)]
     fn __init_from_slot<'a>(
@@ -980,7 +1104,7 @@ impl<'a, T> StablePayloadInitSlot<'a, T> {
         // SAFETY: The generated caller invokes this only from the all-set
         // typestate state after all semantic fields and generated padding gaps
         // have been initialized.
-        unsafe { InitializedStablePayload::new_unchecked() }
+        unsafe { InitializedStablePayload::new_unchecked(self.ptr) }
     }
 }
 
@@ -1279,6 +1403,33 @@ where
         // borrowed for the returned lifetime and no other reference to the value
         // is created by this helper.
         Ok(unsafe { &mut *ptr })
+    }
+}
+
+// SAFETY:
+// - `loan_uninit_payload` checks exact length and alignment before constructing a
+//   typed uninit slot.
+// - `T: ByteBackedStablePayload` proves safe no-zero TX cannot expose
+//   uninitialized implicit padding when the full `size_of::<T>()` byte range is
+//   committed after the returned initialized marker is produced.
+unsafe impl<T> LoanUninitPayload<T> for StableContainerPayload<T>
+where
+    T: ByteBackedStablePayload,
+{
+    fn loan_uninit_layout() -> Result<PayloadLayout, UWireError> {
+        PayloadLayout::new(mem::size_of::<T>(), mem::align_of::<T>())
+    }
+
+    fn loan_uninit_payload<'a>(
+        mut dst: LoanedPayloadUninitMut<'a>,
+    ) -> Result<LoanedUninitPayload<'a, T>, UWireError> {
+        let bytes = dst.as_uninit_bytes_mut_internal();
+        Self::check_uninit_layout(bytes)?;
+        let ptr = NonNull::new(bytes.as_mut_ptr().cast::<mem::MaybeUninit<T>>())
+            .ok_or_else(|| UWireError::invalid_payload("stable payload slot pointer is null"))?;
+        // SAFETY: `check_uninit_layout` verified exact `T` length and alignment,
+        // and the loan wrapper preserves unique mutable access for `'a`.
+        Ok(unsafe { LoanedUninitPayload::new_unchecked(ptr) })
     }
 }
 
