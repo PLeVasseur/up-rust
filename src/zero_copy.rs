@@ -29,7 +29,10 @@ use tracing::warn;
 #[cfg(feature = "owned-frame-transport")]
 use crate::UOwnedFrame;
 use crate::{
-    payload::{PayloadCodec, ReadDecodePayload, StableContainerPayload, StablePayload, UWireError},
+    payload::{
+        LoanPayload, PayloadCodec, ReadDecodePayload, StableContainerPayload, StablePayload,
+        UWireError,
+    },
     utransport::verify_filter_criteria,
     UCode, UFrameMetadata, UFrameMetadataError, UStatus, UUri,
 };
@@ -672,6 +675,45 @@ where
         result
     }
 }
+
+/// Convenience methods for zero-copy transports with initialized TX storage.
+#[async_trait]
+pub trait UZeroCopyTransportExt: UZeroCopyTransport {
+    /// Initializes a typed payload directly in a transmit loan and sends it.
+    ///
+    /// # Errors
+    ///
+    /// Returns an error if metadata validation fails, the transport cannot loan
+    /// the requested initialized layout, the codec rejects the loaned storage, or
+    /// sending the committed loan fails.
+    async fn send_loaned_payload_as<C, T>(
+        &self,
+        metadata: UFrameMetadata,
+        init: impl for<'payload> FnOnce(&'payload mut T) + Send,
+    ) -> Result<(), UStatus>
+    where
+        C: PayloadCodec + LoanPayload<T> + Send + Sync,
+    {
+        let metadata = UFrameMetadata::new(metadata.into_attributes(), Some(C::payload_encoding()))
+            .map_err(frame_metadata_error)?;
+        let layout = C::loan_layout().map_err(UStatus::from)?;
+        let mut buffer = self
+            .loan_tx(UTxLoanSpec::payload(
+                metadata,
+                layout.len(),
+                layout.align(),
+            )?)
+            .await?;
+        verify_tx_buffer_payload_layout(&mut buffer, layout.len(), layout.align())?;
+        {
+            let payload = C::loan_payload(buffer.payload_mut()).map_err(UStatus::from)?;
+            init(payload);
+        }
+        self.send_zero_copy(buffer).await
+    }
+}
+
+impl<T> UZeroCopyTransportExt for T where T: UZeroCopyTransport + ?Sized {}
 
 /// Implementation boundary for transports that can expose uninitialized TX payload storage.
 #[async_trait]
@@ -1444,11 +1486,14 @@ fn internal_zero_copy_error(message: impl Into<String>) -> UStatus {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::{PayloadEncoding, StablePayloadVariant, UMessageBuilder, UPayloadFormat};
+    use crate::{
+        ByteBackedStablePayload, PayloadEncoding, StablePayloadVariant, UMessageBuilder,
+        UPayloadFormat,
+    };
     use std::sync::Mutex as StdMutex;
 
     #[repr(C)]
-    #[derive(Clone, Copy, Debug, Eq, PartialEq)]
+    #[derive(Clone, Copy, Debug, Default, Eq, PartialEq)]
     struct StableBytes {
         bytes: [u8; 4],
     }
@@ -1456,6 +1501,8 @@ mod tests {
     unsafe impl StablePayload for StableBytes {
         const TYPE_NAME: &'static str = "uprotocol.test.StableBytes";
     }
+
+    unsafe impl ByteBackedStablePayload for StableBytes {}
 
     #[repr(C)]
     #[derive(Clone, Copy, Debug, Eq, PartialEq)]
@@ -1836,6 +1883,31 @@ mod tests {
             .await
             .unwrap();
         assert_eq!(injected.try_contiguous_payload(), Some(b"next".as_slice()));
+    }
+
+    #[tokio::test]
+    async fn stable_initialized_tx_helper_sends_stable_payload() {
+        let transport = InMemoryZeroCopyTransport::default();
+
+        transport
+            .send_loaned_payload_as::<StableContainerPayload<StableBytes>, StableBytes>(
+                stable_metadata::<StableBytes>(),
+                |payload| payload.bytes.copy_from_slice(b"init"),
+            )
+            .await
+            .expect("send initialized stable payload");
+
+        let sent = transport.sent_frames();
+        assert_eq!(sent.len(), 1);
+        let sent = sent.first().expect("one sent frame");
+        assert_eq!(
+            sent.metadata().payload_encoding(),
+            Some(&StableContainerPayload::<StableBytes>::encoding())
+        );
+        assert_eq!(
+            sent.borrow_stable_payload::<StableBytes>().unwrap(),
+            &StableBytes { bytes: *b"init" }
+        );
     }
 
     #[cfg(feature = "owned-frame-transport")]

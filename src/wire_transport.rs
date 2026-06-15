@@ -932,17 +932,17 @@ fn invalid_metadata(error: crate::UFrameMetadataError) -> UStatus {
 
 #[cfg(test)]
 mod tests {
-    use std::io::Cursor;
+    use std::{io::Cursor, sync::Mutex as StdMutex};
 
     use super::*;
     use crate::{
-        PayloadEncoding, PayloadLoanProvenance, StableContainerPayload, StablePayload,
-        UMessageBuilder, UPayloadFormat, UProtocolNativeWire, UTxPayloadSpec, UVecRxLease,
-        UVecTxBuffer, UVecUninitTxBuffer,
+        ByteBackedStablePayload, PayloadEncoding, PayloadLoanProvenance, StableContainerPayload,
+        StablePayload, UMessageBuilder, UPayloadFormat, UProtocolNativeWire, UTxPayloadSpec,
+        UVecRxLease, UVecTxBuffer, UVecUninitTxBuffer, UZeroCopyTransportExt,
     };
 
     #[repr(C)]
-    #[derive(Clone, Copy, Debug, Eq, PartialEq)]
+    #[derive(Clone, Copy, Debug, Default, Eq, PartialEq)]
     struct WireStableBytes {
         bytes: [u8; 4],
     }
@@ -950,6 +950,8 @@ mod tests {
     unsafe impl StablePayload for WireStableBytes {
         const TYPE_NAME: &'static str = "uprotocol.test.WireStableBytes";
     }
+
+    unsafe impl ByteBackedStablePayload for WireStableBytes {}
 
     struct RawRx {
         encoded_metadata: Vec<u8>,
@@ -997,6 +999,32 @@ mod tests {
                     PayloadLoanProvenance::OpaqueTransportLoan,
                 )
             })
+        }
+    }
+
+    #[derive(Default)]
+    struct RecordingCore {
+        prepared: StdMutex<Vec<PreparedTxLoanSpec>>,
+        sent: StdMutex<Vec<UVecTxBuffer>>,
+    }
+
+    #[async_trait]
+    impl UZeroCopyTransportCore for RecordingCore {
+        type Tx = UVecTxBuffer;
+        type Rx = RawRx;
+
+        async fn loan_prepared_tx(&self, spec: PreparedTxLoanSpec) -> Result<Self::Tx, UStatus> {
+            self.prepared.lock().unwrap().push(spec.clone());
+            UVecTxBuffer::with_alignment(
+                spec.metadata().clone(),
+                spec.payload_len(),
+                spec.payload_alignment(),
+            )
+        }
+
+        async fn send_prepared_zero_copy(&self, buffer: Self::Tx) -> Result<(), UStatus> {
+            self.sent.lock().unwrap().push(buffer);
+            Ok(())
         }
     }
 
@@ -1112,6 +1140,43 @@ mod tests {
         assert_eq!(
             rx.payload_loan_provenance().unwrap(),
             PayloadLoanProvenance::OpaqueTransportLoan
+        );
+    }
+
+    #[tokio::test]
+    async fn stable_initialized_tx_helper_sends_through_selected_wire_transport() {
+        let transport = RecordingCore::default().with_wire(UProtocolNativeWire);
+
+        transport
+            .send_loaned_payload_as::<StableContainerPayload<WireStableBytes>, WireStableBytes>(
+                stable_metadata::<WireStableBytes>(),
+                |payload| payload.bytes.copy_from_slice(b"wire"),
+            )
+            .await
+            .expect("send initialized stable payload through selected wire");
+
+        let prepared = transport.core().prepared.lock().unwrap();
+        assert_eq!(prepared.len(), 1);
+        let prepared_frame = prepared.first().expect("one prepared frame");
+        let decoded = UProtocolNativeWire::decode_frame_metadata(prepared_frame.encoded_metadata())
+            .expect("decode selected-wire metadata");
+        assert_eq!(
+            decoded.payload_encoding(),
+            Some(&StableContainerPayload::<WireStableBytes>::encoding())
+        );
+        drop(prepared);
+
+        let sent = transport.core().sent.lock().unwrap();
+        assert_eq!(sent.len(), 1);
+        let sent_frame = sent.first().expect("one sent frame");
+        let frame = UVecRxLease::new(
+            sent_frame.metadata().clone(),
+            Some(sent_frame.payload().to_vec()),
+        )
+        .expect("sent stable frame");
+        assert_eq!(
+            frame.borrow_stable_payload::<WireStableBytes>().unwrap(),
+            &WireStableBytes { bytes: *b"wire" }
         );
     }
 

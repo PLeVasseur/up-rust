@@ -14,13 +14,20 @@
 use std::mem::{self, MaybeUninit};
 
 use up_rust::{
-    StableContainerPayload, StablePayloadInit, UFrameMetadata, ULoanedContiguousZeroCopyRxFrame,
-    UMessageBuilder, UUri, UVecRxLease, UUID,
+    LoanPayload, StableContainerPayload, StablePayloadInit, UFrameMetadata,
+    ULoanedContiguousZeroCopyRxFrame, UMessageBuilder, UUri, UVecRxLease, UUID,
 };
 
 #[repr(C)]
 #[derive(
-    Clone, Copy, Debug, Eq, PartialEq, up_rust::StablePayload, up_rust::ByteBackedStablePayload,
+    Clone,
+    Copy,
+    Debug,
+    Default,
+    Eq,
+    PartialEq,
+    up_rust::StablePayload,
+    up_rust::ByteBackedStablePayload,
 )]
 #[stable_payload(type_name = "example.miri.StableBytes")]
 struct StableBytes {
@@ -159,4 +166,20 @@ fn stable_payload_init_rejects_wrong_length() {
         err.to_string().contains("payload length must be"),
         "unexpected error: {err}"
     );
+}
+
+#[test]
+fn stable_initialized_tx_loan_payload_is_miri_friendly() -> Result<(), up_rust::UWireError> {
+    let mut bytes = vec![0_u8; mem::size_of::<StableBytes>()];
+
+    let payload = StableContainerPayload::<StableBytes>::loan_payload(&mut bytes)?;
+    payload.bytes.copy_from_slice(b"send");
+
+    let frame = UVecRxLease::new(metadata::<StableBytes>(), Some(bytes)).expect("stable frame");
+    let borrowed = frame
+        .borrow_stable_payload::<StableBytes>()
+        .expect("borrow sent stable payload");
+
+    assert_eq!(borrowed.bytes, *b"send");
+    Ok(())
 }

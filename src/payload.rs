@@ -297,6 +297,30 @@ pub trait ReadDecodePayload<T>: PayloadCodec {
     fn decode_payload_from_reader<R: Read>(reader: R, payload_len: usize) -> Result<T, UWireError>;
 }
 
+/// Initializes and borrows a typed value directly in initialized transmit storage.
+///
+/// # Safety
+///
+/// Implementors must guarantee that [`LoanPayload::loan_payload`] returns
+/// `&mut T` only when the destination byte range is uniquely borrowed, has the
+/// exact layout returned by [`LoanPayload::loan_layout`], and contains one valid
+/// initialized `T` for the returned lifetime.
+pub unsafe trait LoanPayload<T>: PayloadCodec {
+    /// Returns the exact layout required for a typed initialized transmit loan.
+    ///
+    /// # Errors
+    ///
+    /// Returns an error if this codec cannot loan `T` into initialized TX storage.
+    fn loan_layout() -> Result<PayloadLayout, UWireError>;
+
+    /// Initializes `dst` and returns a typed mutable view over the loaned payload.
+    ///
+    /// # Errors
+    ///
+    /// Returns an error if `dst` does not have the required length or alignment.
+    fn loan_payload(dst: &mut [u8]) -> Result<&mut T, UWireError>;
+}
+
 /// Marker for codecs whose payload value is already an opaque byte sequence.
 pub trait BytePayloadCodec: PayloadCodec {}
 
@@ -1165,6 +1189,26 @@ impl<T: StablePayload> StableContainerPayload<T> {
         }
         Ok(())
     }
+
+    fn check_initialized_layout(src: &[u8]) -> Result<(), UWireError> {
+        let expected_len = mem::size_of::<T>();
+        if src.len() != expected_len {
+            return Err(UWireError::invalid_payload_length(expected_len, src.len()));
+        }
+
+        if expected_len == 0 {
+            return Ok(());
+        }
+
+        let alignment = mem::align_of::<T>();
+        let address = src.as_ptr() as usize;
+        if !address.is_multiple_of(alignment) {
+            return Err(UWireError::invalid_payload(format!(
+                "payload address {address} is not aligned to {alignment}"
+            )));
+        }
+        Ok(())
+    }
 }
 
 impl<T> PayloadCodec for StableContainerPayload<T>
@@ -1202,6 +1246,39 @@ where
                 content_type
             ))
         })
+    }
+}
+
+// SAFETY:
+// - `loan_payload` verifies exact length and alignment before casting the loaned
+//   destination to `*mut T`.
+// - `T: ByteBackedStablePayload + Default` provides a no-padding stable payload
+//   proof and a safe initialized value before `&mut T` is exposed to callers.
+unsafe impl<T> LoanPayload<T> for StableContainerPayload<T>
+where
+    T: ByteBackedStablePayload + Default,
+{
+    fn loan_layout() -> Result<PayloadLayout, UWireError> {
+        PayloadLayout::new(mem::size_of::<T>(), mem::align_of::<T>())
+    }
+
+    fn loan_payload(dst: &mut [u8]) -> Result<&mut T, UWireError> {
+        Self::check_initialized_layout(dst)?;
+        dst.fill(0);
+        let ptr = if mem::size_of::<T>() == 0 {
+            NonNull::<T>::dangling().as_ptr()
+        } else {
+            dst.as_mut_ptr().cast::<T>()
+        };
+        // SAFETY: the checked byte range has the exact `T` layout, or `T` is a
+        // zero-sized byte-backed type using an aligned dangling pointer. Writing
+        // `T::default()` creates one valid initialized `T` before returning the
+        // unique mutable reference tied to `dst`'s borrow.
+        unsafe { ptr.write(T::default()) };
+        // SAFETY: `ptr` now points to one initialized `T`; `dst` is exclusively
+        // borrowed for the returned lifetime and no other reference to the value
+        // is created by this helper.
+        Ok(unsafe { &mut *ptr })
     }
 }
 
