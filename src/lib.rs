@@ -77,7 +77,7 @@ pub mod local_transport;
 pub mod symphony;
 
 use protobuf::{well_known_types::any::Any, Message, MessageFull};
-pub use up_rust_macros::{ByteBackedStablePayload, StablePayload};
+pub use up_rust_macros::{ByteBackedStablePayload, StablePayload, StablePayloadInit};
 
 mod frame_metadata;
 pub use frame_metadata::{
@@ -105,11 +105,20 @@ pub use owned_frame::UOwnedFrame;
 pub mod payload;
 pub use payload::{
     assert_stable_payload_byte_backed_uninit, stable_payload_supports_byte_backed_uninit,
-    ByteBackedStablePayload, BytePayloadCodec, DecodePayload, EncodePayload, PayloadCodec,
-    PayloadFormat, PayloadLayout, ProtobufAnyPayload, ProtobufPayload, RawBytes, ReadDecodePayload,
-    StableContainerPayload, StableContainerPayloadInfo, StablePayload, StablePayloadVariant,
-    StableTypeDetail, UWireError,
+    ByteBackedStablePayload, BytePayloadCodec, DecodePayload, EncodePayload,
+    InitializedStablePayload, PayloadCodec, PayloadFormat, PayloadLayout, ProtobufAnyPayload,
+    ProtobufPayload, RawBytes, ReadDecodePayload, StableContainerPayload,
+    StableContainerPayloadInfo, StablePayload, StablePayloadInit, StablePayloadInitCompleteValue,
+    StablePayloadVariant, StableTypeDetail, UWireError,
 };
+
+#[doc(hidden)]
+pub mod __derive_support {
+    pub use crate::payload::{
+        ByteBackedStablePayloadField, StablePayloadInitSet, StablePayloadInitSlot,
+        StablePayloadInitUnset,
+    };
+}
 
 mod zero_copy;
 #[cfg(feature = "test-util")]
