@@ -146,3 +146,17 @@ fn stable_payload_init_builder_initializes_fields_and_padding() -> Result<(), up
 
     Ok(())
 }
+
+#[test]
+fn stable_payload_init_rejects_wrong_length() {
+    let mut bytes = vec![MaybeUninit::<u8>::uninit(); mem::size_of::<InitMessage>() - 1];
+    let err = match InitMessage::init_from_uninit_bytes(&mut bytes) {
+        Ok(_) => panic!("wrong-length init unexpectedly succeeded"),
+        Err(err) => err,
+    };
+
+    assert!(
+        err.to_string().contains("payload length must be"),
+        "unexpected error: {err}"
+    );
+}
