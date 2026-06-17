@@ -23,6 +23,8 @@ include = [
     "/proto/*",
     "/README.md",
     "/src/*",
+    "/src/bench_fixtures/**",
+    "/test-fixtures/**",
     "/tests/**",
     "/up-spec/up-core-api/uprotocol/*",
 ]
@@ -38,6 +40,10 @@ version = "0.10.0-SNAPSHOT"
 default = ["communication"]
 cloudevents = []
 communication = ["usubscription", "dep:thiserror", "tokio/sync", "tokio/time"]
+protobuf-wire = []
+payload-contract-fixtures = ["protobuf-wire", "dep:serde", "dep:serde_json", "dep:sha2"]
+payload-contract-large-fixtures = ["payload-contract-fixtures"]
+payload-contract-simulator-fixtures = ["payload-contract-large-fixtures"]
 udiscovery = []
 usubscription = []
 utwin = []
@@ -63,8 +69,9 @@ protobuf = { version = "3.7.2", features = ["with-bytes"] }
 # https://rustsec.org/advisories/RUSTSEC-2026-0097
 rand = { version = "0.9.3" }
 regex = { version = "1.11" }
-serde = { version = "1.0.228", optional = true }
+serde = { version = "1.0.228", features = ["derive"], optional = true }
 serde_json = { version = "1.0.145", optional = true }
+sha2 = { version = "0.10", optional = true }
 symphony = { version = "0.1", optional = true }
 thiserror = { version = "1.0.69", optional = true }
 tokio = { version = "1.45.1", default-features = false, optional = true }
