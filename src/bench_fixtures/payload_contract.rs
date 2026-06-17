@@ -582,10 +582,12 @@ pub fn init_can_classic_max(
         .interface_id(CAN_INTERFACE_ID)
         .can_id(CAN_CLASSIC_ID)
         .flags(CAN_FLAG_EFF)
+        .reserved0(0)
         .bus_timestamp_ns(timestamp_ns(sequence))
         .len(8)
         .len8_dlc(8)
         .data_fill_with(|index| pattern_byte(case.case_id, sequence, index))
+        .reserved1([0; 2])
         .checksum(fixture_checksum(case, sequence))
         .finish()
 }
@@ -599,9 +601,11 @@ pub fn init_can_fd_max(
         .interface_id(CAN_INTERFACE_ID)
         .can_id(CAN_FD_ID)
         .flags(CAN_FLAG_EFF | CAN_FD_FLAG_BRS | CAN_FD_FLAG_ESI)
+        .reserved0(0)
         .bus_timestamp_ns(timestamp_ns(sequence))
         .len(64)
         .data_fill_with(|index| pattern_byte(case.case_id, sequence, index))
+        .reserved1([0; 3])
         .checksum(fixture_checksum(case, sequence))
         .finish()
 }
@@ -623,8 +627,10 @@ pub fn init_someip_single_mtu(
         .interface_version(SOMEIP_INTERFACE_VERSION)
         .message_type(SOMEIP_MESSAGE_TYPE)
         .return_code(SOMEIP_RETURN_CODE)
+        .reserved0(0)
         .samples(|index, sample| init_signal_sample(sample, sequence, index))?
         .checksum(fixture_checksum(case, sequence))
+        .reserved1(0)
         .finish()
 }
 
@@ -651,6 +657,7 @@ pub fn init_radar_ars548_detection_list(
         .list_numofdetections(RADAR_ARS548_MAX_DETECTIONS as u32)
         .detections(|index, detection| init_radar_detection(detection, sequence, index))?
         .checksum(fixture_checksum(case, sequence))
+        .reserved0(0)
         .finish()
 }
 
@@ -689,9 +696,11 @@ pub fn init_lidar_hesai_at128_point_cloud(
         .point_format(LIDAR_POINT_FORMAT_XYZIRCAEDT)
         .is_bigendian(0)
         .is_dense(1)
+        .reserved0([0; 2])
         .checksum(fixture_checksum(case, sequence))
         .extrinsics(|pose| init_pose(pose, sequence))?
         .points(|index, point| init_lidar_point(point, sequence, index))?
+        .reserved1(0)
         .finish()
 }
 
@@ -1340,6 +1349,7 @@ fn init_stream_meta(
         .chunk_count(sequence.saturating_add(7))
         .source_timestamp_ns(timestamp_ns(sequence))
         .checksum(fixture_checksum(case, sequence))
+        .reserved0(0)
         .finish()
 }
 

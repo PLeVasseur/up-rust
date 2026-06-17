@@ -9,6 +9,7 @@
 use std::mem;
 
 use up_rust::bench_fixtures::payload_contract::{self as fixtures, *};
+use up_rust::{ByteBackedStablePayload, StableContainerWireFormat, UWireLoanUninit};
 
 #[cfg(feature = "test-util")]
 use up_rust::{
@@ -72,6 +73,29 @@ fn payload_contract_representative_constants_and_sizes_match_contract() {
         assert_eq!(BITS_PER_SAMPLE_12, 12);
         assert_eq!(CAMERA_CARLA_BGRA32_BYTES, 33_177_600);
         assert_eq!(mem::size_of::<CameraBayerRggb12pFrame8mpV1>(), 12_441_784);
+    }
+}
+
+#[test]
+fn payload_contract_stable_fixtures_satisfy_selected_wire_no_zero_bounds() {
+    fn assert_selected_wire_no_zero<T>()
+    where
+        T: ByteBackedStablePayload,
+        StableContainerWireFormat: UWireLoanUninit<T>,
+    {
+    }
+
+    assert_selected_wire_no_zero::<CanClassicFrameV1>();
+    assert_selected_wire_no_zero::<CanFdFrameV1>();
+    assert_selected_wire_no_zero::<SomeIpSignalBatchMtuV1>();
+    assert_selected_wire_no_zero::<StreamChunk4kV1>();
+    assert_selected_wire_no_zero::<RadarDetectionListArs548V1>();
+    assert_selected_wire_no_zero::<StreamChunk64kV1>();
+
+    #[cfg(feature = "payload-contract-large-fixtures")]
+    {
+        assert_selected_wire_no_zero::<LidarPointCloudHesaiAt128V1>();
+        assert_selected_wire_no_zero::<CameraBayerRggb12pFrame8mpV1>();
     }
 }
 

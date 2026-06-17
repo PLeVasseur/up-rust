@@ -53,7 +53,9 @@ pub const BITS_PER_SAMPLE_12: u32 = 12;
 pub const PACKED_LAYOUT_12P_LSB: u32 = 1;
 
 #[repr(C)]
-#[derive(Clone, Copy, crate::StablePayload, crate::StablePayloadInit)]
+#[derive(
+    Clone, Copy, crate::StablePayload, crate::ByteBackedStablePayload, crate::StablePayloadInit,
+)]
 #[stable_payload(type_name = "org.eclipse.uprotocol.bench.v1.BenchHeaderV1")]
 pub struct BenchHeaderV1 {
     pub case_id: u32,
@@ -63,7 +65,9 @@ pub struct BenchHeaderV1 {
 }
 
 #[repr(C)]
-#[derive(Clone, Copy, crate::StablePayload, crate::StablePayloadInit)]
+#[derive(
+    Clone, Copy, crate::StablePayload, crate::ByteBackedStablePayload, crate::StablePayloadInit,
+)]
 #[stable_payload(type_name = "org.eclipse.uprotocol.bench.v1.Vector3fV1")]
 pub struct Vector3fV1 {
     pub x: f32,
@@ -72,7 +76,9 @@ pub struct Vector3fV1 {
 }
 
 #[repr(C)]
-#[derive(Clone, Copy, crate::StablePayload, crate::StablePayloadInit)]
+#[derive(
+    Clone, Copy, crate::StablePayload, crate::ByteBackedStablePayload, crate::StablePayloadInit,
+)]
 #[stable_payload(type_name = "org.eclipse.uprotocol.bench.v1.QuaternionfV1")]
 pub struct QuaternionfV1 {
     pub x: f32,
@@ -82,7 +88,9 @@ pub struct QuaternionfV1 {
 }
 
 #[repr(C)]
-#[derive(Clone, Copy, crate::StablePayload, crate::StablePayloadInit)]
+#[derive(
+    Clone, Copy, crate::StablePayload, crate::ByteBackedStablePayload, crate::StablePayloadInit,
+)]
 #[stable_payload(type_name = "org.eclipse.uprotocol.bench.v1.Pose3dV1")]
 pub struct Pose3dV1 {
     pub translation_m: Vector3fV1,
@@ -90,7 +98,9 @@ pub struct Pose3dV1 {
 }
 
 #[repr(C)]
-#[derive(Clone, Copy, crate::StablePayload, crate::StablePayloadInit)]
+#[derive(
+    Clone, Copy, crate::StablePayload, crate::ByteBackedStablePayload, crate::StablePayloadInit,
+)]
 #[stable_payload(type_name = "org.eclipse.uprotocol.bench.v1.CameraIntrinsicsV1")]
 pub struct CameraIntrinsicsV1 {
     pub fx: f32,
@@ -103,7 +113,9 @@ pub struct CameraIntrinsicsV1 {
 }
 
 #[repr(C)]
-#[derive(Clone, Copy, crate::StablePayload, crate::StablePayloadInit)]
+#[derive(
+    Clone, Copy, crate::StablePayload, crate::ByteBackedStablePayload, crate::StablePayloadInit,
+)]
 #[stable_payload(type_name = "org.eclipse.uprotocol.bench.v1.RoiV1")]
 pub struct RoiV1 {
     pub x: u32,
@@ -113,36 +125,42 @@ pub struct RoiV1 {
 }
 
 #[repr(C)]
-#[derive(crate::StablePayload, crate::StablePayloadInit)]
+#[derive(crate::StablePayload, crate::ByteBackedStablePayload, crate::StablePayloadInit)]
 #[stable_payload(type_name = "org.eclipse.uprotocol.bench.v1.CanClassicFrameV1")]
 pub struct CanClassicFrameV1 {
     pub header: BenchHeaderV1,
     pub interface_id: u32,
     pub can_id: u32,
     pub flags: u32,
+    pub reserved0: u32,
     pub bus_timestamp_ns: u64,
     pub len: u8,
     pub len8_dlc: u8,
     pub data: [u8; 8],
+    pub reserved1: [u8; 2],
     pub checksum: u32,
 }
 
 #[repr(C)]
-#[derive(crate::StablePayload, crate::StablePayloadInit)]
+#[derive(crate::StablePayload, crate::ByteBackedStablePayload, crate::StablePayloadInit)]
 #[stable_payload(type_name = "org.eclipse.uprotocol.bench.v1.CanFdFrameV1")]
 pub struct CanFdFrameV1 {
     pub header: BenchHeaderV1,
     pub interface_id: u32,
     pub can_id: u32,
     pub flags: u32,
+    pub reserved0: u32,
     pub bus_timestamp_ns: u64,
     pub len: u8,
     pub data: [u8; 64],
+    pub reserved1: [u8; 3],
     pub checksum: u32,
 }
 
 #[repr(C)]
-#[derive(Clone, Copy, crate::StablePayload, crate::StablePayloadInit)]
+#[derive(
+    Clone, Copy, crate::StablePayload, crate::ByteBackedStablePayload, crate::StablePayloadInit,
+)]
 #[stable_payload(type_name = "org.eclipse.uprotocol.bench.v1.SignalSampleV1")]
 pub struct SignalSampleV1 {
     pub signal_id: u32,
@@ -152,7 +170,7 @@ pub struct SignalSampleV1 {
 }
 
 #[repr(C)]
-#[derive(crate::StablePayload, crate::StablePayloadInit)]
+#[derive(crate::StablePayload, crate::ByteBackedStablePayload, crate::StablePayloadInit)]
 #[stable_payload(type_name = "org.eclipse.uprotocol.bench.v1.SomeIpSignalBatchMtuV1")]
 pub struct SomeIpSignalBatchMtuV1 {
     pub header: BenchHeaderV1,
@@ -167,12 +185,16 @@ pub struct SomeIpSignalBatchMtuV1 {
     pub interface_version: u8,
     pub message_type: u8,
     pub return_code: u8,
+    pub reserved0: u32,
     pub samples: [SignalSampleV1; SOMEIP_MTU_SIGNAL_SAMPLE_COUNT],
     pub checksum: u32,
+    pub reserved1: u32,
 }
 
 #[repr(C)]
-#[derive(Clone, Copy, crate::StablePayload, crate::StablePayloadInit)]
+#[derive(
+    Clone, Copy, crate::StablePayload, crate::ByteBackedStablePayload, crate::StablePayloadInit,
+)]
 #[stable_payload(type_name = "org.eclipse.uprotocol.bench.v1.StreamChunkHeaderV1")]
 pub struct StreamChunkHeaderV1 {
     pub header: BenchHeaderV1,
@@ -184,10 +206,11 @@ pub struct StreamChunkHeaderV1 {
     pub chunk_count: u32,
     pub source_timestamp_ns: u64,
     pub checksum: u32,
+    pub reserved0: u32,
 }
 
 #[repr(C)]
-#[derive(crate::StablePayload, crate::StablePayloadInit)]
+#[derive(crate::StablePayload, crate::ByteBackedStablePayload, crate::StablePayloadInit)]
 #[stable_payload(type_name = "org.eclipse.uprotocol.bench.v1.StreamChunk4kV1")]
 pub struct StreamChunk4kV1 {
     pub meta: StreamChunkHeaderV1,
@@ -195,7 +218,7 @@ pub struct StreamChunk4kV1 {
 }
 
 #[repr(C)]
-#[derive(crate::StablePayload, crate::StablePayloadInit)]
+#[derive(crate::StablePayload, crate::ByteBackedStablePayload, crate::StablePayloadInit)]
 #[stable_payload(type_name = "org.eclipse.uprotocol.bench.v1.StreamChunk64kV1")]
 pub struct StreamChunk64kV1 {
     pub meta: StreamChunkHeaderV1,
@@ -203,7 +226,9 @@ pub struct StreamChunk64kV1 {
 }
 
 #[repr(C)]
-#[derive(Clone, Copy, crate::StablePayload, crate::StablePayloadInit)]
+#[derive(
+    Clone, Copy, crate::StablePayload, crate::ByteBackedStablePayload, crate::StablePayloadInit,
+)]
 #[stable_payload(type_name = "org.eclipse.uprotocol.bench.v1.Ars548DetectionV1")]
 pub struct Ars548DetectionV1 {
     pub azimuth_angle: f32,
@@ -226,7 +251,7 @@ pub struct Ars548DetectionV1 {
 }
 
 #[repr(C)]
-#[derive(crate::StablePayload, crate::StablePayloadInit)]
+#[derive(crate::StablePayload, crate::ByteBackedStablePayload, crate::StablePayloadInit)]
 #[stable_payload(type_name = "org.eclipse.uprotocol.bench.v1.RadarDetectionListArs548V1")]
 pub struct RadarDetectionListArs548V1 {
     pub header: BenchHeaderV1,
@@ -237,11 +262,14 @@ pub struct RadarDetectionListArs548V1 {
     pub list_numofdetections: u32,
     pub detections: [Ars548DetectionV1; RADAR_ARS548_MAX_DETECTIONS],
     pub checksum: u32,
+    pub reserved0: u32,
 }
 
 #[cfg(feature = "payload-contract-large-fixtures")]
 #[repr(C)]
-#[derive(Clone, Copy, crate::StablePayload, crate::StablePayloadInit)]
+#[derive(
+    Clone, Copy, crate::StablePayload, crate::ByteBackedStablePayload, crate::StablePayloadInit,
+)]
 #[stable_payload(type_name = "org.eclipse.uprotocol.bench.v1.LidarPointXyzircaedtV1")]
 pub struct LidarPointXyzircaedtV1 {
     pub x: f32,
@@ -258,7 +286,7 @@ pub struct LidarPointXyzircaedtV1 {
 
 #[cfg(feature = "payload-contract-large-fixtures")]
 #[repr(C)]
-#[derive(crate::StablePayload, crate::StablePayloadInit)]
+#[derive(crate::StablePayload, crate::ByteBackedStablePayload, crate::StablePayloadInit)]
 #[stable_payload(type_name = "org.eclipse.uprotocol.bench.v1.LidarPointCloudHesaiAt128V1")]
 pub struct LidarPointCloudHesaiAt128V1 {
     pub header: BenchHeaderV1,
@@ -280,14 +308,16 @@ pub struct LidarPointCloudHesaiAt128V1 {
     pub point_format: u32,
     pub is_bigendian: u8,
     pub is_dense: u8,
+    pub reserved0: [u8; 2],
     pub checksum: u32,
     pub extrinsics: Pose3dV1,
     pub points: [LidarPointXyzircaedtV1; LIDAR_HESAI_AT128_POINT_COUNT],
+    pub reserved1: u32,
 }
 
 #[cfg(feature = "payload-contract-large-fixtures")]
 #[repr(C)]
-#[derive(crate::StablePayload, crate::StablePayloadInit)]
+#[derive(crate::StablePayload, crate::ByteBackedStablePayload, crate::StablePayloadInit)]
 #[stable_payload(type_name = "org.eclipse.uprotocol.bench.v1.CameraBayerRggb12pFrame8mpV1")]
 pub struct CameraBayerRggb12pFrame8mpV1 {
     pub header: BenchHeaderV1,

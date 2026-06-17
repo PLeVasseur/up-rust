@@ -5,7 +5,7 @@
  ********************************************************************************/
 
 #[repr(C)]
-#[derive(up_rust::StablePayload)]
+#[derive(up_rust::StablePayload, up_rust::ByteBackedStablePayload)]
 #[stable_payload(type_name = "example.trybuild.PaddedNested")]
 struct PaddedNested {
     leading: u8,

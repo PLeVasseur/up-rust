@@ -9,7 +9,11 @@ use std::mem::{self, MaybeUninit};
 use up_rust::StablePayloadInit;
 
 #[repr(C)]
-#[derive(up_rust::StablePayload, up_rust::StablePayloadInit)]
+#[derive(
+    up_rust::StablePayload,
+    up_rust::ByteBackedStablePayload,
+    up_rust::StablePayloadInit,
+)]
 #[stable_payload(type_name = "example.trybuild.InitPaddedNested")]
 struct InitPaddedNested {
     tag: u8,

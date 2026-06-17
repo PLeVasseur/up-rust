@@ -1,26 +1,5 @@
-error[E0277]: the trait bound `InitPaddedNested: StablePayloadInitCompleteValue<InitPaddedNested>` is not satisfied
-  --> tests/ui/stable_payload/stable_payload_init_nested_padded_by_value.rs:39:23
+error[E0080]: evaluation panicked: ByteBackedStablePayload field `count` has implicit padding before it; add explicit initialized padding fields
+  --> tests/ui/stable_payload/stable_payload_init_nested_padded_by_value.rs:20:5
    |
-39 |         .nested_value(InitPaddedNested { tag: 1, count: 2 })
-   |          ------------ ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ unsatisfied trait bound
-   |          |
-   |          required by a bound introduced by this call
-   |
-help: the trait `ByteBackedStablePayload` is not implemented for `InitPaddedNested`
-  --> tests/ui/stable_payload/stable_payload_init_nested_padded_by_value.rs:14:1
-   |
-14 | struct InitPaddedNested {
-   | ^^^^^^^^^^^^^^^^^^^^^^^
-help: the trait `StablePayloadInitCompleteValue<[T; N]>` is implemented for `[T; N]`
-  --> src/payload.rs
-   |
-   | / impl<T, const N: usize> StablePayloadInitCompleteValue<[T; N]> for [T; N]
-   | | where
-   | |     T: ByteBackedStablePayloadField,
-   | |____________________________________^
-   = note: required for `InitPaddedNested` to implement `StablePayloadInitCompleteValue<InitPaddedNested>`
-note: required by a bound in `__UpRustStablePayloadInitForInitPaddedOuter::<'__up_rust_payload, StablePayloadInitUnset>::nested_value`
-  --> tests/ui/stable_payload/stable_payload_init_nested_padded_by_value.rs:23:5
-   |
-23 |     nested: InitPaddedNested,
-   |     ^^^^^^ required by this bound in `__UpRustStablePayloadInitForInitPaddedOuter::<'__up_rust_payload, StablePayloadInitUnset>::nested_value`
+20 |     count: u32,
+   |     ^^^^^ evaluation of `_` failed here
