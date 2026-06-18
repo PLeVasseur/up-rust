@@ -130,6 +130,12 @@ struct InMemoryWireCoreState {
     prepared_owned: Vec<PreparedOwnedFrame>,
     #[cfg(feature = "owned-frame-transport")]
     owned_received: VecDeque<EncodedOwnedFrame>,
+    #[cfg(feature = "owned-frame-transport")]
+    owned_listeners: Vec<Arc<dyn UEncodedOwnedListener>>,
+    #[cfg(feature = "owned-frame-transport")]
+    owned_receive_filters: Vec<(UUri, Option<UUri>)>,
+    #[cfg(feature = "owned-frame-transport")]
+    owned_listener_filters: Vec<(UUri, Option<UUri>)>,
 }
 
 impl InMemoryWireCore {
@@ -201,6 +207,41 @@ impl InMemoryWireCore {
             .expect("core state lock poisoned")
             .owned_received
             .push_back(frame);
+    }
+
+    #[cfg(feature = "owned-frame-transport")]
+    async fn inject_owned(&self, frame: EncodedOwnedFrame) {
+        let listeners = self
+            .state
+            .lock()
+            .expect("core state lock poisoned")
+            .owned_listeners
+            .clone();
+        for listener in listeners {
+            listener.on_receive_encoded_owned(frame.clone()).await;
+        }
+    }
+
+    #[cfg(feature = "owned-frame-transport")]
+    fn last_owned_receive_filter(&self) -> (UUri, Option<UUri>) {
+        self.state
+            .lock()
+            .expect("core state lock poisoned")
+            .owned_receive_filters
+            .last()
+            .expect("owned receive filter")
+            .clone()
+    }
+
+    #[cfg(feature = "owned-frame-transport")]
+    fn last_owned_listener_filter(&self) -> (UUri, Option<UUri>) {
+        self.state
+            .lock()
+            .expect("core state lock poisoned")
+            .owned_listener_filters
+            .last()
+            .expect("owned listener filter")
+            .clone()
     }
 }
 
@@ -293,12 +334,14 @@ impl UOwnedTransportCore for InMemoryWireCore {
 
     async fn receive_encoded_owned(
         &self,
-        _source_filter: &UUri,
-        _sink_filter: Option<&UUri>,
+        source_filter: &UUri,
+        sink_filter: Option<&UUri>,
     ) -> Result<EncodedOwnedFrame, UStatus> {
-        self.state
-            .lock()
-            .expect("core state lock poisoned")
+        let mut state = self.state.lock().expect("core state lock poisoned");
+        state
+            .owned_receive_filters
+            .push((source_filter.clone(), sink_filter.cloned()));
+        state
             .owned_received
             .pop_front()
             .ok_or_else(|| UStatus::fail_with_code(UCode::NotFound, "no frame available"))
@@ -306,10 +349,15 @@ impl UOwnedTransportCore for InMemoryWireCore {
 
     async fn register_encoded_owned_listener(
         &self,
-        _source_filter: &UUri,
-        _sink_filter: Option<&UUri>,
-        _listener: Arc<dyn UEncodedOwnedListener>,
+        source_filter: &UUri,
+        sink_filter: Option<&UUri>,
+        listener: Arc<dyn UEncodedOwnedListener>,
     ) -> Result<(), UStatus> {
+        let mut state = self.state.lock().expect("core state lock poisoned");
+        state
+            .owned_listener_filters
+            .push((source_filter.clone(), sink_filter.cloned()));
+        state.owned_listeners.push(listener);
         Ok(())
     }
 
@@ -317,9 +365,48 @@ impl UOwnedTransportCore for InMemoryWireCore {
         &self,
         _source_filter: &UUri,
         _sink_filter: Option<&UUri>,
-        _listener: Arc<dyn UEncodedOwnedListener>,
+        listener: Arc<dyn UEncodedOwnedListener>,
     ) -> Result<(), UStatus> {
+        let mut state = self.state.lock().expect("core state lock poisoned");
+        let Some(index) = state
+            .owned_listeners
+            .iter()
+            .position(|registered| Arc::ptr_eq(registered, &listener))
+        else {
+            return Err(UStatus::fail_with_code(
+                UCode::NotFound,
+                "owned listener not registered",
+            ));
+        };
+        state.owned_listeners.remove(index);
         Ok(())
+    }
+}
+
+#[cfg(feature = "owned-frame-transport")]
+#[derive(Default)]
+struct CountingOwnedListener {
+    payloads: Mutex<Vec<Vec<u8>>>,
+}
+
+#[cfg(feature = "owned-frame-transport")]
+impl CountingOwnedListener {
+    fn payloads(&self) -> Vec<Vec<u8>> {
+        self.payloads
+            .lock()
+            .expect("owned payloads lock poisoned")
+            .clone()
+    }
+}
+
+#[cfg(feature = "owned-frame-transport")]
+#[async_trait]
+impl up_rust::UOwnedListener for CountingOwnedListener {
+    async fn on_receive_owned(&self, frame: UOwnedFrame) {
+        self.payloads
+            .lock()
+            .expect("owned payloads lock poisoned")
+            .push(frame.payload_bytes().to_vec());
     }
 }
 
@@ -370,6 +457,11 @@ fn invalid_source_filter() -> UUri {
     UUri::from_str("//vehicle/4210/1/10").expect("invalid source filter fixture")
 }
 
+fn broad_physical_source_filter() -> UUri {
+    UUri::try_from_parts("*", u32::MAX, u8::MAX, u16::MAX)
+        .expect("valid broad physical source filter")
+}
+
 fn metadata_with_payload() -> UFrameMetadata {
     metadata_with_payload_encoding(PayloadEncoding::Standard(UPayloadFormat::Raw))
 }
@@ -377,6 +469,16 @@ fn metadata_with_payload() -> UFrameMetadata {
 fn metadata_with_payload_encoding(payload_encoding: PayloadEncoding) -> UFrameMetadata {
     let message = UMessageBuilder::publish(topic()).build().expect("message");
     UFrameMetadata::new(message.attributes().clone(), Some(payload_encoding)).expect("metadata")
+}
+
+fn nonmatching_metadata_with_payload() -> UFrameMetadata {
+    let source = UUri::try_from_parts("other", 0x4210, 0x01, 0x9000).expect("other URI");
+    let message = UMessageBuilder::publish(source).build().expect("message");
+    UFrameMetadata::new(
+        message.attributes().clone(),
+        Some(PayloadEncoding::Standard(UPayloadFormat::Raw)),
+    )
+    .expect("metadata")
 }
 
 fn metadata_with_protobuf_payload() -> UFrameMetadata {
@@ -394,6 +496,17 @@ where
     InMemoryEncodedRxFrame::new(
         W::encode_frame_metadata(metadata).expect("encoded metadata"),
         payload,
+    )
+}
+
+#[cfg(feature = "owned-frame-transport")]
+fn encoded_owned_frame<W>(metadata: &UFrameMetadata, payload: &'static [u8]) -> EncodedOwnedFrame
+where
+    W: UWireMetadata,
+{
+    EncodedOwnedFrame::new(
+        W::encode_frame_metadata(metadata).expect("encoded metadata"),
+        Some(Bytes::from_static(payload)),
     )
 }
 
@@ -572,4 +685,91 @@ async fn owned_receive_rejects_wrong_wire_before_public_exposure() {
 
     assert_eq!(status.get_code(), UCode::InvalidArgument);
     assert!(status.get_message().contains("wrong selected wire"));
+}
+
+#[cfg(feature = "owned-frame-transport")]
+#[tokio::test]
+async fn owned_pull_receive_filters_after_selected_wire_decode() {
+    let metadata = metadata_with_payload();
+    let other_metadata = nonmatching_metadata_with_payload();
+    let core = InMemoryWireCore::default();
+    let transport = core.clone().with_wire(UProtocolNativeWire);
+    core.push_owned_rx(encoded_owned_frame::<UProtocolNativeWire>(
+        &other_metadata,
+        b"skip",
+    ));
+    core.push_owned_rx(encoded_owned_frame::<UProtocolNativeWire>(
+        &metadata, b"match",
+    ));
+
+    let frame = transport
+        .receive_owned(&valid_source_filter(), None)
+        .await
+        .expect("receive matching owned frame");
+
+    assert_eq!(frame.payload_bytes(), b"match");
+    let (source_filter, sink_filter) = core.last_owned_receive_filter();
+    assert_eq!(source_filter, broad_physical_source_filter());
+    assert!(sink_filter.is_none());
+}
+
+#[cfg(feature = "owned-frame-transport")]
+#[tokio::test]
+async fn owned_listener_filters_after_selected_wire_decode() {
+    let metadata = metadata_with_payload();
+    let other_metadata = nonmatching_metadata_with_payload();
+    let core = InMemoryWireCore::default();
+    let transport = core.clone().with_wire(UProtocolNativeWire);
+    let listener = Arc::new(CountingOwnedListener::default());
+    let source = valid_source_filter();
+
+    transport
+        .register_owned_listener(&source, None, listener.clone())
+        .await
+        .expect("register owned listener");
+
+    core.inject_owned(encoded_owned_frame::<UProtocolNativeWire>(
+        &other_metadata,
+        b"skip",
+    ))
+    .await;
+    core.inject_owned(encoded_owned_frame::<WrongWireSamePayload>(
+        &metadata, b"bad",
+    ))
+    .await;
+    core.inject_owned(encoded_owned_frame::<UProtocolNativeWire>(
+        &metadata, b"match",
+    ))
+    .await;
+
+    assert_eq!(listener.payloads(), vec![b"match".to_vec()]);
+    let (source_filter, sink_filter) = core.last_owned_listener_filter();
+    assert_eq!(source_filter, broad_physical_source_filter());
+    assert!(sink_filter.is_none());
+}
+
+#[cfg(feature = "owned-frame-transport")]
+#[test]
+fn prepared_tx_spec_from_encoded_parts_preserves_encoded_metadata() {
+    let metadata = metadata_with_payload();
+    let encoded_metadata = b"already-selected-wire".to_vec();
+
+    let spec =
+        PreparedTxLoanSpec::from_encoded_parts(metadata.clone(), encoded_metadata.clone(), 4, 2)
+            .expect("prepared TX spec");
+
+    assert_eq!(spec.metadata(), &metadata);
+    assert_eq!(spec.encoded_metadata(), encoded_metadata);
+    assert_eq!(spec.payload_len(), 4);
+    assert_eq!(spec.payload_alignment(), 2);
+}
+
+#[cfg(feature = "owned-frame-transport")]
+#[test]
+fn prepared_tx_spec_from_encoded_parts_rejects_invalid_payload_layout() {
+    let error =
+        PreparedTxLoanSpec::from_encoded_parts(metadata_with_payload(), b"encoded".to_vec(), 4, 3)
+            .expect_err("invalid alignment must fail");
+
+    assert_eq!(error.get_code(), UCode::InvalidArgument);
 }

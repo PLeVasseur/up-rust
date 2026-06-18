@@ -36,7 +36,7 @@ use tracing::warn;
 
 use crate::{
     validate_frame_view_for_transport, LoanedPayload, PayloadCodec, ReadDecodePayload, UCode,
-    UFrameMetadata, UFrameView, ULoanedContiguousZeroCopyRxFrame, UStatus, UTxBuffer,
+    UFrameMetadata, UFrameView, ULoanedContiguousZeroCopyRxFrame, UStatus, UTxBuffer, UTxLoanSpec,
     UUninitTxBuffer, UUri, UWire, UWireError, UWireMetadata, UZeroCopyListener, UZeroCopyRxLease,
     UZeroCopyTransportImpl, UZeroCopyUninitTransportImpl, ValidatedTxLoanSpec,
 };
@@ -153,6 +153,51 @@ impl PreparedTxLoanSpec {
         Ok(Self {
             metadata: spec.metadata().clone(),
             encoded_metadata,
+            payload_len: spec.payload_len(),
+            payload_alignment: spec.payload_alignment(),
+        })
+    }
+
+    /// Creates a prepared loan spec from metadata bytes that are already encoded
+    /// for the selected wire associated with `metadata`.
+    ///
+    /// This is an advanced adapter/core boundary helper for owned-loopback
+    /// bridges. Callers must pass `encoded_metadata` produced by the same
+    /// selected wire that will decode `metadata` on receive; this constructor
+    /// validates the decoded metadata and payload layout but cannot prove that
+    /// the opaque metadata bytes were produced by a particular wire.
+    ///
+    /// # Errors
+    ///
+    /// Returns an error if metadata, payload presence, or payload alignment is
+    /// invalid for a zero-copy transmit loan.
+    pub fn from_encoded_parts(
+        metadata: UFrameMetadata,
+        encoded_metadata: impl Into<Vec<u8>>,
+        payload_len: usize,
+        payload_alignment: usize,
+    ) -> Result<Self, UStatus> {
+        let spec = if metadata.payload_encoding().is_some() {
+            UTxLoanSpec::payload(metadata, payload_len, payload_alignment)?
+        } else {
+            if payload_len != 0 {
+                return Err(UStatus::fail_with_code(
+                    UCode::InvalidArgument,
+                    "prepared TX spec without payload encoding cannot carry payload bytes",
+                ));
+            }
+            if payload_alignment != 1 {
+                return Err(UStatus::fail_with_code(
+                    UCode::InvalidArgument,
+                    "prepared TX spec without payload uses alignment 1",
+                ));
+            }
+            UTxLoanSpec::no_payload(metadata)?
+        };
+        let spec = ValidatedTxLoanSpec::try_from(spec)?;
+        Ok(Self {
+            metadata: spec.metadata().clone(),
+            encoded_metadata: encoded_metadata.into(),
             payload_len: spec.payload_len(),
             payload_alignment: spec.payload_alignment(),
         })
@@ -824,10 +869,17 @@ where
         source_filter: &UUri,
         sink_filter: Option<&UUri>,
     ) -> Result<UOwnedFrame, UStatus> {
-        self.core
-            .receive_encoded_owned(source_filter, sink_filter)
-            .await?
-            .decode::<W>()
+        let core_source_filter = selected_wire_core_source_filter();
+        loop {
+            let frame = self
+                .core
+                .receive_encoded_owned(&core_source_filter, None)
+                .await?
+                .decode::<W>()?;
+            if owned_frame_matches(&frame, source_filter, sink_filter) {
+                return Ok(frame);
+            }
+        }
     }
 
     async fn register_validated_owned_listener(
@@ -841,10 +893,12 @@ where
             sink_filter,
             owned_listener_pointer(&listener),
         );
-        let (listener, inserted) = self.registered_owned_listener(&key, listener);
+        let (listener, inserted) =
+            self.registered_owned_listener(&key, source_filter, sink_filter, listener);
+        let core_source_filter = selected_wire_core_source_filter();
         let result = self
             .core
-            .register_encoded_owned_listener(source_filter, sink_filter, listener)
+            .register_encoded_owned_listener(&core_source_filter, None, listener)
             .await;
         if result.is_err() && inserted {
             self.owned_listeners
@@ -867,9 +921,10 @@ where
             owned_listener_pointer(&listener),
         );
         let listener = self.owned_listener_for_unregister(&key, listener);
+        let core_source_filter = selected_wire_core_source_filter();
         let result = self
             .core
-            .unregister_encoded_owned_listener(source_filter, sink_filter, listener)
+            .unregister_encoded_owned_listener(&core_source_filter, None, listener)
             .await;
         if result.is_ok() {
             self.owned_listeners
@@ -890,6 +945,8 @@ where
     fn registered_owned_listener(
         &self,
         key: &WireListenerKey,
+        source_filter: &UUri,
+        sink_filter: Option<&UUri>,
         listener: Arc<dyn UOwnedListener>,
     ) -> (Arc<dyn UEncodedOwnedListener>, bool) {
         let mut registry = self
@@ -903,6 +960,8 @@ where
         }
 
         let wrapped = Arc::new(WireOwnedListener::<W> {
+            source_filter: source_filter.clone(),
+            sink_filter: sink_filter.cloned(),
             listener,
             _wire: PhantomData,
         });
@@ -922,6 +981,8 @@ where
             .and_then(|listener| listener.clone().downcast::<WireOwnedListener<W>>().ok())
             .unwrap_or_else(|| {
                 Arc::new(WireOwnedListener::<W> {
+                    source_filter: key.source_filter.clone(),
+                    sink_filter: key.sink_filter.clone(),
                     listener: fallback,
                     _wire: PhantomData,
                 })
@@ -934,6 +995,8 @@ struct WireOwnedListener<W>
 where
     W: UWireMetadata,
 {
+    source_filter: UUri,
+    sink_filter: Option<UUri>,
     listener: Arc<dyn UOwnedListener>,
     _wire: PhantomData<W>,
 }
@@ -946,10 +1009,31 @@ where
 {
     async fn on_receive_encoded_owned(&self, frame: EncodedOwnedFrame) {
         match frame.decode::<W>() {
-            Ok(frame) => self.listener.on_receive_owned(frame).await,
+            Ok(frame)
+                if owned_frame_matches(&frame, &self.source_filter, self.sink_filter.as_ref()) =>
+            {
+                self.listener.on_receive_owned(frame).await;
+            }
+            Ok(_) => {}
             Err(error) => warn!(%error, "dropping invalid selected-wire owned frame"),
         }
     }
+}
+
+#[cfg(feature = "owned-frame-transport")]
+fn owned_frame_matches(
+    frame: &UOwnedFrame,
+    source_filter: &UUri,
+    sink_filter: Option<&UUri>,
+) -> bool {
+    source_filter.matches(frame.metadata().attributes().source())
+        && sink_filter.is_none_or(|filter| {
+            frame
+                .metadata()
+                .attributes()
+                .sink()
+                .is_some_and(|sink| filter.matches(sink))
+        })
 }
 
 #[derive(Clone, Debug, Eq, Hash, PartialEq)]
