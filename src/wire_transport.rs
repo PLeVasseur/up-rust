@@ -456,11 +456,17 @@ where
         source_filter: &UUri,
         sink_filter: Option<&UUri>,
     ) -> Result<Self::Rx, UStatus> {
-        let frame = self
-            .core
-            .receive_encoded_zero_copy(source_filter, sink_filter)
-            .await?;
-        UWireRx::try_from_encoded(frame)
+        let core_source_filter = selected_wire_core_source_filter();
+        loop {
+            let frame = self
+                .core
+                .receive_encoded_zero_copy(&core_source_filter, None)
+                .await?;
+            let frame = UWireRx::try_from_encoded(frame)?;
+            if wire_frame_matches(&frame, source_filter, sink_filter) {
+                return Ok(frame);
+            }
+        }
     }
 
     async fn register_validated_zero_copy_listener(
@@ -474,10 +480,12 @@ where
             sink_filter,
             zero_copy_listener_pointer::<TCore::Rx, W>(&listener),
         );
-        let (listener, inserted) = self.registered_zero_copy_listener(&key, listener);
+        let (listener, inserted) =
+            self.registered_zero_copy_listener(&key, source_filter, sink_filter, listener);
+        let core_source_filter = selected_wire_core_source_filter();
         let result = self
             .core
-            .register_encoded_zero_copy_listener(source_filter, sink_filter, listener)
+            .register_encoded_zero_copy_listener(&core_source_filter, None, listener)
             .await;
         if result.is_err() && inserted {
             self.zero_copy_listeners
@@ -500,9 +508,10 @@ where
             zero_copy_listener_pointer::<TCore::Rx, W>(&listener),
         );
         let listener = self.zero_copy_listener_for_unregister(&key, listener);
+        let core_source_filter = selected_wire_core_source_filter();
         let result = self
             .core
-            .unregister_encoded_zero_copy_listener(source_filter, sink_filter, listener)
+            .unregister_encoded_zero_copy_listener(&core_source_filter, None, listener)
             .await;
         if result.is_ok() {
             self.zero_copy_listeners
@@ -540,6 +549,8 @@ where
     fn registered_zero_copy_listener(
         &self,
         key: &WireListenerKey,
+        source_filter: &UUri,
+        sink_filter: Option<&UUri>,
         listener: Arc<dyn UZeroCopyListener<UWireRx<TCore::Rx, W>>>,
     ) -> (Arc<dyn UEncodedZeroCopyListener<TCore::Rx>>, bool) {
         let mut registry = self
@@ -556,6 +567,8 @@ where
         }
 
         let wrapped = Arc::new(WireZeroCopyListener::<TCore::Rx, W> {
+            source_filter: source_filter.clone(),
+            sink_filter: sink_filter.cloned(),
             listener,
             _wire: PhantomData,
         });
@@ -580,6 +593,8 @@ where
             })
             .unwrap_or_else(|| {
                 Arc::new(WireZeroCopyListener::<TCore::Rx, W> {
+                    source_filter: key.source_filter.clone(),
+                    sink_filter: key.sink_filter.clone(),
                     listener: fallback,
                     _wire: PhantomData,
                 })
@@ -592,6 +607,8 @@ where
     Rx: UEncodedRxFrame + Send + 'static,
     W: UWireMetadata,
 {
+    source_filter: UUri,
+    sink_filter: Option<UUri>,
     listener: Arc<dyn UZeroCopyListener<UWireRx<Rx, W>>>,
     _wire: PhantomData<W>,
 }
@@ -604,10 +621,39 @@ where
 {
     async fn on_receive_encoded_zero_copy(&self, frame: Rx) {
         match UWireRx::<Rx, W>::try_from_encoded(frame) {
-            Ok(frame) => self.listener.on_receive_zero_copy(frame).await,
+            Ok(frame)
+                if wire_frame_matches(&frame, &self.source_filter, self.sink_filter.as_ref()) =>
+            {
+                self.listener.on_receive_zero_copy(frame).await;
+            }
+            Ok(_) => {}
             Err(error) => warn!(%error, "dropping invalid selected-wire zero-copy frame"),
         }
     }
+}
+
+fn wire_frame_matches<Rx, W>(
+    frame: &UWireRx<Rx, W>,
+    source_filter: &UUri,
+    sink_filter: Option<&UUri>,
+) -> bool
+where
+    Rx: UEncodedRxFrame,
+    W: UWireMetadata,
+{
+    source_filter.matches(frame.metadata().attributes().source())
+        && sink_filter.is_none_or(|filter| {
+            frame
+                .metadata()
+                .attributes()
+                .sink()
+                .is_some_and(|sink| filter.matches(sink))
+        })
+}
+
+fn selected_wire_core_source_filter() -> UUri {
+    UUri::try_from_parts("*", u32::MAX, u8::MAX, u16::MAX)
+        .expect("valid selected-wire core wildcard source filter")
 }
 
 #[cfg(feature = "owned-frame-transport")]
@@ -953,7 +999,7 @@ fn invalid_metadata(error: crate::UFrameMetadataError) -> UStatus {
 
 #[cfg(test)]
 mod tests {
-    use std::{io::Cursor, sync::Mutex as StdMutex};
+    use std::{collections::VecDeque, io::Cursor, sync::Arc, sync::Mutex as StdMutex};
 
     use protobuf::well_known_types::wrappers::StringValue;
 
@@ -977,6 +1023,7 @@ mod tests {
 
     unsafe impl ByteBackedStablePayload for WireStableBytes {}
 
+    #[derive(Clone)]
     struct RawRx {
         encoded_metadata: Vec<u8>,
         payload: Vec<u8>,
@@ -1030,6 +1077,8 @@ mod tests {
     struct RecordingCore {
         prepared: StdMutex<Vec<PreparedTxLoanSpec>>,
         sent: StdMutex<Vec<UVecTxBuffer>>,
+        received: StdMutex<VecDeque<RawRx>>,
+        receive_filters: StdMutex<Vec<(UUri, Option<UUri>)>>,
     }
 
     #[async_trait]
@@ -1049,6 +1098,32 @@ mod tests {
         async fn send_prepared_zero_copy(&self, buffer: Self::Tx) -> Result<(), UStatus> {
             self.sent.lock().unwrap().push(buffer);
             Ok(())
+        }
+
+        async fn receive_encoded_zero_copy(
+            &self,
+            source_filter: &UUri,
+            sink_filter: Option<&UUri>,
+        ) -> Result<Self::Rx, UStatus> {
+            self.receive_filters
+                .lock()
+                .unwrap()
+                .push((source_filter.clone(), sink_filter.cloned()));
+            self.received.lock().unwrap().pop_front().ok_or_else(|| {
+                UStatus::fail_with_code(UCode::NotFound, "no test encoded frame available")
+            })
+        }
+    }
+
+    #[derive(Default)]
+    struct RecordingZeroCopyListener {
+        frames: StdMutex<Vec<UWireRx<RawRx, UProtocolNativeWire>>>,
+    }
+
+    #[async_trait]
+    impl UZeroCopyListener<UWireRx<RawRx, UProtocolNativeWire>> for RecordingZeroCopyListener {
+        async fn on_receive_zero_copy(&self, frame: UWireRx<RawRx, UProtocolNativeWire>) {
+            self.frames.lock().unwrap().push(frame);
         }
     }
 
@@ -1101,7 +1176,14 @@ mod tests {
     }
 
     fn metadata_with_payload_encoding(payload_encoding: PayloadEncoding) -> UFrameMetadata {
-        let topic = UUri::try_from_parts("vehicle", 0x4210, 0x01, 0x9000).expect("topic URI");
+        metadata_with_topic_and_payload_encoding(0x9000, payload_encoding)
+    }
+
+    fn metadata_with_topic_and_payload_encoding(
+        resource_id: u16,
+        payload_encoding: PayloadEncoding,
+    ) -> UFrameMetadata {
+        let topic = UUri::try_from_parts("vehicle", 0x4210, 0x01, resource_id).expect("topic URI");
         let message = UMessageBuilder::publish(topic).build().expect("message");
         UFrameMetadata::new(message.attributes().clone(), Some(payload_encoding)).expect("metadata")
     }
@@ -1125,6 +1207,17 @@ mod tests {
                 std::mem::size_of::<WireStableBytes>(),
             )
             .to_vec()
+        }
+    }
+
+    fn raw_frame_for_topic(resource_id: u16, payload: &[u8]) -> RawRx {
+        let metadata = metadata_with_topic_and_payload_encoding(
+            resource_id,
+            PayloadEncoding::Standard(UPayloadFormat::Raw),
+        );
+        RawRx {
+            encoded_metadata: UProtocolNativeWire::encode_frame_metadata(&metadata).unwrap(),
+            payload: payload.to_vec(),
         }
     }
 
@@ -1223,6 +1316,52 @@ mod tests {
             frame.borrow_stable_payload::<WireStableBytes>().unwrap(),
             &WireStableBytes { bytes: *b"wire" }
         );
+    }
+
+    #[tokio::test]
+    async fn receive_filters_after_selected_wire_decode() {
+        let core = RecordingCore::default();
+        core.received.lock().unwrap().extend([
+            raw_frame_for_topic(0x9001, b"drop"),
+            raw_frame_for_topic(0x9000, b"keep"),
+        ]);
+        let transport = core.with_wire(UProtocolNativeWire);
+        let source_filter = UUri::try_from_parts("vehicle", 0x4210, 0x01, 0x9000).unwrap();
+
+        let frame = transport
+            .receive_validated_zero_copy(&source_filter, None)
+            .await
+            .expect("matching decoded frame");
+
+        assert_eq!(frame.try_contiguous_payload(), Some(&b"keep"[..]));
+        assert!(transport.core().received.lock().unwrap().is_empty());
+        let filters = transport.core().receive_filters.lock().unwrap();
+        assert_eq!(filters.len(), 2);
+        assert_eq!(filters[0].0, selected_wire_core_source_filter());
+        assert_eq!(filters[0].1, None);
+    }
+
+    #[tokio::test]
+    async fn listener_filters_after_selected_wire_decode() {
+        let source_filter = UUri::try_from_parts("vehicle", 0x4210, 0x01, 0x9000).unwrap();
+        let listener = Arc::new(RecordingZeroCopyListener::default());
+        let wire_listener = WireZeroCopyListener::<RawRx, UProtocolNativeWire> {
+            source_filter,
+            sink_filter: None,
+            listener: listener.clone(),
+            _wire: PhantomData,
+        };
+
+        wire_listener
+            .on_receive_encoded_zero_copy(raw_frame_for_topic(0x9001, b"drop"))
+            .await;
+        wire_listener
+            .on_receive_encoded_zero_copy(raw_frame_for_topic(0x9000, b"keep"))
+            .await;
+
+        let frames = listener.frames.lock().unwrap();
+        assert_eq!(frames.len(), 1);
+        assert_eq!(frames[0].try_contiguous_payload(), Some(&b"keep"[..]));
     }
 
     #[test]

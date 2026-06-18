@@ -1,11 +1,11 @@
-error[E0599]: no method named `tag` found for struct `__UpRustStablePayloadInitForInitDuplicateSetter<'_, StablePayloadInitSet, StablePayloadInitUnset>` in the current scope
+error[E0599]: no method named `tag` found for struct `__UpRustStablePayloadInitForInitDuplicateSetter<'_, up_rust::payload::StablePayloadInitSet, up_rust::payload::StablePayloadInitUnset>` in the current scope
   --> tests/ui/stable_payload/stable_payload_init_duplicate_setter.rs:31:25
    |
 12 | #[derive(up_rust::StablePayload, up_rust::StablePayloadInit)]
    |                                  -------------------------- method `tag` not found for this struct
 ...
 31 |     let _ = init.tag(1).tag(2).count(3).finish().unwrap();
-   |                         ^^^ method not found in `__UpRustStablePayloadInitForInitDuplicateSetter<'_, StablePayloadInitSet, StablePayloadInitUnset>`
+   |                         ^^^ method not found in `__UpRustStablePayloadInitForInitDuplicateSetter<'_, up_rust::payload::StablePayloadInitSet, up_rust::payload::StablePayloadInitUnset>`
    |
    = note: the method was found for
-           - `__UpRustStablePayloadInitForInitDuplicateSetter<'__up_rust_payload, StablePayloadInitUnset, __UpRustField1>`
+           - `__UpRustStablePayloadInitForInitDuplicateSetter<'__up_rust_payload, up_rust::payload::StablePayloadInitUnset, __UpRustField1>`
