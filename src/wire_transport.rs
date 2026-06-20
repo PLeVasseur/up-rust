@@ -877,11 +877,11 @@ where
         source_filter: &UUri,
         sink_filter: Option<&UUri>,
     ) -> Result<UOwnedFrame, UStatus> {
-        let core_source_filter = selected_wire_core_source_filter();
+        let core_source_filter = selected_wire_core_source_filter_for(source_filter);
         loop {
             let frame = self
                 .core
-                .receive_encoded_owned(&core_source_filter, None)
+                .receive_encoded_owned(&core_source_filter, sink_filter)
                 .await?
                 .decode::<W>()?;
             if owned_frame_matches(&frame, source_filter, sink_filter) {
@@ -1207,6 +1207,33 @@ mod tests {
         }
     }
 
+    #[cfg(feature = "owned-frame-transport")]
+    #[async_trait]
+    impl UOwnedTransportCore for RecordingCore {
+        async fn send_prepared_owned(&self, _frame: PreparedOwnedFrame) -> Result<(), UStatus> {
+            Ok(())
+        }
+
+        async fn receive_encoded_owned(
+            &self,
+            source_filter: &UUri,
+            sink_filter: Option<&UUri>,
+        ) -> Result<EncodedOwnedFrame, UStatus> {
+            self.receive_filters
+                .lock()
+                .unwrap()
+                .push((source_filter.clone(), sink_filter.cloned()));
+            self.received
+                .lock()
+                .unwrap()
+                .pop_front()
+                .map(|raw| EncodedOwnedFrame::new(raw.encoded_metadata, Some(raw.payload.into())))
+                .ok_or_else(|| {
+                    UStatus::fail_with_code(UCode::NotFound, "no test owned frame available")
+                })
+        }
+    }
+
     #[derive(Default)]
     struct RecordingZeroCopyListener {
         frames: StdMutex<Vec<UWireRx<RawRx, UProtocolNativeWire>>>,
@@ -1449,6 +1476,52 @@ mod tests {
             .expect("matching decoded frame");
 
         assert_eq!(frame.try_contiguous_payload(), Some(&b"keep"[..]));
+        let filters = transport.core().receive_filters.lock().unwrap();
+        assert_eq!(filters.len(), 1);
+        assert_eq!(filters[0].0, selected_wire_core_source_filter());
+        assert_eq!(filters[0].1, None);
+    }
+
+    #[cfg(feature = "owned-frame-transport")]
+    #[tokio::test]
+    async fn owned_receive_uses_exact_core_filter_for_exact_source_filter() {
+        let core = RecordingCore::default();
+        core.received
+            .lock()
+            .unwrap()
+            .push_back(raw_frame_for_topic(0x9000, b"owned"));
+        let transport = core.with_wire(UProtocolNativeWire);
+        let source_filter = UUri::try_from_parts("vehicle", 0x4210, 0x01, 0x9000).unwrap();
+
+        let frame = transport
+            .receive_validated_owned(&source_filter, None)
+            .await
+            .expect("matching owned frame");
+
+        assert_eq!(frame.payload_bytes(), b"owned");
+        let filters = transport.core().receive_filters.lock().unwrap();
+        assert_eq!(filters.len(), 1);
+        assert_eq!(filters[0].0, source_filter);
+        assert_eq!(filters[0].1, None);
+    }
+
+    #[cfg(feature = "owned-frame-transport")]
+    #[tokio::test]
+    async fn owned_receive_uses_wildcard_core_filter_for_wildcard_source_filter() {
+        let core = RecordingCore::default();
+        core.received
+            .lock()
+            .unwrap()
+            .push_back(raw_frame_for_topic(0x9000, b"owned"));
+        let transport = core.with_wire(UProtocolNativeWire);
+        let source_filter = UUri::try_from_parts("vehicle", 0x4210, 0x01, u16::MAX).unwrap();
+
+        let frame = transport
+            .receive_validated_owned(&source_filter, None)
+            .await
+            .expect("matching owned frame");
+
+        assert_eq!(frame.payload_bytes(), b"owned");
         let filters = transport.core().receive_filters.lock().unwrap();
         assert_eq!(filters.len(), 1);
         assert_eq!(filters[0].0, selected_wire_core_source_filter());
