@@ -501,11 +501,11 @@ where
         source_filter: &UUri,
         sink_filter: Option<&UUri>,
     ) -> Result<Self::Rx, UStatus> {
-        let core_source_filter = selected_wire_core_source_filter();
+        let core_source_filter = selected_wire_core_source_filter_for(source_filter);
         loop {
             let frame = self
                 .core
-                .receive_encoded_zero_copy(&core_source_filter, None)
+                .receive_encoded_zero_copy(&core_source_filter, sink_filter)
                 .await?;
             let frame = UWireRx::try_from_encoded(frame)?;
             if wire_frame_matches(&frame, source_filter, sink_filter) {
@@ -699,6 +699,14 @@ where
 fn selected_wire_core_source_filter() -> UUri {
     UUri::try_from_parts("*", u32::MAX, u8::MAX, u16::MAX)
         .expect("valid selected-wire core wildcard source filter")
+}
+
+fn selected_wire_core_source_filter_for(source_filter: &UUri) -> UUri {
+    if source_filter.verify_no_wildcards().is_ok() {
+        source_filter.clone()
+    } else {
+        selected_wire_core_source_filter()
+    }
 }
 
 #[cfg(feature = "owned-frame-transport")]
@@ -1421,8 +1429,42 @@ mod tests {
         assert!(transport.core().received.lock().unwrap().is_empty());
         let filters = transport.core().receive_filters.lock().unwrap();
         assert_eq!(filters.len(), 2);
+        assert_eq!(filters[0].0, source_filter);
+        assert_eq!(filters[0].1, None);
+    }
+
+    #[tokio::test]
+    async fn receive_uses_wildcard_core_filter_for_wildcard_source_filter() {
+        let core = RecordingCore::default();
+        core.received
+            .lock()
+            .unwrap()
+            .push_back(raw_frame_for_topic(0x9000, b"keep"));
+        let transport = core.with_wire(UProtocolNativeWire);
+        let source_filter = UUri::try_from_parts("vehicle", 0x4210, 0x01, u16::MAX).unwrap();
+
+        let frame = transport
+            .receive_validated_zero_copy(&source_filter, None)
+            .await
+            .expect("matching decoded frame");
+
+        assert_eq!(frame.try_contiguous_payload(), Some(&b"keep"[..]));
+        let filters = transport.core().receive_filters.lock().unwrap();
+        assert_eq!(filters.len(), 1);
         assert_eq!(filters[0].0, selected_wire_core_source_filter());
         assert_eq!(filters[0].1, None);
+    }
+
+    #[test]
+    fn selected_wire_core_source_filter_uses_exact_source_when_safe() {
+        let exact = UUri::try_from_parts("vehicle", 0x4210, 0x01, 0x9000).unwrap();
+        let wildcard = UUri::try_from_parts("vehicle", 0x4210, 0x01, u16::MAX).unwrap();
+
+        assert_eq!(selected_wire_core_source_filter_for(&exact), exact);
+        assert_eq!(
+            selected_wire_core_source_filter_for(&wildcard),
+            selected_wire_core_source_filter()
+        );
     }
 
     #[tokio::test]
