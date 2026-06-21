@@ -8,11 +8,11 @@ use std::io::Cursor;
 
 use protobuf::well_known_types::wrappers::StringValue;
 use up_rust::{
-    DecodePayload, EncodePayload, PayloadCodec, ProtobufWire, ReadDecodePayload, UWireMetadata,
+    DecodePayload, EncodePayload, PayloadCodec, ProtobufWire, ReadDecodePayload, UWire,
     UWireReadDecode,
 };
 
-fn assert_wire<W: UWireMetadata>() {}
+fn assert_wire<W: UWire>() {}
 
 fn assert_read_decode<T, W>()
 where

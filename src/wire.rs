@@ -190,6 +190,94 @@ pub trait UWire {
             WireCompatibility::Incompatible
         }
     }
+
+    /// Returns the selected-wire metadata context consumed by metadata codecs.
+    #[cfg(feature = "selected-wire-codec-core")]
+    fn metadata_context() -> UWireMetadataContext
+    where
+        Self: Sized,
+    {
+        UWireMetadataContext::from_wire::<Self>()
+    }
+}
+
+/// Selected-wire metadata context consumed by metadata codecs.
+#[cfg(feature = "selected-wire-codec-core")]
+#[derive(Clone, Copy)]
+pub struct UWireMetadataContext {
+    /// Stable identity for the full selected wire.
+    pub wire_id: WireIdentity,
+    /// Payload operation family supported by this selected wire.
+    pub payload_family_id: WireIdentity,
+    /// Metadata byte layout used by this selected wire.
+    pub metadata_layout_id: WireIdentity,
+    /// Metadata byte-format version supported by this selected wire.
+    pub format_version: u16,
+    wire_compatibility: Option<fn(&WireIdentityRef) -> WireCompatibility>,
+    payload_family_compatibility: Option<fn(&WireIdentityRef) -> WireCompatibility>,
+}
+
+#[cfg(feature = "selected-wire-codec-core")]
+impl UWireMetadataContext {
+    /// Builds a metadata context for a selected wire marker type.
+    #[must_use]
+    pub fn from_wire<W>() -> Self
+    where
+        W: UWire,
+    {
+        Self {
+            wire_id: W::WIRE_ID,
+            payload_family_id: W::PAYLOAD_FAMILY_ID,
+            metadata_layout_id: W::METADATA_LAYOUT_ID,
+            format_version: W::FORMAT_VERSION,
+            wire_compatibility: Some(W::wire_compatibility),
+            payload_family_compatibility: Some(W::payload_family_compatibility),
+        }
+    }
+
+    /// Builds a metadata context with exact identity matching.
+    #[must_use]
+    pub fn new_exact(
+        wire_id: WireIdentity,
+        payload_family_id: WireIdentity,
+        metadata_layout_id: WireIdentity,
+        format_version: u16,
+    ) -> Self {
+        Self {
+            wire_id,
+            payload_family_id,
+            metadata_layout_id,
+            format_version,
+            wire_compatibility: None,
+            payload_family_compatibility: None,
+        }
+    }
+
+    /// Checks selected-wire compatibility before public frame exposure.
+    #[must_use]
+    pub fn wire_compatibility(&self, actual: &WireIdentityRef) -> WireCompatibility {
+        if let Some(wire_compatibility) = self.wire_compatibility {
+            return wire_compatibility(actual);
+        }
+        if actual.matches(self.wire_id) {
+            WireCompatibility::Compatible
+        } else {
+            WireCompatibility::Incompatible
+        }
+    }
+
+    /// Checks payload-family compatibility before public frame exposure.
+    #[must_use]
+    pub fn payload_family_compatibility(&self, actual: &WireIdentityRef) -> WireCompatibility {
+        if let Some(payload_family_compatibility) = self.payload_family_compatibility {
+            return payload_family_compatibility(actual);
+        }
+        if actual.matches(self.payload_family_id) {
+            WireCompatibility::Compatible
+        } else {
+            WireCompatibility::Incompatible
+        }
+    }
 }
 
 /// Default first-wave native wire for explicit native payload paths.
@@ -272,73 +360,54 @@ impl UWire for StableContainerWireFormat {
 
 /// Explicit metadata codec used by selected-wire transport adapters.
 #[cfg(feature = "selected-wire-codec-core")]
-pub trait UWireMetadataCodec<W>
-where
-    W: UWire,
-{
-    /// Encodes native frame metadata for `W`.
+pub trait UWireMetadataCodec {
+    /// Encodes native frame metadata for the selected-wire context.
     ///
     /// # Errors
     ///
     /// Returns an error when metadata is invalid or cannot be serialized.
     fn encode_frame_metadata(
         &self,
+        context: UWireMetadataContext,
         metadata: &UFrameMetadata,
     ) -> Result<Vec<u8>, UWireMetadataError>;
 
-    /// Decodes and validates native frame metadata for `W`.
+    /// Decodes and validates native frame metadata for the selected-wire context.
     ///
     /// # Errors
     ///
     /// Returns an error when bytes are malformed, use an unsupported layout or
     /// version, or declare an incompatible wire or payload family.
-    fn decode_frame_metadata(&self, src: &[u8]) -> Result<UFrameMetadata, UWireMetadataError>;
+    fn decode_frame_metadata(
+        &self,
+        context: UWireMetadataContext,
+        src: &[u8],
+    ) -> Result<UFrameMetadata, UWireMetadataError>;
 }
 
-/// Protobuf-backed selected-wire metadata codec.
+/// Native-prefix metadata codec carrying protobuf-encoded `UAttributes`.
 #[cfg(feature = "selected-wire-protobuf-metadata")]
 #[derive(Clone, Copy, Debug, Default, Eq, PartialEq)]
-pub struct ProtobufMetadataCodec;
+pub struct NativePrefixProtobufMetadataCodec;
 
 #[cfg(feature = "selected-wire-protobuf-metadata")]
-impl<W> UWireMetadataCodec<W> for ProtobufMetadataCodec
-where
-    W: UWire,
-{
+impl UWireMetadataCodec for NativePrefixProtobufMetadataCodec {
     fn encode_frame_metadata(
         &self,
+        context: UWireMetadataContext,
         metadata: &UFrameMetadata,
     ) -> Result<Vec<u8>, UWireMetadataError> {
-        encode_frame_metadata::<W>(metadata)
+        encode_frame_metadata(context, metadata)
     }
 
-    fn decode_frame_metadata(&self, src: &[u8]) -> Result<UFrameMetadata, UWireMetadataError> {
-        decode_frame_metadata::<W>(src)
-    }
-}
-
-/// Protobuf metadata convenience helper for selected-wire marker types.
-#[cfg(feature = "selected-wire-protobuf-metadata")]
-pub trait UWireMetadata: UWire {
-    /// Encodes protobuf-backed frame metadata for this selected wire.
-    fn encode_frame_metadata(metadata: &UFrameMetadata) -> Result<Vec<u8>, UWireMetadataError>
-    where
-        Self: Sized,
-    {
-        encode_frame_metadata::<Self>(metadata)
-    }
-
-    /// Decodes protobuf-backed frame metadata for this selected wire.
-    fn decode_frame_metadata(src: &[u8]) -> Result<UFrameMetadata, UWireMetadataError>
-    where
-        Self: Sized,
-    {
-        decode_frame_metadata::<Self>(src)
+    fn decode_frame_metadata(
+        &self,
+        context: UWireMetadataContext,
+        src: &[u8],
+    ) -> Result<UFrameMetadata, UWireMetadataError> {
+        decode_frame_metadata(context, src)
     }
 }
-
-#[cfg(feature = "selected-wire-protobuf-metadata")]
-impl<W> UWireMetadata for W where W: UWire {}
 
 /// Wire-level encode helper alias for existing payload codecs.
 pub trait UWireEncode<T: ?Sized>: EncodePayload<T> {}
@@ -487,18 +556,18 @@ impl From<UWireMetadataError> for UStatus {
 ///
 /// Returns an error when metadata is invalid or cannot be serialized.
 #[cfg(feature = "selected-wire-protobuf-metadata")]
-pub fn encode_frame_metadata<W>(metadata: &UFrameMetadata) -> Result<Vec<u8>, UWireMetadataError>
-where
-    W: UWire,
-{
+fn encode_frame_metadata(
+    context: UWireMetadataContext,
+    metadata: &UFrameMetadata,
+) -> Result<Vec<u8>, UWireMetadataError> {
     metadata.validate()?;
 
     let mut out = Vec::new();
     out.extend_from_slice(MAGIC);
-    write_identity_ref(&mut out, W::METADATA_LAYOUT_ID);
-    write_u16(&mut out, W::FORMAT_VERSION);
-    write_identity_ref(&mut out, W::WIRE_ID);
-    write_identity_ref(&mut out, W::PAYLOAD_FAMILY_ID);
+    write_identity_ref(&mut out, context.metadata_layout_id);
+    write_u16(&mut out, context.format_version);
+    write_identity_ref(&mut out, context.wire_id);
+    write_identity_ref(&mut out, context.payload_family_id);
     write_u16(&mut out, 0);
     write_len_prefixed_bytes(&mut out, &metadata.attributes().write_to_protobuf_bytes()?)?;
     write_payload_encoding(&mut out, metadata.payload_encoding())?;
@@ -512,40 +581,43 @@ where
 /// Returns an error when bytes are malformed, use an unsupported layout or
 /// version, or declare an incompatible wire or payload family.
 #[cfg(feature = "selected-wire-protobuf-metadata")]
-pub fn decode_frame_metadata<W>(src: &[u8]) -> Result<UFrameMetadata, UWireMetadataError>
-where
-    W: UWire,
-{
+fn decode_frame_metadata(
+    context: UWireMetadataContext,
+    src: &[u8],
+) -> Result<UFrameMetadata, UWireMetadataError> {
     let mut reader = MetadataReader::new(src);
     if reader.take(MAGIC.len())? != MAGIC.as_slice() {
         return Err(UWireMetadataError::WrongMagic);
     }
 
     let layout_id = reader.read_identity_ref()?;
-    if !layout_id.matches(W::METADATA_LAYOUT_ID) {
+    if !layout_id.matches(context.metadata_layout_id) {
         return Err(UWireMetadataError::UnknownMetadataLayoutId { actual: layout_id });
     }
 
     let version = reader.read_u16()?;
-    if version != W::FORMAT_VERSION {
+    if version != context.format_version {
         return Err(UWireMetadataError::UnsupportedVersion {
-            expected: W::FORMAT_VERSION,
+            expected: context.format_version,
             actual: version,
         });
     }
 
     let wire_id = reader.read_identity_ref()?;
-    if !W::wire_compatibility(&wire_id).is_compatible() {
+    if !context.wire_compatibility(&wire_id).is_compatible() {
         return Err(UWireMetadataError::WrongWireMetadata {
-            expected: W::WIRE_ID,
+            expected: context.wire_id,
             actual: wire_id,
         });
     }
 
     let payload_family_id = reader.read_identity_ref()?;
-    if !W::payload_family_compatibility(&payload_family_id).is_compatible() {
+    if !context
+        .payload_family_compatibility(&payload_family_id)
+        .is_compatible()
+    {
         return Err(UWireMetadataError::PayloadFamilyMismatch {
-            expected: W::PAYLOAD_FAMILY_ID,
+            expected: context.payload_family_id,
             actual: payload_family_id,
         });
     }

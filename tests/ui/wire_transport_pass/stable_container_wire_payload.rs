@@ -6,7 +6,7 @@
 
 use up_rust::{
     ByteBackedStablePayload, PayloadCodec, StableContainerPayload, StableContainerWireFormat,
-    UWireLoan, UWireLoanUninit, UWireMetadata,
+    UWire, UWireLoan, UWireLoanUninit,
 };
 
 #[repr(C)]
@@ -18,7 +18,7 @@ struct SelectedWireStableBytes {
     reserved: [u8; 2],
 }
 
-fn assert_wire<W: UWireMetadata>() {}
+fn assert_wire<W: UWire>() {}
 
 fn assert_wire_loan<W, T>()
 where

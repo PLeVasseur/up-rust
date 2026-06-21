@@ -83,9 +83,7 @@ pub use frame_metadata::{
 
 pub mod wire;
 #[cfg(feature = "selected-wire-protobuf-metadata")]
-pub use wire::{
-    decode_frame_metadata, encode_frame_metadata, ProtobufMetadataCodec, UWireMetadata,
-};
+pub use wire::NativePrefixProtobufMetadataCodec;
 pub use wire::{
     ProtobufWire, StableContainerWireFormat, UProtocolNativeWire, UWire, UWireDecode,
     UWireDecodeOwned, UWireEncode, UWireLoan, UWireLoanUninit, UWireReadDecode, WireCompatibility,
@@ -95,7 +93,7 @@ pub use wire::{
     XCDR_V2_PAYLOAD_FAMILY_ID, XCDR_V2_WIRE_ID,
 };
 #[cfg(feature = "selected-wire-codec-core")]
-pub use wire::{UWireMetadataCodec, UWireMetadataError};
+pub use wire::{UWireMetadataCodec, UWireMetadataContext, UWireMetadataError};
 
 #[cfg(all(feature = "owned-frame-transport", feature = "protobuf-support"))]
 pub mod frame_wire;
@@ -180,7 +178,7 @@ mod wire_transport;
     feature = "selected-wire-transport-adapter",
     feature = "selected-wire-protobuf-metadata"
 ))]
-pub use wire_transport::UWithProtobufMetadataWire;
+pub use wire_transport::UWithNativePrefixProtobufMetadata;
 #[cfg(feature = "owned-frame-transport")]
 pub use wire_transport::{
     EncodedOwnedFrame, PreparedOwnedFrame, UEncodedOwnedListener, UOwnedTransportCore,

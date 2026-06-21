@@ -13,8 +13,9 @@
 
 use bytes::Bytes;
 use up_rust::{
-    decode_frame_metadata, encode_frame_metadata, PayloadEncoding, UFrameMetadata, UMessageBuilder,
-    UPayloadFormat, UProtocolNativeWire, UUri, UWire, UWireMetadataError, WireIdentity,
+    NativePrefixProtobufMetadataCodec, PayloadEncoding, UFrameMetadata, UMessageBuilder,
+    UPayloadFormat, UProtocolNativeWire, UUri, UWire, UWireMetadataCodec, UWireMetadataError,
+    WireIdentity,
 };
 
 const LAYOUT_COMPACT_LO: usize = 5;
@@ -79,8 +80,24 @@ fn metadata_with_custom_payload() -> UFrameMetadata {
     .expect("metadata")
 }
 
+fn encode<W>(metadata: &UFrameMetadata) -> Vec<u8>
+where
+    W: UWire,
+{
+    NativePrefixProtobufMetadataCodec
+        .encode_frame_metadata(W::metadata_context(), metadata)
+        .expect("encode")
+}
+
+fn decode<W>(encoded: &[u8]) -> Result<UFrameMetadata, UWireMetadataError>
+where
+    W: UWire,
+{
+    NativePrefixProtobufMetadataCodec.decode_frame_metadata(W::metadata_context(), encoded)
+}
+
 fn encoded_without_payload() -> Vec<u8> {
-    encode_frame_metadata::<UProtocolNativeWire>(&metadata_without_payload()).expect("encode")
+    encode::<UProtocolNativeWire>(&metadata_without_payload())
 }
 
 fn set_byte(bytes: &mut [u8], offset: usize, value: u8) {
@@ -111,8 +128,8 @@ fn identity_constants_match_first_wave_register() {
 fn no_payload_metadata_round_trips() {
     let metadata = metadata_without_payload();
 
-    let encoded = encode_frame_metadata::<UProtocolNativeWire>(&metadata).expect("encode");
-    let decoded = decode_frame_metadata::<UProtocolNativeWire>(&encoded).expect("decode");
+    let encoded = encode::<UProtocolNativeWire>(&metadata);
+    let decoded = decode::<UProtocolNativeWire>(&encoded).expect("decode");
 
     assert_eq!(decoded, metadata);
     assert!(decoded.payload_encoding().is_none());
@@ -122,8 +139,8 @@ fn no_payload_metadata_round_trips() {
 fn standard_payload_metadata_round_trips() {
     let metadata = metadata_with_standard_payload();
 
-    let encoded = encode_frame_metadata::<UProtocolNativeWire>(&metadata).expect("encode");
-    let decoded = decode_frame_metadata::<UProtocolNativeWire>(&encoded).expect("decode");
+    let encoded = encode::<UProtocolNativeWire>(&metadata);
+    let decoded = decode::<UProtocolNativeWire>(&encoded).expect("decode");
 
     assert_eq!(decoded, metadata);
     assert_eq!(
@@ -136,8 +153,8 @@ fn standard_payload_metadata_round_trips() {
 fn custom_payload_encoding_is_preserved() {
     let metadata = metadata_with_custom_payload();
 
-    let encoded = encode_frame_metadata::<UProtocolNativeWire>(&metadata).expect("encode");
-    let decoded = decode_frame_metadata::<UProtocolNativeWire>(&encoded).expect("decode");
+    let encoded = encode::<UProtocolNativeWire>(&metadata);
+    let decoded = decode::<UProtocolNativeWire>(&encoded).expect("decode");
 
     assert_eq!(decoded, metadata);
     assert_eq!(
@@ -153,7 +170,7 @@ fn wrong_magic_is_rejected() {
     let mut encoded = encoded_without_payload();
     set_byte(&mut encoded, 0, b'X');
 
-    let error = decode_frame_metadata::<UProtocolNativeWire>(&encoded).unwrap_err();
+    let error = decode::<UProtocolNativeWire>(&encoded).unwrap_err();
 
     assert_eq!(error, UWireMetadataError::WrongMagic);
 }
@@ -164,7 +181,7 @@ fn unknown_metadata_layout_is_rejected() {
     set_byte(&mut encoded, LAYOUT_COMPACT_LO, 0xFF);
     set_byte(&mut encoded, LAYOUT_COMPACT_HI, 0xFF);
 
-    let error = decode_frame_metadata::<UProtocolNativeWire>(&encoded).unwrap_err();
+    let error = decode::<UProtocolNativeWire>(&encoded).unwrap_err();
 
     assert!(matches!(
         error,
@@ -177,7 +194,7 @@ fn unsupported_version_is_rejected() {
     let mut encoded = encoded_without_payload();
     set_byte(&mut encoded, VERSION_LO, 0x02);
 
-    let error = decode_frame_metadata::<UProtocolNativeWire>(&encoded).unwrap_err();
+    let error = decode::<UProtocolNativeWire>(&encoded).unwrap_err();
 
     assert!(matches!(
         error,
@@ -189,7 +206,7 @@ fn unsupported_version_is_rejected() {
 fn wrong_selected_wire_id_is_rejected() {
     let encoded = encoded_without_payload();
 
-    let error = decode_frame_metadata::<WrongWire>(&encoded).unwrap_err();
+    let error = decode::<WrongWire>(&encoded).unwrap_err();
 
     assert!(matches!(
         error,
@@ -203,7 +220,7 @@ fn unknown_selected_wire_id_is_rejected() {
     set_byte(&mut encoded, SELECTED_WIRE_COMPACT_LO, 0xFF);
     set_byte(&mut encoded, SELECTED_WIRE_COMPACT_HI, 0xFF);
 
-    let error = decode_frame_metadata::<UProtocolNativeWire>(&encoded).unwrap_err();
+    let error = decode::<UProtocolNativeWire>(&encoded).unwrap_err();
 
     assert!(matches!(
         error,
@@ -215,7 +232,7 @@ fn unknown_selected_wire_id_is_rejected() {
 fn payload_family_mismatch_is_rejected() {
     let encoded = encoded_without_payload();
 
-    let error = decode_frame_metadata::<WrongPayloadFamily>(&encoded).unwrap_err();
+    let error = decode::<WrongPayloadFamily>(&encoded).unwrap_err();
 
     assert!(matches!(
         error,
@@ -229,7 +246,7 @@ fn unknown_payload_family_id_is_rejected() {
     set_byte(&mut encoded, PAYLOAD_FAMILY_COMPACT_LO, 0xFF);
     set_byte(&mut encoded, PAYLOAD_FAMILY_COMPACT_HI, 0xFF);
 
-    let error = decode_frame_metadata::<UProtocolNativeWire>(&encoded).unwrap_err();
+    let error = decode::<UProtocolNativeWire>(&encoded).unwrap_err();
 
     assert!(matches!(
         error,
@@ -242,7 +259,7 @@ fn reserved_flags_are_rejected() {
     let mut encoded = encoded_without_payload();
     set_byte(&mut encoded, FLAGS_LO, 0x01);
 
-    let error = decode_frame_metadata::<UProtocolNativeWire>(&encoded).unwrap_err();
+    let error = decode::<UProtocolNativeWire>(&encoded).unwrap_err();
 
     assert_eq!(error, UWireMetadataError::UnsupportedReservedFlags(1));
 }
@@ -252,7 +269,7 @@ fn malformed_length_is_rejected() {
     let mut encoded = encoded_without_payload();
     encoded.truncate(encoded.len().saturating_sub(2));
 
-    let error = decode_frame_metadata::<UProtocolNativeWire>(&encoded).unwrap_err();
+    let error = decode::<UProtocolNativeWire>(&encoded).unwrap_err();
 
     assert!(matches!(error, UWireMetadataError::MalformedMetadata(_)));
 }
@@ -263,7 +280,7 @@ fn unsupported_payload_encoding_tag_is_rejected() {
     let last = encoded.len().checked_sub(1).expect("nonempty vector");
     set_byte(&mut encoded, last, 0x03);
 
-    let error = decode_frame_metadata::<UProtocolNativeWire>(&encoded).unwrap_err();
+    let error = decode::<UProtocolNativeWire>(&encoded).unwrap_err();
 
     assert!(matches!(
         error,
@@ -274,14 +291,14 @@ fn unsupported_payload_encoding_tag_is_rejected() {
 #[test]
 fn unsupported_standard_payload_encoding_is_rejected() {
     let metadata = metadata_with_standard_payload();
-    let mut encoded = encode_frame_metadata::<UProtocolNativeWire>(&metadata).expect("encode");
+    let mut encoded = encode::<UProtocolNativeWire>(&metadata);
     let last = encoded
         .len()
         .checked_sub(4)
         .expect("standard payload bytes");
     set_byte(&mut encoded, last, 0x7F);
 
-    let error = decode_frame_metadata::<UProtocolNativeWire>(&encoded).unwrap_err();
+    let error = decode::<UProtocolNativeWire>(&encoded).unwrap_err();
 
     assert!(matches!(
         error,
@@ -294,19 +311,16 @@ fn trailing_bytes_are_rejected() {
     let mut encoded = encoded_without_payload();
     encoded.push(0x00);
 
-    let error = decode_frame_metadata::<UProtocolNativeWire>(&encoded).unwrap_err();
+    let error = decode::<UProtocolNativeWire>(&encoded).unwrap_err();
 
     assert!(matches!(error, UWireMetadataError::MalformedMetadata(_)));
 }
 
 #[test]
 fn metadata_size_budget_cases_are_recordable() {
-    let no_payload = encode_frame_metadata::<UProtocolNativeWire>(&metadata_without_payload())
-        .expect("no-payload vector");
-    let standard = encode_frame_metadata::<UProtocolNativeWire>(&metadata_with_standard_payload())
-        .expect("standard vector");
-    let custom = encode_frame_metadata::<UProtocolNativeWire>(&metadata_with_custom_payload())
-        .expect("custom vector");
+    let no_payload = encode::<UProtocolNativeWire>(&metadata_without_payload());
+    let standard = encode::<UProtocolNativeWire>(&metadata_with_standard_payload());
+    let custom = encode::<UProtocolNativeWire>(&metadata_with_custom_payload());
     let full_attributes = standard.clone();
 
     assert!(!no_payload.is_empty());
