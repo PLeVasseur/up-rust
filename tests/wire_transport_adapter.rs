@@ -22,11 +22,11 @@ use async_trait::async_trait;
 #[cfg(feature = "owned-frame-transport")]
 use bytes::Bytes;
 use up_rust::{
-    PayloadCodec, PayloadEncoding, PreparedTxLoanSpec, ProtobufWire, UCode, UEncodedRxFrame,
-    UEncodedZeroCopyListener, UFrameMetadata, UFrameView, UMessageBuilder, UPayloadFormat,
-    UProtocolNativeWire, UStatus, UTxBuffer, UTxLoanSpec, UTxPayloadSpec, UUri, UVecTxBuffer,
-    UWire, UWireMetadata, UWireRx, UWithWire, UZeroCopyListener, UZeroCopyTransport,
-    UZeroCopyTransportCore, WireIdentity,
+    PayloadCodec, PayloadEncoding, PreparedTxLoanSpec, ProtobufMetadataCodec, ProtobufWire, UCode,
+    UEncodedRxFrame, UEncodedZeroCopyListener, UFrameMetadata, UFrameView, UMessageBuilder,
+    UPayloadFormat, UProtocolNativeWire, UStatus, UTxBuffer, UTxLoanSpec, UTxPayloadSpec, UUri,
+    UVecTxBuffer, UWire, UWireMetadata, UWireRx, UWithProtobufMetadataWire, UZeroCopyListener,
+    UZeroCopyTransport, UZeroCopyTransportCore, WireIdentity,
 };
 
 #[cfg(feature = "owned-frame-transport")]
@@ -433,11 +433,15 @@ impl CountingZeroCopyListener {
 }
 
 #[async_trait]
-impl<W> UZeroCopyListener<UWireRx<InMemoryEncodedRxFrame, W>> for CountingZeroCopyListener
+impl<W> UZeroCopyListener<UWireRx<InMemoryEncodedRxFrame, W, ProtobufMetadataCodec>>
+    for CountingZeroCopyListener
 where
     W: UWireMetadata + Send + Sync + 'static,
 {
-    async fn on_receive_zero_copy(&self, frame: UWireRx<InMemoryEncodedRxFrame, W>) {
+    async fn on_receive_zero_copy(
+        &self,
+        frame: UWireRx<InMemoryEncodedRxFrame, W, ProtobufMetadataCodec>,
+    ) {
         self.payloads
             .lock()
             .expect("payloads lock poisoned")
@@ -517,7 +521,7 @@ async fn zero_copy_loan_passes_encoded_metadata_to_core_for_selected_wires() {
         W: UWireMetadata + Send + Sync + 'static,
     {
         let core = InMemoryWireCore::default();
-        let transport = core.clone().with_wire(wire);
+        let transport = core.clone().with_protobuf_metadata_wire(wire);
 
         let mut tx = transport
             .loan_tx(tx_spec(metadata.clone(), 3))
@@ -545,7 +549,9 @@ async fn zero_copy_loan_passes_encoded_metadata_to_core_for_selected_wires() {
 async fn zero_copy_pull_receive_rejects_wrong_wire_before_public_exposure() {
     let metadata = metadata_with_payload();
     let core = InMemoryWireCore::default();
-    let transport = core.clone().with_wire(UProtocolNativeWire);
+    let transport = core
+        .clone()
+        .with_protobuf_metadata_wire(UProtocolNativeWire);
     core.push_zero_copy_rx(encoded_frame::<WrongWireSamePayload>(&metadata, b"bad"));
 
     let status = match transport
@@ -566,7 +572,9 @@ async fn zero_copy_pull_receive_rejects_wrong_wire_before_public_exposure() {
 async fn zero_copy_pull_receive_rejects_payload_family_mismatch_before_public_exposure() {
     let metadata = metadata_with_payload();
     let core = InMemoryWireCore::default();
-    let transport = core.clone().with_wire(UProtocolNativeWire);
+    let transport = core
+        .clone()
+        .with_protobuf_metadata_wire(UProtocolNativeWire);
     core.push_zero_copy_rx(encoded_frame::<SameWireWrongPayload>(&metadata, b"bad"));
 
     let status = match transport
@@ -586,7 +594,9 @@ async fn zero_copy_pull_receive_rejects_payload_family_mismatch_before_public_ex
 #[tokio::test]
 async fn zero_copy_pull_receive_rejects_malformed_metadata_before_public_exposure() {
     let core = InMemoryWireCore::default();
-    let transport = core.clone().with_wire(UProtocolNativeWire);
+    let transport = core
+        .clone()
+        .with_protobuf_metadata_wire(UProtocolNativeWire);
     core.push_zero_copy_rx(InMemoryEncodedRxFrame::new(b"not-upwm".to_vec(), b"bad"));
 
     let status = match transport
@@ -604,7 +614,9 @@ async fn zero_copy_pull_receive_rejects_malformed_metadata_before_public_exposur
 async fn zero_copy_listener_drops_invalid_metadata_and_unregisters_same_wrapped_listener() {
     let metadata = metadata_with_payload();
     let core = InMemoryWireCore::default();
-    let transport = core.clone().with_wire(UProtocolNativeWire);
+    let transport = core
+        .clone()
+        .with_protobuf_metadata_wire(UProtocolNativeWire);
     let listener = Arc::new(CountingZeroCopyListener::default());
     let source = valid_source_filter();
 
@@ -638,7 +650,9 @@ async fn zero_copy_listener_drops_invalid_metadata_and_unregisters_same_wrapped_
 #[tokio::test]
 async fn zero_copy_filter_validation_runs_before_core_registration() {
     let core = InMemoryWireCore::default();
-    let transport = core.clone().with_wire(UProtocolNativeWire);
+    let transport = core
+        .clone()
+        .with_protobuf_metadata_wire(UProtocolNativeWire);
     let listener = Arc::new(CountingZeroCopyListener::default());
 
     let status = transport
@@ -655,7 +669,9 @@ async fn zero_copy_filter_validation_runs_before_core_registration() {
 async fn owned_send_passes_encoded_metadata_to_core() {
     let metadata = metadata_with_payload();
     let core = InMemoryWireCore::default();
-    let transport = core.clone().with_wire(UProtocolNativeWire);
+    let transport = core
+        .clone()
+        .with_protobuf_metadata_wire(UProtocolNativeWire);
     let frame = UOwnedFrame::with_payload(metadata.clone(), Bytes::from_static(b"owned"))
         .expect("owned frame");
 
@@ -676,7 +692,9 @@ async fn owned_send_passes_encoded_metadata_to_core() {
 async fn owned_receive_rejects_wrong_wire_before_public_exposure() {
     let metadata = metadata_with_payload();
     let core = InMemoryWireCore::default();
-    let transport = core.clone().with_wire(UProtocolNativeWire);
+    let transport = core
+        .clone()
+        .with_protobuf_metadata_wire(UProtocolNativeWire);
     core.push_owned_rx(EncodedOwnedFrame::new(
         WrongWireSamePayload::encode_frame_metadata(&metadata).expect("encoded metadata"),
         Some(Bytes::from_static(b"bad")),
@@ -688,7 +706,9 @@ async fn owned_receive_rejects_wrong_wire_before_public_exposure() {
         .expect_err("wrong selected wire must be rejected");
 
     assert_eq!(status.get_code(), UCode::InvalidArgument);
-    assert!(status.get_message().contains("wrong selected wire"));
+    assert!(status
+        .get_message()
+        .is_some_and(|message| message.contains("wrong selected wire")));
 }
 
 #[cfg(feature = "owned-frame-transport")]
@@ -697,7 +717,9 @@ async fn owned_pull_receive_filters_after_selected_wire_decode() {
     let metadata = metadata_with_payload();
     let other_metadata = nonmatching_metadata_with_payload();
     let core = InMemoryWireCore::default();
-    let transport = core.clone().with_wire(UProtocolNativeWire);
+    let transport = core
+        .clone()
+        .with_protobuf_metadata_wire(UProtocolNativeWire);
     core.push_owned_rx(encoded_owned_frame::<UProtocolNativeWire>(
         &other_metadata,
         b"skip",
@@ -713,7 +735,7 @@ async fn owned_pull_receive_filters_after_selected_wire_decode() {
 
     assert_eq!(frame.payload_bytes(), b"match");
     let (source_filter, sink_filter) = core.last_owned_receive_filter();
-    assert_eq!(source_filter, broad_physical_source_filter());
+    assert_eq!(source_filter, valid_source_filter());
     assert!(sink_filter.is_none());
 }
 
@@ -723,7 +745,9 @@ async fn owned_listener_filters_after_selected_wire_decode() {
     let metadata = metadata_with_payload();
     let other_metadata = nonmatching_metadata_with_payload();
     let core = InMemoryWireCore::default();
-    let transport = core.clone().with_wire(UProtocolNativeWire);
+    let transport = core
+        .clone()
+        .with_protobuf_metadata_wire(UProtocolNativeWire);
     let listener = Arc::new(CountingOwnedListener::default());
     let source = valid_source_filter();
 

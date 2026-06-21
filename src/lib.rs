@@ -82,8 +82,10 @@ pub use frame_metadata::{
 };
 
 pub mod wire;
-#[cfg(feature = "up-core-types")]
-pub use wire::{decode_frame_metadata, encode_frame_metadata, UWireMetadata, UWireMetadataError};
+#[cfg(feature = "selected-wire-protobuf-metadata")]
+pub use wire::{
+    decode_frame_metadata, encode_frame_metadata, ProtobufMetadataCodec, UWireMetadata,
+};
 pub use wire::{
     ProtobufWire, StableContainerWireFormat, UProtocolNativeWire, UWire, UWireDecode,
     UWireDecodeOwned, UWireEncode, UWireLoan, UWireLoanUninit, UWireReadDecode, WireCompatibility,
@@ -92,6 +94,8 @@ pub use wire::{
     STABLE_CONTAINER_PAYLOAD_FAMILY_ID, STABLE_CONTAINER_WIRE_ID, UPROTOCOL_NATIVE_WIRE_ID,
     XCDR_V2_PAYLOAD_FAMILY_ID, XCDR_V2_WIRE_ID,
 };
+#[cfg(feature = "selected-wire-codec-core")]
+pub use wire::{UWireMetadataCodec, UWireMetadataError};
 
 #[cfg(all(feature = "owned-frame-transport", feature = "protobuf-support"))]
 pub mod frame_wire;
@@ -170,17 +174,24 @@ pub use utransport::{
     UOwnedListener, UOwnedTransport, UOwnedTransportExt, UOwnedTransportImpl, ValidatedOwnedFrame,
 };
 
-#[cfg(feature = "up-core-types")]
+#[cfg(feature = "selected-wire-transport-core")]
 mod wire_transport;
+#[cfg(all(
+    feature = "selected-wire-transport-adapter",
+    feature = "selected-wire-protobuf-metadata"
+))]
+pub use wire_transport::UWithProtobufMetadataWire;
 #[cfg(feature = "owned-frame-transport")]
 pub use wire_transport::{
     EncodedOwnedFrame, PreparedOwnedFrame, UEncodedOwnedListener, UOwnedTransportCore,
 };
-#[cfg(feature = "up-core-types")]
+#[cfg(feature = "selected-wire-transport-core")]
 pub use wire_transport::{
-    PreparedTxLoanSpec, UEncodedLoanedRxFrame, UEncodedRxFrame, UEncodedZeroCopyListener, UHasWire,
-    UWireRx, UWireTransport, UWithWire, UZeroCopyTransportCore, UZeroCopyUninitTransportCore,
+    PreparedTxLoanSpec, UEncodedLoanedRxFrame, UEncodedRxFrame, UEncodedZeroCopyListener,
+    UZeroCopyTransportCore, UZeroCopyUninitTransportCore,
 };
+#[cfg(feature = "selected-wire-transport-adapter")]
+pub use wire_transport::{UHasWire, UWireRx, UWireTransport, UWithWireAndMetadataCodec};
 
 mod uuid;
 pub use uuid::UUID;

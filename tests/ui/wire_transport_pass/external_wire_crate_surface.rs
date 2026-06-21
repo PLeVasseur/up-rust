@@ -9,9 +9,9 @@ mod fake_external_wire_crate;
 
 use fake_external_wire_crate::{metadata, ExternalFixture, ExternalTxCore, FakeExternalWire};
 use up_rust::{
-    DecodePayload, EncodePayload, PreparedTxLoanSpec, UTxLoanSpec, UWireDecode, UWireEncode,
-    UWireLoan, UWireMetadata, UWireReadDecode, UWithWire, UZeroCopyTransportExt,
-    ValidatedTxLoanSpec,
+    DecodePayload, EncodePayload, PreparedTxLoanSpec, ProtobufMetadataCodec, UTxLoanSpec,
+    UWireDecode, UWireEncode, UWireLoan, UWireMetadata, UWireReadDecode,
+    UWithProtobufMetadataWire, UZeroCopyTransportExt, ValidatedTxLoanSpec,
 };
 
 fn assert_external_wire<W>()
@@ -25,7 +25,7 @@ where
 }
 
 async fn selected_wire_zero_copy_tx_compiles() -> Result<(), up_rust::UStatus> {
-    let transport = ExternalTxCore.with_wire(FakeExternalWire);
+    let transport = ExternalTxCore.with_protobuf_metadata_wire(FakeExternalWire);
     transport
         .send_loaned_payload::<ExternalFixture>(metadata(), |payload| {
             payload.signal_id = 7;
@@ -46,8 +46,9 @@ fn main() {
     assert_eq!(decoded, fixture);
 
     let spec = UTxLoanSpec::payload(metadata(), encoded.len(), 1).expect("loan spec");
-    let prepared = PreparedTxLoanSpec::from_validated::<FakeExternalWire>(
+    let prepared = PreparedTxLoanSpec::from_validated::<FakeExternalWire, ProtobufMetadataCodec>(
         ValidatedTxLoanSpec::try_from(spec).expect("validated spec"),
+        &ProtobufMetadataCodec,
     )
     .expect("prepared fake external TX");
     assert!(!prepared.encoded_metadata().is_empty());

@@ -11,15 +11,17 @@
  * SPDX-License-Identifier: Apache-2.0
  ********************************************************************************/
 
+#![cfg_attr(not(feature = "selected-wire-transport-adapter"), allow(dead_code))]
+
 //! Selected-wire transport adapter core.
 //!
 //! Product transports implement the small core traits in this module for their
 //! physical mechanics. A core accepts metadata bytes already prepared by the
-//! selected `W: UWireMetadata`, returns encoded metadata bytes on receive, and
+//! selected metadata codec, returns encoded metadata bytes on receive, and
 //! validates any physical mirror fields against decoded metadata before public
 //! exposure. Product transport modules should not import, match on, or branch
 //! by concrete wire families such as `UProtocolNativeWire`; the selected wire is
-//! owned by [`UWireTransport<TCore, W>`].
+//! owned by [`UWireTransport<TCore, W, C>`].
 
 use std::{
     any::Any,
@@ -34,41 +36,51 @@ use async_trait::async_trait;
 use bytes::Bytes;
 use tracing::warn;
 
+#[cfg(feature = "selected-wire-protobuf-metadata")]
+use crate::ProtobufMetadataCodec;
 use crate::{
     validate_frame_view_for_transport, LoanedPayload, PayloadCodec, ReadDecodePayload, UCode,
     UFrameMetadata, UFrameView, ULoanedContiguousZeroCopyRxFrame, UStatus, UTxBuffer, UTxLoanSpec,
-    UUninitTxBuffer, UUri, UWire, UWireError, UWireMetadata, UZeroCopyListener, UZeroCopyRxLease,
-    UZeroCopyTransportImpl, UZeroCopyUninitTransportImpl, ValidatedTxLoanSpec,
+    UUninitTxBuffer, UUri, UWire, UWireError, UWireMetadataCodec, UZeroCopyListener,
+    UZeroCopyRxLease, UZeroCopyTransportImpl, UZeroCopyUninitTransportImpl, ValidatedTxLoanSpec,
 };
 #[cfg(feature = "owned-frame-transport")]
 use crate::{UOwnedFrame, UOwnedListener, UOwnedTransportImpl, ValidatedOwnedFrame};
 
 /// Generic selected-wire transport adapter.
-pub struct UWireTransport<TCore, W>
+pub struct UWireTransport<TCore, W, C>
 where
     W: UWire,
 {
     core: TCore,
     wire: W,
+    metadata_codec: C,
     zero_copy_listeners: Mutex<HashMap<WireListenerKey, Arc<dyn Any + Send + Sync>>>,
     #[cfg(feature = "owned-frame-transport")]
     owned_listeners: Mutex<HashMap<WireListenerKey, Arc<dyn Any + Send + Sync>>>,
 }
 
-impl<TCore, W> UWireTransport<TCore, W>
+impl<TCore, W, C> UWireTransport<TCore, W, C>
 where
     W: UWire,
 {
-    /// Creates an adapter around a transport core and a selected wire marker.
+    /// Creates an adapter around a transport core, selected wire marker, and metadata codec.
     #[must_use]
-    pub fn new(core: TCore, wire: W) -> Self {
+    pub fn new(core: TCore, wire: W, metadata_codec: C) -> Self {
         Self {
             core,
             wire,
+            metadata_codec,
             zero_copy_listeners: Mutex::new(HashMap::new()),
             #[cfg(feature = "owned-frame-transport")]
             owned_listeners: Mutex::new(HashMap::new()),
         }
+    }
+
+    /// Creates an adapter with an explicit selected wire and metadata codec.
+    #[must_use]
+    pub fn with_wire_and_metadata_codec(core: TCore, wire: W, metadata_codec: C) -> Self {
+        Self::new(core, wire, metadata_codec)
     }
 
     /// Returns the wrapped physical transport core.
@@ -83,29 +95,65 @@ where
         &mut self.core
     }
 
-    /// Consumes the adapter and returns the wrapped core and selected wire.
+    /// Returns the selected metadata codec.
     #[must_use]
-    pub fn into_parts(self) -> (TCore, W) {
-        (self.core, self.wire)
+    pub fn metadata_codec(&self) -> &C {
+        &self.metadata_codec
+    }
+
+    /// Consumes the adapter and returns the wrapped core, selected wire, and metadata codec.
+    #[must_use]
+    pub fn into_parts(self) -> (TCore, W, C) {
+        (self.core, self.wire, self.metadata_codec)
     }
 }
 
-/// Construction helper for choosing a selected wire on a physical core.
-pub trait UWithWire<W>: Sized
+/// Construction helper for choosing a selected wire and metadata codec on a physical core.
+pub trait UWithWireAndMetadataCodec<W, C>: Sized
 where
     W: UWire,
 {
-    /// Wraps this core in a selected-wire transport adapter.
+    /// Wraps this core in a selected-wire transport adapter with an explicit metadata codec.
     #[must_use]
-    fn with_wire(self, wire: W) -> UWireTransport<Self, W>;
+    fn with_wire_and_metadata_codec(self, wire: W, metadata_codec: C)
+        -> UWireTransport<Self, W, C>;
 }
 
-impl<TCore, W> UWithWire<W> for TCore
+impl<TCore, W, C> UWithWireAndMetadataCodec<W, C> for TCore
 where
     W: UWire,
 {
-    fn with_wire(self, wire: W) -> UWireTransport<Self, W> {
-        UWireTransport::new(self, wire)
+    fn with_wire_and_metadata_codec(
+        self,
+        wire: W,
+        metadata_codec: C,
+    ) -> UWireTransport<Self, W, C> {
+        UWireTransport::new(self, wire, metadata_codec)
+    }
+}
+
+/// Protobuf metadata convenience construction helper.
+#[cfg(feature = "selected-wire-protobuf-metadata")]
+pub trait UWithProtobufMetadataWire<W>: Sized
+where
+    W: UWire,
+{
+    /// Wraps this core with protobuf-backed selected-wire metadata.
+    #[must_use]
+    fn with_protobuf_metadata_wire(self, wire: W)
+        -> UWireTransport<Self, W, ProtobufMetadataCodec>;
+}
+
+#[cfg(feature = "selected-wire-protobuf-metadata")]
+impl<TCore, W> UWithProtobufMetadataWire<W> for TCore
+where
+    W: UWire,
+{
+    fn with_protobuf_metadata_wire(
+        self,
+        wire: W,
+    ) -> UWireTransport<Self, W, ProtobufMetadataCodec> {
+        UWireTransport::new(self, wire, ProtobufMetadataCodec)
     }
 }
 
@@ -119,7 +167,7 @@ pub trait UHasWire {
     fn wire(&self) -> &Self::Wire;
 }
 
-impl<TCore, W> UHasWire for UWireTransport<TCore, W>
+impl<TCore, W, C> UHasWire for UWireTransport<TCore, W, C>
 where
     W: UWire,
 {
@@ -145,11 +193,12 @@ impl PreparedTxLoanSpec {
     /// # Errors
     ///
     /// Returns an error if selected-wire metadata encoding fails.
-    pub fn from_validated<W>(spec: ValidatedTxLoanSpec) -> Result<Self, UStatus>
+    pub fn from_validated<W, C>(spec: ValidatedTxLoanSpec, codec: &C) -> Result<Self, UStatus>
     where
-        W: UWireMetadata,
+        W: UWire,
+        C: UWireMetadataCodec<W>,
     {
-        let encoded_metadata = W::encode_frame_metadata(spec.metadata())?;
+        let encoded_metadata = codec.encode_frame_metadata(spec.metadata())?;
         Ok(Self {
             metadata: spec.metadata().clone(),
             encoded_metadata,
@@ -249,7 +298,7 @@ impl PreparedTxLoanSpec {
 ///
 /// This is an implementation-boundary trait. Raw encoded receive objects should
 /// not implement public frame or lease traits directly; public receive paths
-/// expose [`UWireRx<Rx, W>`] after selected-wire metadata decode and validation.
+/// expose [`UWireRx<Rx, W, C>`] after selected-wire metadata decode and validation.
 pub trait UEncodedRxFrame {
     /// Ordered payload reader type.
     type PayloadReader<'a>: Read + 'a
@@ -288,19 +337,21 @@ pub trait UEncodedLoanedRxFrame: UEncodedRxFrame {
 }
 
 /// Public zero-copy receive lease after selected-wire metadata validation.
-pub struct UWireRx<Rx, W>
+pub struct UWireRx<Rx, W, C>
 where
     W: UWire,
 {
     metadata: UFrameMetadata,
     raw: Rx,
     _wire: PhantomData<W>,
+    _metadata_codec: PhantomData<C>,
 }
 
-impl<Rx, W> UWireRx<Rx, W>
+impl<Rx, W, C> UWireRx<Rx, W, C>
 where
     Rx: UEncodedRxFrame,
-    W: UWireMetadata,
+    W: UWire,
+    C: UWireMetadataCodec<W>,
 {
     /// Decodes metadata from a raw encoded receive object and validates the public frame view.
     ///
@@ -308,12 +359,13 @@ where
     ///
     /// Returns an error if metadata bytes are malformed, selected-wire checks
     /// fail, or the resulting public frame view violates transport invariants.
-    pub fn try_from_encoded(raw: Rx) -> Result<Self, UStatus> {
-        let metadata = W::decode_frame_metadata(raw.encoded_metadata())?;
+    pub fn try_from_encoded(raw: Rx, codec: &C) -> Result<Self, UStatus> {
+        let metadata = codec.decode_frame_metadata(raw.encoded_metadata())?;
         let frame = Self {
             metadata,
             raw,
             _wire: PhantomData,
+            _metadata_codec: PhantomData,
         };
         validate_frame_view_for_transport(&frame)?;
         Ok(frame)
@@ -334,7 +386,8 @@ where
     /// Decodes this frame's payload using the selected wire `W`.
     ///
     /// Prefer this selected-wire helper on receive values produced by
-    /// `.with_wire(W)`. Use [`UFrameView::decode_payload_from_reader_as`] only for
+    /// explicit selected-wire adapter construction. Use
+    /// [`UFrameView::decode_payload_from_reader_as`] only for
     /// low-level codec escape hatches.
     ///
     /// # Errors
@@ -353,10 +406,11 @@ where
     }
 }
 
-impl<Rx, W> UFrameView for UWireRx<Rx, W>
+impl<Rx, W, C> UFrameView for UWireRx<Rx, W, C>
 where
     Rx: UEncodedRxFrame,
-    W: UWireMetadata,
+    W: UWire,
+    C: UWireMetadataCodec<W>,
 {
     type PayloadReader<'a>
         = Rx::PayloadReader<'a>
@@ -392,17 +446,19 @@ where
     }
 }
 
-impl<Rx, W> UZeroCopyRxLease for UWireRx<Rx, W>
+impl<Rx, W, C> UZeroCopyRxLease for UWireRx<Rx, W, C>
 where
     Rx: UEncodedRxFrame,
-    W: UWireMetadata,
+    W: UWire,
+    C: UWireMetadataCodec<W>,
 {
 }
 
-impl<Rx, W> ULoanedContiguousZeroCopyRxFrame for UWireRx<Rx, W>
+impl<Rx, W, C> ULoanedContiguousZeroCopyRxFrame for UWireRx<Rx, W, C>
 where
     Rx: UEncodedLoanedRxFrame,
-    W: UWireMetadata,
+    W: UWire,
+    C: UWireMetadataCodec<W>,
 {
     fn loaned_contiguous_payload(&self) -> Result<LoanedPayload<'_>, UWireError> {
         self.raw.loaned_contiguous_payload()
@@ -478,17 +534,21 @@ pub trait UZeroCopyUninitTransportCore: UZeroCopyTransportCore {
 }
 
 #[async_trait]
-impl<TCore, W> UZeroCopyTransportImpl for UWireTransport<TCore, W>
+impl<TCore, W, C> UZeroCopyTransportImpl for UWireTransport<TCore, W, C>
 where
     TCore: UZeroCopyTransportCore,
-    W: UWireMetadata + Send + Sync + 'static,
+    W: UWire + Send + Sync + 'static,
+    C: UWireMetadataCodec<W> + Clone + Send + Sync + 'static,
 {
     type Tx = TCore::Tx;
-    type Rx = UWireRx<TCore::Rx, W>;
+    type Rx = UWireRx<TCore::Rx, W, C>;
 
     async fn loan_validated_tx(&self, spec: ValidatedTxLoanSpec) -> Result<Self::Tx, UStatus> {
         self.core
-            .loan_prepared_tx(PreparedTxLoanSpec::from_validated::<W>(spec)?)
+            .loan_prepared_tx(PreparedTxLoanSpec::from_validated::<W, C>(
+                spec,
+                &self.metadata_codec,
+            )?)
             .await
     }
 
@@ -507,7 +567,7 @@ where
                 .core
                 .receive_encoded_zero_copy(&core_source_filter, sink_filter)
                 .await?;
-            let frame = UWireRx::try_from_encoded(frame)?;
+            let frame = UWireRx::try_from_encoded(frame, &self.metadata_codec)?;
             if wire_frame_matches(&frame, source_filter, sink_filter) {
                 return Ok(frame);
             }
@@ -523,7 +583,7 @@ where
         let key = listener_key(
             source_filter,
             sink_filter,
-            zero_copy_listener_pointer::<TCore::Rx, W>(&listener),
+            zero_copy_listener_pointer::<TCore::Rx, W, C>(&listener),
         );
         let (listener, inserted) =
             self.registered_zero_copy_listener(&key, source_filter, sink_filter, listener);
@@ -550,7 +610,7 @@ where
         let key = listener_key(
             source_filter,
             sink_filter,
-            zero_copy_listener_pointer::<TCore::Rx, W>(&listener),
+            zero_copy_listener_pointer::<TCore::Rx, W, C>(&listener),
         );
         let listener = self.zero_copy_listener_for_unregister(&key, listener);
         let core_source_filter = selected_wire_core_source_filter();
@@ -569,10 +629,11 @@ where
 }
 
 #[async_trait]
-impl<TCore, W> UZeroCopyUninitTransportImpl for UWireTransport<TCore, W>
+impl<TCore, W, C> UZeroCopyUninitTransportImpl for UWireTransport<TCore, W, C>
 where
     TCore: UZeroCopyUninitTransportCore,
-    W: UWireMetadata + Send + Sync + 'static,
+    W: UWire + Send + Sync + 'static,
+    C: UWireMetadataCodec<W> + Clone + Send + Sync + 'static,
 {
     type UninitTx = TCore::UninitTx;
 
@@ -581,22 +642,26 @@ where
         spec: ValidatedTxLoanSpec,
     ) -> Result<Self::UninitTx, UStatus> {
         self.core
-            .loan_prepared_uninit_tx(PreparedTxLoanSpec::from_validated::<W>(spec)?)
+            .loan_prepared_uninit_tx(PreparedTxLoanSpec::from_validated::<W, C>(
+                spec,
+                &self.metadata_codec,
+            )?)
             .await
     }
 }
 
-impl<TCore, W> UWireTransport<TCore, W>
+impl<TCore, W, C> UWireTransport<TCore, W, C>
 where
     TCore: UZeroCopyTransportCore,
-    W: UWireMetadata + Send + Sync + 'static,
+    W: UWire + Send + Sync + 'static,
+    C: UWireMetadataCodec<W> + Clone + Send + Sync + 'static,
 {
     fn registered_zero_copy_listener(
         &self,
         key: &WireListenerKey,
         source_filter: &UUri,
         sink_filter: Option<&UUri>,
-        listener: Arc<dyn UZeroCopyListener<UWireRx<TCore::Rx, W>>>,
+        listener: Arc<dyn UZeroCopyListener<UWireRx<TCore::Rx, W, C>>>,
     ) -> (Arc<dyn UEncodedZeroCopyListener<TCore::Rx>>, bool) {
         let mut registry = self
             .zero_copy_listeners
@@ -605,16 +670,17 @@ where
         if let Some(existing) = registry.get(key) {
             if let Ok(existing) = existing
                 .clone()
-                .downcast::<WireZeroCopyListener<TCore::Rx, W>>()
+                .downcast::<WireZeroCopyListener<TCore::Rx, W, C>>()
             {
                 return (existing, false);
             }
         }
 
-        let wrapped = Arc::new(WireZeroCopyListener::<TCore::Rx, W> {
+        let wrapped = Arc::new(WireZeroCopyListener::<TCore::Rx, W, C> {
             source_filter: source_filter.clone(),
             sink_filter: sink_filter.cloned(),
             listener,
+            metadata_codec: self.metadata_codec.clone(),
             _wire: PhantomData,
         });
         registry.insert(key.clone(), wrapped.clone());
@@ -624,7 +690,7 @@ where
     fn zero_copy_listener_for_unregister(
         &self,
         key: &WireListenerKey,
-        fallback: Arc<dyn UZeroCopyListener<UWireRx<TCore::Rx, W>>>,
+        fallback: Arc<dyn UZeroCopyListener<UWireRx<TCore::Rx, W, C>>>,
     ) -> Arc<dyn UEncodedZeroCopyListener<TCore::Rx>> {
         self.zero_copy_listeners
             .lock()
@@ -633,39 +699,43 @@ where
             .and_then(|listener| {
                 listener
                     .clone()
-                    .downcast::<WireZeroCopyListener<TCore::Rx, W>>()
+                    .downcast::<WireZeroCopyListener<TCore::Rx, W, C>>()
                     .ok()
             })
             .unwrap_or_else(|| {
-                Arc::new(WireZeroCopyListener::<TCore::Rx, W> {
+                Arc::new(WireZeroCopyListener::<TCore::Rx, W, C> {
                     source_filter: key.source_filter.clone(),
                     sink_filter: key.sink_filter.clone(),
                     listener: fallback,
+                    metadata_codec: self.metadata_codec.clone(),
                     _wire: PhantomData,
                 })
             })
     }
 }
 
-struct WireZeroCopyListener<Rx, W>
+struct WireZeroCopyListener<Rx, W, C>
 where
     Rx: UEncodedRxFrame + Send + 'static,
-    W: UWireMetadata,
+    W: UWire,
+    C: UWireMetadataCodec<W>,
 {
     source_filter: UUri,
     sink_filter: Option<UUri>,
-    listener: Arc<dyn UZeroCopyListener<UWireRx<Rx, W>>>,
+    listener: Arc<dyn UZeroCopyListener<UWireRx<Rx, W, C>>>,
+    metadata_codec: C,
     _wire: PhantomData<W>,
 }
 
 #[async_trait]
-impl<Rx, W> UEncodedZeroCopyListener<Rx> for WireZeroCopyListener<Rx, W>
+impl<Rx, W, C> UEncodedZeroCopyListener<Rx> for WireZeroCopyListener<Rx, W, C>
 where
     Rx: UEncodedRxFrame + Send + 'static,
-    W: UWireMetadata + Send + Sync + 'static,
+    W: UWire + Send + Sync + 'static,
+    C: UWireMetadataCodec<W> + Send + Sync + 'static,
 {
     async fn on_receive_encoded_zero_copy(&self, frame: Rx) {
-        match UWireRx::<Rx, W>::try_from_encoded(frame) {
+        match UWireRx::<Rx, W, C>::try_from_encoded(frame, &self.metadata_codec) {
             Ok(frame)
                 if wire_frame_matches(&frame, &self.source_filter, self.sink_filter.as_ref()) =>
             {
@@ -677,14 +747,15 @@ where
     }
 }
 
-fn wire_frame_matches<Rx, W>(
-    frame: &UWireRx<Rx, W>,
+fn wire_frame_matches<Rx, W, C>(
+    frame: &UWireRx<Rx, W, C>,
     source_filter: &UUri,
     sink_filter: Option<&UUri>,
 ) -> bool
 where
     Rx: UEncodedRxFrame,
-    W: UWireMetadata,
+    W: UWire,
+    C: UWireMetadataCodec<W>,
 {
     source_filter.matches(frame.metadata().attributes().source())
         && sink_filter.is_none_or(|filter| {
@@ -725,12 +796,13 @@ impl PreparedOwnedFrame {
     /// # Errors
     ///
     /// Returns an error if selected-wire metadata encoding fails.
-    pub fn from_validated<W>(frame: ValidatedOwnedFrame) -> Result<Self, UStatus>
+    pub fn from_validated<W, C>(frame: ValidatedOwnedFrame, codec: &C) -> Result<Self, UStatus>
     where
-        W: UWireMetadata,
+        W: UWire,
+        C: UWireMetadataCodec<W>,
     {
         let (metadata, payload) = frame.into_inner().into_parts();
-        let encoded_metadata = W::encode_frame_metadata(&metadata)?;
+        let encoded_metadata = codec.encode_frame_metadata(&metadata)?;
         Ok(Self {
             metadata,
             encoded_metadata,
@@ -799,11 +871,12 @@ impl EncodedOwnedFrame {
     /// # Errors
     ///
     /// Returns an error if selected-wire metadata decode or owned-frame validation fails.
-    pub fn decode<W>(self) -> Result<UOwnedFrame, UStatus>
+    pub fn decode<W, C>(self, codec: &C) -> Result<UOwnedFrame, UStatus>
     where
-        W: UWireMetadata,
+        W: UWire,
+        C: UWireMetadataCodec<W>,
     {
-        let metadata = W::decode_frame_metadata(&self.encoded_metadata)?;
+        let metadata = codec.decode_frame_metadata(&self.encoded_metadata)?;
         UOwnedFrame::new(metadata, self.payload).map_err(invalid_metadata)
     }
 
@@ -861,14 +934,18 @@ pub trait UOwnedTransportCore: Send + Sync {
 
 #[cfg(feature = "owned-frame-transport")]
 #[async_trait]
-impl<TCore, W> UOwnedTransportImpl for UWireTransport<TCore, W>
+impl<TCore, W, C> UOwnedTransportImpl for UWireTransport<TCore, W, C>
 where
     TCore: UOwnedTransportCore,
-    W: UWireMetadata + Send + Sync + 'static,
+    W: UWire + Send + Sync + 'static,
+    C: UWireMetadataCodec<W> + Clone + Send + Sync + 'static,
 {
     async fn send_validated_owned(&self, frame: ValidatedOwnedFrame) -> Result<(), UStatus> {
         self.core
-            .send_prepared_owned(PreparedOwnedFrame::from_validated::<W>(frame)?)
+            .send_prepared_owned(PreparedOwnedFrame::from_validated::<W, C>(
+                frame,
+                &self.metadata_codec,
+            )?)
             .await
     }
 
@@ -883,7 +960,7 @@ where
                 .core
                 .receive_encoded_owned(&core_source_filter, sink_filter)
                 .await?
-                .decode::<W>()?;
+                .decode::<W, C>(&self.metadata_codec)?;
             if owned_frame_matches(&frame, source_filter, sink_filter) {
                 return Ok(frame);
             }
@@ -945,10 +1022,11 @@ where
 }
 
 #[cfg(feature = "owned-frame-transport")]
-impl<TCore, W> UWireTransport<TCore, W>
+impl<TCore, W, C> UWireTransport<TCore, W, C>
 where
     TCore: UOwnedTransportCore,
-    W: UWireMetadata + Send + Sync + 'static,
+    W: UWire + Send + Sync + 'static,
+    C: UWireMetadataCodec<W> + Clone + Send + Sync + 'static,
 {
     fn registered_owned_listener(
         &self,
@@ -962,15 +1040,16 @@ where
             .lock()
             .expect("wire owned listener registry lock poisoned");
         if let Some(existing) = registry.get(key) {
-            if let Ok(existing) = existing.clone().downcast::<WireOwnedListener<W>>() {
+            if let Ok(existing) = existing.clone().downcast::<WireOwnedListener<W, C>>() {
                 return (existing, false);
             }
         }
 
-        let wrapped = Arc::new(WireOwnedListener::<W> {
+        let wrapped = Arc::new(WireOwnedListener::<W, C> {
             source_filter: source_filter.clone(),
             sink_filter: sink_filter.cloned(),
             listener,
+            metadata_codec: self.metadata_codec.clone(),
             _wire: PhantomData,
         });
         registry.insert(key.clone(), wrapped.clone());
@@ -986,12 +1065,13 @@ where
             .lock()
             .expect("wire owned listener registry lock poisoned")
             .get(key)
-            .and_then(|listener| listener.clone().downcast::<WireOwnedListener<W>>().ok())
+            .and_then(|listener| listener.clone().downcast::<WireOwnedListener<W, C>>().ok())
             .unwrap_or_else(|| {
-                Arc::new(WireOwnedListener::<W> {
+                Arc::new(WireOwnedListener::<W, C> {
                     source_filter: key.source_filter.clone(),
                     sink_filter: key.sink_filter.clone(),
                     listener: fallback,
+                    metadata_codec: self.metadata_codec.clone(),
                     _wire: PhantomData,
                 })
             })
@@ -999,24 +1079,27 @@ where
 }
 
 #[cfg(feature = "owned-frame-transport")]
-struct WireOwnedListener<W>
+struct WireOwnedListener<W, C>
 where
-    W: UWireMetadata,
+    W: UWire,
+    C: UWireMetadataCodec<W>,
 {
     source_filter: UUri,
     sink_filter: Option<UUri>,
     listener: Arc<dyn UOwnedListener>,
+    metadata_codec: C,
     _wire: PhantomData<W>,
 }
 
 #[cfg(feature = "owned-frame-transport")]
 #[async_trait]
-impl<W> UEncodedOwnedListener for WireOwnedListener<W>
+impl<W, C> UEncodedOwnedListener for WireOwnedListener<W, C>
 where
-    W: UWireMetadata + Send + Sync + 'static,
+    W: UWire + Send + Sync + 'static,
+    C: UWireMetadataCodec<W> + Send + Sync + 'static,
 {
     async fn on_receive_encoded_owned(&self, frame: EncodedOwnedFrame) {
-        match frame.decode::<W>() {
+        match frame.decode::<W, C>(&self.metadata_codec) {
             Ok(frame)
                 if owned_frame_matches(&frame, &self.source_filter, self.sink_filter.as_ref()) =>
             {
@@ -1063,10 +1146,13 @@ fn listener_key(
     }
 }
 
-fn zero_copy_listener_pointer<Rx, W>(listener: &Arc<dyn UZeroCopyListener<UWireRx<Rx, W>>>) -> usize
+fn zero_copy_listener_pointer<Rx, W, C>(
+    listener: &Arc<dyn UZeroCopyListener<UWireRx<Rx, W, C>>>,
+) -> usize
 where
     Rx: UEncodedRxFrame,
-    W: UWireMetadata,
+    W: UWire,
+    C: UWireMetadataCodec<W>,
 {
     let ptr = Arc::as_ptr(listener);
     let thin_ptr = ptr as *const ();
@@ -1100,7 +1186,7 @@ mod tests {
         ByteBackedStablePayload, EncodePayload, PayloadEncoding, PayloadLoanProvenance,
         ProtobufWire, StableContainerPayload, StableContainerWireFormat, StablePayload,
         UMessageBuilder, UPayloadFormat, UProtocolNativeWire, UTxPayloadSpec, UVecRxLease,
-        UVecTxBuffer, UVecUninitTxBuffer, UZeroCopyTransportExt,
+        UVecTxBuffer, UVecUninitTxBuffer, UWireMetadata, UZeroCopyTransportExt,
     };
 
     #[repr(C)]
@@ -1236,12 +1322,17 @@ mod tests {
 
     #[derive(Default)]
     struct RecordingZeroCopyListener {
-        frames: StdMutex<Vec<UWireRx<RawRx, UProtocolNativeWire>>>,
+        frames: StdMutex<Vec<UWireRx<RawRx, UProtocolNativeWire, ProtobufMetadataCodec>>>,
     }
 
     #[async_trait]
-    impl UZeroCopyListener<UWireRx<RawRx, UProtocolNativeWire>> for RecordingZeroCopyListener {
-        async fn on_receive_zero_copy(&self, frame: UWireRx<RawRx, UProtocolNativeWire>) {
+    impl UZeroCopyListener<UWireRx<RawRx, UProtocolNativeWire, ProtobufMetadataCodec>>
+        for RecordingZeroCopyListener
+    {
+        async fn on_receive_zero_copy(
+            &self,
+            frame: UWireRx<RawRx, UProtocolNativeWire, ProtobufMetadataCodec>,
+        ) {
             self.frames.lock().unwrap().push(frame);
         }
     }
@@ -1349,7 +1440,11 @@ mod tests {
             payload: b"abc".to_vec(),
         };
 
-        let rx = UWireRx::<RawRx, UProtocolNativeWire>::try_from_encoded(raw).unwrap();
+        let rx = UWireRx::<RawRx, UProtocolNativeWire, ProtobufMetadataCodec>::try_from_encoded(
+            raw,
+            &ProtobufMetadataCodec,
+        )
+        .unwrap();
 
         assert_eq!(rx.metadata(), &metadata);
         assert_eq!(rx.payload_len(), 3);
@@ -1370,7 +1465,11 @@ mod tests {
             payload: payload.to_vec(),
         };
 
-        let rx = UWireRx::<RawRx, ProtobufWire>::try_from_encoded(raw).unwrap();
+        let rx = UWireRx::<RawRx, ProtobufWire, ProtobufMetadataCodec>::try_from_encoded(
+            raw,
+            &ProtobufMetadataCodec,
+        )
+        .unwrap();
         let decoded: StringValue = rx.decode_payload().unwrap();
 
         assert_eq!(decoded.value, "selected-wire");
@@ -1379,7 +1478,7 @@ mod tests {
     #[test]
     fn stable_borrow_accepts_wire_rx_with_loaned_raw_frame() {
         fn assert_loaned_rx<T: ULoanedContiguousZeroCopyRxFrame>() {}
-        assert_loaned_rx::<UWireRx<RawRx, UProtocolNativeWire>>();
+        assert_loaned_rx::<UWireRx<RawRx, UProtocolNativeWire, ProtobufMetadataCodec>>();
 
         let value = WireStableBytes { bytes: *b"wire" };
         let metadata = stable_metadata::<WireStableBytes>();
@@ -1389,7 +1488,11 @@ mod tests {
             payload: stable_bytes(&value),
         };
 
-        let rx = UWireRx::<RawRx, UProtocolNativeWire>::try_from_encoded(raw).unwrap();
+        let rx = UWireRx::<RawRx, UProtocolNativeWire, ProtobufMetadataCodec>::try_from_encoded(
+            raw,
+            &ProtobufMetadataCodec,
+        )
+        .unwrap();
         let borrowed = rx.borrow_stable_payload::<WireStableBytes>().unwrap();
 
         assert_eq!(borrowed, &value);
@@ -1401,7 +1504,8 @@ mod tests {
 
     #[tokio::test]
     async fn stable_initialized_tx_helper_sends_through_selected_wire_transport() {
-        let transport = RecordingCore::default().with_wire(StableContainerWireFormat);
+        let transport =
+            RecordingCore::default().with_protobuf_metadata_wire(StableContainerWireFormat);
 
         transport
             .send_loaned_payload::<WireStableBytes>(
@@ -1444,7 +1548,7 @@ mod tests {
             raw_frame_for_topic(0x9001, b"drop"),
             raw_frame_for_topic(0x9000, b"keep"),
         ]);
-        let transport = core.with_wire(UProtocolNativeWire);
+        let transport = core.with_protobuf_metadata_wire(UProtocolNativeWire);
         let source_filter = UUri::try_from_parts("vehicle", 0x4210, 0x01, 0x9000).unwrap();
 
         let frame = transport
@@ -1467,7 +1571,7 @@ mod tests {
             .lock()
             .unwrap()
             .push_back(raw_frame_for_topic(0x9000, b"keep"));
-        let transport = core.with_wire(UProtocolNativeWire);
+        let transport = core.with_protobuf_metadata_wire(UProtocolNativeWire);
         let source_filter = UUri::try_from_parts("vehicle", 0x4210, 0x01, u16::MAX).unwrap();
 
         let frame = transport
@@ -1490,7 +1594,7 @@ mod tests {
             .lock()
             .unwrap()
             .push_back(raw_frame_for_topic(0x9000, b"owned"));
-        let transport = core.with_wire(UProtocolNativeWire);
+        let transport = core.with_protobuf_metadata_wire(UProtocolNativeWire);
         let source_filter = UUri::try_from_parts("vehicle", 0x4210, 0x01, 0x9000).unwrap();
 
         let frame = transport
@@ -1513,7 +1617,7 @@ mod tests {
             .lock()
             .unwrap()
             .push_back(raw_frame_for_topic(0x9000, b"owned"));
-        let transport = core.with_wire(UProtocolNativeWire);
+        let transport = core.with_protobuf_metadata_wire(UProtocolNativeWire);
         let source_filter = UUri::try_from_parts("vehicle", 0x4210, 0x01, u16::MAX).unwrap();
 
         let frame = transport
@@ -1544,12 +1648,14 @@ mod tests {
     async fn listener_filters_after_selected_wire_decode() {
         let source_filter = UUri::try_from_parts("vehicle", 0x4210, 0x01, 0x9000).unwrap();
         let listener = Arc::new(RecordingZeroCopyListener::default());
-        let wire_listener = WireZeroCopyListener::<RawRx, UProtocolNativeWire> {
-            source_filter,
-            sink_filter: None,
-            listener: listener.clone(),
-            _wire: PhantomData,
-        };
+        let wire_listener =
+            WireZeroCopyListener::<RawRx, UProtocolNativeWire, ProtobufMetadataCodec> {
+                source_filter,
+                sink_filter: None,
+                listener: listener.clone(),
+                metadata_codec: ProtobufMetadataCodec,
+                _wire: PhantomData,
+            };
 
         wire_listener
             .on_receive_encoded_zero_copy(raw_frame_for_topic(0x9001, b"drop"))
@@ -1568,7 +1674,7 @@ mod tests {
         fn assert_zero_copy_impl<T: UZeroCopyTransportImpl>() {}
         fn assert_uninit_impl<T: UZeroCopyUninitTransportImpl>() {}
 
-        type Transport = UWireTransport<CompileCore, UProtocolNativeWire>;
+        type Transport = UWireTransport<CompileCore, UProtocolNativeWire, ProtobufMetadataCodec>;
         assert_zero_copy_impl::<Transport>();
         assert_uninit_impl::<Transport>();
     }
@@ -1588,7 +1694,11 @@ mod tests {
         )
         .unwrap();
 
-        let prepared = PreparedTxLoanSpec::from_validated::<UProtocolNativeWire>(spec).unwrap();
+        let prepared = PreparedTxLoanSpec::from_validated::<
+            UProtocolNativeWire,
+            ProtobufMetadataCodec,
+        >(spec, &ProtobufMetadataCodec)
+        .unwrap();
 
         assert_eq!(prepared.metadata(), &metadata);
         assert_eq!(prepared.payload_len(), 4);
@@ -1601,13 +1711,13 @@ mod tests {
     fn wire_transport_fits_owned_blanket_boundary() {
         fn assert_owned_impl<T: UOwnedTransportImpl>() {}
 
-        type Transport = UWireTransport<CompileCore, UProtocolNativeWire>;
+        type Transport = UWireTransport<CompileCore, UProtocolNativeWire, ProtobufMetadataCodec>;
         assert_owned_impl::<Transport>();
     }
 
     #[test]
     fn with_wire_constructs_adapter() {
-        let transport = CompileCore.with_wire(UProtocolNativeWire);
+        let transport = CompileCore.with_protobuf_metadata_wire(UProtocolNativeWire);
         let _: &UProtocolNativeWire = transport.wire();
         let _: &CompileCore = transport.core();
     }

@@ -45,12 +45,16 @@ expert-unsafe-payloads = [
     "unsafe-stable-payload-init",
     "unsafe-uninit-payload-bytes",
 ]
-owned-frame-transport = ["up-core-types"]
+owned-frame-transport = ["selected-wire-transport-core"]
 payload-contract-fixtures = ["protobuf-wire", "dep:serde", "dep:serde_json", "dep:sha2"]
 payload-contract-large-fixtures = ["payload-contract-fixtures"]
 payload-contract-simulator-fixtures = ["payload-contract-large-fixtures"]
 protobuf-support = ["dep:protobuf"]
 protobuf-wire = ["up-core-types"]
+selected-wire-codec-core = []
+selected-wire-protobuf-metadata = ["selected-wire-codec-core", "up-core-types"]
+selected-wire-transport-adapter = ["selected-wire-transport-core"]
+selected-wire-transport-core = ["selected-wire-codec-core"]
 symphony = ["up-l2-rpc-server", "dep:serde", "dep:serde_json", "dep:symphony"]
 test-util = ["dep:mockall"]
 up-core-types = ["protobuf-support"]

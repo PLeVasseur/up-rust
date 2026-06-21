@@ -149,7 +149,7 @@ impl UFrameWireFormat for ProtobufUMessageFrame {
     fn deserialize_frame(src: &[u8]) -> Result<UOwnedFrame, UFrameWireError> {
         let message = UMessage::parse_from_protobuf_bytes(src)?;
         let metadata = try_project_umessage_to_frame_metadata(&message)?;
-        let payload = message.payload().map(Bytes::copy_from_slice);
+        let payload = message.payload().as_deref().map(Bytes::copy_from_slice);
         UOwnedFrame::new(metadata, payload).map_err(UFrameWireError::from)
     }
 }
