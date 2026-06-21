@@ -653,7 +653,7 @@ impl<'a> MetadataReader<'a> {
             ENCODING_NONE => Ok(None),
             ENCODING_STANDARD => {
                 let raw = self.read_i32()?;
-                let format = UPayloadFormat::from_i32(raw).ok_or_else(|| {
+                let format = UPayloadFormat::try_from_i32(raw).map_err(|_| {
                     UWireMetadataError::UnsupportedPayloadEncoding(format!(
                         "unknown UPayloadFormat value {raw}"
                     ))

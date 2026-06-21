@@ -15,13 +15,12 @@ use async_trait::async_trait;
 #[cfg(test)]
 use mockall::automock;
 
-use crate::{
-    up_core_api::usubscription::{
-        reset_request::reason::Code, subscription_status::State,
-        SubscriptionStatus as SubscriptionStatusProto,
-    },
-    UCode, UStatus, UUri,
-};
+use crate::{communication::SubscriptionStatus, UStatus, UUri};
+
+#[cfg(all(feature = "up-l2-rpc-client", feature = "up-core-types"))]
+mod usubscription_client;
+#[cfg(all(feature = "up-l2-rpc-client", feature = "up-core-types"))]
+pub use usubscription_client::RpcClientUSubscription;
 
 /// The uEntity (type) identifier of the uSubscription service.
 pub const USUBSCRIPTION_TYPE_ID: u32 = 0x0000_0000;
@@ -47,27 +46,6 @@ pub const RESOURCE_ID_SUBSCRIPTION_CHANGE: u16 = 0x8000;
 
 #[derive(Clone, Debug, PartialEq)]
 #[repr(C)]
-pub enum SubscriptionStatus {
-    Unsubscribed = State::UNSUBSCRIBED as isize,
-    SubscribePending = State::SUBSCRIBE_PENDING as isize,
-    Subscribed = State::SUBSCRIBED as isize,
-    UnsubscribePending = State::UNSUBSCRIBE_PENDING as isize,
-}
-
-impl From<&SubscriptionStatusProto> for SubscriptionStatus {
-    fn from(status: &SubscriptionStatusProto) -> Self {
-        let state = status.state.enum_value_or_default();
-        match state {
-            State::UNSUBSCRIBED => SubscriptionStatus::Unsubscribed,
-            State::SUBSCRIBE_PENDING => SubscriptionStatus::SubscribePending,
-            State::SUBSCRIBED => SubscriptionStatus::Subscribed,
-            State::UNSUBSCRIBE_PENDING => SubscriptionStatus::UnsubscribePending,
-        }
-    }
-}
-
-#[derive(Clone, Debug, PartialEq)]
-#[repr(C)]
 pub struct SubscriptionInfo {
     topic: UUri,
     subscriber: UUri,
@@ -77,6 +55,21 @@ pub struct SubscriptionInfo {
 }
 
 impl SubscriptionInfo {
+    /// Creates a new info object.
+    ///
+    /// # Arguments
+    /// * `topic` - The topic of the subscription.
+    /// * `subscriber` - The uEntity that has established the subscription.
+    /// * `status` - The status of the subscription.
+    /// * `expiration` - The point in time at which the subscription expires (milliseconds since Unix epoch).
+    ///   If not specified, the subscription is valid until explicitly unsubscribed.
+    /// * `min_sample_period` - The minimum duration (in seconds) between two events that should be maintained
+    ///   for remote only topics. Device dispatchers (i.e. streamers) use this attribute to reduce the publication
+    ///   rates of events sent between devices.
+    ///   This attribute is commonly used for mobile/cloud components subscribing to vehicle topics that are published
+    ///   at a high rate. If the desired sampling period set by the subscriber is lower than the original
+    ///   publisher's publication period, the attribute is ignored. If not specified, the sampling period is set
+    ///   by the publisher.
     #[must_use]
     pub fn new(
         topic: UUri,
@@ -124,8 +117,8 @@ impl SubscriptionInfo {
     /// # Examples
     ///
     /// ```rust
-    /// use up_rust::UUri;
-    /// use up_rust::core::usubscription::{SubscriptionInfo, SubscriptionStatus};
+    /// use up_rust::{communication::SubscriptionStatus, UUri};
+    /// use up_rust::core::usubscription::SubscriptionInfo;
     ///
     /// let subscription_info = SubscriptionInfo::new(
     ///     UUri::try_from("/A100/1/9000").unwrap(),
@@ -135,6 +128,7 @@ impl SubscriptionInfo {
     ///     None,
     /// );
     /// assert!(subscription_info.has_status(SubscriptionStatus::Subscribed));
+    /// assert!(!subscription_info.has_status(SubscriptionStatus::Unsubscribed));
     /// ```
     #[must_use]
     pub fn has_status(&self, state: SubscriptionStatus) -> bool {
@@ -142,114 +136,13 @@ impl SubscriptionInfo {
     }
 }
 
-impl TryFrom<&crate::up_core_api::usubscription::Subscription> for SubscriptionInfo {
-    type Error = UStatus;
-    fn try_from(
-        subscription: &crate::up_core_api::usubscription::Subscription,
-    ) -> Result<Self, Self::Error> {
-        let topic = subscription
-            .topic
-            .as_ref()
-            .ok_or(UStatus::fail_with_code(
-                UCode::InvalidArgument,
-                "topic missing",
-            ))
-            .and_then(|t| {
-                UUri::try_from(t)
-                    .map_err(|_| UStatus::fail_with_code(UCode::InvalidArgument, "invalid topic"))
-            })?;
-        let subscriber = subscription
-            .subscriber
-            .as_ref()
-            .and_then(|s| s.uri.as_ref())
-            .ok_or(UStatus::fail_with_code(
-                UCode::InvalidArgument,
-                "subscriber missing",
-            ))
-            .and_then(|s| {
-                UUri::try_from(s).map_err(|_| {
-                    UStatus::fail_with_code(UCode::InvalidArgument, "invalid subscriber")
-                })
-            })?;
-        let status = subscription
-            .status
-            .as_ref()
-            .map(SubscriptionStatus::from)
-            .ok_or(UStatus::fail_with_code(
-                UCode::InvalidArgument,
-                "status missing",
-            ))?;
-        subscription
-            .attributes
-            .as_ref()
-            .ok_or_else(|| UStatus::fail_with_code(UCode::InvalidArgument, "missing attributes"))
-            .map(|attributes| {
-                let expiration = attributes.expire.as_ref().map(|ts| ts.seconds as u64);
-                SubscriptionInfo::new(
-                    topic,
-                    subscriber,
-                    status,
-                    expiration,
-                    attributes.sample_period_ms,
-                )
-            })
-    }
-}
-
-impl TryFrom<&crate::up_core_api::usubscription::Update> for SubscriptionInfo {
-    type Error = UStatus;
-    fn try_from(update: &crate::up_core_api::usubscription::Update) -> Result<Self, Self::Error> {
-        let topic = update
-            .topic
-            .as_ref()
-            .ok_or(UStatus::fail_with_code(
-                UCode::InvalidArgument,
-                "topic missing",
-            ))
-            .and_then(|t| {
-                UUri::try_from(t)
-                    .map_err(|_| UStatus::fail_with_code(UCode::InvalidArgument, "invalid topic"))
-            })?;
-        let subscriber = update
-            .subscriber
-            .as_ref()
-            .and_then(|s| s.uri.as_ref())
-            .ok_or(UStatus::fail_with_code(
-                UCode::InvalidArgument,
-                "subscriber missing",
-            ))
-            .and_then(|s| {
-                UUri::try_from(s).map_err(|_| {
-                    UStatus::fail_with_code(UCode::InvalidArgument, "invalid subscriber")
-                })
-            })?;
-        let status =
-            update
-                .status
-                .as_ref()
-                .map(SubscriptionStatus::from)
-                .ok_or(UStatus::fail_with_code(
-                    UCode::InvalidArgument,
-                    "status missing",
-                ))?;
-        let attribs = update.attributes.get_or_default();
-        let expiration = attribs.expire.as_ref().map(|ts| ts.seconds as u64);
-        Ok(SubscriptionInfo::new(
-            topic,
-            subscriber,
-            status,
-            expiration,
-            attribs.sample_period_ms,
-        ))
-    }
-}
-
+/// Potential reasons for resetting the uSubscription service.
 #[derive(Debug, PartialEq)]
 #[repr(C)]
 pub enum ResetReason {
-    Unspecified = Code::UNSPECIFIED as isize,
-    FactoryReset = Code::FACTORY_RESET as isize,
-    CorruptedData = Code::CORRUPTED_DATA as isize,
+    Unspecified,
+    FactoryReset,
+    CorruptedData,
 }
 
 /// Gets a UUri referring to one of the local uSubscription service's resources.
@@ -277,6 +170,13 @@ pub fn usubscription_uri(resource_id: u16) -> UUri {
 ///
 /// Please refer to the [uSubscription service specification](https://github.com/eclipse-uprotocol/up-spec/blob/main/up-l3/usubscription/v3/README.adoc)
 /// for details.
+///
+/// **Note** that in contrast to the uSubscription service specification, the functions defined in this trait only
+/// support commonly used input and output parameters of the operations defined in the specification. This is mainly
+/// due to the fact, that for many of the other parameters defined in the specification, it is not entirely clear if
+/// and how they should be used in practice. The next version of the uSubscription service specification will
+/// include a more detailed description of the operations and their parameters, which will then be reflected in the
+/// next version of this trait.
 #[cfg_attr(test, automock)]
 #[async_trait]
 pub trait USubscription: Send + Sync {
@@ -285,11 +185,11 @@ pub trait USubscription: Send + Sync {
     /// # Parameters
     ///
     /// * `topic` - The topic to subscribe to.
-    /// * `expiration` - The point in time at which the subscription expires (seconds since Unix epoch).
+    /// * `expiration` - The point in time at which the subscription expires (milliseconds since Unix epoch).
     ///   If not specified, the subscription is valid until explicitly unsubscribed.
-    /// * `min_sample_period` - The minimum time between two events that should be maintained for remote
-    ///   only topics. Device dispatchers (i.e. streamers) use this attribute to reduce the publication rates of
-    ///   events sent between devices.
+    /// * `min_sample_period` - The minimum duration (in seconds) between two events that should be maintained
+    ///   for remote only topics. Device dispatchers (i.e. streamers) use this attribute to reduce the
+    ///   publication rates of events sent between devices.
     ///   This attribute is commonly used for mobile/cloud components subscribing to vehicle topics that are published
     ///   at a high rate. If the desired sampling period set by the subscriber is lower than the original publisher's
     ///   publication period, the attribute is ignored.
@@ -297,7 +197,7 @@ pub trait USubscription: Send + Sync {
     ///
     /// # Returns
     ///
-    /// * The outcome of the attempt to establish the subscription.
+    /// The outcome of the attempt to establish the subscription.
     async fn subscribe(
         &self,
         topic: &UUri,
@@ -305,7 +205,7 @@ pub trait USubscription: Send + Sync {
         min_sample_period: Option<u32>,
     ) -> Result<SubscriptionStatus, UStatus>;
 
-    /// Unsubscribes from a topic.
+    /// Unsubscribes this client from a topic.
     ///
     /// # Parameters
     ///
@@ -313,7 +213,7 @@ pub trait USubscription: Send + Sync {
     ///
     /// # Errors
     ///
-    /// returns an error if the attempt has failed.
+    /// Returns an error if the attempt to unsubscribe has failed.
     async fn unsubscribe(&self, topic: &UUri) -> Result<(), UStatus>;
 
     /// Gets all (currently) active subscriptions for a given topic.
@@ -324,7 +224,7 @@ pub trait USubscription: Send + Sync {
     ///
     /// # Errors
     ///
-    /// returns an error if the attempt to retrieve the subscriptions has failed.
+    /// Returns an error if the attempt to retrieve the subscriptions has failed.
     async fn fetch_subscriptions_by_topic(
         &self,
         topic: &UUri,
@@ -338,13 +238,13 @@ pub trait USubscription: Send + Sync {
     ///
     /// # Errors
     ///
-    /// returns an error if the attempt to retrieve the subscriptions has failed.
+    /// Returns an error if the attempt to retrieve the subscriptions has failed.
     async fn fetch_subscriptions_by_subscriber(
         &self,
         subscriber: &UUri,
     ) -> Result<Vec<SubscriptionInfo>, UStatus>;
 
-    /// Registers for notifications about changes subscription status for a given topic.
+    /// Registers this client for notifications about changes to the subscription status for a given topic.
     ///
     /// # Parameters
     ///
@@ -352,10 +252,10 @@ pub trait USubscription: Send + Sync {
     ///
     /// # Errors
     ///
-    /// returns an error if the attempt to register for notifications has failed.
+    /// Returns an error if the attempt to register for notifications has failed.
     async fn register_for_notifications(&self, topic: &UUri) -> Result<(), UStatus>;
 
-    /// Unregisters from notifications about changes subscription status for a given topic.
+    /// Unregisters this client from notifications about changes to the subscription status for a given topic.
     ///
     /// # Parameters
     ///
@@ -363,22 +263,22 @@ pub trait USubscription: Send + Sync {
     ///
     /// # Errors
     ///
-    /// returns an error if the attempt to unregister from notifications has failed.
+    /// Returns an error if the attempt to unregister from notifications has failed.
     async fn unregister_for_notifications(&self, topic: &UUri) -> Result<(), UStatus>;
 
     /// Fetches a list of subscribers that are currently subscribed to a given topic.
     ///
     /// # Parameters
     ///
-    /// * `topic` - The topic.
+    /// * `topic` - The topic to fetch subscriptions for.
     ///
     /// # Returns
     ///
-    /// a list of URIs representing the uEntities that are subscribed to the given topic.
+    /// A list of URIs representing the uEntities that are subscribed to the given topic.
     ///
     /// # Errors
     ///
-    /// returns an error if the attempt to fetch subscribers has failed.
+    /// Returns an error if the attempt to fetch subscribers has failed.
     async fn fetch_subscribers(&self, topic: &UUri) -> Result<Vec<UUri>, UStatus>;
 
     /// Flushes all stored subscription information, including any persistently stored subscriptions.
@@ -387,12 +287,12 @@ pub trait USubscription: Send + Sync {
     ///
     /// * `reason` - The reason for the reset.
     /// * `message` - An optional human-readable message providing additional context about the reset.
-    /// * `before` - An optional timestamp (seconds since Unix epoch). All subscriptions created before
+    /// * `before` - An optional timestamp (milliseconds since Unix epoch). All subscriptions created before
     ///   this timestamp will be removed.
     ///
     /// # Errors
     ///
-    /// returns an error if the attempt to reset has failed.
+    /// Returns an error if the attempt to reset has failed.
     async fn reset(
         &self,
         reason: ResetReason,

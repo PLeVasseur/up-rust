@@ -11,13 +11,13 @@
  * SPDX-License-Identifier: Apache-2.0
  ********************************************************************************/
 
-use protobuf_codegen::Customize;
-
+#[cfg(feature = "up-core-types")]
 const UPROTOCOL_BASE_URI: &str = "up-spec/up-core-api/";
 #[cfg(feature = "payload-contract-fixtures")]
 const PAYLOAD_CONTRACT_PROTO_BASE_URI: &str = "test-fixtures/proto/";
 
-fn main() -> Result<(), Box<dyn std::error::Error>> {
+#[cfg(feature = "up-core-types")]
+fn proto_api() -> Result<(), Box<dyn std::error::Error>> {
     let files = vec![
         // uProtocol-project proto definitions
         format!("{}uprotocol/uoptions.proto", UPROTOCOL_BASE_URI),
@@ -38,7 +38,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         format!("{}uprotocol/v1/ustatus.proto", UPROTOCOL_BASE_URI),
         // not used in the SDK yet, but for completeness sake
         format!("{}uprotocol/v1/file.proto", UPROTOCOL_BASE_URI),
-        // optional up-core-api features
+        // optional uProtocol Core API types
         #[cfg(feature = "udiscovery")]
         format!(
             "{}uprotocol/core/udiscovery/v3/udiscovery.proto",
@@ -49,21 +49,22 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
             "{}uprotocol/core/usubscription/v3/usubscription.proto",
             UPROTOCOL_BASE_URI
         ),
-        #[cfg(feature = "utwin")]
-        format!("{}uprotocol/core/utwin/v2/utwin.proto", UPROTOCOL_BASE_URI),
     ];
 
     protobuf_codegen::Codegen::new()
         .protoc()
         // use vendored protoc instead of relying on user provided protobuf installation
         .protoc_path(&protoc_bin_vendored::protoc_bin_path().unwrap())
-        .customize(Customize::default().tokio_bytes(true))
+        .customize(protobuf_codegen::Customize::default().tokio_bytes(true))
         .include(UPROTOCOL_BASE_URI)
         .inputs(files.as_slice())
         .cargo_out_dir("uprotocol")
         .run_from_script();
+    Ok(())
+}
 
-    #[cfg(feature = "cloudevents")]
+#[cfg(feature = "cloudevents")]
+fn cloudevents() -> Result<(), Box<dyn std::error::Error>> {
     protobuf_codegen::Codegen::new()
         .protoc()
         // use vendored protoc instead of relying on user provided protobuf installation
@@ -72,9 +73,6 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         .inputs(["proto/io/cloudevents/v1/cloudevents.proto"])
         .cargo_out_dir("cloudevents")
         .run_from_script();
-
-    #[cfg(feature = "payload-contract-fixtures")]
-    generate_payload_contract_fixtures()?;
 
     Ok(())
 }
@@ -103,11 +101,24 @@ fn generate_payload_contract_fixtures() -> Result<(), Box<dyn std::error::Error>
     protobuf_codegen::Codegen::new()
         .protoc()
         .protoc_path(&protoc_bin_vendored::protoc_bin_path()?)
-        .customize(Customize::default())
+        .customize(protobuf_codegen::Customize::default())
         .include(PAYLOAD_CONTRACT_PROTO_BASE_URI)
         .inputs(inputs)
         .cargo_out_dir("payload_contract_fixtures")
         .run_from_script();
+
+    Ok(())
+}
+
+fn main() -> Result<(), Box<dyn std::error::Error>> {
+    #[cfg(feature = "up-core-types")]
+    proto_api()?;
+
+    #[cfg(feature = "cloudevents")]
+    cloudevents()?;
+
+    #[cfg(feature = "payload-contract-fixtures")]
+    generate_payload_contract_fixtures()?;
 
     Ok(())
 }

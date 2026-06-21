@@ -557,7 +557,9 @@ async fn zero_copy_pull_receive_rejects_wrong_wire_before_public_exposure() {
     };
 
     assert_eq!(status.get_code(), UCode::InvalidArgument);
-    assert!(status.get_message().contains("wrong selected wire"));
+    assert!(status
+        .get_message()
+        .is_some_and(|message| message.contains("wrong selected wire")));
 }
 
 #[tokio::test]
@@ -576,7 +578,9 @@ async fn zero_copy_pull_receive_rejects_payload_family_mismatch_before_public_ex
     };
 
     assert_eq!(status.get_code(), UCode::InvalidArgument);
-    assert!(status.get_message().contains("payload family mismatch"));
+    assert!(status
+        .get_message()
+        .is_some_and(|message| message.contains("payload family mismatch")));
 }
 
 #[tokio::test]

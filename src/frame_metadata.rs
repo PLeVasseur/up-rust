@@ -378,7 +378,7 @@ mod tests {
 
         let metadata = try_project_umessage_to_frame_metadata(&message).expect("metadata");
 
-        assert_eq!(message.payload(), Some([].as_slice()));
+        assert_eq!(message.payload(), Some(Bytes::new()));
         assert_eq!(
             metadata.payload_encoding(),
             Some(&PayloadEncoding::Standard(UPayloadFormat::Raw))
@@ -386,7 +386,7 @@ mod tests {
 
         let projected =
             try_project_frame_to_umessage(metadata, Some(Bytes::new())).expect("projected message");
-        assert_eq!(projected.payload(), Some([].as_slice()));
+        assert_eq!(projected.payload(), Some(Bytes::new()));
         assert_eq!(projected.payload_format(), Some(UPayloadFormat::Raw));
     }
 
@@ -414,7 +414,7 @@ mod tests {
             let projected =
                 try_project_frame_to_umessage(metadata, Some(Bytes::from_static(b"payload")))
                     .expect("projected message");
-            assert_eq!(projected.payload(), Some(b"payload".as_slice()));
+            assert_eq!(projected.payload(), Some(Bytes::from_static(b"payload")));
             assert_eq!(projected.payload_format(), Some(format));
         }
     }

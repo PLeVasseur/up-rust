@@ -14,24 +14,188 @@
 use std::sync::Arc;
 
 use async_trait::async_trait;
-use protobuf::{well_known_types::timestamp::Timestamp, Enum};
+use protobuf::well_known_types::timestamp::Timestamp;
 
 use crate::{
+    communication::{CallOptions, RpcClient, SubscriptionStatus},
     core::usubscription::{
-        usubscription_uri, ResetReason, SubscriptionInfo, SubscriptionStatus, USubscription,
+        usubscription_uri, ResetReason, SubscriptionInfo, USubscription,
         RESOURCE_ID_FETCH_SUBSCRIBERS, RESOURCE_ID_FETCH_SUBSCRIPTIONS,
         RESOURCE_ID_REGISTER_FOR_NOTIFICATIONS, RESOURCE_ID_RESET, RESOURCE_ID_SUBSCRIBE,
         RESOURCE_ID_UNREGISTER_FOR_NOTIFICATIONS, RESOURCE_ID_UNSUBSCRIBE,
     },
     up_core_api::usubscription::{
         FetchSubscribersResponse, FetchSubscriptionsRequest, FetchSubscriptionsResponse,
-        NotificationsResponse, ResetResponse, SubscribeAttributes, SubscriptionRequest,
-        SubscriptionResponse, UnsubscribeRequest, UnsubscribeResponse,
+        NotificationsResponse, ResetResponse, SubscribeAttributes, Subscription,
+        SubscriptionRequest, SubscriptionResponse, UnsubscribeRequest, UnsubscribeResponse, Update,
     },
     UCode, UStatus, UUri,
 };
 
-use super::{CallOptions, RpcClient};
+fn unix_epoch_millis_as_protobuf_timestamp(
+    millis: Option<u64>,
+) -> Result<Option<Timestamp>, UStatus> {
+    if let Some(milliseconds) = millis {
+        // this will always yield a valid Timestamp as the maximum value of u64 (2^64 - 1) divided by 1000
+        // is less than the maximum number of milliseconds that can be represented in an i64 (2^63 - 1)
+        let seconds = (milliseconds / 1000_u64) as i64;
+        let nanos = (milliseconds % 1000)
+            .checked_mul(1_000_000)
+            .ok_or_else(|| {
+                UStatus::fail_with_code(UCode::InvalidArgument, "timestamp out of range")
+            })
+            .and_then(|s| {
+                i32::try_from(s).map_err(|_| {
+                    UStatus::fail_with_code(UCode::InvalidArgument, "timestamp out of range")
+                })
+            })?;
+        Ok(Some(Timestamp {
+            seconds,
+            nanos,
+            ..Default::default()
+        }))
+    } else {
+        Ok(None)
+    }
+}
+
+fn protobuf_timestamp_as_unix_epoch_milliseconds(
+    ts: Option<&Timestamp>,
+) -> Result<Option<u64>, UStatus> {
+    if let Some(ts) = ts {
+        let err = || {
+            UStatus::fail_with_code(
+                UCode::InvalidArgument,
+                "invalid timestamp: seconds value out of range",
+            )
+        };
+        if ts.nanos < 0 || ts.nanos >= 1_000_000_000 {
+            return Err(UStatus::fail_with_code(
+                UCode::InvalidArgument,
+                "invalid timestamp: nanos value out of range",
+            ));
+        }
+        u64::try_from(ts.seconds)
+            .ok()
+            .and_then(|s| s.checked_mul(1000))
+            .and_then(|ms| ms.checked_add(ts.nanos as u64 / 1_000_000))
+            .ok_or_else(err)
+            .map(Some)
+    } else {
+        Ok(None)
+    }
+}
+
+impl TryFrom<&Subscription> for SubscriptionInfo {
+    type Error = UStatus;
+
+    fn try_from(subscription_proto: &Subscription) -> Result<Self, Self::Error> {
+        let topic = subscription_proto
+            .topic
+            .as_ref()
+            .ok_or(UStatus::fail_with_code(
+                UCode::InvalidArgument,
+                "topic missing",
+            ))
+            .and_then(|t| {
+                UUri::try_from(t)
+                    .map_err(|_| UStatus::fail_with_code(UCode::InvalidArgument, "invalid topic"))
+            })?;
+        let subscriber = subscription_proto
+            .subscriber
+            .as_ref()
+            .and_then(|s| s.uri.as_ref())
+            .ok_or(UStatus::fail_with_code(
+                UCode::InvalidArgument,
+                "subscriber missing",
+            ))
+            .and_then(|s| {
+                UUri::try_from(s).map_err(|_| {
+                    UStatus::fail_with_code(UCode::InvalidArgument, "invalid subscriber")
+                })
+            })?;
+        let status = subscription_proto
+            .status
+            .as_ref()
+            .ok_or(UStatus::fail_with_code(
+                UCode::InvalidArgument,
+                "status missing",
+            ))
+            .and_then(SubscriptionStatus::try_from)?;
+        subscription_proto
+            .attributes
+            .as_ref()
+            .ok_or_else(|| UStatus::fail_with_code(UCode::InvalidArgument, "missing attributes"))
+            .and_then(|attributes| {
+                let expiration =
+                    protobuf_timestamp_as_unix_epoch_milliseconds(attributes.expire.as_ref())?;
+                Ok(SubscriptionInfo::new(
+                    topic,
+                    subscriber,
+                    status,
+                    expiration,
+                    attributes.sample_period_ms,
+                ))
+            })
+    }
+}
+
+impl TryFrom<&Update> for SubscriptionInfo {
+    type Error = UStatus;
+    fn try_from(update_proto: &Update) -> Result<Self, Self::Error> {
+        let topic = update_proto
+            .topic
+            .as_ref()
+            .ok_or(UStatus::fail_with_code(
+                UCode::InvalidArgument,
+                "topic missing",
+            ))
+            .and_then(|t| {
+                UUri::try_from(t)
+                    .map_err(|_| UStatus::fail_with_code(UCode::InvalidArgument, "invalid topic"))
+            })?;
+        let subscriber = update_proto
+            .subscriber
+            .as_ref()
+            .and_then(|s| s.uri.as_ref())
+            .ok_or(UStatus::fail_with_code(
+                UCode::InvalidArgument,
+                "subscriber missing",
+            ))
+            .and_then(|s| {
+                UUri::try_from(s).map_err(|_| {
+                    UStatus::fail_with_code(UCode::InvalidArgument, "invalid subscriber")
+                })
+            })?;
+        let status = update_proto
+            .status
+            .as_ref()
+            .ok_or(UStatus::fail_with_code(
+                UCode::InvalidArgument,
+                "status missing",
+            ))
+            .and_then(SubscriptionStatus::try_from)?;
+        let attribs = update_proto.attributes.get_or_default();
+        let expiration = protobuf_timestamp_as_unix_epoch_milliseconds(attribs.expire.as_ref())?;
+        Ok(SubscriptionInfo::new(
+            topic,
+            subscriber,
+            status,
+            expiration,
+            attribs.sample_period_ms,
+        ))
+    }
+}
+
+impl From<ResetReason> for crate::up_core_api::usubscription::reset_request::reason::Code {
+    fn from(reason: ResetReason) -> Self {
+        match reason {
+            ResetReason::Unspecified => Self::UNSPECIFIED,
+            ResetReason::FactoryReset => Self::FACTORY_RESET,
+            ResetReason::CorruptedData => Self::CORRUPTED_DATA,
+        }
+    }
+}
 
 /// A [`USubscription`] client implementation for invoking operations of a local USubscription service.
 ///
@@ -83,7 +247,7 @@ impl USubscription for RpcClientUSubscription {
     async fn subscribe(
         &self,
         topic: &UUri,
-        expiration: Option<u64>,
+        expiration: Option<u64>, // millis since Unix Epoch
         min_sample_period: Option<u32>,
     ) -> Result<SubscriptionStatus, UStatus> {
         let subscription_request = SubscriptionRequest {
@@ -91,12 +255,7 @@ impl USubscription for RpcClientUSubscription {
             attributes: match (expiration, min_sample_period) {
                 (None, None) => None.into(),
                 _ => Some(SubscribeAttributes {
-                    expire: expiration
-                        .map(|ts| Timestamp {
-                            seconds: ts as i64,
-                            ..Default::default()
-                        })
-                        .into(),
+                    expire: unix_epoch_millis_as_protobuf_timestamp(expiration)?.into(),
                     sample_period_ms: min_sample_period,
                     ..Default::default()
                 })
@@ -119,7 +278,7 @@ impl USubscription for RpcClientUSubscription {
                             "uSubscription returned invalid response: no subscription status",
                         ))
                     },
-                    |status| Ok(SubscriptionStatus::from(status)),
+                    SubscriptionStatus::try_from,
                 )?)
             })
             .map_err(UStatus::from)
@@ -251,26 +410,18 @@ impl USubscription for RpcClientUSubscription {
         &self,
         reason: ResetReason,
         message: Option<String>,
-        before: Option<u64>,
+        before: Option<u64>, // millis since Unix Epoch
     ) -> Result<(), UStatus> {
-        let code =
-            crate::up_core_api::usubscription::reset_request::reason::Code::from_i32(reason as i32)
-                .ok_or_else(|| {
-                    UStatus::fail_with_code(UCode::InvalidArgument, "invalid reset reason")
-                })?;
+        let before_ts = unix_epoch_millis_as_protobuf_timestamp(before)?;
         let reset_request = crate::up_core_api::usubscription::ResetRequest {
             reason: Some(crate::up_core_api::usubscription::reset_request::Reason {
-                code: code.into(),
+                code: crate::up_core_api::usubscription::reset_request::reason::Code::from(reason)
+                    .into(),
                 message,
                 ..Default::default()
             })
             .into(),
-            before: before
-                .map(|b| Timestamp {
-                    seconds: b as i64,
-                    ..Default::default()
-                })
-                .into(),
+            before: before_ts.into(),
             ..Default::default()
         };
         self.rpc_client
@@ -291,7 +442,7 @@ mod tests {
 
     use super::*;
     use crate::{
-        communication::{rpc::MockRpcClient, UPayload},
+        communication::{MockRpcClient, UPayload},
         up_core_api::usubscription::{
             fetch_subscriptions_request::Request, FetchSubscribersRequest, NotificationsRequest,
             ResetRequest,
@@ -299,6 +450,48 @@ mod tests {
         UCode, UUri,
     };
     use std::sync::Arc;
+
+    #[test]
+    fn test_unix_epoch_millis_as_protobuf_timestamp() {
+        assert!(
+            unix_epoch_millis_as_protobuf_timestamp(Some(1_000)).is_ok_and(|ts| {
+                ts == Some(Timestamp {
+                    seconds: 1,
+                    nanos: 0,
+                    ..Default::default()
+                })
+            })
+        );
+
+        assert!(
+            unix_epoch_millis_as_protobuf_timestamp(Some(1_234)).is_ok_and(|ts| {
+                ts == Some(Timestamp {
+                    seconds: 1,
+                    nanos: 234_000_000,
+                    ..Default::default()
+                })
+            })
+        );
+
+        assert!(unix_epoch_millis_as_protobuf_timestamp(Some(u64::MAX)).is_ok());
+        assert!(unix_epoch_millis_as_protobuf_timestamp(None).is_ok_and(|ts| ts.is_none()));
+    }
+
+    #[test_case::test_case(10, 234_000_000 => matches Ok(Some(10_234)); "succeeds for valid timestamp")]
+    #[test_case::test_case(-10, 234_000_000 => matches Err(UStatus {..}); "fails for negative seconds")]
+    #[test_case::test_case(10, -1 => matches Err(UStatus {..}); "fails for nanos exceeding lower bound")]
+    #[test_case::test_case(10, 1_000_000_000 => matches Err(UStatus {..}); "fails for nanos exeeding upper bound")]
+    fn test_protobuf_timestamp_as_unix_epoch_milliseconds(
+        seconds: i64,
+        nanos: i32,
+    ) -> Result<Option<u64>, UStatus> {
+        let timestamp = Timestamp {
+            seconds,
+            nanos,
+            ..Default::default()
+        };
+        protobuf_timestamp_as_unix_epoch_milliseconds(Some(&timestamp))
+    }
 
     #[tokio::test]
     async fn test_subscribe_invokes_rpc_client() {
