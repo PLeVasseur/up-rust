@@ -28,6 +28,7 @@ impl SerializationError {
     }
 }
 
+#[cfg(feature = "protobuf-support")]
 impl From<protobuf::Error> for SerializationError {
     fn from(err: protobuf::Error) -> Self {
         Self::new(format!("protobuf error: {}", err))

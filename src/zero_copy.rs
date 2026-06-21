@@ -32,6 +32,8 @@ use tracing::warn;
     feature = "expert-unsafe-payloads"
 ))]
 use crate::payload::UnsafeStablePayloadTxSlot;
+#[cfg(feature = "up-core-types")]
+use crate::UHasWire;
 #[cfg(feature = "owned-frame-transport")]
 use crate::UOwnedFrame;
 use crate::{
@@ -41,9 +43,10 @@ use crate::{
         StablePayload, StablePayloadInit, UWireError,
     },
     utransport::verify_filter_criteria,
-    UCode, UFrameMetadata, UFrameMetadataError, UHasWire, UStatus, UUri, UWireLoan,
-    UWireLoanUninit,
+    UCode, UFrameMetadata, UFrameMetadataError, UStatus, UUri,
 };
+#[cfg(feature = "up-core-types")]
+use crate::{UWireLoan, UWireLoanUninit};
 
 mod zero_copy_transport_sealed {
     pub trait Sealed {}
@@ -745,6 +748,7 @@ pub trait UZeroCopyTransportExt: UZeroCopyTransport {
     ///
     /// Returns an error if the selected wire does not successfully loan, encode,
     /// or send the payload through the underlying transport.
+    #[cfg(feature = "up-core-types")]
     async fn send_loaned_payload<T>(
         &self,
         metadata: UFrameMetadata,
@@ -812,6 +816,7 @@ pub trait UZeroCopyUninitTransportExt: UZeroCopyUninitTransport {
     ///
     /// Returns an error if metadata validation, loaning, initialization, or send
     /// fails.
+    #[cfg(feature = "up-core-types")]
     async fn send_uninit_loaned_payload<T>(
         &self,
         metadata: UFrameMetadata,
@@ -902,6 +907,7 @@ pub trait UZeroCopyUninitTransportExt: UZeroCopyUninitTransport {
     ///
     /// Returns an error if metadata validation, stable initialization, loaning, or
     /// send fails.
+    #[cfg(feature = "up-core-types")]
     async fn send_uninit_stable_payload<T>(
         &self,
         metadata: UFrameMetadata,

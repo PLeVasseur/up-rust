@@ -37,7 +37,7 @@ rust-version = "1.88"
 version = "0.10.0-SNAPSHOT"
 
 [features]
-default = ["up-core-types"]
+default = []
 cloudevents = ["protobuf-support"]
 communication = ["up-l2-notifier", "up-l2-publisher", "up-l2-subscriber", "up-l2-rpc-client", "up-l2-rpc-server"]
 expert-unsafe-payloads = [
@@ -45,12 +45,12 @@ expert-unsafe-payloads = [
     "unsafe-stable-payload-init",
     "unsafe-uninit-payload-bytes",
 ]
-owned-frame-transport = []
+owned-frame-transport = ["up-core-types"]
 payload-contract-fixtures = ["protobuf-wire", "dep:serde", "dep:serde_json", "dep:sha2"]
 payload-contract-large-fixtures = ["payload-contract-fixtures"]
 payload-contract-simulator-fixtures = ["payload-contract-large-fixtures"]
-protobuf-support = []
-protobuf-wire = ["protobuf-support"]
+protobuf-support = ["dep:protobuf"]
+protobuf-wire = ["up-core-types"]
 symphony = ["up-l2-rpc-server", "dep:serde", "dep:serde_json", "dep:symphony"]
 test-util = ["dep:mockall"]
 up-core-types = ["protobuf-support"]
@@ -72,7 +72,7 @@ async-trait = { version = "0.1" }
 bytes = { version = "1.11.1" }
 mediatype = "0.20"
 mockall = { version = "0.13", optional = true }
-protobuf = { version = "3.7.2", features = ["with-bytes"] }
+protobuf = { version = "3.7.2", features = ["with-bytes"], optional = true }
 # https://rustsec.org/advisories/RUSTSEC-2026-0097
 rand = { version = "0.9.3" }
 regex = { version = "1.11" }
@@ -183,6 +183,22 @@ required-features = ["up-core-types"]
 name = "tck_uuid"
 harness = false   # allows Cucumber to print output instead of libtest
 required-features = ["up-core-types"]
+
+[[test]]
+name = "payload_contract"
+required-features = ["payload-contract-fixtures"]
+
+[[test]]
+name = "wire_metadata_conformance"
+required-features = ["up-core-types"]
+
+[[test]]
+name = "wire_transport_adapter"
+required-features = ["protobuf-wire"]
+
+[[test]]
+name = "wire_transport_trybuild"
+required-features = ["protobuf-wire"]
 
 [lints.rust]
 # this prevents cargo from complaining about code blocks

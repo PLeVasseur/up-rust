@@ -11,20 +11,40 @@
  * SPDX-License-Identifier: Apache-2.0
  ********************************************************************************/
 
-use std::{error::Error, fmt::Display, io::Read};
+#[cfg(any(feature = "protobuf-support", feature = "up-core-types"))]
+use std::io::Read;
+#[cfg(feature = "up-core-types")]
+use std::{error::Error, fmt::Display};
 
+#[cfg(any(feature = "protobuf-support", feature = "up-core-types"))]
+use crate::PayloadEncoding;
+#[cfg(feature = "protobuf-support")]
+use crate::PayloadFormat;
 use crate::{
     ByteBackedStablePayload, DecodePayload, EncodePayload, LoanPayload, LoanUninitPayload,
-    PayloadEncoding, PayloadFormat, PayloadLayout, ProtobufMappable, ProtobufPayload,
-    ReadDecodePayload, SerializationError, StableContainerPayload, UAttributes, UCode,
-    UFrameMetadata, UFrameMetadataError, UPayloadFormat, UStatus, UWireError,
+    ReadDecodePayload, StableContainerPayload,
+};
+#[cfg(feature = "protobuf-support")]
+use crate::{PayloadLayout, UWireError};
+#[cfg(feature = "protobuf-support")]
+use crate::{ProtobufMappable, ProtobufPayload};
+#[cfg(feature = "up-core-types")]
+use crate::{
+    SerializationError, UAttributes, UCode, UFrameMetadata, UFrameMetadataError, UPayloadFormat,
+    UStatus,
 };
 
+#[cfg(feature = "up-core-types")]
 const MAGIC: &[u8; 4] = b"UPWM";
+#[cfg(feature = "up-core-types")]
 const ID_REF_COMPACT: u8 = 0x00;
+#[cfg(feature = "up-core-types")]
 const ID_REF_LITERAL: u8 = 0x01;
+#[cfg(feature = "up-core-types")]
 const ENCODING_NONE: u8 = 0;
+#[cfg(feature = "up-core-types")]
 const ENCODING_STANDARD: u8 = 1;
+#[cfg(feature = "up-core-types")]
 const ENCODING_CUSTOM: u8 = 2;
 
 /// First supported native-prefix metadata byte-format version.
@@ -195,6 +215,7 @@ impl UWire for ProtobufWire {
     const FORMAT_VERSION: u16 = FORMAT_VERSION;
 }
 
+#[cfg(feature = "protobuf-support")]
 impl PayloadFormat for ProtobufWire {
     fn name() -> &'static str {
         ProtobufPayload::name()
@@ -205,6 +226,7 @@ impl PayloadFormat for ProtobufWire {
     }
 }
 
+#[cfg(feature = "protobuf-support")]
 impl<T> EncodePayload<T> for ProtobufWire
 where
     T: ProtobufMappable,
@@ -218,6 +240,7 @@ where
     }
 }
 
+#[cfg(feature = "protobuf-support")]
 impl<'a, T> DecodePayload<'a, T> for ProtobufWire
 where
     T: ProtobufMappable,
@@ -227,6 +250,7 @@ where
     }
 }
 
+#[cfg(feature = "protobuf-support")]
 impl<T> ReadDecodePayload<T> for ProtobufWire
 where
     T: ProtobufMappable,
@@ -248,6 +272,7 @@ impl UWire for StableContainerWireFormat {
 }
 
 /// Metadata-prefix encode/decode helper trait for selected wires.
+#[cfg(feature = "up-core-types")]
 pub trait UWireMetadata: UWire {
     /// Encodes native frame metadata for this selected wire.
     ///
@@ -275,6 +300,7 @@ pub trait UWireMetadata: UWire {
     }
 }
 
+#[cfg(feature = "up-core-types")]
 impl<W> UWireMetadata for W where W: UWire {}
 
 /// Wire-level encode helper alias for existing payload codecs.
@@ -328,6 +354,7 @@ where
 }
 
 /// Errors returned by native-prefix selected-wire metadata handling.
+#[cfg(feature = "up-core-types")]
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub enum UWireMetadataError {
     /// The input did not start with the native-prefix metadata magic bytes.
@@ -358,6 +385,7 @@ pub enum UWireMetadataError {
     SerializationError(String),
 }
 
+#[cfg(feature = "up-core-types")]
 impl Display for UWireMetadataError {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
@@ -392,20 +420,24 @@ impl Display for UWireMetadataError {
     }
 }
 
+#[cfg(feature = "up-core-types")]
 impl Error for UWireMetadataError {}
 
+#[cfg(feature = "up-core-types")]
 impl From<UFrameMetadataError> for UWireMetadataError {
     fn from(value: UFrameMetadataError) -> Self {
         Self::FrameMetadata(value.to_string())
     }
 }
 
+#[cfg(feature = "up-core-types")]
 impl From<SerializationError> for UWireMetadataError {
     fn from(value: SerializationError) -> Self {
         Self::SerializationError(value.to_string())
     }
 }
 
+#[cfg(feature = "up-core-types")]
 impl From<UWireMetadataError> for UStatus {
     fn from(value: UWireMetadataError) -> Self {
         UStatus::fail_with_code(UCode::InvalidArgument, value.to_string())
@@ -417,6 +449,7 @@ impl From<UWireMetadataError> for UStatus {
 /// # Errors
 ///
 /// Returns an error when metadata is invalid or cannot be serialized.
+#[cfg(feature = "up-core-types")]
 pub fn encode_frame_metadata<W>(metadata: &UFrameMetadata) -> Result<Vec<u8>, UWireMetadataError>
 where
     W: UWire,
@@ -441,6 +474,7 @@ where
 ///
 /// Returns an error when bytes are malformed, use an unsupported layout or
 /// version, or declare an incompatible wire or payload family.
+#[cfg(feature = "up-core-types")]
 pub fn decode_frame_metadata<W>(src: &[u8]) -> Result<UFrameMetadata, UWireMetadataError>
 where
     W: UWire,
@@ -491,11 +525,13 @@ where
     UFrameMetadata::new(attributes, payload_encoding).map_err(UWireMetadataError::from)
 }
 
+#[cfg(feature = "up-core-types")]
 fn write_identity_ref(out: &mut Vec<u8>, identity: WireIdentity) {
     out.push(ID_REF_COMPACT);
     write_u16(out, identity.compact_id());
 }
 
+#[cfg(feature = "up-core-types")]
 fn write_payload_encoding(
     out: &mut Vec<u8>,
     payload_encoding: Option<&PayloadEncoding>,
@@ -520,10 +556,12 @@ fn write_payload_encoding(
     Ok(())
 }
 
+#[cfg(feature = "up-core-types")]
 fn write_len_prefixed_str(out: &mut Vec<u8>, value: &str) -> Result<(), UWireMetadataError> {
     write_len_prefixed_bytes(out, value.as_bytes())
 }
 
+#[cfg(feature = "up-core-types")]
 fn write_len_prefixed_bytes(out: &mut Vec<u8>, value: &[u8]) -> Result<(), UWireMetadataError> {
     let len = u32::try_from(value.len()).map_err(|_| {
         UWireMetadataError::MalformedMetadata(format!(
@@ -536,23 +574,28 @@ fn write_len_prefixed_bytes(out: &mut Vec<u8>, value: &[u8]) -> Result<(), UWire
     Ok(())
 }
 
+#[cfg(feature = "up-core-types")]
 fn write_u16(out: &mut Vec<u8>, value: u16) {
     out.extend_from_slice(&value.to_le_bytes());
 }
 
+#[cfg(feature = "up-core-types")]
 fn write_u32(out: &mut Vec<u8>, value: u32) {
     out.extend_from_slice(&value.to_le_bytes());
 }
 
+#[cfg(feature = "up-core-types")]
 fn write_i32(out: &mut Vec<u8>, value: i32) {
     out.extend_from_slice(&value.to_le_bytes());
 }
 
+#[cfg(feature = "up-core-types")]
 struct MetadataReader<'a> {
     src: &'a [u8],
     pos: usize,
 }
 
+#[cfg(feature = "up-core-types")]
 impl<'a> MetadataReader<'a> {
     fn new(src: &'a [u8]) -> Self {
         Self { src, pos: 0 }
@@ -682,6 +725,7 @@ impl<'a> MetadataReader<'a> {
 
 #[cfg(test)]
 mod tests {
+    #[cfg(feature = "protobuf-support")]
     use protobuf::well_known_types::wrappers::StringValue;
 
     use super::*;
@@ -743,6 +787,7 @@ mod tests {
         assert_eq!(STABLE_CONTAINER_PAYLOAD_FAMILY_ID.compact_id(), 0x0004);
     }
 
+    #[cfg(feature = "protobuf-support")]
     #[test]
     fn protobuf_wire_delegates_application_payload_codec() {
         let value = StringValue {

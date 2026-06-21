@@ -82,19 +82,20 @@ pub use frame_metadata::{
 };
 
 pub mod wire;
+#[cfg(feature = "up-core-types")]
+pub use wire::{decode_frame_metadata, encode_frame_metadata, UWireMetadata, UWireMetadataError};
 pub use wire::{
-    decode_frame_metadata, encode_frame_metadata, ProtobufWire, StableContainerWireFormat,
-    UProtocolNativeWire, UWire, UWireDecode, UWireDecodeOwned, UWireEncode, UWireLoan,
-    UWireLoanUninit, UWireMetadata, UWireMetadataError, UWireReadDecode, WireCompatibility,
+    ProtobufWire, StableContainerWireFormat, UProtocolNativeWire, UWire, UWireDecode,
+    UWireDecodeOwned, UWireEncode, UWireLoan, UWireLoanUninit, UWireReadDecode, WireCompatibility,
     WireIdentity, WireIdentityRef, NATIVE_EXPLICIT_PAYLOAD_FAMILY_ID,
     NATIVE_PREFIX_METADATA_LAYOUT_ID, PROTOBUF_PAYLOAD_FAMILY_ID, PROTOBUF_WIRE_ID,
     STABLE_CONTAINER_PAYLOAD_FAMILY_ID, STABLE_CONTAINER_WIRE_ID, UPROTOCOL_NATIVE_WIRE_ID,
     XCDR_V2_PAYLOAD_FAMILY_ID, XCDR_V2_WIRE_ID,
 };
 
-#[cfg(feature = "owned-frame-transport")]
+#[cfg(all(feature = "owned-frame-transport", feature = "protobuf-support"))]
 pub mod frame_wire;
-#[cfg(feature = "owned-frame-transport")]
+#[cfg(all(feature = "owned-frame-transport", feature = "protobuf-support"))]
 pub use frame_wire::{ProtobufUMessageFrame, UFrameWireError, UFrameWireFormat};
 
 #[cfg(feature = "owned-frame-transport")]
@@ -169,11 +170,13 @@ pub use utransport::{
     UOwnedListener, UOwnedTransport, UOwnedTransportExt, UOwnedTransportImpl, ValidatedOwnedFrame,
 };
 
+#[cfg(feature = "up-core-types")]
 mod wire_transport;
 #[cfg(feature = "owned-frame-transport")]
 pub use wire_transport::{
     EncodedOwnedFrame, PreparedOwnedFrame, UEncodedOwnedListener, UOwnedTransportCore,
 };
+#[cfg(feature = "up-core-types")]
 pub use wire_transport::{
     PreparedTxLoanSpec, UEncodedLoanedRxFrame, UEncodedRxFrame, UEncodedZeroCopyListener, UHasWire,
     UWireRx, UWireTransport, UWithWire, UZeroCopyTransportCore, UZeroCopyUninitTransportCore,
@@ -188,7 +191,9 @@ pub(crate) mod up_core_api {
     include!(concat!(env!("OUT_DIR"), "/uprotocol/mod.rs"));
 }
 
+#[cfg(feature = "protobuf-support")]
 mod protobuf_mappable;
+#[cfg(feature = "protobuf-support")]
 pub use protobuf_mappable::ProtobufMappable;
 
 mod serialization_error;

@@ -23,10 +23,9 @@ use std::{
 use bytes::Bytes;
 use mediatype::ReadParams;
 
-use crate::{
-    zero_copy::LoanedPayloadUninitMut, PayloadEncoding, ProtobufMappable, UCode, UPayloadFormat,
-    UStatus,
-};
+#[cfg(feature = "protobuf-support")]
+use crate::ProtobufMappable;
+use crate::{zero_copy::LoanedPayloadUninitMut, PayloadEncoding, UCode, UPayloadFormat, UStatus};
 
 const STABLE_CONTAINER_ENCODING_ID: &str = "up.stable-container";
 const STABLE_CONTAINER_MEDIA_TYPE: &str = "application/vnd.uprotocol.stable-container";
@@ -1648,6 +1647,7 @@ impl PayloadFormat for ProtobufPayload {
     }
 }
 
+#[cfg(feature = "protobuf-support")]
 impl<T> EncodePayload<T> for ProtobufPayload
 where
     T: ProtobufMappable,
@@ -1668,6 +1668,7 @@ where
     }
 }
 
+#[cfg(feature = "protobuf-support")]
 impl<'a, T> DecodePayload<'a, T> for ProtobufPayload
 where
     T: ProtobufMappable,
@@ -1678,6 +1679,7 @@ where
     }
 }
 
+#[cfg(feature = "protobuf-support")]
 impl<T> ReadDecodePayload<T> for ProtobufPayload
 where
     T: ProtobufMappable,
@@ -1710,6 +1712,7 @@ impl PayloadFormat for ProtobufAnyPayload {
     }
 }
 
+#[cfg(feature = "protobuf-support")]
 impl<T> EncodePayload<T> for ProtobufAnyPayload
 where
     T: ProtobufMappable,
@@ -1730,6 +1733,7 @@ where
     }
 }
 
+#[cfg(feature = "protobuf-support")]
 impl<'a, T> DecodePayload<'a, T> for ProtobufAnyPayload
 where
     T: ProtobufMappable,
@@ -1740,6 +1744,7 @@ where
     }
 }
 
+#[cfg(feature = "protobuf-support")]
 impl<T> ReadDecodePayload<T> for ProtobufAnyPayload
 where
     T: ProtobufMappable,
@@ -1751,6 +1756,7 @@ where
     }
 }
 
+#[cfg(feature = "protobuf-support")]
 fn copy_encoded_payload(bytes: Bytes, dst: &mut [u8]) -> Result<(), UWireError> {
     let actual = dst.len();
     let out = dst
@@ -1778,6 +1784,7 @@ fn read_exact_payload<R: Read>(mut reader: R, payload_len: usize) -> Result<Vec<
 mod tests {
     use std::io::{Chain, Cursor};
 
+    #[cfg(feature = "protobuf-support")]
     use protobuf::well_known_types::wrappers::StringValue;
 
     #[cfg(feature = "owned-frame-transport")]
@@ -1790,6 +1797,7 @@ mod tests {
         UUri::try_from_parts("vehicle", 0x4210, 0x01, 0x9000).expect("topic")
     }
 
+    #[cfg(feature = "protobuf-support")]
     fn message(value: &str) -> StringValue {
         StringValue {
             value: value.to_string(),
@@ -1961,6 +1969,7 @@ mod tests {
         assert_eq!(frame.payload_bytes(), payload.as_ref());
     }
 
+    #[cfg(feature = "protobuf-support")]
     #[test]
     fn protobuf_payload_encode_decode_round_trips() {
         let input = message("protobuf payload");
@@ -1976,6 +1985,7 @@ mod tests {
         );
     }
 
+    #[cfg(feature = "protobuf-support")]
     #[test]
     fn protobuf_any_payload_encode_decode_round_trips() {
         let input = message("protobuf any payload");
@@ -1991,6 +2001,7 @@ mod tests {
         );
     }
 
+    #[cfg(feature = "protobuf-support")]
     #[test]
     fn protobuf_payload_reader_decode_round_trips() {
         let input = message("protobuf reader payload");
