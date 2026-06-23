@@ -45,7 +45,7 @@ expert-unsafe-payloads = [
     "unsafe-stable-payload-init",
     "unsafe-uninit-payload-bytes",
 ]
-owned-frame-transport = ["selected-wire-transport-core"]
+owned-frame-transport = ["selected-wire-transport-core", "up-core-types"]
 payload-contract-fixtures = ["protobuf-wire", "dep:serde", "dep:serde_json", "dep:sha2"]
 payload-contract-large-fixtures = ["payload-contract-fixtures"]
 payload-contract-simulator-fixtures = ["payload-contract-large-fixtures"]

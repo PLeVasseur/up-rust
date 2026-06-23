@@ -42,6 +42,9 @@ None of the following features are enabled by default, so you can pick and choos
   implementations.
 * `usubscription` Enables support for types required to interact with [uSubscription service](https://github.com/eclipse-uprotocol/up-spec/blob/v1.6.0-alpha.7/up-l3/usubscription/v3/README.adoc)
   implementations.
+* `owned-frame-transport` enables an experimental native owned-frame transport API. This is additive to `UTransport` and does not replace the ordinary `UMessage` compatibility path.
+* `payload-contract-fixtures` exposes representative benchmark payload fixtures, stable structs, validators, manifests, and protobuf schemas for transport benchmarks.
+* `unsafe-stable-payload-tx`, `unsafe-stable-payload-init`, and `unsafe-uninit-payload-bytes` enable expert stable-payload transmit APIs with caller-side initialization obligations. `expert-unsafe-payloads` enables all of them.
 * `util` provides some useful helper structs. In particular, provides a [local, in-memory UTransport](crate::local_transport::LocalTransport) for exchanging messages within a single process. This transport is also used by the examples illustrating usage of the Communication Layer API.
 
 ## References
