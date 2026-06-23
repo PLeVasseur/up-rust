@@ -97,6 +97,7 @@ protoc-bin-vendored = { version = "3.2" }
 
 [dev-dependencies]
 clap = { version = "4.6.1" }
+criterion = { version = "0.5.1", features = ["csv_output"] }
 cucumber = { version = "0.23.0", features = ["output-junit"] }
 hex = { version = "0.4.3" }
 mockall = { version = "0.13.1" }
@@ -203,6 +204,26 @@ required-features = ["protobuf-wire"]
 [[test]]
 name = "wire_transport_trybuild"
 required-features = ["protobuf-wire"]
+
+[[bench]]
+name = "selected_wire_metadata"
+harness = false
+required-features = ["selected-wire-protobuf-metadata", "protobuf-wire"]
+
+[[bench]]
+name = "selected_wire_rx"
+harness = false
+required-features = ["selected-wire-protobuf-metadata", "selected-wire-transport-adapter", "protobuf-wire"]
+
+[[bench]]
+name = "selected_wire_filter"
+harness = false
+required-features = ["selected-wire-protobuf-metadata", "selected-wire-transport-adapter", "protobuf-wire"]
+
+[[bench]]
+name = "selected_wire_adapter_receive"
+harness = false
+required-features = ["selected-wire-protobuf-metadata", "selected-wire-transport-adapter", "protobuf-wire"]
 
 [lints.rust]
 # this prevents cargo from complaining about code blocks
