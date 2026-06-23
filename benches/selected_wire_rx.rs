@@ -7,11 +7,18 @@
 mod support;
 
 use criterion::{black_box, criterion_group, criterion_main, Criterion};
-use support::{allocation_sample, encoded_frame_for, native_wire_rx, reset_allocations};
+use support::{
+    allocation_sample, encoded_frame_for, export_allocation_sample, native_wire_rx,
+    reset_allocations,
+};
 use up_rust::UProtocolNativeWire;
 
 fn bench_rx(c: &mut Criterion) {
     let frame = encoded_frame_for::<UProtocolNativeWire>(support::source_uri());
+
+    export_allocation_sample("selected_wire_rx/try_from_encoded", || {
+        native_wire_rx(frame.clone())
+    });
 
     c.bench_function("selected_wire_rx/try_from_encoded", |b| {
         b.iter(|| {

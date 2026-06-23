@@ -10,6 +10,7 @@ use async_trait::async_trait;
 use bytes::Bytes;
 use std::alloc::{GlobalAlloc, Layout, System};
 use std::collections::VecDeque;
+use std::hint::black_box;
 use std::io::Cursor;
 use std::sync::atomic::{AtomicUsize, Ordering};
 use std::sync::{Arc, Mutex};
@@ -56,6 +57,17 @@ pub fn allocation_sample() -> AllocationSample {
         allocations: ALLOCATIONS.load(Ordering::Relaxed),
         bytes: ALLOCATED_BYTES.load(Ordering::Relaxed),
     }
+}
+
+pub fn export_allocation_sample<T>(selector: &str, operation: impl FnOnce() -> T) {
+    reset_allocations();
+    let result = operation();
+    let sample = allocation_sample();
+    black_box(result);
+    eprintln!(
+        "P51_ALLOCATION_SAMPLE selector={selector} allocations={} bytes={}",
+        sample.allocations, sample.bytes
+    );
 }
 
 #[derive(Clone, Debug, PartialEq)]
