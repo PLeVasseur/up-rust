@@ -96,7 +96,9 @@ pub use wire::{
     XCDR_V2_PAYLOAD_FAMILY_ID, XCDR_V2_WIRE_ID,
 };
 #[cfg(feature = "selected-wire-codec-core")]
-pub use wire::{UWireMetadataCodec, UWireMetadataContext, UWireMetadataError};
+pub use wire::{
+    UWireMetadataCodec, UWireMetadataCodecFor, UWireMetadataContext, UWireMetadataError,
+};
 
 #[cfg(all(feature = "owned-frame-transport", feature = "protobuf-support"))]
 pub mod frame_wire;

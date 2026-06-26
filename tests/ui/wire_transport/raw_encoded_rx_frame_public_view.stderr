@@ -18,8 +18,8 @@ help: the following other types implement trait `UFrameView`
    | | where
    | |     Rx: UEncodedRxFrame,
    | |     W: UWire,
-   | |     C: UWireMetadataCodec,
-   | |__________________________^ `UWireRx<Rx, W, C>`
+   | |     C: UWireMetadataCodecFor<W>,
+   | |________________________________^ `UWireRx<Rx, W, C>`
    |
   ::: src/zero_copy.rs
    |
@@ -51,8 +51,8 @@ help: the following other types implement trait `UZeroCopyRxLease`
    | | where
    | |     Rx: UEncodedRxFrame,
    | |     W: UWire,
-   | |     C: UWireMetadataCodec,
-   | |__________________________^ `UWireRx<Rx, W, C>`
+   | |     C: UWireMetadataCodecFor<W>,
+   | |________________________________^ `UWireRx<Rx, W, C>`
    |
   ::: src/zero_copy.rs
    |

@@ -385,6 +385,18 @@ pub trait UWireMetadataCodec {
     ) -> Result<UFrameMetadata, UWireMetadataError>;
 }
 
+/// Metadata codec that is statically compatible with selected wire `W`.
+///
+/// This marker keeps the ordinary metadata codec contract reusable while
+/// allowing adapter constructors to reject invalid wire/codec pairings at
+/// compile time.
+#[cfg(feature = "selected-wire-codec-core")]
+pub trait UWireMetadataCodecFor<W>: UWireMetadataCodec
+where
+    W: UWire,
+{
+}
+
 /// Native-prefix metadata codec carrying protobuf-encoded `UAttributes`.
 #[cfg(feature = "selected-wire-protobuf-metadata")]
 #[derive(Clone, Copy, Debug, Default, Eq, PartialEq)]
@@ -408,6 +420,9 @@ impl UWireMetadataCodec for NativePrefixProtobufMetadataCodec {
         decode_frame_metadata(context, src)
     }
 }
+
+#[cfg(feature = "selected-wire-protobuf-metadata")]
+impl<W> UWireMetadataCodecFor<W> for NativePrefixProtobufMetadataCodec where W: UWire {}
 
 /// Wire-level encode helper alias for existing payload codecs.
 pub trait UWireEncode<T: ?Sized>: EncodePayload<T> {}
