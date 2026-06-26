@@ -62,7 +62,54 @@ pub enum UTxPayloadSpec {
     /// The frame carries no payload and no payload encoding metadata.
     Absent,
     /// The frame carries a payload, including a present empty payload.
-    Present { len: usize, alignment: usize },
+    Present {
+        len: usize,
+        alignment: PayloadAlignment,
+    },
+}
+
+/// Validated visible application payload alignment in bytes.
+///
+/// The value is always nonzero and a power of two. Runtime values from config,
+/// metadata, or transport boundaries must be constructed with [`Self::new`] or
+/// [`TryFrom<usize>`] so those boundaries keep their explicit validation.
+#[derive(Clone, Copy, Debug, Eq, Hash, Ord, PartialEq, PartialOrd)]
+pub struct PayloadAlignment(usize);
+
+impl PayloadAlignment {
+    /// Alignment for absent payloads and byte-oriented payloads.
+    pub const ONE: Self = Self(1);
+
+    /// Creates a payload alignment after validating the nonzero power-of-two invariant.
+    ///
+    /// # Errors
+    ///
+    /// Returns an error when `value` is zero or not a power of two.
+    pub fn new(value: usize) -> Result<Self, UStatus> {
+        if value == 0 {
+            return Err(invalid_argument(
+                "payload alignment must be greater than zero",
+            ));
+        }
+        if !value.is_power_of_two() {
+            return Err(invalid_argument("payload alignment must be a power of two"));
+        }
+        Ok(Self(value))
+    }
+
+    /// Returns the raw alignment value in bytes.
+    #[must_use]
+    pub const fn as_usize(self) -> usize {
+        self.0
+    }
+}
+
+impl TryFrom<usize> for PayloadAlignment {
+    type Error = UStatus;
+
+    fn try_from(value: usize) -> Result<Self, Self::Error> {
+        Self::new(value)
+    }
 }
 
 impl UTxPayloadSpec {
@@ -72,8 +119,14 @@ impl UTxPayloadSpec {
     ///
     /// Returns an error if `alignment` is zero or not a power of two.
     pub fn present(len: usize, alignment: usize) -> Result<Self, UStatus> {
-        validate_payload_layout(len, alignment)?;
-        Ok(Self::Present { len, alignment })
+        let alignment = PayloadAlignment::new(alignment)?;
+        Ok(Self::present_with_alignment(len, alignment))
+    }
+
+    /// Creates a present-payload spec from length and a validated alignment.
+    #[must_use]
+    pub fn present_with_alignment(len: usize, alignment: PayloadAlignment) -> Self {
+        Self::Present { len, alignment }
     }
 
     /// Creates a present-empty-payload spec.
@@ -81,7 +134,7 @@ impl UTxPayloadSpec {
     pub fn present_empty() -> Self {
         Self::Present {
             len: 0,
-            alignment: 1,
+            alignment: PayloadAlignment::ONE,
         }
     }
 
@@ -109,8 +162,14 @@ impl UTxPayloadSpec {
     /// Returns the requested visible application payload alignment.
     #[must_use]
     pub fn alignment(self) -> usize {
+        self.payload_alignment().as_usize()
+    }
+
+    /// Returns the validated payload alignment proof for this spec.
+    #[must_use]
+    pub fn payload_alignment(self) -> PayloadAlignment {
         match self {
-            Self::Absent => 1,
+            Self::Absent => PayloadAlignment::ONE,
             Self::Present { alignment, .. } => alignment,
         }
     }
@@ -209,6 +268,12 @@ impl UTxLoanSpec {
     pub fn payload_alignment(&self) -> usize {
         self.payload.alignment()
     }
+
+    /// Returns the validated payload alignment proof.
+    #[must_use]
+    pub fn payload_alignment_proof(&self) -> PayloadAlignment {
+        self.payload.payload_alignment()
+    }
 }
 
 /// Transmit loan spec that has passed the public transport validation boundary.
@@ -250,6 +315,12 @@ impl ValidatedTxLoanSpec {
     #[must_use]
     pub fn payload_alignment(&self) -> usize {
         self.0.payload_alignment()
+    }
+
+    /// Returns the validated payload alignment proof.
+    #[must_use]
+    pub fn payload_alignment_proof(&self) -> PayloadAlignment {
+        self.0.payload_alignment_proof()
     }
 }
 
@@ -1770,14 +1841,7 @@ fn validate_payload_presence(
 }
 
 fn validate_payload_layout(payload_len: usize, alignment: usize) -> Result<(), UStatus> {
-    if alignment == 0 {
-        return Err(invalid_argument(
-            "payload alignment must be greater than zero",
-        ));
-    }
-    if !alignment.is_power_of_two() {
-        return Err(invalid_argument("payload alignment must be a power of two"));
-    }
+    PayloadAlignment::new(alignment)?;
     let _ = payload_len;
     Ok(())
 }
@@ -2006,6 +2070,33 @@ mod tests {
     fn payload_alignment_must_be_power_of_two() {
         let error = UTxPayloadSpec::present(16, 3).unwrap_err();
         assert_eq!(error.get_code(), UCode::InvalidArgument);
+    }
+
+    #[test]
+    fn payload_alignment_proof_rejects_zero() {
+        let error = PayloadAlignment::new(0).unwrap_err();
+        assert_eq!(error.get_code(), UCode::InvalidArgument);
+    }
+
+    #[test]
+    fn payload_alignment_proof_rejects_non_power_of_two() {
+        let error = PayloadAlignment::new(6).unwrap_err();
+        assert_eq!(error.get_code(), UCode::InvalidArgument);
+    }
+
+    #[test]
+    fn payload_alignment_proof_round_trips_raw_value() {
+        let alignment = PayloadAlignment::new(8).unwrap();
+        let spec = UTxLoanSpec::new(
+            metadata_with_encoding(),
+            UTxPayloadSpec::present_with_alignment(16, alignment),
+        )
+        .unwrap();
+        let validated = ValidatedTxLoanSpec::try_from(spec).unwrap();
+
+        assert_eq!(alignment.as_usize(), 8);
+        assert_eq!(validated.payload_alignment(), 8);
+        assert_eq!(validated.payload_alignment_proof(), alignment);
     }
 
     struct CountingTransport {

@@ -491,7 +491,11 @@ fn metadata_with_protobuf_payload() -> UFrameMetadata {
 }
 
 fn tx_spec(metadata: UFrameMetadata, len: usize) -> UTxLoanSpec {
-    UTxLoanSpec::new(metadata, UTxPayloadSpec::Present { len, alignment: 1 }).expect("TX loan spec")
+    UTxLoanSpec::new(
+        metadata,
+        UTxPayloadSpec::present_with_alignment(len, up_rust::PayloadAlignment::ONE),
+    )
+    .expect("TX loan spec")
 }
 
 fn encoded_frame<W>(metadata: &UFrameMetadata, payload: &'static [u8]) -> InMemoryEncodedRxFrame

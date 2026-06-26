@@ -39,10 +39,11 @@ use tracing::warn;
 #[cfg(feature = "selected-wire-protobuf-metadata")]
 use crate::NativePrefixProtobufMetadataCodec;
 use crate::{
-    validate_frame_view_for_transport, LoanedPayload, PayloadCodec, ReadDecodePayload, UCode,
-    UFrameMetadata, UFrameView, ULoanedContiguousZeroCopyRxFrame, UStatus, UTxBuffer, UTxLoanSpec,
-    UUninitTxBuffer, UUri, UWire, UWireError, UWireMetadataCodec, UZeroCopyListener,
-    UZeroCopyRxLease, UZeroCopyTransportImpl, UZeroCopyUninitTransportImpl, ValidatedTxLoanSpec,
+    validate_frame_view_for_transport, LoanedPayload, PayloadAlignment, PayloadCodec,
+    ReadDecodePayload, UCode, UFrameMetadata, UFrameView, ULoanedContiguousZeroCopyRxFrame,
+    UStatus, UTxBuffer, UTxLoanSpec, UUninitTxBuffer, UUri, UWire, UWireError, UWireMetadataCodec,
+    UZeroCopyListener, UZeroCopyRxLease, UZeroCopyTransportImpl, UZeroCopyUninitTransportImpl,
+    ValidatedTxLoanSpec,
 };
 #[cfg(feature = "owned-frame-transport")]
 use crate::{UOwnedFrame, UOwnedListener, UOwnedTransportImpl, ValidatedOwnedFrame};
@@ -186,7 +187,7 @@ pub struct PreparedTxLoanSpec {
     metadata: UFrameMetadata,
     encoded_metadata: Vec<u8>,
     payload_len: usize,
-    payload_alignment: usize,
+    payload_alignment: PayloadAlignment,
 }
 
 impl PreparedTxLoanSpec {
@@ -206,7 +207,7 @@ impl PreparedTxLoanSpec {
             metadata: spec.metadata().clone(),
             encoded_metadata,
             payload_len: spec.payload_len(),
-            payload_alignment: spec.payload_alignment(),
+            payload_alignment: spec.payload_alignment_proof(),
         })
     }
 
@@ -251,7 +252,7 @@ impl PreparedTxLoanSpec {
             metadata: spec.metadata().clone(),
             encoded_metadata: encoded_metadata.into(),
             payload_len: spec.payload_len(),
-            payload_alignment: spec.payload_alignment(),
+            payload_alignment: spec.payload_alignment_proof(),
         })
     }
 
@@ -276,6 +277,12 @@ impl PreparedTxLoanSpec {
     /// Returns the visible application payload alignment requested from the core.
     #[must_use]
     pub fn payload_alignment(&self) -> usize {
+        self.payload_alignment.as_usize()
+    }
+
+    /// Returns the validated visible application payload alignment proof.
+    #[must_use]
+    pub fn payload_alignment_proof(&self) -> PayloadAlignment {
         self.payload_alignment
     }
 
@@ -292,7 +299,7 @@ impl PreparedTxLoanSpec {
             self.metadata,
             self.encoded_metadata,
             self.payload_len,
-            self.payload_alignment,
+            self.payload_alignment.as_usize(),
         )
     }
 }
@@ -1713,7 +1720,7 @@ mod tests {
                 metadata.clone(),
                 UTxPayloadSpec::Present {
                     len: 4,
-                    alignment: 2,
+                    alignment: crate::PayloadAlignment::new(2).unwrap(),
                 },
             )
             .unwrap(),
@@ -1729,6 +1736,10 @@ mod tests {
         assert_eq!(prepared.metadata(), &metadata);
         assert_eq!(prepared.payload_len(), 4);
         assert_eq!(prepared.payload_alignment(), 2);
+        assert_eq!(
+            prepared.payload_alignment_proof(),
+            crate::PayloadAlignment::new(2).unwrap()
+        );
         assert!(!prepared.encoded_metadata().is_empty());
     }
 

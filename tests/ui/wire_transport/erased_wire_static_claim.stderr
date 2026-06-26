@@ -9,16 +9,16 @@ note: for a trait to be dyn compatible it needs to allow building a vtable
   --> src/wire.rs
    |
    |     const WIRE_ID: WireIdentity;
-   |           ^^^^^^^ the trait is not dyn compatible because it contains associated const `WIRE_ID`
+   |           ^^^^^^^ the trait is not dyn compatible because it contains this associated `const`
    |     /// Payload operation family supported by this selected wire.
    |     const PAYLOAD_FAMILY_ID: WireIdentity;
-   |           ^^^^^^^^^^^^^^^^^ the trait is not dyn compatible because it contains associated const `PAYLOAD_FAMILY_ID`
+   |           ^^^^^^^^^^^^^^^^^ the trait is not dyn compatible because it contains this associated `const`
    |     /// Metadata byte layout used by this selected wire.
    |     const METADATA_LAYOUT_ID: WireIdentity;
-   |           ^^^^^^^^^^^^^^^^^^ the trait is not dyn compatible because it contains associated const `METADATA_LAYOUT_ID`
+   |           ^^^^^^^^^^^^^^^^^^ the trait is not dyn compatible because it contains this associated `const`
    |     /// Metadata byte-format version supported by this selected wire.
    |     const FORMAT_VERSION: u16;
-   |           ^^^^^^^^^^^^^^ the trait is not dyn compatible because it contains associated const `FORMAT_VERSION`
+   |           ^^^^^^^^^^^^^^ the trait is not dyn compatible because it contains this associated `const`
 ...
    |     fn wire_compatibility(actual: &WireIdentityRef) -> WireCompatibility {
    |        ^^^^^^^^^^^^^^^^^^ the trait is not dyn compatible because associated function `wire_compatibility` has no `self` parameter

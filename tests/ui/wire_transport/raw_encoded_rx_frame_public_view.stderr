@@ -14,11 +14,12 @@ help: the trait `UFrameView` is not implemented for `RawEncodedRxFrame`
 help: the following other types implement trait `UFrameView`
   --> src/wire_transport.rs
    |
-   | / impl<Rx, W> UFrameView for UWireRx<Rx, W>
+   | / impl<Rx, W, C> UFrameView for UWireRx<Rx, W, C>
    | | where
    | |     Rx: UEncodedRxFrame,
-   | |     W: UWireMetadata,
-   | |_____________________^ `UWireRx<Rx, W>`
+   | |     W: UWire,
+   | |     C: UWireMetadataCodec,
+   | |__________________________^ `UWireRx<Rx, W, C>`
    |
   ::: src/zero_copy.rs
    |
@@ -46,11 +47,12 @@ help: the trait `UZeroCopyRxLease` is not implemented for `RawEncodedRxFrame`
 help: the following other types implement trait `UZeroCopyRxLease`
   --> src/wire_transport.rs
    |
-   | / impl<Rx, W> UZeroCopyRxLease for UWireRx<Rx, W>
+   | / impl<Rx, W, C> UZeroCopyRxLease for UWireRx<Rx, W, C>
    | | where
    | |     Rx: UEncodedRxFrame,
-   | |     W: UWireMetadata,
-   | |_____________________^ `UWireRx<Rx, W>`
+   | |     W: UWire,
+   | |     C: UWireMetadataCodec,
+   | |__________________________^ `UWireRx<Rx, W, C>`
    |
   ::: src/zero_copy.rs
    |
