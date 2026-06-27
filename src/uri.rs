@@ -20,6 +20,7 @@ A UUri represents a uProtocol resource identifier and is used in various places 
 // [impl->req~uri-data-model-proto~1]
 
 use std::hash::{Hash, Hasher};
+use std::ops::Deref;
 use std::str::FromStr;
 use std::sync::LazyLock;
 
@@ -291,6 +292,76 @@ impl Hash for UUri {
 }
 
 impl Eq for UUri {}
+
+/// A [`UUri`] that has been checked to contain no wildcard components.
+///
+/// This proof type is for APIs where exact-vs-wildcard URI behavior is
+/// materially different. It only carries the result of
+/// [`UUri::verify_no_wildcards`]; it does not imply physical transport
+/// prefiltering or no-copy behavior.
+#[derive(Debug, Clone, Eq, Hash, PartialEq)]
+pub struct ExactUUri(UUri);
+
+impl ExactUUri {
+    /// Creates an exact URI proof from a URI with no wildcard components.
+    ///
+    /// # Errors
+    ///
+    /// Returns the same validation error as [`UUri::verify_no_wildcards`] when
+    /// any URI component contains a wildcard.
+    pub fn try_new(uri: UUri) -> Result<Self, UUriError> {
+        uri.verify_no_wildcards()?;
+        Ok(Self(uri))
+    }
+
+    /// Borrows the checked URI.
+    #[must_use]
+    pub fn as_uuri(&self) -> &UUri {
+        &self.0
+    }
+
+    /// Consumes this proof and returns the underlying URI.
+    #[must_use]
+    pub fn into_inner(self) -> UUri {
+        self.0
+    }
+}
+
+impl AsRef<UUri> for ExactUUri {
+    fn as_ref(&self) -> &UUri {
+        self.as_uuri()
+    }
+}
+
+impl Deref for ExactUUri {
+    type Target = UUri;
+
+    fn deref(&self) -> &Self::Target {
+        self.as_uuri()
+    }
+}
+
+impl From<ExactUUri> for UUri {
+    fn from(value: ExactUUri) -> Self {
+        value.into_inner()
+    }
+}
+
+impl TryFrom<UUri> for ExactUUri {
+    type Error = UUriError;
+
+    fn try_from(value: UUri) -> Result<Self, Self::Error> {
+        Self::try_new(value)
+    }
+}
+
+impl TryFrom<&UUri> for ExactUUri {
+    type Error = UUriError;
+
+    fn try_from(value: &UUri) -> Result<Self, Self::Error> {
+        Self::try_new(value.clone())
+    }
+}
 
 impl PartialEq<str> for UUri {
     fn eq(&self, other: &str) -> bool {
