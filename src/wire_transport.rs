@@ -1203,7 +1203,7 @@ mod tests {
         ByteBackedStablePayload, EncodePayload, PayloadEncoding, PayloadLoanProvenance,
         ProtobufWire, StableContainerPayload, StableContainerWireFormat, StablePayload,
         UMessageBuilder, UPayloadFormat, UProtocolNativeWire, UTxPayloadSpec, UVecRxLease,
-        UVecTxBuffer, UVecUninitTxBuffer, UZeroCopyTransportExt,
+        UVecTxBuffer, UVecUninitTxBuffer, UWireMetadataCodec, UZeroCopyTransportExt,
     };
 
     #[repr(C)]

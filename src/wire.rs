@@ -577,14 +577,22 @@ fn encode_frame_metadata(
 ) -> Result<Vec<u8>, UWireMetadataError> {
     metadata.validate()?;
 
-    let mut out = Vec::new();
+    let attributes = metadata.attributes().write_to_protobuf_bytes()?;
+    let mut out = Vec::with_capacity(
+        MAGIC.len()
+            + (3 * (1 + std::mem::size_of::<u16>()))
+            + (2 * std::mem::size_of::<u16>())
+            + std::mem::size_of::<u32>()
+            + attributes.len()
+            + payload_encoding_encoded_len(metadata.payload_encoding()),
+    );
     out.extend_from_slice(MAGIC);
     write_identity_ref(&mut out, context.metadata_layout_id);
     write_u16(&mut out, context.format_version);
     write_identity_ref(&mut out, context.wire_id);
     write_identity_ref(&mut out, context.payload_family_id);
     write_u16(&mut out, 0);
-    write_len_prefixed_bytes(&mut out, &metadata.attributes().write_to_protobuf_bytes()?)?;
+    write_len_prefixed_bytes(&mut out, &attributes)?;
     write_payload_encoding(&mut out, metadata.payload_encoding())?;
     Ok(out)
 }
@@ -678,6 +686,20 @@ fn write_payload_encoding(
         }
     }
     Ok(())
+}
+
+#[cfg(feature = "selected-wire-protobuf-metadata")]
+fn payload_encoding_encoded_len(payload_encoding: Option<&PayloadEncoding>) -> usize {
+    match payload_encoding {
+        None => 1,
+        Some(PayloadEncoding::Standard(_)) => 1 + std::mem::size_of::<i32>(),
+        Some(PayloadEncoding::Custom { id, content_type }) => {
+            1 + std::mem::size_of::<u32>()
+                + id.len()
+                + std::mem::size_of::<u32>()
+                + content_type.len()
+        }
+    }
 }
 
 #[cfg(feature = "selected-wire-protobuf-metadata")]
