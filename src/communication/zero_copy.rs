@@ -11,6 +11,16 @@
  * SPDX-License-Identifier: Apache-2.0
  ********************************************************************************/
 
+//! Zero-copy communication-layer facade.
+//!
+//! This module exposes the simple L2 operations that can be expressed without
+//! hiding zero-copy lifetimes. Stable/no-zero publish is provided as an ordinary
+//! front-door API. Receive, listener, RPC server, and request handling remain at
+//! the [`UZeroCopyTransport`] layer for now because their non-copying shape is
+//! tied to the transport receive lease type. Any future L2 convenience that
+//! copies out of a receive lease must use a `copying` name and must not claim
+//! no-copy behavior.
+
 use std::sync::Arc;
 
 use crate::{

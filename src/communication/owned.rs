@@ -11,19 +11,33 @@
  * SPDX-License-Identifier: Apache-2.0
  ********************************************************************************/
 
+//! Owned native-frame communication-layer facade.
+//!
+//! This module is additive to the existing `communication` API. It builds L2
+//! roles on top of [`UOwnedTransport`] without changing [`crate::UTransport`]
+//! or the existing `communication::{Publisher, Subscriber, Notifier, RpcClient,
+//! RpcServer}` traits. The owned receive/listener roles convert owned native
+//! frames back to `UMessage` before invoking ordinary [`crate::UListener`]
+//! handlers, so callers do not need to name transport core, loan, or metadata
+//! codec types.
+
+use std::collections::{hash_map::Entry, HashMap};
 use std::sync::Arc;
 
 use async_trait::async_trait;
 
 use crate::{
     communication::{
-        CallOptions, PubSubError, RegistrationError, ServiceInvocationError, UPayload,
+        CallOptions, NotificationError, PubSubError, RegistrationError, ServiceInvocationError,
+        SubscriptionChangeHandler, SubscriptionStatus, UPayload,
     },
-    LocalUriProvider, UCode, UMessage, UMessageBuilder, UOwnedFrame, UOwnedListener,
+    LocalUriProvider, UCode, UListener, UMessage, UMessageBuilder, UOwnedFrame, UOwnedListener,
     UOwnedTransport, UStatus, UUri, UUID,
 };
 #[cfg(feature = "selected-wire-transport-adapter")]
 use crate::{DecodePayload, EncodePayload, PayloadCodec, UHasWire, UWireDecodeOwned, UWireEncode};
+
+pub use crate::communication::RequestHandler;
 
 /// Front door for owned native-frame communication-layer clients.
 pub struct Endpoint<T, P>
@@ -53,6 +67,18 @@ where
     #[must_use]
     pub fn publisher(&self) -> Publisher<T, P> {
         Publisher::new(self.transport.clone(), self.uri_provider.clone())
+    }
+
+    /// Creates a subscriber for owned native-frame topic listeners.
+    #[must_use]
+    pub fn subscriber(&self) -> Subscriber<T> {
+        Subscriber::new(self.transport.clone())
+    }
+
+    /// Creates a notifier for owned native-frame notification send/listen roles.
+    #[must_use]
+    pub fn notifier(&self) -> Notifier<T, P> {
+        Notifier::new(self.transport.clone(), self.uri_provider.clone())
     }
 
     /// Creates an RPC client for owned native-frame request/response messages.
@@ -89,6 +115,326 @@ fn build_message_with_payload(
 fn frame_from_message(message: &UMessage) -> Result<UOwnedFrame, crate::UFrameMetadataError> {
     let metadata = crate::try_project_umessage_to_frame_metadata(message)?;
     UOwnedFrame::new(metadata, message.payload())
+}
+
+fn message_from_frame(frame: UOwnedFrame) -> Result<UMessage, crate::UFrameMetadataError> {
+    crate::try_project_frame_to_umessage(frame.metadata().clone(), frame.payload().cloned())
+}
+
+fn listener_pointer(listener: &Arc<dyn UListener>) -> usize {
+    let ptr = Arc::as_ptr(listener);
+    let thin_ptr = ptr as *const ();
+    thin_ptr as usize
+}
+
+#[derive(Clone, Debug, Eq, Hash, PartialEq)]
+struct MessageListenerKey {
+    source_filter: UUri,
+    sink_filter: Option<UUri>,
+    listener: usize,
+}
+
+impl MessageListenerKey {
+    fn new(
+        source_filter: &UUri,
+        sink_filter: Option<&UUri>,
+        listener: &Arc<dyn UListener>,
+    ) -> Self {
+        Self {
+            source_filter: source_filter.clone(),
+            sink_filter: sink_filter.cloned(),
+            listener: listener_pointer(listener),
+        }
+    }
+}
+
+struct MessageListener {
+    inner: Arc<dyn UListener>,
+}
+
+#[async_trait]
+impl UOwnedListener for MessageListener {
+    async fn on_receive_owned(&self, frame: UOwnedFrame) {
+        if let Ok(message) = message_from_frame(frame) {
+            self.inner.on_receive(message).await;
+        }
+    }
+}
+
+type MessageListenerMap = tokio::sync::Mutex<HashMap<MessageListenerKey, Arc<dyn UOwnedListener>>>;
+
+async fn register_message_listener<T>(
+    transport: &T,
+    listeners: &MessageListenerMap,
+    source_filter: &UUri,
+    sink_filter: Option<&UUri>,
+    listener: Arc<dyn UListener>,
+) -> Result<(), RegistrationError>
+where
+    T: UOwnedTransport + ?Sized,
+{
+    let key = MessageListenerKey::new(source_filter, sink_filter, &listener);
+    if listeners.lock().await.contains_key(&key) {
+        return Err(RegistrationError::AlreadyExists);
+    }
+    let owned_listener: Arc<dyn UOwnedListener> = Arc::new(MessageListener { inner: listener });
+    transport
+        .register_owned_listener(source_filter, sink_filter, owned_listener.clone())
+        .await
+        .map_err(RegistrationError::from)?;
+
+    let mut listeners = listeners.lock().await;
+    match listeners.entry(key) {
+        Entry::Vacant(entry) => {
+            entry.insert(owned_listener);
+            Ok(())
+        }
+        Entry::Occupied(_) => {
+            drop(listeners);
+            let _ = transport
+                .unregister_owned_listener(source_filter, sink_filter, owned_listener)
+                .await;
+            Err(RegistrationError::AlreadyExists)
+        }
+    }
+}
+
+async fn unregister_message_listener<T>(
+    transport: &T,
+    listeners: &MessageListenerMap,
+    source_filter: &UUri,
+    sink_filter: Option<&UUri>,
+    listener: Arc<dyn UListener>,
+) -> Result<(), RegistrationError>
+where
+    T: UOwnedTransport + ?Sized,
+{
+    let key = MessageListenerKey::new(source_filter, sink_filter, &listener);
+    let Some(owned_listener) = listeners.lock().await.remove(&key) else {
+        return Err(RegistrationError::NoSuchListener);
+    };
+    if let Err(error) = transport
+        .unregister_owned_listener(source_filter, sink_filter, owned_listener)
+        .await
+    {
+        return Err(RegistrationError::from(error));
+    }
+    Ok(())
+}
+
+fn validate_listener_topic(topic: &UUri) -> Result<(), RegistrationError> {
+    topic
+        .verify_no_wildcards()
+        .map_err(|error| RegistrationError::InvalidFilter(error.to_string()))
+}
+
+/// Subscriber implemented over an owned native-frame transport.
+///
+/// This is a direct listener-registration facade. It does not contact a
+/// USubscription service; callers that need subscription-service state machines
+/// should keep using the existing `InMemorySubscriber` path.
+pub struct Subscriber<T>
+where
+    T: UOwnedTransport + ?Sized,
+{
+    transport: Arc<T>,
+    listeners: MessageListenerMap,
+}
+
+impl<T> Subscriber<T>
+where
+    T: UOwnedTransport + ?Sized,
+{
+    /// Creates a subscriber over an owned native-frame transport.
+    #[must_use]
+    pub fn new(transport: Arc<T>) -> Self {
+        Self {
+            transport,
+            listeners: tokio::sync::Mutex::new(HashMap::new()),
+        }
+    }
+
+    /// Registers a listener for owned native-frame publish messages.
+    pub async fn subscribe(
+        &self,
+        topic: &UUri,
+        handler: Arc<dyn UListener>,
+        subscription_change_handler: Option<Arc<dyn SubscriptionChangeHandler>>,
+    ) -> Result<(), RegistrationError> {
+        validate_listener_topic(topic)?;
+        register_message_listener(&*self.transport, &self.listeners, topic, None, handler).await?;
+        if let Some(handler) = subscription_change_handler {
+            handler.on_subscription_change(topic.clone(), SubscriptionStatus::Subscribed);
+        }
+        Ok(())
+    }
+
+    /// Unregisters a listener for owned native-frame publish messages.
+    pub async fn unsubscribe(
+        &self,
+        topic: &UUri,
+        handler: Arc<dyn UListener>,
+    ) -> Result<(), RegistrationError> {
+        validate_listener_topic(topic)?;
+        unregister_message_listener(&*self.transport, &self.listeners, topic, None, handler).await
+    }
+}
+
+#[async_trait]
+impl<T> crate::communication::Subscriber for Subscriber<T>
+where
+    T: UOwnedTransport + ?Sized,
+{
+    async fn subscribe(
+        &self,
+        topic: &UUri,
+        handler: Arc<dyn UListener>,
+        subscription_change_handler: Option<Arc<dyn SubscriptionChangeHandler>>,
+    ) -> Result<(), RegistrationError> {
+        Subscriber::subscribe(self, topic, handler, subscription_change_handler).await
+    }
+
+    async fn unsubscribe(
+        &self,
+        topic: &UUri,
+        handler: Arc<dyn UListener>,
+    ) -> Result<(), RegistrationError> {
+        Subscriber::unsubscribe(self, topic, handler).await
+    }
+}
+
+/// Notifier implemented over an owned native-frame transport.
+pub struct Notifier<T, P>
+where
+    T: UOwnedTransport + ?Sized,
+    P: LocalUriProvider + ?Sized,
+{
+    transport: Arc<T>,
+    uri_provider: Arc<P>,
+    listeners: MessageListenerMap,
+}
+
+impl<T, P> Notifier<T, P>
+where
+    T: UOwnedTransport + ?Sized,
+    P: LocalUriProvider + ?Sized,
+{
+    /// Creates a notifier over an owned native-frame transport.
+    #[must_use]
+    pub fn new(transport: Arc<T>, uri_provider: Arc<P>) -> Self {
+        Self {
+            transport,
+            uri_provider,
+            listeners: tokio::sync::Mutex::new(HashMap::new()),
+        }
+    }
+
+    fn build_frame(
+        &self,
+        resource_id: u16,
+        destination: &UUri,
+        call_options: CallOptions,
+        payload: Option<UPayload>,
+    ) -> Result<UOwnedFrame, NotificationError> {
+        let mut builder = UMessageBuilder::notification(
+            self.uri_provider.get_resource_uri(resource_id),
+            destination.clone(),
+        );
+        builder.with_ttl(call_options.ttl());
+        if let Some(message_id) = call_options.message_id() {
+            builder.with_message_id(message_id.clone());
+        }
+        if let Some(priority) = call_options.priority() {
+            builder.with_priority(priority);
+        }
+        let message = build_message_with_payload(&mut builder, payload)
+            .map_err(|error| NotificationError::InvalidArgument(error.to_string()))?;
+        frame_from_message(&message)
+            .map_err(|error| NotificationError::InvalidArgument(error.to_string()))
+    }
+
+    /// Sends an owned native-frame notification.
+    pub async fn notify(
+        &self,
+        resource_id: u16,
+        destination: &UUri,
+        call_options: CallOptions,
+        payload: Option<UPayload>,
+    ) -> Result<(), NotificationError> {
+        let frame = self.build_frame(resource_id, destination, call_options, payload)?;
+        self.transport
+            .send_owned(frame)
+            .await
+            .map_err(Box::from)
+            .map_err(NotificationError::NotifyError)
+    }
+
+    /// Starts listening for owned native-frame notifications on a topic.
+    pub async fn start_listening(
+        &self,
+        topic: &UUri,
+        listener: Arc<dyn UListener>,
+    ) -> Result<(), RegistrationError> {
+        validate_listener_topic(topic)?;
+        register_message_listener(
+            &*self.transport,
+            &self.listeners,
+            topic,
+            Some(&self.uri_provider.get_source_uri()),
+            listener,
+        )
+        .await
+    }
+
+    /// Stops listening for owned native-frame notifications on a topic.
+    pub async fn stop_listening(
+        &self,
+        topic: &UUri,
+        listener: Arc<dyn UListener>,
+    ) -> Result<(), RegistrationError> {
+        validate_listener_topic(topic)?;
+        unregister_message_listener(
+            &*self.transport,
+            &self.listeners,
+            topic,
+            Some(&self.uri_provider.get_source_uri()),
+            listener,
+        )
+        .await
+    }
+}
+
+#[async_trait]
+impl<T, P> crate::communication::Notifier for Notifier<T, P>
+where
+    T: UOwnedTransport + ?Sized,
+    P: LocalUriProvider + ?Sized,
+{
+    async fn notify(
+        &self,
+        resource_id: u16,
+        destination: &UUri,
+        call_options: CallOptions,
+        payload: Option<UPayload>,
+    ) -> Result<(), NotificationError> {
+        Notifier::notify(self, resource_id, destination, call_options, payload).await
+    }
+
+    async fn start_listening(
+        &self,
+        topic: &UUri,
+        listener: Arc<dyn UListener>,
+    ) -> Result<(), RegistrationError> {
+        Notifier::start_listening(self, topic, listener).await
+    }
+
+    async fn stop_listening(
+        &self,
+        topic: &UUri,
+        listener: Arc<dyn UListener>,
+    ) -> Result<(), RegistrationError> {
+        Notifier::stop_listening(self, topic, listener).await
+    }
 }
 
 /// RPC client implemented over an owned native-frame transport.
@@ -670,6 +1016,30 @@ mod tests {
         frame_from_message(message).expect("frame")
     }
 
+    #[derive(Default)]
+    struct RecordingMessageListener {
+        messages: Mutex<Vec<UMessage>>,
+    }
+
+    impl RecordingMessageListener {
+        fn messages(&self) -> Vec<UMessage> {
+            self.messages
+                .lock()
+                .expect("messages lock poisoned")
+                .clone()
+        }
+    }
+
+    #[async_trait]
+    impl UListener for RecordingMessageListener {
+        async fn on_receive(&self, msg: UMessage) {
+            self.messages
+                .lock()
+                .expect("messages lock poisoned")
+                .push(msg);
+        }
+    }
+
     #[tokio::test]
     async fn publish_sends_owned_frame() {
         let transport = Arc::new(RecordingOwnedTransport::new());
@@ -730,6 +1100,88 @@ mod tests {
             .await;
 
         assert!(matches!(result, Err(PubSubError::PublishError(_))));
+    }
+
+    #[tokio::test]
+    async fn subscriber_registers_owned_listener_and_delivers_messages() {
+        let transport = Arc::new(RecordingOwnedTransport::new());
+        let subscriber = Endpoint::new(transport.clone(), uri_provider()).subscriber();
+        let topic = uri_provider().get_resource_uri(0x9A00);
+        let listener = Arc::new(RecordingMessageListener::default());
+
+        subscriber
+            .subscribe(&topic, listener.clone(), None)
+            .await
+            .expect("subscriber registered");
+        let message = UMessageBuilder::publish(topic.clone())
+            .build_with_payload("event", UPayloadFormat::Text)
+            .expect("publish message");
+        transport
+            .registered_listener()
+            .on_receive_owned(message_frame(&message))
+            .await;
+
+        let messages = listener.messages();
+        assert_eq!(messages.len(), 1);
+        assert!(messages[0].is_publish());
+        assert_eq!(
+            messages[0].payload(),
+            Some(bytes::Bytes::from_static(b"event"))
+        );
+
+        subscriber
+            .unsubscribe(&topic, listener)
+            .await
+            .expect("subscriber unregistered");
+    }
+
+    #[tokio::test]
+    async fn notifier_sends_and_listens_with_owned_frames() {
+        let transport = Arc::new(RecordingOwnedTransport::new());
+        let notifier = Endpoint::new(transport.clone(), uri_provider()).notifier();
+        let topic = uri_provider().get_resource_uri(0xD100);
+        let listener = Arc::new(RecordingMessageListener::default());
+
+        notifier
+            .start_listening(&topic, listener.clone())
+            .await
+            .expect("notifier listener registered");
+        let notification =
+            UMessageBuilder::notification(topic.clone(), uri_provider().get_source_uri())
+                .build_with_payload("notification", UPayloadFormat::Text)
+                .expect("notification message");
+        transport
+            .registered_listener()
+            .on_receive_owned(message_frame(&notification))
+            .await;
+
+        notifier
+            .notify(
+                0xD100,
+                &uri_provider().get_source_uri(),
+                CallOptions::for_notification(None, None, None),
+                Some(UPayload::new("notify", UPayloadFormat::Text)),
+            )
+            .await
+            .expect("notification sent");
+
+        let messages = listener.messages();
+        assert_eq!(messages.len(), 1);
+        assert!(messages[0].is_notification());
+        assert_eq!(
+            messages[0].payload(),
+            Some(bytes::Bytes::from_static(b"notification"))
+        );
+        let frames = transport.sent_frames();
+        assert_eq!(frames.len(), 1);
+        let sent = message_from_frame(frames[0].clone()).expect("sent notification");
+        assert!(sent.is_notification());
+        assert_eq!(sent.payload(), Some(bytes::Bytes::from_static(b"notify")));
+
+        notifier
+            .stop_listening(&topic, listener)
+            .await
+            .expect("notifier listener unregistered");
     }
 
     #[tokio::test]
