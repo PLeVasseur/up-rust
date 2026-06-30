@@ -43,6 +43,9 @@ pub use simple_publisher::SimplePublisher;
 #[cfg(feature = "owned-frame-transport")]
 pub mod owned;
 
+#[cfg(all(feature = "selected-wire-transport-adapter", feature = "up-l2-api"))]
+pub mod zero_copy;
+
 #[cfg(feature = "up-l2-subscriber")]
 mod in_memory_subscriber;
 #[cfg(feature = "up-l2-subscriber")]
