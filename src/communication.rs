@@ -40,6 +40,9 @@ mod simple_publisher;
 #[cfg(feature = "up-l2-publisher")]
 pub use simple_publisher::SimplePublisher;
 
+#[cfg(feature = "owned-frame-transport")]
+pub mod owned;
+
 #[cfg(feature = "up-l2-subscriber")]
 mod in_memory_subscriber;
 #[cfg(feature = "up-l2-subscriber")]
