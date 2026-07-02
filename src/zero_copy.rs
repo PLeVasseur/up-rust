@@ -36,17 +36,17 @@ use crate::payload::UnsafeStablePayloadTxSlot;
 use crate::UHasWire;
 #[cfg(feature = "owned-frame-transport")]
 use crate::UOwnedFrame;
+#[cfg(feature = "selected-wire-transport-adapter")]
+use crate::UWirePayload;
 use crate::{
     payload::{
-        InitializedStablePayload, LoanPayload, LoanUninitPayload, LoanedInitPayload,
+        BorrowPayload, InitializedStablePayload, LoanPayload, LoanUninitPayload, LoanedInitPayload,
         LoanedUninitPayload, PayloadCodec, ReadDecodePayload, StableContainerPayload,
         StablePayload, StablePayloadInit, UWireError,
     },
     utransport::verify_filter_criteria,
     UCode, UFrameMetadata, UFrameMetadataError, UStatus, UUri,
 };
-#[cfg(feature = "selected-wire-transport-adapter")]
-use crate::{UWireLoan, UWireLoanUninit};
 
 mod zero_copy_transport_sealed {
     pub trait Sealed {}
@@ -605,9 +605,24 @@ pub trait ULoanedContiguousZeroCopyRxFrame: UZeroCopyRxLease {
     where
         T: StablePayload,
     {
-        StableContainerPayload::<T>::verify_encoding(self.metadata().payload_encoding())?;
+        self.borrow_payload_as::<StableContainerPayload<T>, T>()
+    }
+
+    /// Borrows one typed value from loan-backed contiguous storage using codec `C`.
+    ///
+    /// This is the low-level codec-selected receive form. Selected-wire receive
+    /// wrappers expose a wire-selected `borrow_payload` helper so ordinary callers
+    /// do not need to name `C`.
+    fn borrow_payload_as<C, T>(&self) -> Result<&T, UWireError>
+    where
+        C: BorrowPayload<T>,
+    {
+        C::verify_encoding(self.metadata().payload_encoding())?;
+        if !self.has_payload() {
+            return Err(UWireError::MissingPayload);
+        }
         let payload = self.loaned_contiguous_payload()?;
-        StableContainerPayload::<T>::borrow_checked_payload(payload.as_bytes())
+        C::borrow_payload(payload.as_bytes())
     }
 }
 
@@ -827,10 +842,10 @@ pub trait UZeroCopyTransportExt: UZeroCopyTransport {
     ) -> Result<(), UStatus>
     where
         Self: UHasWire,
-        Self::Wire: UWireLoan<T>,
-        <Self::Wire as UWireLoan<T>>::Codec: Send + Sync,
+        Self::Wire: UWirePayload<T>,
+        <Self::Wire as UWirePayload<T>>::Codec: LoanPayload<T> + Send + Sync,
     {
-        self.send_loaned_payload_as::<<Self::Wire as UWireLoan<T>>::Codec, T>(metadata, init)
+        self.send_loaned_payload_as::<<Self::Wire as UWirePayload<T>>::Codec, T>(metadata, init)
             .await
     }
 
@@ -898,11 +913,11 @@ pub trait UZeroCopyUninitTransportExt: UZeroCopyUninitTransport {
     ) -> Result<(), UStatus>
     where
         Self: UHasWire,
-        Self::Wire: UWireLoanUninit<T>,
-        <Self::Wire as UWireLoanUninit<T>>::Codec: Send + Sync,
+        Self::Wire: UWirePayload<T>,
+        <Self::Wire as UWirePayload<T>>::Codec: LoanUninitPayload<T> + Send + Sync,
         T: Send,
     {
-        self.send_uninit_loaned_payload_as::<<Self::Wire as UWireLoanUninit<T>>::Codec, T>(
+        self.send_uninit_loaned_payload_as::<<Self::Wire as UWirePayload<T>>::Codec, T>(
             metadata, init,
         )
         .await
@@ -989,7 +1004,7 @@ pub trait UZeroCopyUninitTransportExt: UZeroCopyUninitTransport {
     ) -> Result<(), UStatus>
     where
         Self: UHasWire,
-        Self::Wire: UWireLoanUninit<T, Codec = StableContainerPayload<T>>,
+        Self::Wire: UWirePayload<T, Codec = StableContainerPayload<T>>,
         T: StablePayloadInit + Send,
     {
         self.send_uninit_stable_payload_as::<T>(metadata, init)

@@ -10,7 +10,7 @@ use criterion::{black_box, criterion_group, criterion_main, BatchSize, Criterion
 use std::sync::Arc;
 use support::{encoded_frame_for, export_allocation_sample, BenchCore, CountingZeroCopyListener};
 use tokio::runtime::Runtime;
-use up_rust::{UProtocolNativeWire, UWithNativePrefixProtobufMetadata, UZeroCopyTransport};
+use up_rust::{UProtocolNativeWire, UWithNativePrefixWire, UZeroCopyTransport};
 
 fn bench_adapter_receive(c: &mut Criterion) {
     let rt = Runtime::new().expect("tokio runtime");
@@ -20,7 +20,7 @@ fn bench_adapter_receive(c: &mut Criterion) {
     export_allocation_sample("selected_wire_adapter_receive/accepted", || {
         let core = BenchCore::default();
         core.push_rx(encoded_frame_for::<UProtocolNativeWire>(source.clone()));
-        let transport = core.with_native_prefix_protobuf_metadata(UProtocolNativeWire);
+        let transport = core.into_native_prefix_wire_transport(UProtocolNativeWire);
         rt.block_on(transport.receive_zero_copy(&source, None))
             .expect("accepted receive")
     });
@@ -32,7 +32,7 @@ fn bench_adapter_receive(c: &mut Criterion) {
                 other_source.clone(),
             ));
             core.push_rx(encoded_frame_for::<UProtocolNativeWire>(source.clone()));
-            let transport = core.with_native_prefix_protobuf_metadata(UProtocolNativeWire);
+            let transport = core.into_native_prefix_wire_transport(UProtocolNativeWire);
             rt.block_on(transport.receive_zero_copy(&source, None))
                 .expect("receive after reject")
         },
@@ -41,7 +41,7 @@ fn bench_adapter_receive(c: &mut Criterion) {
         let core = BenchCore::default();
         let transport = core
             .clone()
-            .with_native_prefix_protobuf_metadata(UProtocolNativeWire);
+            .into_native_prefix_wire_transport(UProtocolNativeWire);
         let listener = Arc::new(CountingZeroCopyListener::default());
         rt.block_on(transport.register_zero_copy_listener(&source, None, listener.clone()))
             .expect("register listener");
@@ -69,7 +69,7 @@ fn bench_adapter_receive(c: &mut Criterion) {
         core.push_rx(encoded_frame_for::<UProtocolNativeWire>(
             other_source.clone(),
         ));
-        let transport = core.with_native_prefix_protobuf_metadata(UProtocolNativeWire);
+        let transport = core.into_native_prefix_wire_transport(UProtocolNativeWire);
         match rt.block_on(transport.receive_zero_copy(&source, None)) {
             Ok(_) => panic!("nonmatching frame should be dropped before not found"),
             Err(error) => error,
@@ -81,7 +81,7 @@ fn bench_adapter_receive(c: &mut Criterion) {
             let core = BenchCore::default();
             let transport = core
                 .clone()
-                .with_native_prefix_protobuf_metadata(UProtocolNativeWire);
+                .into_native_prefix_wire_transport(UProtocolNativeWire);
             let listener = Arc::new(CountingZeroCopyListener::default());
             rt.block_on(transport.register_zero_copy_listener(&source, None, listener))
                 .expect("register listener");
@@ -94,7 +94,7 @@ fn bench_adapter_receive(c: &mut Criterion) {
             let core = BenchCore::default();
             let transport = core
                 .clone()
-                .with_native_prefix_protobuf_metadata(UProtocolNativeWire);
+                .into_native_prefix_wire_transport(UProtocolNativeWire);
             let listener = Arc::new(CountingZeroCopyListener::default());
             rt.block_on(transport.register_zero_copy_listener(&source, None, listener.clone()))
                 .expect("register listener");
@@ -108,7 +108,7 @@ fn bench_adapter_receive(c: &mut Criterion) {
             let core = BenchCore::default();
             let transport = core
                 .clone()
-                .with_native_prefix_protobuf_metadata(UProtocolNativeWire);
+                .into_native_prefix_wire_transport(UProtocolNativeWire);
             let listener = Arc::new(CountingZeroCopyListener::default());
             rt.block_on(transport.register_zero_copy_listener(&source, None, listener.clone()))
                 .expect("register listener");
@@ -146,7 +146,7 @@ fn bench_adapter_receive(c: &mut Criterion) {
         b.iter(|| {
             let core = BenchCore::default();
             core.push_rx(encoded_frame_for::<UProtocolNativeWire>(source.clone()));
-            let transport = core.with_native_prefix_protobuf_metadata(UProtocolNativeWire);
+            let transport = core.into_native_prefix_wire_transport(UProtocolNativeWire);
             let frame = rt
                 .block_on(transport.receive_zero_copy(black_box(&source), None))
                 .expect("accepted receive");
@@ -163,7 +163,7 @@ fn bench_adapter_receive(c: &mut Criterion) {
                     other_source.clone(),
                 ));
                 core.push_rx(encoded_frame_for::<UProtocolNativeWire>(source.clone()));
-                let transport = core.with_native_prefix_protobuf_metadata(UProtocolNativeWire);
+                let transport = core.into_native_prefix_wire_transport(UProtocolNativeWire);
                 let frame = rt
                     .block_on(transport.receive_zero_copy(black_box(&source), None))
                     .expect("receive after reject");
@@ -178,7 +178,7 @@ fn bench_adapter_receive(c: &mut Criterion) {
             core.push_rx(encoded_frame_for::<UProtocolNativeWire>(
                 other_source.clone(),
             ));
-            let transport = core.with_native_prefix_protobuf_metadata(UProtocolNativeWire);
+            let transport = core.into_native_prefix_wire_transport(UProtocolNativeWire);
             let error = match rt.block_on(transport.receive_zero_copy(black_box(&source), None)) {
                 Ok(_) => panic!("nonmatching frame should be dropped before not found"),
                 Err(error) => error,
@@ -194,7 +194,7 @@ fn bench_adapter_receive(c: &mut Criterion) {
                 let core = BenchCore::default();
                 let transport = core
                     .clone()
-                    .with_native_prefix_protobuf_metadata(UProtocolNativeWire);
+                    .into_native_prefix_wire_transport(UProtocolNativeWire);
                 let listener = Arc::new(CountingZeroCopyListener::default());
                 rt.block_on(transport.register_zero_copy_listener(&source, None, listener))
                     .expect("register listener");
@@ -211,7 +211,7 @@ fn bench_adapter_receive(c: &mut Criterion) {
                     let core = BenchCore::default();
                     let transport = core
                         .clone()
-                        .with_native_prefix_protobuf_metadata(UProtocolNativeWire);
+                        .into_native_prefix_wire_transport(UProtocolNativeWire);
                     let listener = Arc::new(CountingZeroCopyListener::default());
                     rt.block_on(transport.register_zero_copy_listener(
                         &source,
@@ -242,7 +242,7 @@ fn bench_adapter_receive(c: &mut Criterion) {
                     let core = BenchCore::default();
                     let transport = core
                         .clone()
-                        .with_native_prefix_protobuf_metadata(UProtocolNativeWire);
+                        .into_native_prefix_wire_transport(UProtocolNativeWire);
                     let listener = Arc::new(CountingZeroCopyListener::default());
                     rt.block_on(transport.register_zero_copy_listener(
                         &source,
@@ -270,7 +270,7 @@ fn bench_adapter_receive(c: &mut Criterion) {
             let core = BenchCore::default();
             let transport = core
                 .clone()
-                .with_native_prefix_protobuf_metadata(UProtocolNativeWire);
+                .into_native_prefix_wire_transport(UProtocolNativeWire);
             let listener = Arc::new(CountingZeroCopyListener::default());
             rt.block_on(transport.register_zero_copy_listener(&source, None, listener.clone()))
                 .expect("register listener");

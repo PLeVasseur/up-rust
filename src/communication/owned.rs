@@ -1281,7 +1281,7 @@ mod selected_wire_tests {
     use super::*;
     use crate::{
         NativePrefixProtobufMetadataCodec, ProtobufWire, UHasWire, UOwnedTransportCore,
-        UOwnedTransportImpl, UStatus, UWithNativePrefixProtobufMetadata, ValidatedOwnedFrame,
+        UOwnedTransportImpl, UStatus, UWithNativePrefixWire, ValidatedOwnedFrame,
     };
 
     #[derive(Clone, Default)]
@@ -1318,10 +1318,7 @@ mod selected_wire_tests {
     #[tokio::test]
     async fn publish_typed_uses_selected_wire() {
         let core = RecordingOwnedCore::default();
-        let transport = Arc::new(
-            core.clone()
-                .with_native_prefix_protobuf_metadata(ProtobufWire),
-        );
+        let transport = Arc::new(core.clone().into_native_prefix_wire_transport(ProtobufWire));
         assert_eq!(transport.wire(), &ProtobufWire);
         let publisher = Publisher::new(transport, uri_provider());
         let payload = StringValue {

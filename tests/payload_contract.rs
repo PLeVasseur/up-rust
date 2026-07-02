@@ -9,7 +9,9 @@
 use std::mem;
 
 use up_rust::bench_fixtures::payload_contract::{self as fixtures, *};
-use up_rust::{ByteBackedStablePayload, StableContainerWireFormat, UWireLoanUninit};
+use up_rust::{
+    ByteBackedStablePayload, LoanUninitPayload, StableContainerWireFormat, UWirePayload,
+};
 
 #[cfg(feature = "test-util")]
 use up_rust::{
@@ -81,7 +83,8 @@ fn payload_contract_stable_fixtures_satisfy_selected_wire_no_zero_bounds() {
     fn assert_selected_wire_no_zero<T>()
     where
         T: ByteBackedStablePayload,
-        StableContainerWireFormat: UWireLoanUninit<T>,
+        StableContainerWireFormat: UWirePayload<T>,
+        <StableContainerWireFormat as UWirePayload<T>>::Codec: LoanUninitPayload<T>,
     {
     }
 

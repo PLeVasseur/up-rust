@@ -9,9 +9,8 @@ mod fake_external_wire_crate;
 
 use fake_external_wire_crate::{metadata, ExternalFixture, ExternalTxCore, FakeExternalWire};
 use up_rust::{
-    DecodePayload, EncodePayload, NativePrefixProtobufMetadataCodec, PreparedTxLoanSpec,
-    UTxLoanSpec, UWire, UWireDecode, UWireEncode, UWireLoan, UWireReadDecode,
-    UWithNativePrefixProtobufMetadata, UZeroCopyTransportExt, ValidatedTxLoanSpec,
+    DecodePayload, EncodePayload, LoanPayload, UWire, UWireDecode, UWireEncode, UWirePayload,
+    UWireReadDecode, UWithNativePrefixWire, UZeroCopyTransportExt,
 };
 
 fn assert_external_wire<W>()
@@ -20,12 +19,13 @@ where
         + UWireEncode<ExternalFixture>
         + for<'a> UWireDecode<'a, ExternalFixture>
         + UWireReadDecode<ExternalFixture>
-        + UWireLoan<ExternalFixture>,
+        + UWirePayload<ExternalFixture>,
+    <W as UWirePayload<ExternalFixture>>::Codec: LoanPayload<ExternalFixture>,
 {
 }
 
 async fn selected_wire_zero_copy_tx_compiles() -> Result<(), up_rust::UStatus> {
-    let transport = ExternalTxCore.with_native_prefix_protobuf_metadata(FakeExternalWire);
+    let transport = ExternalTxCore.into_native_prefix_wire_transport(FakeExternalWire);
     transport
         .send_loaned_payload::<ExternalFixture>(metadata(), |payload| {
             payload.signal_id = 7;
@@ -44,14 +44,6 @@ fn main() {
     let encoded = FakeExternalWire::encode_payload_owned(&fixture).expect("encode fake external");
     let decoded = FakeExternalWire::decode_payload(&encoded).expect("decode fake external");
     assert_eq!(decoded, fixture);
-
-    let spec = UTxLoanSpec::payload(metadata(), encoded.len(), 1).expect("loan spec");
-    let prepared = PreparedTxLoanSpec::from_validated::<FakeExternalWire, NativePrefixProtobufMetadataCodec>(
-        ValidatedTxLoanSpec::try_from(spec).expect("validated spec"),
-        &NativePrefixProtobufMetadataCodec,
-    )
-    .expect("prepared fake external TX");
-    assert!(!prepared.encoded_metadata().is_empty());
 
     let _ = selected_wire_zero_copy_tx_compiles;
 }

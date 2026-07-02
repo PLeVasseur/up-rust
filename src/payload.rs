@@ -305,6 +305,26 @@ pub trait ReadDecodePayload<T>: PayloadCodec {
     fn decode_payload_from_reader<R: Read>(reader: R, payload_len: usize) -> Result<T, UWireError>;
 }
 
+/// Borrows a typed payload directly from contiguous receive storage.
+///
+/// This is the receive-side true zero-copy codec hook. Implementors must not
+/// allocate, copy, or deserialize into owned storage before returning `&T`.
+///
+/// # Safety
+///
+/// Implementors must validate that `src` has the exact length and alignment for
+/// one initialized `T`, that the bytes are a valid representation for `T` under
+/// this codec, and that returning `&T` cannot observe uninitialized padding or
+/// process-local state.
+pub unsafe trait BorrowPayload<T>: PayloadCodec {
+    /// Borrows `T` from contiguous payload bytes.
+    ///
+    /// # Errors
+    ///
+    /// Returns an error if the payload bytes cannot be borrowed as one valid `T`.
+    fn borrow_payload(src: &[u8]) -> Result<&T, UWireError>;
+}
+
 /// Initializes and borrows a typed value directly in initialized transmit storage.
 ///
 /// # Safety
@@ -1480,6 +1500,19 @@ where
         // SAFETY: `check_uninit_layout` verified exact `T` length and alignment,
         // and the loan wrapper preserves unique mutable access for `'a`.
         Ok(unsafe { LoanedUninitPayload::new_unchecked(ptr) })
+    }
+}
+
+// SAFETY:
+// - `borrow_payload` verifies exact length and alignment before casting.
+// - `T: StablePayload` is the stable-container safety contract that the visible
+//   payload bytes represent one initialized `T` for receive-side borrowing.
+unsafe impl<T> BorrowPayload<T> for StableContainerPayload<T>
+where
+    T: StablePayload,
+{
+    fn borrow_payload(src: &[u8]) -> Result<&T, UWireError> {
+        Self::borrow_checked_payload(src)
     }
 }
 

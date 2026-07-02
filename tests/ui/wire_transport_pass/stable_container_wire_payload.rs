@@ -5,8 +5,8 @@
  ********************************************************************************/
 
 use up_rust::{
-    ByteBackedStablePayload, PayloadCodec, StableContainerPayload, StableContainerWireFormat,
-    UWire, UWireLoan, UWireLoanUninit,
+    ByteBackedStablePayload, LoanPayload, LoanUninitPayload, PayloadCodec, StableContainerPayload,
+    StableContainerWireFormat, UWire, UWirePayload,
 };
 
 #[repr(C)]
@@ -22,7 +22,8 @@ fn assert_wire<W: UWire>() {}
 
 fn assert_wire_loan<W, T>()
 where
-    W: UWireLoan<T> + UWireLoanUninit<T>,
+    W: UWirePayload<T>,
+    <W as UWirePayload<T>>::Codec: LoanPayload<T> + LoanUninitPayload<T>,
 {
 }
 
@@ -30,7 +31,7 @@ fn main() {
     assert_wire::<StableContainerWireFormat>();
     assert_wire_loan::<StableContainerWireFormat, SelectedWireStableBytes>();
 
-    let wire_encoding = <StableContainerWireFormat as UWireLoan<
+    let wire_encoding = <StableContainerWireFormat as UWirePayload<
         SelectedWireStableBytes,
     >>::Codec::payload_encoding();
     let stable_encoding = StableContainerPayload::<SelectedWireStableBytes>::payload_encoding();

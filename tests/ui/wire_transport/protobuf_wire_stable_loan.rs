@@ -4,21 +4,16 @@
  * SPDX-License-Identifier: Apache-2.0
  ********************************************************************************/
 
-use up_rust::{ProtobufWire, UWireLoan};
+use protobuf::well_known_types::wrappers::StringValue;
+use up_rust::{LoanPayload, ProtobufWire, UWirePayload};
 
-#[repr(C)]
-#[derive(Default, up_rust::StablePayload, up_rust::ByteBackedStablePayload)]
-#[stable_payload(type_name = "example.trybuild.UnsupportedProtobufStableLoan")]
-struct UnsupportedProtobufStableLoan {
-    bytes: [u8; 4],
-}
-
-fn needs_stable_loan<W, T>()
+fn needs_typed_loan<W, T>()
 where
-    W: UWireLoan<T>,
+    W: UWirePayload<T>,
+    <W as UWirePayload<T>>::Codec: LoanPayload<T>,
 {
 }
 
 fn main() {
-    needs_stable_loan::<ProtobufWire, UnsupportedProtobufStableLoan>();
+    needs_typed_loan::<ProtobufWire, StringValue>();
 }

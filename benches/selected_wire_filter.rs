@@ -9,7 +9,7 @@ mod support;
 use criterion::{black_box, criterion_group, criterion_main, Criterion};
 use support::{encoded_frame_for, export_allocation_sample, BenchCore};
 use tokio::runtime::Runtime;
-use up_rust::{UProtocolNativeWire, UWithNativePrefixProtobufMetadata, UZeroCopyTransport};
+use up_rust::{UProtocolNativeWire, UWithNativePrefixWire, UZeroCopyTransport};
 
 fn bench_filter(c: &mut Criterion) {
     let rt = Runtime::new().expect("tokio runtime");
@@ -19,14 +19,14 @@ fn bench_filter(c: &mut Criterion) {
     export_allocation_sample("selected_wire_filter/exact_receive", || {
         let core = BenchCore::default();
         core.push_rx(encoded_frame_for::<UProtocolNativeWire>(source.clone()));
-        let transport = core.with_native_prefix_protobuf_metadata(UProtocolNativeWire);
+        let transport = core.into_native_prefix_wire_transport(UProtocolNativeWire);
         rt.block_on(transport.receive_zero_copy(&source, None))
             .expect("receive exact")
     });
     export_allocation_sample("selected_wire_filter/wildcard_receive", || {
         let core = BenchCore::default();
         core.push_rx(encoded_frame_for::<UProtocolNativeWire>(source.clone()));
-        let transport = core.with_native_prefix_protobuf_metadata(UProtocolNativeWire);
+        let transport = core.into_native_prefix_wire_transport(UProtocolNativeWire);
         rt.block_on(transport.receive_zero_copy(&wildcard, None))
             .expect("receive wildcard")
     });
@@ -35,7 +35,7 @@ fn bench_filter(c: &mut Criterion) {
         b.iter(|| {
             let core = BenchCore::default();
             core.push_rx(encoded_frame_for::<UProtocolNativeWire>(source.clone()));
-            let transport = core.with_native_prefix_protobuf_metadata(UProtocolNativeWire);
+            let transport = core.into_native_prefix_wire_transport(UProtocolNativeWire);
             let frame = rt
                 .block_on(transport.receive_zero_copy(black_box(&source), None))
                 .expect("receive exact");
@@ -47,7 +47,7 @@ fn bench_filter(c: &mut Criterion) {
         b.iter(|| {
             let core = BenchCore::default();
             core.push_rx(encoded_frame_for::<UProtocolNativeWire>(source.clone()));
-            let transport = core.with_native_prefix_protobuf_metadata(UProtocolNativeWire);
+            let transport = core.into_native_prefix_wire_transport(UProtocolNativeWire);
             let frame = rt
                 .block_on(transport.receive_zero_copy(black_box(&wildcard), None))
                 .expect("receive wildcard");

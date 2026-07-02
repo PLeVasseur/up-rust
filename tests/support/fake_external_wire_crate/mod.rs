@@ -9,7 +9,7 @@ use std::{io::Read, mem};
 use up_rust::{
     DecodePayload, EncodePayload, LoanPayload, PayloadEncoding, PayloadFormat, PayloadLayout,
     PreparedTxLoanSpec, ReadDecodePayload, UFrameMetadata, UMessageBuilder, UStatus, UUri,
-    UVecTxBuffer, UWire, UWireError, UWireLoan, UZeroCopyTransportCore, WireIdentity,
+    UVecTxBuffer, UWire, UWireError, UWirePayload, UZeroCopyTransportCore, WireIdentity,
     NATIVE_PREFIX_METADATA_LAYOUT_ID,
 };
 
@@ -126,7 +126,7 @@ unsafe impl LoanPayload<ExternalFixture> for FakeExternalWire {
     }
 }
 
-impl UWireLoan<ExternalFixture> for FakeExternalWire {
+impl UWirePayload<ExternalFixture> for FakeExternalWire {
     type Codec = Self;
 }
 

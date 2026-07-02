@@ -21,8 +21,8 @@ use crate::PayloadEncoding;
 #[cfg(feature = "protobuf-support")]
 use crate::PayloadFormat;
 use crate::{
-    ByteBackedStablePayload, DecodePayload, EncodePayload, LoanPayload, LoanUninitPayload,
-    ReadDecodePayload, StableContainerPayload,
+    DecodePayload, EncodePayload, PayloadCodec, ReadDecodePayload, StableContainerPayload,
+    StablePayload,
 };
 #[cfg(feature = "protobuf-support")]
 use crate::{PayloadLayout, UWireError};
@@ -444,34 +444,29 @@ pub trait UWireReadDecode<T>: ReadDecodePayload<T> {}
 
 impl<C, T> UWireReadDecode<T> for C where C: ReadDecodePayload<T> {}
 
-/// Wire-level initialized loan support for typed payloads.
+/// Selected-wire payload mapping for typed payloads.
 ///
-/// The selected wire chooses the concrete payload codec used for the typed loan.
-/// This keeps non-generic wire markers such as [`StableContainerWireFormat`]
-/// usable with type-specific stable-container metadata.
-pub trait UWireLoan<T>: UWire {
-    /// Concrete payload codec used by this selected wire for `T` loans.
-    type Codec: LoanPayload<T>;
+/// A wire chooses one payload codec for `T`. The codec's implemented capability
+/// traits then decide which operations are available: encode/decode, initialized
+/// TX loan, uninitialized TX loan, and receive-side typed borrow.
+pub trait UWirePayload<T>: UWire {
+    /// Concrete payload codec used by this selected wire for `T`.
+    type Codec: PayloadCodec;
 }
 
-/// Wire-level uninitialized loan support for typed payloads.
-pub trait UWireLoanUninit<T>: UWire {
-    /// Concrete payload codec used by this selected wire for `T` uninitialized loans.
-    type Codec: LoanUninitPayload<T>;
-}
-
-impl<T> UWireLoan<T> for StableContainerWireFormat
+impl<T> UWirePayload<T> for StableContainerWireFormat
 where
-    T: ByteBackedStablePayload + Default,
+    T: StablePayload,
 {
     type Codec = StableContainerPayload<T>;
 }
 
-impl<T> UWireLoanUninit<T> for StableContainerWireFormat
+#[cfg(feature = "protobuf-support")]
+impl<T> UWirePayload<T> for ProtobufWire
 where
-    T: ByteBackedStablePayload,
+    T: ProtobufMappable,
 {
-    type Codec = StableContainerPayload<T>;
+    type Codec = ProtobufPayload;
 }
 
 /// Errors returned by native-prefix selected-wire metadata handling.
@@ -875,7 +870,9 @@ mod tests {
     use protobuf::well_known_types::wrappers::StringValue;
 
     use super::*;
-    use crate::{PayloadCodec, StablePayload};
+    use crate::{
+        BorrowPayload, ByteBackedStablePayload, LoanPayload, LoanUninitPayload, PayloadCodec,
+    };
 
     #[repr(C)]
     #[derive(Clone, Copy, Debug, Default, Eq, PartialEq)]
@@ -893,15 +890,11 @@ mod tests {
     // exactly the byte array field.
     unsafe impl ByteBackedStablePayload for WireStableBytes {}
 
-    fn assert_wire_loan<T, W>()
+    fn assert_wire_payload<T, W>()
     where
-        W: UWireLoan<T>,
-    {
-    }
-
-    fn assert_wire_uninit_loan<T, W>()
-    where
-        W: UWireLoanUninit<T>,
+        W: UWirePayload<T>,
+        <W as UWirePayload<T>>::Codec:
+            LoanPayload<T> + LoanUninitPayload<T> + BorrowPayload<T> + PayloadCodec,
     {
     }
 
@@ -952,12 +945,11 @@ mod tests {
     }
 
     #[test]
-    fn stable_container_wire_exposes_type_specific_loan_codecs() {
-        assert_wire_loan::<WireStableBytes, StableContainerWireFormat>();
-        assert_wire_uninit_loan::<WireStableBytes, StableContainerWireFormat>();
+    fn stable_container_wire_maps_type_to_capable_codec() {
+        assert_wire_payload::<WireStableBytes, StableContainerWireFormat>();
 
         let encoding =
-            <StableContainerWireFormat as UWireLoan<WireStableBytes>>::Codec::payload_encoding();
+            <StableContainerWireFormat as UWirePayload<WireStableBytes>>::Codec::payload_encoding();
         let expected = StableContainerPayload::<WireStableBytes>::payload_encoding();
         assert_eq!(encoding, expected);
     }

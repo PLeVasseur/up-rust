@@ -130,11 +130,10 @@ pub mod wire;
 pub use wire::NativePrefixProtobufMetadataCodec;
 pub use wire::{
     ProtobufWire, StableContainerWireFormat, UProtocolNativeWire, UWire, UWireDecode,
-    UWireDecodeOwned, UWireEncode, UWireLoan, UWireLoanUninit, UWireReadDecode, WireCompatibility,
-    WireIdentity, WireIdentityRef, NATIVE_EXPLICIT_PAYLOAD_FAMILY_ID,
-    NATIVE_PREFIX_METADATA_LAYOUT_ID, PROTOBUF_PAYLOAD_FAMILY_ID, PROTOBUF_WIRE_ID,
-    STABLE_CONTAINER_PAYLOAD_FAMILY_ID, STABLE_CONTAINER_WIRE_ID, UPROTOCOL_NATIVE_WIRE_ID,
-    XCDR_V2_PAYLOAD_FAMILY_ID, XCDR_V2_WIRE_ID,
+    UWireDecodeOwned, UWireEncode, UWirePayload, UWireReadDecode, WireCompatibility, WireIdentity,
+    WireIdentityRef, NATIVE_EXPLICIT_PAYLOAD_FAMILY_ID, NATIVE_PREFIX_METADATA_LAYOUT_ID,
+    PROTOBUF_PAYLOAD_FAMILY_ID, PROTOBUF_WIRE_ID, STABLE_CONTAINER_PAYLOAD_FAMILY_ID,
+    STABLE_CONTAINER_WIRE_ID, UPROTOCOL_NATIVE_WIRE_ID, XCDR_V2_PAYLOAD_FAMILY_ID, XCDR_V2_WIRE_ID,
 };
 #[cfg(feature = "selected-wire-codec-core")]
 pub use wire::{
@@ -154,7 +153,7 @@ pub use owned_frame::UOwnedFrame;
 pub mod payload;
 pub use payload::{
     assert_stable_payload_byte_backed_uninit, stable_payload_supports_byte_backed_uninit,
-    ByteBackedStablePayload, BytePayloadCodec, DecodePayload, EncodePayload,
+    BorrowPayload, ByteBackedStablePayload, BytePayloadCodec, DecodePayload, EncodePayload,
     InitializedStablePayload, LoanPayload, LoanUninitPayload, LoanedInitPayload,
     LoanedUninitPayload, PayloadCodec, PayloadFormat, PayloadLayout, ProtobufAnyPayload,
     ProtobufPayload, RawBytes, ReadDecodePayload, StableContainerPayload,
@@ -220,11 +219,6 @@ pub use utransport::{
 
 #[cfg(feature = "selected-wire-transport-core")]
 mod wire_transport;
-#[cfg(all(
-    feature = "selected-wire-transport-adapter",
-    feature = "selected-wire-protobuf-metadata"
-))]
-pub use wire_transport::UWithNativePrefixProtobufMetadata;
 #[cfg(feature = "owned-frame-transport")]
 pub use wire_transport::{
     EncodedOwnedFrame, PreparedOwnedFrame, UEncodedOwnedListener, UOwnedTransportCore,
@@ -234,8 +228,18 @@ pub use wire_transport::{
     PreparedTxLoanSpec, UEncodedLoanedRxFrame, UEncodedRxFrame, UEncodedZeroCopyListener,
     UZeroCopyTransportCore, UZeroCopyUninitTransportCore,
 };
+#[cfg(all(
+    feature = "selected-wire-transport-adapter",
+    feature = "selected-wire-protobuf-metadata"
+))]
+pub use wire_transport::{
+    ProtobufWireTransport, StableContainerWireTransport, UNativePrefixWireTransport,
+    UProtocolNativeWireTransport, UWithNativePrefixWire,
+};
 #[cfg(feature = "selected-wire-transport-adapter")]
-pub use wire_transport::{UHasWire, UWireRx, UWireTransport, UWithWireAndMetadataCodec};
+pub use wire_transport::{
+    UHasWire, USelectedWireZeroCopyTransport, UWireRx, UWireTransport, UWithWireAndMetadataCodec,
+};
 
 mod uuid;
 pub use uuid::UUID;

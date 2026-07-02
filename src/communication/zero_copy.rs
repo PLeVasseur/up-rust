@@ -26,7 +26,7 @@ use std::sync::Arc;
 use crate::{
     communication::{CallOptions, PubSubError},
     LocalUriProvider, StableContainerPayload, StablePayloadInit, UFrameMetadata, UHasWire,
-    UMessageBuilder, UWireLoan, UWireLoanUninit, UZeroCopyTransport, UZeroCopyTransportExt,
+    UMessageBuilder, UWirePayload, UZeroCopyTransport, UZeroCopyTransportExt,
     UZeroCopyUninitTransport, UZeroCopyUninitTransportExt,
 };
 
@@ -124,8 +124,8 @@ where
         init: impl for<'payload> FnOnce(&'payload mut Payload) + Send,
     ) -> Result<(), PubSubError>
     where
-        T::Wire: UWireLoan<Payload>,
-        <T::Wire as UWireLoan<Payload>>::Codec: Send + Sync,
+        T::Wire: UWirePayload<Payload>,
+        <T::Wire as UWirePayload<Payload>>::Codec: crate::LoanPayload<Payload> + Send + Sync,
     {
         let metadata = self.build_metadata(resource_id, call_options)?;
         self.transport
@@ -154,7 +154,7 @@ where
             > + Send,
     ) -> Result<(), PubSubError>
     where
-        T::Wire: UWireLoanUninit<Payload, Codec = StableContainerPayload<Payload>>,
+        T::Wire: UWirePayload<Payload, Codec = StableContainerPayload<Payload>>,
         Payload: StablePayloadInit + Send,
     {
         let metadata = self.build_metadata(resource_id, call_options)?;
