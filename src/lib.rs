@@ -21,6 +21,34 @@ This crate can be used to
   over one of the supported transport protocols.
 * implement support for an additional transport protocol by means of implementing the [Transport & Session Layer API](https://github.com/eclipse-uprotocol/up-spec/blob/v1.6.0-alpha.7/up-l1/README.adoc).
 
+## Public API Tiers
+
+The crate root is a compatibility import surface. Existing root imports such
+as `UMessage`, `UTransport`, `UOwnedTransport`, `UZeroCopyTransport`, wire
+helpers, payload helpers, mocks, and fixtures remain available. The tiers below
+describe the intended starting points for new code; they are not deprecations or
+capability removals.
+
+* Ordinary application and service code should start from the Communication
+  Layer roles in `communication`, such as publishers, subscribers, notifiers,
+  RPC clients, and RPC servers.
+* Compatibility transport code should use `UTransport`, `UListener`,
+  `UMessage`, `UAttributes`, `UUri`, and `UStatus` when implementing or adapting
+  the ordinary message transport contract.
+* Native-frame, selected-wire, payload-codec, and zero-copy names are advanced
+  Transport Layer and wire-representation surfaces for transport authors,
+  codecs, routing adapters, and loan-backed paths.
+* Unsafe stable-payload transmit/init APIs and unchecked constructors are expert
+  surfaces with caller-side safety obligations. They are not the default
+  application path.
+* Mocks, in-memory proof transports, vector-backed leases, payload fixtures, and
+  benchmark fixtures are test/proof support surfaces rather than ordinary
+  production application APIs.
+
+Direct Transport Layer usage remains valid, and selected-wire or whole-frame
+wire semantics remain Transport Layer representation/profile semantics consumed
+by Communication Layer roles.
+
 ## Features
 
 None of the following features are enabled by default, so you can pick and choose which parts of the library you want to use by enabling the corresponding features. Note that some features depend on each other, so enabling one feature might automatically enable other features as well. For example, enabling `up-core-types` will also enable `protobuf-support` since the generated types require that.

@@ -22,6 +22,18 @@ up-rust = { version = "0.9" }
 
 Most developers will want to use the Communication Level API and its default implementation which are provided by the `communication` module. Please refer to the [examples](./examples/) for inspiration how to use this crate.
 
+### Choosing Imports
+
+The crate root remains a compatibility import surface, so existing `up_rust::UMessage`, `up_rust::UTransport`, and similar root imports are still valid. New code should choose imports by the layer being used:
+
+* Application and service code should start with the Communication Layer roles in `up_rust::communication`, such as publishers, subscribers, notifiers, and RPC clients/servers.
+* Compatibility transport code should use `UTransport`, `UListener`, `UMessage`, `UAttributes`, `UUri`, and `UStatus` directly when it is implementing or adapting the ordinary message transport contract.
+* Native-frame, selected-wire, payload-codec, and zero-copy code is advanced transport or wire-representation work. Import those names deliberately when implementing transports, codecs, routing adapters, or loan-backed paths.
+* Unsafe stable-payload transmit/init APIs and unchecked constructors are expert surfaces with caller-side safety obligations. They are not the default application path.
+* Mocks, in-memory proof transports, vector-backed leases, payload fixtures, and benchmark fixtures are test/proof support surfaces. Prefer them for tests and conformance evidence, not as ordinary production application APIs.
+
+These tiers are documentation guidance only; they do not deprecate `UTransport`, ban direct Transport Layer usage, or remove any existing root export.
+
 ## Building from Source
 <!--
 `uman~up-language-building~1`
