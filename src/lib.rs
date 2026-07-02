@@ -49,6 +49,19 @@ Direct Transport Layer usage remains valid, and selected-wire or whole-frame
 wire semantics remain Transport Layer representation/profile semantics consumed
 by Communication Layer roles.
 
+For direct up-L1 work, use the concrete public doors below rather than guessing
+from the ordinary `communication` entry point:
+
+| Use case | Public door | Notes |
+| --- | --- | --- |
+| Compatibility message transport | Root exports such as `UTransport`, `UListener`, `UMessage`, `UAttributes`, `UUri`, and `UStatus` | Direct up-L1 remains a supported compatibility path. |
+| Owned native-frame transport | Root exports such as `UOwnedTransport`, `UOwnedFrame`, `ValidatedOwnedFrame`, `PreparedOwnedFrame`, and the role facade in `communication::owned` | Available with the owned-frame transport features; it does not replace `UTransport`. |
+| Zero-copy transport and loans | Root exports such as `UZeroCopyTransport`, `UZeroCopyUninitTransport`, `UTxBuffer`, `UUninitTxBuffer`, `UZeroCopyRxLease`, and the publish facade in `communication::zero_copy` | Loan-backed mechanics remain up-L1 capability. The L2 facade is intentionally narrower than raw transport capability. |
+| Selected-wire profiles | The public `wire` module plus root exports such as `UWire`, `UProtocolNativeWire`, `ProtobufWire`, `WireIdentity`, and selected-wire adapter exports such as `UWireTransport` | Selected-wire identity, metadata, and payload-family checks are up-L1 representation/profile semantics. |
+| Whole-frame envelopes | The public `frame_wire` module and root exports such as `UFrameWireFormat` and `ProtobufUMessageFrame` when the required features are enabled | Whole-frame serialization is separate from selected-wire profile metadata. |
+| Payload codecs and stable payload support | The public `payload` module plus root exports such as `PayloadCodec`, `EncodePayload`, `DecodePayload`, `StablePayload`, and `StablePayloadInit` | Safe derive/codegen paths are preferred for applications; manual unsafe slots are expert hatches. |
+| Test, fake, and proof support | Feature-gated root exports such as `MockTransport`, `InMemoryZeroCopyTransport`, vector leases, and payload fixtures | These remain available for tests, benchmarks, and conformance proof, not as production transport evidence by themselves. |
+
 ## Features
 
 None of the following features are enabled by default, so you can pick and choose which parts of the library you want to use by enabling the corresponding features. Note that some features depend on each other, so enabling one feature might automatically enable other features as well. For example, enabling `up-core-types` will also enable `protobuf-support` since the generated types require that.

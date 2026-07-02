@@ -34,6 +34,18 @@ The crate root remains a compatibility import surface, so existing `up_rust::UMe
 
 These tiers are documentation guidance only; they do not deprecate `UTransport`, ban direct Transport Layer usage, or remove any existing root export.
 
+For direct Transport Layer work, the up-L1 doors are still intentionally easy to find:
+
+| Use case | Public door | Notes |
+| --- | --- | --- |
+| Compatibility message transport | Root exports such as `up_rust::UTransport`, `up_rust::UListener`, `up_rust::UMessage`, `up_rust::UAttributes`, `up_rust::UUri`, and `up_rust::UStatus` | Direct up-L1 remains a supported compatibility path. |
+| Owned native-frame transport | Root exports such as `up_rust::UOwnedTransport`, `up_rust::UOwnedFrame`, `up_rust::ValidatedOwnedFrame`, `up_rust::PreparedOwnedFrame`, and the role facade in `up_rust::communication::owned` | Available with the owned-frame transport features; it does not replace `UTransport`. |
+| Zero-copy transport and loans | Root exports such as `up_rust::UZeroCopyTransport`, `up_rust::UZeroCopyUninitTransport`, `up_rust::UTxBuffer`, `up_rust::UUninitTxBuffer`, `up_rust::UZeroCopyRxLease`, and the publish facade in `up_rust::communication::zero_copy` | Loan-backed mechanics remain up-L1 capability. The L2 facade is intentionally narrower than raw transport capability. |
+| Selected-wire profiles | The public `up_rust::wire` module plus root exports such as `up_rust::UWire`, `up_rust::UProtocolNativeWire`, `up_rust::ProtobufWire`, `up_rust::WireIdentity`, and selected-wire adapter exports such as `up_rust::UWireTransport` | Selected-wire identity, metadata, and payload-family checks are up-L1 representation/profile semantics. |
+| Whole-frame envelopes | The public `up_rust::frame_wire` module and root exports such as `up_rust::UFrameWireFormat` and `up_rust::ProtobufUMessageFrame` when the required features are enabled | Whole-frame serialization is separate from selected-wire profile metadata. |
+| Payload codecs and stable payload support | The public `up_rust::payload` module plus root exports such as `up_rust::PayloadCodec`, `up_rust::EncodePayload`, `up_rust::DecodePayload`, `up_rust::StablePayload`, and `up_rust::StablePayloadInit` | Safe derive/codegen paths are preferred for applications; manual unsafe slots are expert hatches. |
+| Test, fake, and proof support | Feature-gated root exports such as `up_rust::MockTransport`, `up_rust::InMemoryZeroCopyTransport`, vector leases, and payload fixtures | These remain available for tests, benchmarks, and conformance proof, not as production transport evidence by themselves. |
+
 ## Building from Source
 <!--
 `uman~up-language-building~1`
