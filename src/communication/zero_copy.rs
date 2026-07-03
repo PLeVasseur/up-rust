@@ -25,10 +25,11 @@ use std::sync::Arc;
 
 use crate::{
     communication::{CallOptions, PubSubError},
-    LocalUriProvider, StableContainerPayload, StablePayloadInit, UFrameMetadata, UHasWire,
-    UMessageBuilder, UWirePayload, UZeroCopyTransport, UZeroCopyTransportExt,
-    UZeroCopyUninitTransport, UZeroCopyUninitTransportExt,
+    LocalUriProvider, StableContainerPayload, StablePayloadInit, UFrameMetadata, UMessageBuilder,
+    UZeroCopyTransport, UZeroCopyTransportExt, UZeroCopyUninitTransport,
+    UZeroCopyUninitTransportExt,
 };
+use crate::{wire::UWirePayload, wire_transport::UHasWire};
 
 /// Front door for zero-copy communication-layer clients.
 pub struct Endpoint<T, P>

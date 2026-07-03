@@ -11,7 +11,13 @@
  * SPDX-License-Identifier: Apache-2.0
  ********************************************************************************/
 
-#![cfg_attr(not(feature = "selected-wire-transport-adapter"), allow(dead_code))]
+#![cfg_attr(
+    not(any(
+        feature = "transport-implementer-api",
+        feature = "wire-implementer-api"
+    )),
+    allow(dead_code)
+)]
 
 //! Selected-wire transport adapter core.
 //!
@@ -37,16 +43,17 @@ use bytes::Bytes;
 use tracing::warn;
 
 #[cfg(feature = "selected-wire-protobuf-metadata")]
-use crate::NativePrefixProtobufMetadataCodec;
+use crate::wire::NativePrefixProtobufMetadataCodec;
+#[cfg(feature = "selected-wire-protobuf-metadata")]
+use crate::wire::{ProtobufWire, StableContainerWireFormat, UProtocolNativeWire};
+use crate::wire::{UWire, UWireMetadataCodecFor, UWirePayload};
 use crate::{
     validate_frame_view_for_transport, BorrowPayload, LoanedPayload, PayloadAlignment,
     ReadDecodePayload, UCode, UFrameMetadata, UFrameView, ULoanedContiguousZeroCopyRxFrame,
-    UStatus, UTxBuffer, UTxLoanSpec, UUninitTxBuffer, UUri, UWire, UWireError,
-    UWireMetadataCodecFor, UWirePayload, UZeroCopyListener, UZeroCopyRxLease, UZeroCopyTransport,
-    UZeroCopyTransportImpl, UZeroCopyUninitTransportImpl, ValidatedTxLoanSpec,
+    UStatus, UTxBuffer, UTxLoanSpec, UUninitTxBuffer, UUri, UWireError, UZeroCopyListener,
+    UZeroCopyRxLease, UZeroCopyTransport, UZeroCopyTransportImpl, UZeroCopyUninitTransportImpl,
+    ValidatedTxLoanSpec,
 };
-#[cfg(feature = "selected-wire-protobuf-metadata")]
-use crate::{ProtobufWire, StableContainerWireFormat, UProtocolNativeWire};
 #[cfg(feature = "owned-frame-transport")]
 use crate::{UOwnedFrame, UOwnedListener, UOwnedTransportImpl, ValidatedOwnedFrame};
 

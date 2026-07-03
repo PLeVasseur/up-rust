@@ -51,12 +51,14 @@ payload-contract-large-fixtures = ["payload-contract-fixtures"]
 payload-contract-simulator-fixtures = ["payload-contract-large-fixtures"]
 protobuf-support = ["dep:protobuf"]
 protobuf-wire = ["up-core-types"]
+selected-wire-user-api = ["selected-wire-protobuf-metadata", "selected-wire-transport-adapter"]
 selected-wire-codec-core = []
 selected-wire-protobuf-metadata = ["selected-wire-codec-core", "up-core-types"]
 selected-wire-transport-adapter = ["selected-wire-transport-core"]
 selected-wire-transport-core = ["selected-wire-codec-core"]
 symphony = ["up-l2-rpc-server", "dep:serde", "dep:serde_json", "dep:symphony"]
 test-util = ["dep:mockall"]
+transport-implementer-api = ["selected-wire-transport-core"]
 up-core-types = ["protobuf-support"]
 up-l2-api = ["dep:thiserror"]
 up-l2-notifier = ["up-l2-api"]
@@ -70,6 +72,7 @@ unsafe-stable-payload-tx = []
 unsafe-uninit-payload-bytes = []
 usubscription = ["up-l2-rpc-client"]
 util = ["tokio/sync"]
+wire-implementer-api = ["selected-wire-protobuf-metadata"]
 
 [dependencies]
 async-trait = { version = "0.1" }
@@ -195,15 +198,19 @@ required-features = ["payload-contract-fixtures"]
 
 [[test]]
 name = "wire_metadata_conformance"
-required-features = ["up-core-types"]
+required-features = ["wire-implementer-api"]
 
 [[test]]
 name = "wire_transport_adapter"
-required-features = ["protobuf-wire"]
+required-features = ["selected-wire-user-api", "wire-implementer-api", "transport-implementer-api", "protobuf-wire"]
 
 [[test]]
 name = "wire_transport_trybuild"
-required-features = ["protobuf-wire"]
+required-features = ["selected-wire-user-api", "wire-implementer-api", "transport-implementer-api", "protobuf-wire"]
+
+[[test]]
+name = "role_firewall_trybuild"
+required-features = ["selected-wire-user-api"]
 
 [[bench]]
 name = "selected_wire_metadata"

@@ -37,7 +37,10 @@ capability removals.
   the ordinary message transport contract.
 * Native-frame, selected-wire, payload-codec, and zero-copy names are advanced
   Transport Layer and wire-representation surfaces for transport authors,
-  codecs, routing adapters, and loan-backed paths.
+  codecs, routing adapters, and loan-backed paths. New selected-wire users
+  should enable `selected-wire-user-api`; external wire authors should enable
+  `wire-implementer-api`; physical transport authors should enable
+  `transport-implementer-api`.
 * Unsafe stable-payload transmit/init APIs and unchecked constructors are expert
   surfaces with caller-side safety obligations. They are not the default
   application path.
@@ -125,20 +128,40 @@ pub use frame_metadata::{
     UFrameMetadata, UFrameMetadataError,
 };
 
+#[cfg(feature = "wire-implementer-api")]
 pub mod wire;
-#[cfg(feature = "selected-wire-protobuf-metadata")]
+#[cfg(not(feature = "wire-implementer-api"))]
+mod wire;
+#[cfg(feature = "wire-implementer-api")]
 pub use wire::NativePrefixProtobufMetadataCodec;
+#[cfg(any(feature = "selected-wire-user-api", feature = "wire-implementer-api"))]
 pub use wire::{
-    ProtobufWire, StableContainerWireFormat, UProtocolNativeWire, UWire, UWireDecode,
-    UWireDecodeOwned, UWireEncode, UWirePayload, UWireReadDecode, WireCompatibility, WireIdentity,
+    ProtobufWire, StableContainerWireFormat, UProtocolNativeWire, WireCompatibility, WireIdentity,
     WireIdentityRef, NATIVE_EXPLICIT_PAYLOAD_FAMILY_ID, NATIVE_PREFIX_METADATA_LAYOUT_ID,
     PROTOBUF_PAYLOAD_FAMILY_ID, PROTOBUF_WIRE_ID, STABLE_CONTAINER_PAYLOAD_FAMILY_ID,
     STABLE_CONTAINER_WIRE_ID, UPROTOCOL_NATIVE_WIRE_ID, XCDR_V2_PAYLOAD_FAMILY_ID, XCDR_V2_WIRE_ID,
 };
-#[cfg(feature = "selected-wire-codec-core")]
+#[cfg(feature = "wire-implementer-api")]
+pub use wire::{UWire, UWireDecode, UWireDecodeOwned, UWireEncode, UWirePayload, UWireReadDecode};
+#[cfg(feature = "wire-implementer-api")]
 pub use wire::{
     UWireMetadataCodec, UWireMetadataCodecFor, UWireMetadataContext, UWireMetadataError,
 };
+
+#[cfg(feature = "wire-implementer-api")]
+pub mod wire_implementer_api {
+    //! External selected-wire/profile authoring surface.
+    pub use crate::{
+        NativePrefixProtobufMetadataCodec, ProtobufWire, StableContainerWireFormat,
+        UProtocolNativeWire, UWire, UWireDecode, UWireDecodeOwned, UWireEncode, UWireMetadataCodec,
+        UWireMetadataCodecFor, UWireMetadataContext, UWireMetadataError, UWirePayload,
+        UWireReadDecode, WireCompatibility, WireIdentity, WireIdentityRef,
+        NATIVE_EXPLICIT_PAYLOAD_FAMILY_ID, NATIVE_PREFIX_METADATA_LAYOUT_ID,
+        PROTOBUF_PAYLOAD_FAMILY_ID, PROTOBUF_WIRE_ID, STABLE_CONTAINER_PAYLOAD_FAMILY_ID,
+        STABLE_CONTAINER_WIRE_ID, UPROTOCOL_NATIVE_WIRE_ID, XCDR_V2_PAYLOAD_FAMILY_ID,
+        XCDR_V2_WIRE_ID,
+    };
+}
 
 #[cfg(all(feature = "owned-frame-transport", feature = "protobuf-support"))]
 pub mod frame_wire;
@@ -217,29 +240,94 @@ pub use utransport::{
     UOwnedListener, UOwnedTransport, UOwnedTransportExt, UOwnedTransportImpl, ValidatedOwnedFrame,
 };
 
-#[cfg(feature = "selected-wire-transport-core")]
+#[cfg(all(
+    feature = "selected-wire-transport-core",
+    feature = "transport-implementer-api"
+))]
+pub mod wire_transport;
+#[cfg(all(
+    feature = "selected-wire-transport-core",
+    not(feature = "transport-implementer-api")
+))]
 mod wire_transport;
-#[cfg(feature = "owned-frame-transport")]
+#[cfg(all(
+    feature = "owned-frame-transport",
+    feature = "transport-implementer-api"
+))]
 pub use wire_transport::{
     EncodedOwnedFrame, PreparedOwnedFrame, UEncodedOwnedListener, UOwnedTransportCore,
 };
-#[cfg(feature = "selected-wire-transport-core")]
+#[cfg(feature = "transport-implementer-api")]
 pub use wire_transport::{
     PreparedTxLoanSpec, UEncodedLoanedRxFrame, UEncodedRxFrame, UEncodedZeroCopyListener,
     UZeroCopyTransportCore, UZeroCopyUninitTransportCore,
 };
-#[cfg(all(
-    feature = "selected-wire-transport-adapter",
-    feature = "selected-wire-protobuf-metadata"
-))]
+#[cfg(feature = "selected-wire-user-api")]
 pub use wire_transport::{
     ProtobufWireTransport, StableContainerWireTransport, UNativePrefixWireTransport,
     UProtocolNativeWireTransport, UWithNativePrefixWire,
 };
-#[cfg(feature = "selected-wire-transport-adapter")]
-pub use wire_transport::{
-    UHasWire, USelectedWireZeroCopyTransport, UWireRx, UWireTransport, UWithWireAndMetadataCodec,
-};
+#[cfg(feature = "selected-wire-user-api")]
+pub use wire_transport::{UHasWire, USelectedWireZeroCopyTransport, UWireRx};
+#[cfg(all(
+    feature = "selected-wire-transport-core",
+    any(
+        feature = "transport-implementer-api",
+        feature = "wire-implementer-api"
+    )
+))]
+pub use wire_transport::{UWireTransport, UWithWireAndMetadataCodec};
+
+#[cfg(feature = "selected-wire-user-api")]
+pub mod selected_wire_user_api {
+    //! Selected-wire construction and route-use surface for users of a chosen wire profile.
+    pub use crate::{
+        ProtobufWire, ProtobufWireTransport, StableContainerWireFormat,
+        StableContainerWireTransport, UHasWire, UNativePrefixWireTransport, UProtocolNativeWire,
+        UProtocolNativeWireTransport, USelectedWireZeroCopyTransport, UWireRx,
+        UWithNativePrefixWire, WireCompatibility, WireIdentity, WireIdentityRef,
+    };
+}
+
+#[cfg(feature = "transport-implementer-api")]
+pub mod transport_implementer_api {
+    //! Physical transport-core implementation surface.
+    #[cfg(feature = "owned-frame-transport")]
+    pub use crate::{
+        EncodedOwnedFrame, PreparedOwnedFrame, UEncodedOwnedListener, UOwnedTransportCore,
+    };
+    pub use crate::{
+        PreparedTxLoanSpec, UEncodedLoanedRxFrame, UEncodedRxFrame, UEncodedZeroCopyListener,
+        UWireTransport, UWithWireAndMetadataCodec, UZeroCopyTransportCore,
+        UZeroCopyUninitTransportCore,
+    };
+}
+
+#[cfg(any(
+    feature = "unsafe-stable-payload-tx",
+    feature = "unsafe-stable-payload-init",
+    feature = "unsafe-uninit-payload-bytes",
+    feature = "expert-unsafe-payloads"
+))]
+pub mod expert_unsafe {
+    //! Expert stable/uninitialized payload hatches with caller-side obligations.
+    #[cfg(any(
+        feature = "unsafe-stable-payload-tx",
+        feature = "expert-unsafe-payloads"
+    ))]
+    pub use crate::{UnsafeStablePayloadTxSlot, ZeroedStablePayloadTxSlot};
+}
+
+#[cfg(any(feature = "test-util", feature = "payload-contract-fixtures"))]
+pub mod test_support {
+    //! Test, fake, proof, and fixture support. These are not production transport evidence.
+    #[cfg(feature = "payload-contract-fixtures")]
+    pub use crate::bench_fixtures;
+    #[cfg(feature = "test-util")]
+    pub use crate::{
+        InMemoryZeroCopyTransport, MockLocalUriProvider, MockTransport, MockUListener,
+    };
+}
 
 mod uuid;
 pub use uuid::UUID;

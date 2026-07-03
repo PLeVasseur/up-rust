@@ -11,6 +11,8 @@
  * SPDX-License-Identifier: Apache-2.0
  ********************************************************************************/
 
+#![cfg_attr(not(feature = "wire-implementer-api"), allow(dead_code))]
+
 #[cfg(any(feature = "protobuf-support", feature = "up-core-types"))]
 use std::io::Read;
 #[cfg(feature = "selected-wire-codec-core")]

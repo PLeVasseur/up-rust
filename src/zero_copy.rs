@@ -33,11 +33,11 @@ use tracing::warn;
 ))]
 use crate::payload::UnsafeStablePayloadTxSlot;
 #[cfg(feature = "selected-wire-transport-adapter")]
-use crate::UHasWire;
+use crate::wire::UWirePayload;
+#[cfg(feature = "selected-wire-transport-adapter")]
+use crate::wire_transport::UHasWire;
 #[cfg(feature = "owned-frame-transport")]
 use crate::UOwnedFrame;
-#[cfg(feature = "selected-wire-transport-adapter")]
-use crate::UWirePayload;
 use crate::{
     payload::{
         BorrowPayload, InitializedStablePayload, LoanPayload, LoanUninitPayload, LoanedInitPayload,
