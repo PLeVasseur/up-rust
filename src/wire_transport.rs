@@ -698,7 +698,7 @@ where
         let core_source_filter = selected_wire_core_source_filter();
         let result = self
             .core
-            .register_encoded_zero_copy_listener(&core_source_filter, None, listener)
+            .register_encoded_zero_copy_listener(&core_source_filter, sink_filter, listener)
             .await;
         if result.is_err() && inserted {
             self.zero_copy_listeners
@@ -724,7 +724,7 @@ where
         let core_source_filter = selected_wire_core_source_filter();
         let result = self
             .core
-            .unregister_encoded_zero_copy_listener(&core_source_filter, None, listener)
+            .unregister_encoded_zero_copy_listener(&core_source_filter, sink_filter, listener)
             .await;
         if result.is_ok() {
             self.zero_copy_listeners
@@ -1092,7 +1092,7 @@ where
         let core_source_filter = selected_wire_core_source_filter();
         let result = self
             .core
-            .register_encoded_owned_listener(&core_source_filter, None, listener)
+            .register_encoded_owned_listener(&core_source_filter, sink_filter, listener)
             .await;
         if result.is_err() && inserted {
             self.owned_listeners
@@ -1118,7 +1118,7 @@ where
         let core_source_filter = selected_wire_core_source_filter();
         let result = self
             .core
-            .unregister_encoded_owned_listener(&core_source_filter, None, listener)
+            .unregister_encoded_owned_listener(&core_source_filter, sink_filter, listener)
             .await;
         if result.is_ok() {
             self.owned_listeners

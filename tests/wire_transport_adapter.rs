@@ -156,6 +156,8 @@ struct InMemoryWireCoreState {
     zero_copy_listeners: Vec<Arc<dyn UEncodedZeroCopyListener<InMemoryEncodedRxFrame>>>,
     zero_copy_registered: Vec<usize>,
     zero_copy_unregistered: Vec<usize>,
+    zero_copy_listener_filters: Vec<(UUri, Option<UUri>)>,
+    zero_copy_unregister_filters: Vec<(UUri, Option<UUri>)>,
     zero_copy_register_calls: usize,
     #[cfg(feature = "owned-frame-transport")]
     prepared_owned: Vec<PreparedOwnedFrame>,
@@ -167,6 +169,8 @@ struct InMemoryWireCoreState {
     owned_receive_filters: Vec<(UUri, Option<UUri>)>,
     #[cfg(feature = "owned-frame-transport")]
     owned_listener_filters: Vec<(UUri, Option<UUri>)>,
+    #[cfg(feature = "owned-frame-transport")]
+    owned_unregister_filters: Vec<(UUri, Option<UUri>)>,
 }
 
 impl InMemoryWireCore {
@@ -218,6 +222,26 @@ impl InMemoryWireCore {
             .expect("core state lock poisoned")
             .zero_copy_listeners
             .len()
+    }
+
+    fn last_zero_copy_listener_filter(&self) -> (UUri, Option<UUri>) {
+        self.state
+            .lock()
+            .expect("core state lock poisoned")
+            .zero_copy_listener_filters
+            .last()
+            .expect("zero-copy listener filter")
+            .clone()
+    }
+
+    fn last_zero_copy_unregister_filter(&self) -> (UUri, Option<UUri>) {
+        self.state
+            .lock()
+            .expect("core state lock poisoned")
+            .zero_copy_unregister_filters
+            .last()
+            .expect("zero-copy unregister filter")
+            .clone()
     }
 
     #[cfg(feature = "owned-frame-transport")]
@@ -274,6 +298,17 @@ impl InMemoryWireCore {
             .expect("owned listener filter")
             .clone()
     }
+
+    #[cfg(feature = "owned-frame-transport")]
+    fn last_owned_unregister_filter(&self) -> (UUri, Option<UUri>) {
+        self.state
+            .lock()
+            .expect("core state lock poisoned")
+            .owned_unregister_filters
+            .last()
+            .expect("owned unregister filter")
+            .clone()
+    }
 }
 
 #[async_trait]
@@ -313,12 +348,15 @@ impl UZeroCopyTransportCore for InMemoryWireCore {
 
     async fn register_encoded_zero_copy_listener(
         &self,
-        _source_filter: &UUri,
-        _sink_filter: Option<&UUri>,
+        source_filter: &UUri,
+        sink_filter: Option<&UUri>,
         listener: Arc<dyn UEncodedZeroCopyListener<Self::Rx>>,
     ) -> Result<(), UStatus> {
         let mut state = self.state.lock().expect("core state lock poisoned");
         state.zero_copy_register_calls += 1;
+        state
+            .zero_copy_listener_filters
+            .push((source_filter.clone(), sink_filter.cloned()));
         state
             .zero_copy_registered
             .push(encoded_listener_id(&listener));
@@ -328,11 +366,14 @@ impl UZeroCopyTransportCore for InMemoryWireCore {
 
     async fn unregister_encoded_zero_copy_listener(
         &self,
-        _source_filter: &UUri,
-        _sink_filter: Option<&UUri>,
+        source_filter: &UUri,
+        sink_filter: Option<&UUri>,
         listener: Arc<dyn UEncodedZeroCopyListener<Self::Rx>>,
     ) -> Result<(), UStatus> {
         let mut state = self.state.lock().expect("core state lock poisoned");
+        state
+            .zero_copy_unregister_filters
+            .push((source_filter.clone(), sink_filter.cloned()));
         state
             .zero_copy_unregistered
             .push(encoded_listener_id(&listener));
@@ -394,11 +435,14 @@ impl UOwnedTransportCore for InMemoryWireCore {
 
     async fn unregister_encoded_owned_listener(
         &self,
-        _source_filter: &UUri,
-        _sink_filter: Option<&UUri>,
+        source_filter: &UUri,
+        sink_filter: Option<&UUri>,
         listener: Arc<dyn UEncodedOwnedListener>,
     ) -> Result<(), UStatus> {
         let mut state = self.state.lock().expect("core state lock poisoned");
+        state
+            .owned_unregister_filters
+            .push((source_filter.clone(), sink_filter.cloned()));
         let Some(index) = state
             .owned_listeners
             .iter()
@@ -484,6 +528,14 @@ fn topic() -> UUri {
     UUri::try_from_parts("vehicle", 0x4210, 0x01, 0x9000).expect("topic URI")
 }
 
+fn notification_sink() -> UUri {
+    UUri::try_from_parts("cloud", 0x1234, 0x01, 0x0000).expect("notification sink URI")
+}
+
+fn other_notification_sink() -> UUri {
+    UUri::try_from_parts("other-cloud", 0x1234, 0x01, 0x0000).expect("other notification sink URI")
+}
+
 fn valid_source_filter() -> UUri {
     UUri::from_str("//vehicle/4210/1/9000").expect("valid source filter")
 }
@@ -504,6 +556,17 @@ fn metadata_with_payload() -> UFrameMetadata {
 fn metadata_with_payload_encoding(payload_encoding: PayloadEncoding) -> UFrameMetadata {
     let message = UMessageBuilder::publish(topic()).build().expect("message");
     UFrameMetadata::new(message.attributes().clone(), Some(payload_encoding)).expect("metadata")
+}
+
+fn notification_metadata_with_payload(destination: UUri) -> UFrameMetadata {
+    let message = UMessageBuilder::notification(topic(), destination)
+        .build()
+        .expect("notification message");
+    UFrameMetadata::new(
+        message.attributes().clone(),
+        Some(PayloadEncoding::Standard(UPayloadFormat::Raw)),
+    )
+    .expect("notification metadata")
 }
 
 fn nonmatching_metadata_with_payload() -> UFrameMetadata {
@@ -745,6 +808,47 @@ async fn zero_copy_listener_drops_invalid_metadata_and_unregisters_same_wrapped_
 }
 
 #[tokio::test]
+async fn zero_copy_listener_passes_sink_filter_to_encoded_core() {
+    let metadata = notification_metadata_with_payload(notification_sink());
+    let other_metadata = notification_metadata_with_payload(other_notification_sink());
+    let core = InMemoryWireCore::default();
+    let transport = core
+        .clone()
+        .into_native_prefix_wire_transport(UProtocolNativeWire);
+    let listener = Arc::new(CountingZeroCopyListener::default());
+    let source = valid_source_filter();
+    let sink = notification_sink();
+
+    transport
+        .register_zero_copy_listener(&source, Some(&sink), listener.clone())
+        .await
+        .expect("register sink-bearing listener");
+
+    let (source_filter, sink_filter) = core.last_zero_copy_listener_filter();
+    assert_eq!(source_filter, broad_physical_source_filter());
+    assert_eq!(sink_filter, Some(sink.clone()));
+
+    core.inject_zero_copy(encoded_frame::<UProtocolNativeWire>(
+        &other_metadata,
+        b"skip",
+    ))
+    .await;
+    core.inject_zero_copy(encoded_frame::<UProtocolNativeWire>(&metadata, b"match"))
+        .await;
+
+    assert_eq!(listener.payloads(), vec![b"match".to_vec()]);
+
+    transport
+        .unregister_zero_copy_listener(&source, Some(&sink), listener)
+        .await
+        .expect("unregister sink-bearing listener");
+
+    let (source_filter, sink_filter) = core.last_zero_copy_unregister_filter();
+    assert_eq!(source_filter, broad_physical_source_filter());
+    assert_eq!(sink_filter, Some(sink));
+}
+
+#[tokio::test]
 async fn zero_copy_filter_validation_runs_before_core_registration() {
     let core = InMemoryWireCore::default();
     let transport = core
@@ -877,6 +981,50 @@ async fn owned_listener_filters_after_selected_wire_decode() {
     let (source_filter, sink_filter) = core.last_owned_listener_filter();
     assert_eq!(source_filter, broad_physical_source_filter());
     assert!(sink_filter.is_none());
+}
+
+#[cfg(feature = "owned-frame-transport")]
+#[tokio::test]
+async fn owned_listener_passes_sink_filter_to_encoded_core() {
+    let metadata = notification_metadata_with_payload(notification_sink());
+    let other_metadata = notification_metadata_with_payload(other_notification_sink());
+    let core = InMemoryWireCore::default();
+    let transport = core
+        .clone()
+        .into_native_prefix_wire_transport(UProtocolNativeWire);
+    let listener = Arc::new(CountingOwnedListener::default());
+    let source = valid_source_filter();
+    let sink = notification_sink();
+
+    transport
+        .register_owned_listener(&source, Some(&sink), listener.clone())
+        .await
+        .expect("register sink-bearing owned listener");
+
+    let (source_filter, sink_filter) = core.last_owned_listener_filter();
+    assert_eq!(source_filter, broad_physical_source_filter());
+    assert_eq!(sink_filter, Some(sink.clone()));
+
+    core.inject_owned(encoded_owned_frame::<UProtocolNativeWire>(
+        &other_metadata,
+        b"skip",
+    ))
+    .await;
+    core.inject_owned(encoded_owned_frame::<UProtocolNativeWire>(
+        &metadata, b"match",
+    ))
+    .await;
+
+    assert_eq!(listener.payloads(), vec![b"match".to_vec()]);
+
+    transport
+        .unregister_owned_listener(&source, Some(&sink), listener)
+        .await
+        .expect("unregister sink-bearing owned listener");
+
+    let (source_filter, sink_filter) = core.last_owned_unregister_filter();
+    assert_eq!(source_filter, broad_physical_source_filter());
+    assert_eq!(sink_filter, Some(sink));
 }
 
 #[cfg(feature = "owned-frame-transport")]
