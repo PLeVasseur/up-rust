@@ -7,7 +7,6 @@
 #![allow(dead_code)]
 
 use async_trait::async_trait;
-use bytes::Bytes;
 use std::alloc::{GlobalAlloc, Layout, System};
 use std::collections::VecDeque;
 use std::hint::black_box;
@@ -15,10 +14,10 @@ use std::io::Cursor;
 use std::sync::atomic::{AtomicUsize, Ordering};
 use std::sync::{Arc, Mutex};
 use up_rust::{
-    NativePrefixProtobufMetadataCodec, PreparedTxLoanSpec, UCode, UEncodedRxFrame,
-    UEncodedZeroCopyListener, UFrameMetadata, UMessageBuilder, UPayloadFormat, UProtocolNativeWire,
-    UStatus, UTxBuffer, UUri, UVecTxBuffer, UWire, UWireMetadataCodec, UWireRx, UZeroCopyListener,
-    UZeroCopyTransportCore, WireIdentity,
+    NativePrefixFrameMetadataCodec, PayloadEncoding, PreparedTxLoanSpec, UCode, UEncodedRxFrame,
+    UEncodedZeroCopyListener, UFrameMetadata, UProtocolNativeWire, UStatus, UTxBuffer, UUri,
+    UVecTxBuffer, UWire, UWireMetadataCodec, UWireRx, UZeroCopyListener, UZeroCopyTransportCore,
+    WireIdentity,
 };
 
 pub struct CountingAllocator;
@@ -266,27 +265,20 @@ pub fn wildcard_source_uri() -> UUri {
 }
 
 pub fn metadata_for(source: UUri) -> UFrameMetadata {
-    let message = UMessageBuilder::publish(source)
-        .build_with_payload(
-            Bytes::from_static(b"bench-payload"),
-            UPayloadFormat::Protobuf,
-        )
-        .expect("bench message");
-    UFrameMetadata::new(
-        message.attributes().clone(),
-        Some(up_rust::PayloadEncoding::Standard(UPayloadFormat::Protobuf)),
-    )
-    .expect("bench metadata")
+    UFrameMetadata::publish(source)
+        .with_payload_encoding(PayloadEncoding::PROTOBUF)
+        .build()
+        .expect("bench metadata")
 }
 
 pub fn encoded_metadata<W: UWire>(metadata: &UFrameMetadata) -> Vec<u8> {
-    NativePrefixProtobufMetadataCodec
+    NativePrefixFrameMetadataCodec
         .encode_frame_metadata(W::metadata_context(), metadata)
         .expect("encode metadata")
 }
 
 pub fn decode_metadata<W: UWire>(encoded: &[u8]) -> UFrameMetadata {
-    NativePrefixProtobufMetadataCodec
+    NativePrefixFrameMetadataCodec
         .decode_frame_metadata(W::metadata_context(), encoded)
         .expect("decode metadata")
 }
@@ -298,8 +290,8 @@ pub fn encoded_frame_for<W: UWire>(source: UUri) -> BenchRxFrame {
 
 pub fn native_wire_rx(
     frame: BenchRxFrame,
-) -> UWireRx<BenchRxFrame, UProtocolNativeWire, NativePrefixProtobufMetadataCodec> {
-    UWireRx::try_from_encoded(frame, &NativePrefixProtobufMetadataCodec).expect("wire rx")
+) -> UWireRx<BenchRxFrame, UProtocolNativeWire, NativePrefixFrameMetadataCodec> {
+    UWireRx::try_from_encoded(frame, &NativePrefixFrameMetadataCodec).expect("wire rx")
 }
 
 #[derive(Default)]
@@ -314,13 +306,12 @@ impl CountingZeroCopyListener {
 }
 
 #[async_trait]
-impl
-    UZeroCopyListener<UWireRx<BenchRxFrame, UProtocolNativeWire, NativePrefixProtobufMetadataCodec>>
+impl UZeroCopyListener<UWireRx<BenchRxFrame, UProtocolNativeWire, NativePrefixFrameMetadataCodec>>
     for CountingZeroCopyListener
 {
     async fn on_receive_zero_copy(
         &self,
-        _frame: UWireRx<BenchRxFrame, UProtocolNativeWire, NativePrefixProtobufMetadataCodec>,
+        _frame: UWireRx<BenchRxFrame, UProtocolNativeWire, NativePrefixFrameMetadataCodec>,
     ) {
         self.count.fetch_add(1, Ordering::Relaxed);
     }

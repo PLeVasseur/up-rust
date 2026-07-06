@@ -138,14 +138,18 @@ pub mod wire;
 mod wire;
 #[cfg(any(feature = "selected-wire-user-api", feature = "wire-implementer-api"))]
 pub use wire::NativePrefixFrameMetadataCodec;
-#[cfg(feature = "wire-implementer-api")]
+#[cfg(all(
+    feature = "wire-implementer-api",
+    feature = "selected-wire-protobuf-metadata"
+))]
 pub use wire::NativePrefixProtobufMetadataCodec;
 #[cfg(any(feature = "selected-wire-user-api", feature = "wire-implementer-api"))]
 pub use wire::{
     ProtobufWire, StableContainerWireFormat, UProtocolNativeWire, WireCompatibility, WireIdentity,
     WireIdentityRef, NATIVE_EXPLICIT_PAYLOAD_FAMILY_ID, NATIVE_PREFIX_METADATA_LAYOUT_ID,
     PROTOBUF_PAYLOAD_FAMILY_ID, PROTOBUF_WIRE_ID, STABLE_CONTAINER_PAYLOAD_FAMILY_ID,
-    STABLE_CONTAINER_WIRE_ID, UPROTOCOL_NATIVE_WIRE_ID, XCDR_V2_PAYLOAD_FAMILY_ID, XCDR_V2_WIRE_ID,
+    STABLE_CONTAINER_WIRE_ID, UFRAME_FIELDS_METADATA_LAYOUT_ID, UPROTOCOL_NATIVE_WIRE_ID,
+    XCDR_V2_PAYLOAD_FAMILY_ID, XCDR_V2_WIRE_ID,
 };
 #[cfg(feature = "wire-implementer-api")]
 pub use wire::{UWire, UWireDecode, UWireDecodeOwned, UWireEncode, UWirePayload, UWireReadDecode};
@@ -157,15 +161,23 @@ pub use wire::{
 #[cfg(feature = "wire-implementer-api")]
 pub mod wire_implementer_api {
     //! External selected-wire/profile authoring surface.
+    //!
+    //! Ordinary metadata is the canonical UFrame field block
+    //! ([`crate::NativePrefixFrameMetadataCodec`],
+    //! [`crate::UFRAME_FIELDS_METADATA_LAYOUT_ID`]); the legacy
+    //! protobuf-`UAttributes` profile is exported here only when the
+    //! `selected-wire-protobuf-metadata` feature is enabled.
+    #[cfg(feature = "selected-wire-protobuf-metadata")]
+    pub use crate::NativePrefixProtobufMetadataCodec;
     pub use crate::{
-        NativePrefixProtobufMetadataCodec, ProtobufWire, StableContainerWireFormat,
+        NativePrefixFrameMetadataCodec, ProtobufWire, StableContainerWireFormat,
         UProtocolNativeWire, UWire, UWireDecode, UWireDecodeOwned, UWireEncode, UWireMetadataCodec,
         UWireMetadataCodecFor, UWireMetadataContext, UWireMetadataError, UWirePayload,
         UWireReadDecode, WireCompatibility, WireIdentity, WireIdentityRef,
         NATIVE_EXPLICIT_PAYLOAD_FAMILY_ID, NATIVE_PREFIX_METADATA_LAYOUT_ID,
         PROTOBUF_PAYLOAD_FAMILY_ID, PROTOBUF_WIRE_ID, STABLE_CONTAINER_PAYLOAD_FAMILY_ID,
-        STABLE_CONTAINER_WIRE_ID, UPROTOCOL_NATIVE_WIRE_ID, XCDR_V2_PAYLOAD_FAMILY_ID,
-        XCDR_V2_WIRE_ID,
+        STABLE_CONTAINER_WIRE_ID, UFRAME_FIELDS_METADATA_LAYOUT_ID, UPROTOCOL_NATIVE_WIRE_ID,
+        XCDR_V2_PAYLOAD_FAMILY_ID, XCDR_V2_WIRE_ID,
     };
 }
 

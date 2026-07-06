@@ -51,9 +51,13 @@ payload-contract-large-fixtures = ["payload-contract-fixtures"]
 payload-contract-simulator-fixtures = ["payload-contract-large-fixtures"]
 protobuf-support = ["dep:protobuf"]
 protobuf-wire = ["up-core-types"]
-selected-wire-user-api = ["selected-wire-protobuf-metadata", "selected-wire-transport-adapter"]
+# R2W split: ordinary selected-wire surfaces provide canonical field-block
+# metadata via selected-wire-codec-core and no longer pull protobuf metadata.
+selected-wire-user-api = ["selected-wire-transport-adapter", "up-core-types"]
 selected-wire-codec-core = []
 selected-wire-protobuf-metadata = ["selected-wire-codec-core", "up-core-types"]
+# Explicit opt-in for the legacy protobuf-UAttributes metadata profile.
+selected-wire-legacy-protobuf-metadata = ["selected-wire-protobuf-metadata"]
 selected-wire-transport-adapter = ["selected-wire-transport-core"]
 selected-wire-transport-core = ["selected-wire-codec-core"]
 symphony = ["up-l2-rpc-server", "dep:serde", "dep:serde_json", "dep:symphony"]
@@ -72,7 +76,7 @@ unsafe-stable-payload-tx = []
 unsafe-uninit-payload-bytes = []
 usubscription = ["up-l2-rpc-client"]
 util = ["tokio/sync"]
-wire-implementer-api = ["selected-wire-protobuf-metadata"]
+wire-implementer-api = ["selected-wire-codec-core", "up-core-types"]
 
 [dependencies]
 async-trait = { version = "0.1" }
@@ -215,22 +219,22 @@ required-features = ["selected-wire-user-api"]
 [[bench]]
 name = "selected_wire_metadata"
 harness = false
-required-features = ["selected-wire-protobuf-metadata", "protobuf-wire"]
+required-features = ["selected-wire-user-api", "wire-implementer-api", "transport-implementer-api", "protobuf-wire"]
 
 [[bench]]
 name = "selected_wire_rx"
 harness = false
-required-features = ["selected-wire-protobuf-metadata", "selected-wire-transport-adapter", "protobuf-wire"]
+required-features = ["selected-wire-user-api", "wire-implementer-api", "transport-implementer-api", "protobuf-wire"]
 
 [[bench]]
 name = "selected_wire_filter"
 harness = false
-required-features = ["selected-wire-protobuf-metadata", "selected-wire-transport-adapter", "protobuf-wire"]
+required-features = ["selected-wire-user-api", "wire-implementer-api", "transport-implementer-api", "protobuf-wire"]
 
 [[bench]]
 name = "selected_wire_adapter_receive"
 harness = false
-required-features = ["selected-wire-protobuf-metadata", "selected-wire-transport-adapter", "protobuf-wire"]
+required-features = ["selected-wire-user-api", "wire-implementer-api", "transport-implementer-api", "protobuf-wire"]
 
 [lints.rust]
 # this prevents cargo from complaining about code blocks

@@ -13,7 +13,7 @@
 
 use bytes::Bytes;
 use up_rust::{
-    NativePrefixProtobufMetadataCodec, PayloadEncoding, UFrameMetadata, UMessageBuilder,
+    NativePrefixFrameMetadataCodec, PayloadEncoding, UFrameMetadata, UMessageBuilder,
     UPayloadFormat, UProtocolNativeWire, UUri, UWire, UWireMetadataCodec, UWireMetadataError,
     WireIdentity,
 };
@@ -84,7 +84,7 @@ fn encode<W>(metadata: &UFrameMetadata) -> Vec<u8>
 where
     W: UWire,
 {
-    NativePrefixProtobufMetadataCodec
+    NativePrefixFrameMetadataCodec
         .encode_frame_metadata(W::metadata_context(), metadata)
         .expect("encode")
 }
@@ -93,7 +93,7 @@ fn decode<W>(encoded: &[u8]) -> Result<UFrameMetadata, UWireMetadataError>
 where
     W: UWire,
 {
-    NativePrefixProtobufMetadataCodec.decode_frame_metadata(W::metadata_context(), encoded)
+    NativePrefixFrameMetadataCodec.decode_frame_metadata(W::metadata_context(), encoded)
 }
 
 fn encoded_without_payload() -> Vec<u8> {
@@ -282,6 +282,8 @@ fn unsupported_payload_encoding_tag_is_rejected() {
     assert!(matches!(
         error,
         UWireMetadataError::UnsupportedPayloadEncoding(_)
+            | UWireMetadataError::MalformedMetadata(_)
+            | UWireMetadataError::FrameMetadata(_)
     ));
 }
 
@@ -300,6 +302,8 @@ fn unsupported_standard_payload_encoding_is_rejected() {
     assert!(matches!(
         error,
         UWireMetadataError::UnsupportedPayloadEncoding(_)
+            | UWireMetadataError::MalformedMetadata(_)
+            | UWireMetadataError::FrameMetadata(_)
     ));
 }
 
@@ -324,4 +328,68 @@ fn metadata_size_budget_cases_are_recordable() {
     assert!(standard.len() >= no_payload.len());
     assert!(custom.len() > no_payload.len());
     assert_eq!(full_attributes.len(), standard.len());
+}
+
+// ---- R2W cross-profile rejection vectors: canonical field-block vs legacy
+// protobuf-`UAttributes` metadata are distinct, selectable, rejectable
+// profiles identified by their metadata layout ids. Decoding bytes of one
+// profile with the other codec MUST fail as `UnknownMetadataLayoutId`, never
+// as generic malformed metadata.
+
+#[test]
+#[cfg(feature = "selected-wire-protobuf-metadata")]
+fn canonical_bytes_rejected_by_legacy_codec_as_unknown_layout() {
+    use up_rust::NativePrefixProtobufMetadataCodec;
+    let metadata = metadata_with_standard_payload();
+    let canonical = NativePrefixFrameMetadataCodec
+        .encode_frame_metadata(UProtocolNativeWire::metadata_context(), &metadata)
+        .expect("canonical encode");
+
+    let error = NativePrefixProtobufMetadataCodec
+        .decode_frame_metadata(UProtocolNativeWire::metadata_context(), &canonical)
+        .unwrap_err();
+
+    assert!(
+        matches!(error, UWireMetadataError::UnknownMetadataLayoutId { .. }),
+        "expected UnknownMetadataLayoutId, got: {error:?}"
+    );
+}
+
+#[test]
+#[cfg(feature = "selected-wire-protobuf-metadata")]
+fn legacy_bytes_rejected_by_canonical_codec_as_unknown_layout() {
+    use up_rust::NativePrefixProtobufMetadataCodec;
+    let metadata = metadata_with_standard_payload();
+    let legacy = NativePrefixProtobufMetadataCodec
+        .encode_frame_metadata(UProtocolNativeWire::metadata_context(), &metadata)
+        .expect("legacy encode");
+
+    let error = NativePrefixFrameMetadataCodec
+        .decode_frame_metadata(UProtocolNativeWire::metadata_context(), &legacy)
+        .unwrap_err();
+
+    assert!(
+        matches!(error, UWireMetadataError::UnknownMetadataLayoutId { .. }),
+        "expected UnknownMetadataLayoutId, got: {error:?}"
+    );
+}
+
+#[test]
+fn canonical_profile_identity_is_distinct_and_round_trips() {
+    use up_rust::UFRAME_FIELDS_METADATA_LAYOUT_ID;
+    assert_ne!(
+        UFRAME_FIELDS_METADATA_LAYOUT_ID,
+        up_rust::NATIVE_PREFIX_METADATA_LAYOUT_ID
+    );
+    let metadata = metadata_with_custom_payload();
+    let encoded = NativePrefixFrameMetadataCodec
+        .encode_frame_metadata(UProtocolNativeWire::metadata_context(), &metadata)
+        .expect("canonical encode");
+    // The on-wire layout compact id names the canonical profile.
+    let compact = u16::from_le_bytes([encoded[LAYOUT_COMPACT_LO], encoded[LAYOUT_COMPACT_HI]]);
+    assert_eq!(compact, UFRAME_FIELDS_METADATA_LAYOUT_ID.compact_id());
+    let decoded = NativePrefixFrameMetadataCodec
+        .decode_frame_metadata(UProtocolNativeWire::metadata_context(), &encoded)
+        .expect("canonical decode");
+    assert_eq!(decoded, metadata);
 }

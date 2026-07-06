@@ -1283,7 +1283,7 @@ mod selected_wire_tests {
 
     use super::*;
     use crate::{
-        NativePrefixProtobufMetadataCodec, ProtobufWire, UHasWire, UOwnedTransportCore,
+        NativePrefixFrameMetadataCodec, ProtobufWire, UHasWire, UOwnedTransportCore,
         UOwnedTransportImpl, UStatus, UWithNativePrefixWire, ValidatedOwnedFrame,
     };
 
@@ -1339,7 +1339,7 @@ mod selected_wire_tests {
         assert!(payloads[0]
             .as_ref()
             .is_some_and(|payload| !payload.is_empty()));
-        let _: NativePrefixProtobufMetadataCodec = NativePrefixProtobufMetadataCodec;
+        let _: NativePrefixFrameMetadataCodec = NativePrefixFrameMetadataCodec;
     }
 
     struct DirectSelectedOwnedTransport {

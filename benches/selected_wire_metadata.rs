@@ -24,12 +24,12 @@ fn bench_metadata(c: &mut Criterion) {
         decode_metadata::<UProtocolNativeWire>(&encoded)
     });
     export_allocation_sample("selected_wire_metadata/wrong_wire_reject", || {
-        up_rust::NativePrefixProtobufMetadataCodec
+        up_rust::NativePrefixFrameMetadataCodec
             .decode_frame_metadata(WrongWireSamePayload::metadata_context(), &encoded)
             .expect_err("wrong wire must reject")
     });
     export_allocation_sample("selected_wire_metadata/payload_family_reject", || {
-        up_rust::NativePrefixProtobufMetadataCodec
+        up_rust::NativePrefixFrameMetadataCodec
             .decode_frame_metadata(SameWireWrongPayload::metadata_context(), &encoded)
             .expect_err("wrong payload family must reject")
     });
@@ -55,7 +55,7 @@ fn bench_metadata(c: &mut Criterion) {
     c.bench_function("selected_wire_metadata/wrong_wire_reject", |b| {
         b.iter(|| {
             reset_allocations();
-            let error = up_rust::NativePrefixProtobufMetadataCodec
+            let error = up_rust::NativePrefixFrameMetadataCodec
                 .decode_frame_metadata(
                     WrongWireSamePayload::metadata_context(),
                     black_box(&encoded),
@@ -69,7 +69,7 @@ fn bench_metadata(c: &mut Criterion) {
     c.bench_function("selected_wire_metadata/payload_family_reject", |b| {
         b.iter(|| {
             reset_allocations();
-            let error = up_rust::NativePrefixProtobufMetadataCodec
+            let error = up_rust::NativePrefixFrameMetadataCodec
                 .decode_frame_metadata(
                     SameWireWrongPayload::metadata_context(),
                     black_box(&encoded),

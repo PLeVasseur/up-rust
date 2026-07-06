@@ -42,9 +42,9 @@ use async_trait::async_trait;
 use bytes::Bytes;
 use tracing::warn;
 
+use crate::wire::NativePrefixFrameMetadataCodec;
 #[cfg(feature = "selected-wire-protobuf-metadata")]
 use crate::wire::NativePrefixProtobufMetadataCodec;
-#[cfg(feature = "selected-wire-protobuf-metadata")]
 use crate::wire::{ProtobufWire, StableContainerWireFormat, UProtocolNativeWire};
 use crate::wire::{UWire, UWireMetadataCodecFor, UWirePayload};
 use crate::{
@@ -146,29 +146,34 @@ where
     }
 }
 
-/// Selected-wire transport using native-prefix protobuf metadata.
-#[cfg(feature = "selected-wire-protobuf-metadata")]
+/// Selected-wire transport using the canonical UFrame metadata field block.
+///
+/// Ordinary selected-wire construction is canonical-by-default per R2W. The
+/// legacy protobuf-`UAttributes` metadata profile remains available only via
+/// the explicitly legacy-named aliases/constructors below.
 pub type UNativePrefixWireTransport<TCore, W> =
-    UWireTransport<TCore, W, NativePrefixProtobufMetadataCodec>;
+    UWireTransport<TCore, W, NativePrefixFrameMetadataCodec>;
 
-/// uProtocol-native selected-wire transport using native-prefix protobuf metadata.
-#[cfg(feature = "selected-wire-protobuf-metadata")]
+/// uProtocol-native selected-wire transport with canonical metadata.
 pub type UProtocolNativeWireTransport<TCore> =
     UNativePrefixWireTransport<TCore, UProtocolNativeWire>;
 
-/// Protocol Buffers selected-wire transport using native-prefix protobuf metadata.
-#[cfg(feature = "selected-wire-protobuf-metadata")]
+/// Protocol Buffers selected-wire transport with canonical metadata.
 pub type ProtobufWireTransport<TCore> = UNativePrefixWireTransport<TCore, ProtobufWire>;
 
-/// Stable-container selected-wire transport using native-prefix protobuf metadata.
-#[cfg(feature = "selected-wire-protobuf-metadata")]
+/// Stable-container selected-wire transport with canonical metadata.
 pub type StableContainerWireTransport<TCore> =
     UNativePrefixWireTransport<TCore, StableContainerWireFormat>;
 
-/// Convenience constructors for native-prefix selected-wire transports.
+/// **Legacy compatibility** selected-wire transport using the
+/// protobuf-`UAttributes` metadata profile.
 #[cfg(feature = "selected-wire-protobuf-metadata")]
+pub type UNativePrefixLegacyProtobufMetadataWireTransport<TCore, W> =
+    UWireTransport<TCore, W, NativePrefixProtobufMetadataCodec>;
+
+/// Convenience constructors for canonical native-prefix selected-wire transports.
 pub trait UWithNativePrefixWire: Sized {
-    /// Wraps this core with an external or custom selected wire using native-prefix metadata.
+    /// Wraps this core with an external or custom selected wire using canonical metadata.
     #[must_use]
     fn into_native_prefix_wire_transport<W>(self, wire: W) -> UNativePrefixWireTransport<Self, W>
     where
@@ -187,13 +192,12 @@ pub trait UWithNativePrefixWire: Sized {
     fn into_stable_container_transport(self) -> StableContainerWireTransport<Self>;
 }
 
-#[cfg(feature = "selected-wire-protobuf-metadata")]
 impl<TCore> UWithNativePrefixWire for TCore {
     fn into_native_prefix_wire_transport<W>(self, wire: W) -> UNativePrefixWireTransport<Self, W>
     where
         W: UWire,
     {
-        UWireTransport::new(self, wire, NativePrefixProtobufMetadataCodec)
+        UWireTransport::new(self, wire, NativePrefixFrameMetadataCodec)
     }
 
     fn into_uprotocol_native_transport(self) -> UProtocolNativeWireTransport<Self> {
@@ -206,6 +210,34 @@ impl<TCore> UWithNativePrefixWire for TCore {
 
     fn into_stable_container_transport(self) -> StableContainerWireTransport<Self> {
         self.into_native_prefix_wire_transport(StableContainerWireFormat)
+    }
+}
+
+/// **Legacy compatibility** constructors for the protobuf-`UAttributes`
+/// metadata profile. Use only for wire compatibility with peers that still
+/// speak the legacy metadata block; ordinary construction is canonical.
+#[cfg(feature = "selected-wire-protobuf-metadata")]
+pub trait UWithNativePrefixLegacyProtobufMetadataWire: Sized {
+    /// Wraps this core with a selected wire using the legacy protobuf metadata profile.
+    #[must_use]
+    fn into_native_prefix_wire_transport_legacy_protobuf_metadata<W>(
+        self,
+        wire: W,
+    ) -> UNativePrefixLegacyProtobufMetadataWireTransport<Self, W>
+    where
+        W: UWire;
+}
+
+#[cfg(feature = "selected-wire-protobuf-metadata")]
+impl<TCore> UWithNativePrefixLegacyProtobufMetadataWire for TCore {
+    fn into_native_prefix_wire_transport_legacy_protobuf_metadata<W>(
+        self,
+        wire: W,
+    ) -> UNativePrefixLegacyProtobufMetadataWireTransport<Self, W>
+    where
+        W: UWire,
+    {
+        UWireTransport::new(self, wire, NativePrefixProtobufMetadataCodec)
     }
 }
 
@@ -1429,17 +1461,16 @@ mod tests {
 
     #[derive(Default)]
     struct RecordingZeroCopyListener {
-        frames:
-            StdMutex<Vec<UWireRx<RawRx, UProtocolNativeWire, NativePrefixProtobufMetadataCodec>>>,
+        frames: StdMutex<Vec<UWireRx<RawRx, UProtocolNativeWire, NativePrefixFrameMetadataCodec>>>,
     }
 
     #[async_trait]
-    impl UZeroCopyListener<UWireRx<RawRx, UProtocolNativeWire, NativePrefixProtobufMetadataCodec>>
+    impl UZeroCopyListener<UWireRx<RawRx, UProtocolNativeWire, NativePrefixFrameMetadataCodec>>
         for RecordingZeroCopyListener
     {
         async fn on_receive_zero_copy(
             &self,
-            frame: UWireRx<RawRx, UProtocolNativeWire, NativePrefixProtobufMetadataCodec>,
+            frame: UWireRx<RawRx, UProtocolNativeWire, NativePrefixFrameMetadataCodec>,
         ) {
             self.frames.lock().unwrap().push(frame);
         }
@@ -1544,7 +1575,7 @@ mod tests {
     where
         W: UWire,
     {
-        NativePrefixProtobufMetadataCodec
+        NativePrefixFrameMetadataCodec
             .encode_frame_metadata(W::metadata_context(), metadata)
             .unwrap()
     }
@@ -1553,7 +1584,7 @@ mod tests {
     where
         W: UWire,
     {
-        NativePrefixProtobufMetadataCodec
+        NativePrefixFrameMetadataCodec
             .decode_frame_metadata(W::metadata_context(), encoded)
             .unwrap()
     }
@@ -1567,9 +1598,9 @@ mod tests {
             payload: b"abc".to_vec(),
         };
 
-        let rx = UWireRx::<RawRx, UProtocolNativeWire, NativePrefixProtobufMetadataCodec>::try_from_encoded(
+        let rx = UWireRx::<RawRx, UProtocolNativeWire, NativePrefixFrameMetadataCodec>::try_from_encoded(
             raw,
-            &NativePrefixProtobufMetadataCodec,
+            &NativePrefixFrameMetadataCodec,
         )
         .unwrap();
 
@@ -1592,12 +1623,11 @@ mod tests {
             payload: payload.to_vec(),
         };
 
-        let rx =
-            UWireRx::<RawRx, ProtobufWire, NativePrefixProtobufMetadataCodec>::try_from_encoded(
-                raw,
-                &NativePrefixProtobufMetadataCodec,
-            )
-            .unwrap();
+        let rx = UWireRx::<RawRx, ProtobufWire, NativePrefixFrameMetadataCodec>::try_from_encoded(
+            raw,
+            &NativePrefixFrameMetadataCodec,
+        )
+        .unwrap();
         let decoded: StringValue = rx.decode_payload().unwrap();
 
         assert_eq!(decoded.value, "selected-wire");
@@ -1606,8 +1636,7 @@ mod tests {
     #[test]
     fn stable_borrow_accepts_wire_rx_with_loaned_raw_frame() {
         fn assert_loaned_rx<T: ULoanedContiguousZeroCopyRxFrame>() {}
-        assert_loaned_rx::<UWireRx<RawRx, UProtocolNativeWire, NativePrefixProtobufMetadataCodec>>(
-        );
+        assert_loaned_rx::<UWireRx<RawRx, UProtocolNativeWire, NativePrefixFrameMetadataCodec>>();
 
         let value = WireStableBytes { bytes: *b"wire" };
         let metadata = stable_metadata::<WireStableBytes>();
@@ -1617,9 +1646,9 @@ mod tests {
             payload: stable_bytes(&value),
         };
 
-        let rx = UWireRx::<RawRx, UProtocolNativeWire, NativePrefixProtobufMetadataCodec>::try_from_encoded(
+        let rx = UWireRx::<RawRx, UProtocolNativeWire, NativePrefixFrameMetadataCodec>::try_from_encoded(
             raw,
-            &NativePrefixProtobufMetadataCodec,
+            &NativePrefixFrameMetadataCodec,
         )
         .unwrap();
         let borrowed = rx.borrow_stable_payload::<WireStableBytes>().unwrap();
@@ -1777,11 +1806,11 @@ mod tests {
         let source_filter = UUri::try_from_parts("vehicle", 0x4210, 0x01, 0x9000).unwrap();
         let listener = Arc::new(RecordingZeroCopyListener::default());
         let wire_listener =
-            WireZeroCopyListener::<RawRx, UProtocolNativeWire, NativePrefixProtobufMetadataCodec> {
+            WireZeroCopyListener::<RawRx, UProtocolNativeWire, NativePrefixFrameMetadataCodec> {
                 source_filter,
                 sink_filter: None,
                 listener: listener.clone(),
-                metadata_codec: NativePrefixProtobufMetadataCodec,
+                metadata_codec: NativePrefixFrameMetadataCodec,
                 _wire: PhantomData,
             };
 
@@ -1803,7 +1832,7 @@ mod tests {
         fn assert_uninit_impl<T: UZeroCopyUninitTransportImpl>() {}
 
         type Transport =
-            UWireTransport<CompileCore, UProtocolNativeWire, NativePrefixProtobufMetadataCodec>;
+            UWireTransport<CompileCore, UProtocolNativeWire, NativePrefixFrameMetadataCodec>;
         assert_zero_copy_impl::<Transport>();
         assert_uninit_impl::<Transport>();
     }
@@ -1825,8 +1854,8 @@ mod tests {
 
         let prepared = PreparedTxLoanSpec::from_validated::<
             UProtocolNativeWire,
-            NativePrefixProtobufMetadataCodec,
-        >(spec, &NativePrefixProtobufMetadataCodec)
+            NativePrefixFrameMetadataCodec,
+        >(spec, &NativePrefixFrameMetadataCodec)
         .unwrap();
 
         assert_eq!(prepared.metadata(), &metadata);
@@ -1845,7 +1874,7 @@ mod tests {
         fn assert_owned_impl<T: UOwnedTransportImpl>() {}
 
         type Transport =
-            UWireTransport<CompileCore, UProtocolNativeWire, NativePrefixProtobufMetadataCodec>;
+            UWireTransport<CompileCore, UProtocolNativeWire, NativePrefixFrameMetadataCodec>;
         assert_owned_impl::<Transport>();
     }
 

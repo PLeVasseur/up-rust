@@ -97,6 +97,17 @@ pub const STABLE_CONTAINER_PAYLOAD_FAMILY_ID: WireIdentity =
 pub const NATIVE_PREFIX_METADATA_LAYOUT_ID: WireIdentity =
     WireIdentity::new("org.eclipse.uprotocol.metadata.native-prefix", 0x0001);
 
+/// Metadata layout identity for the canonical UFrame metadata field block
+/// carried behind native-prefix framing.
+///
+/// Distinct from [`NATIVE_PREFIX_METADATA_LAYOUT_ID`] (the legacy
+/// protobuf-`UAttributes` block) so that canonical and legacy metadata are
+/// selectable, rejectable profiles: decoding bytes of one profile with the
+/// other codec fails as [`UWireMetadataError::UnknownMetadataLayoutId`],
+/// never as generic malformed metadata.
+pub const UFRAME_FIELDS_METADATA_LAYOUT_ID: WireIdentity =
+    WireIdentity::new("org.eclipse.uprotocol.metadata.uframe-fields", 0x0002);
+
 /// Stable wire, payload-family, or metadata-layout identity.
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub struct WireIdentity {
@@ -255,6 +266,17 @@ impl UWireMetadataContext {
         }
     }
 
+    /// Returns this context with the metadata layout identity replaced.
+    ///
+    /// Metadata codecs overlay their own profile identity so the layout id on
+    /// the wire always names the codec's byte profile, independent of the
+    /// legacy per-wire declaration.
+    #[must_use]
+    pub fn with_metadata_layout(mut self, metadata_layout_id: WireIdentity) -> Self {
+        self.metadata_layout_id = metadata_layout_id;
+        self
+    }
+
     /// Checks selected-wire compatibility before public frame exposure.
     #[must_use]
     pub fn wire_compatibility(&self, actual: &WireIdentityRef) -> WireCompatibility {
@@ -363,6 +385,15 @@ impl UWire for StableContainerWireFormat {
 /// Explicit metadata codec used by selected-wire transport adapters.
 #[cfg(feature = "selected-wire-codec-core")]
 pub trait UWireMetadataCodec {
+    /// Metadata byte-profile identity this codec writes and accepts.
+    ///
+    /// Defaults to the legacy native-prefix protobuf layout for compatibility
+    /// with pre-R2 external codecs; profile codecs override it. Codecs MUST
+    /// overlay this identity onto the context they encode/decode with so that
+    /// cross-profile decode fails as
+    /// [`UWireMetadataError::UnknownMetadataLayoutId`].
+    const METADATA_LAYOUT_ID: WireIdentity = NATIVE_PREFIX_METADATA_LAYOUT_ID;
+
     /// Encodes native frame metadata for the selected-wire context.
     ///
     /// # Errors
@@ -418,12 +449,17 @@ pub struct NativePrefixProtobufMetadataCodec;
 
 #[cfg(feature = "selected-wire-protobuf-metadata")]
 impl UWireMetadataCodec for NativePrefixProtobufMetadataCodec {
+    const METADATA_LAYOUT_ID: WireIdentity = NATIVE_PREFIX_METADATA_LAYOUT_ID;
+
     fn encode_frame_metadata(
         &self,
         context: UWireMetadataContext,
         metadata: &UFrameMetadata,
     ) -> Result<Vec<u8>, UWireMetadataError> {
-        encode_frame_metadata(context, metadata)
+        encode_frame_metadata(
+            context.with_metadata_layout(Self::METADATA_LAYOUT_ID),
+            metadata,
+        )
     }
 
     fn decode_frame_metadata(
@@ -431,7 +467,7 @@ impl UWireMetadataCodec for NativePrefixProtobufMetadataCodec {
         context: UWireMetadataContext,
         src: &[u8],
     ) -> Result<UFrameMetadata, UWireMetadataError> {
-        decode_frame_metadata(context, src)
+        decode_frame_metadata(context.with_metadata_layout(Self::METADATA_LAYOUT_ID), src)
     }
 }
 
@@ -453,11 +489,14 @@ pub struct NativePrefixFrameMetadataCodec;
 
 #[cfg(feature = "selected-wire-codec-core")]
 impl UWireMetadataCodec for NativePrefixFrameMetadataCodec {
+    const METADATA_LAYOUT_ID: WireIdentity = UFRAME_FIELDS_METADATA_LAYOUT_ID;
+
     fn encode_frame_metadata(
         &self,
         context: UWireMetadataContext,
         metadata: &UFrameMetadata,
     ) -> Result<Vec<u8>, UWireMetadataError> {
+        let context = context.with_metadata_layout(Self::METADATA_LAYOUT_ID);
         let fields = crate::frame_codec::encode_frame_metadata_fields(metadata)
             .map_err(|error| UWireMetadataError::FrameMetadata(error.to_string()))?;
         let mut out = Vec::with_capacity(
@@ -482,6 +521,7 @@ impl UWireMetadataCodec for NativePrefixFrameMetadataCodec {
         context: UWireMetadataContext,
         src: &[u8],
     ) -> Result<UFrameMetadata, UWireMetadataError> {
+        let context = context.with_metadata_layout(Self::METADATA_LAYOUT_ID);
         let mut reader = MetadataReader::new(src);
         read_and_check_native_prefix(&mut reader, context)?;
         let fields = reader.read_len_prefixed_bytes()?;

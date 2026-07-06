@@ -23,7 +23,7 @@ use async_trait::async_trait;
 use bytes::Bytes;
 use up_rust::{LoanedPayload, PayloadLoanProvenance, StableContainerWireFormat};
 use up_rust::{
-    NativePrefixProtobufMetadataCodec, PayloadCodec, PayloadEncoding, PreparedTxLoanSpec,
+    NativePrefixFrameMetadataCodec, PayloadCodec, PayloadEncoding, PreparedTxLoanSpec,
     ProtobufWire, ProtobufWireTransport, StableContainerPayload, StableContainerWireTransport,
     UCode, UEncodedLoanedRxFrame, UEncodedRxFrame, UEncodedZeroCopyListener, UFrameMetadata,
     UFrameView, UHasWire, UMessageBuilder, UPayloadFormat, UProtocolNativeWire,
@@ -508,14 +508,14 @@ impl CountingZeroCopyListener {
 }
 
 #[async_trait]
-impl<W> UZeroCopyListener<UWireRx<InMemoryEncodedRxFrame, W, NativePrefixProtobufMetadataCodec>>
+impl<W> UZeroCopyListener<UWireRx<InMemoryEncodedRxFrame, W, NativePrefixFrameMetadataCodec>>
     for CountingZeroCopyListener
 where
     W: UWire + Send + Sync + 'static,
 {
     async fn on_receive_zero_copy(
         &self,
-        frame: UWireRx<InMemoryEncodedRxFrame, W, NativePrefixProtobufMetadataCodec>,
+        frame: UWireRx<InMemoryEncodedRxFrame, W, NativePrefixFrameMetadataCodec>,
     ) {
         self.payloads
             .lock()
@@ -597,7 +597,7 @@ where
     W: UWire,
 {
     InMemoryEncodedRxFrame::new(
-        NativePrefixProtobufMetadataCodec
+        NativePrefixFrameMetadataCodec
             .encode_frame_metadata(W::metadata_context(), metadata)
             .expect("encoded metadata"),
         payload,
@@ -610,7 +610,7 @@ where
     W: UWire,
 {
     EncodedOwnedFrame::new(
-        NativePrefixProtobufMetadataCodec
+        NativePrefixFrameMetadataCodec
             .encode_frame_metadata(W::metadata_context(), metadata)
             .expect("encoded metadata"),
         Some(Bytes::from_static(payload)),
@@ -638,7 +638,7 @@ async fn zero_copy_loan_passes_encoded_metadata_to_core_for_selected_wires() {
         assert_eq!(prepared.payload_len(), 3);
         assert_eq!(prepared.payload_alignment(), 1);
         assert_eq!(
-            NativePrefixProtobufMetadataCodec
+            NativePrefixFrameMetadataCodec
                 .decode_frame_metadata(W::metadata_context(), prepared.encoded_metadata())
                 .expect("decode metadata"),
             metadata
@@ -654,10 +654,7 @@ async fn zero_copy_loan_passes_encoded_metadata_to_core_for_selected_wires() {
 fn native_prefix_profile_helpers_select_expected_static_wires() {
     fn assert_selected_wire_transport<T, W>()
     where
-        T: USelectedWireZeroCopyTransport<
-            Wire = W,
-            MetadataCodec = NativePrefixProtobufMetadataCodec,
-        >,
+        T: USelectedWireZeroCopyTransport<Wire = W, MetadataCodec = NativePrefixFrameMetadataCodec>,
         W: UWire,
     {
     }
@@ -883,7 +880,7 @@ async fn owned_send_passes_encoded_metadata_to_core() {
     assert_eq!(prepared.metadata(), &metadata);
     assert_eq!(prepared.payload().map(Bytes::as_ref), Some(&b"owned"[..]));
     assert_eq!(
-        NativePrefixProtobufMetadataCodec
+        NativePrefixFrameMetadataCodec
             .decode_frame_metadata(
                 UProtocolNativeWire::metadata_context(),
                 prepared.encoded_metadata(),
@@ -902,7 +899,7 @@ async fn owned_receive_rejects_wrong_wire_before_public_exposure() {
         .clone()
         .into_native_prefix_wire_transport(UProtocolNativeWire);
     core.push_owned_rx(EncodedOwnedFrame::new(
-        NativePrefixProtobufMetadataCodec
+        NativePrefixFrameMetadataCodec
             .encode_frame_metadata(WrongWireSamePayload::metadata_context(), &metadata)
             .expect("encoded metadata"),
         Some(Bytes::from_static(b"bad")),
