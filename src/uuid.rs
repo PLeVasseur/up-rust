@@ -133,6 +133,17 @@ impl UUID {
         Ok(UUID { msb, lsb })
     }
 
+    /// Gets this UUID as a pair of 64 bit integers.
+    ///
+    /// # Returns
+    ///
+    /// A tuple of the most significant and least significant 8 bytes,
+    /// i.e. the inverse of [`UUID::from_u64_pair`].
+    #[must_use]
+    pub fn as_u64_pair(&self) -> (u64, u64) {
+        (self.msb, self.lsb)
+    }
+
     // [impl->dsn~uuid-spec~1]
     pub(crate) fn build_for_timestamp(duration_since_unix_epoch: Duration) -> UUID {
         let timestamp_millis = u64::try_from(duration_since_unix_epoch.as_millis())

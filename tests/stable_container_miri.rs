@@ -164,8 +164,8 @@ fn metadata<T: up_rust::StablePayload>() -> UFrameMetadata {
         .with_message_id(fixed_id)
         .build()
         .expect("message");
-    UFrameMetadata::new(
-        message.attributes().clone(),
+    up_rust::try_project_attributes_to_frame_metadata(
+        message.attributes(),
         Some(StableContainerPayload::<T>::encoding()),
     )
     .expect("stable metadata")

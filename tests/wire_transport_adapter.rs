@@ -550,21 +550,22 @@ fn broad_physical_source_filter() -> UUri {
 }
 
 fn metadata_with_payload() -> UFrameMetadata {
-    metadata_with_payload_encoding(PayloadEncoding::Standard(UPayloadFormat::Raw))
+    metadata_with_payload_encoding(PayloadEncoding::RAW)
 }
 
 fn metadata_with_payload_encoding(payload_encoding: PayloadEncoding) -> UFrameMetadata {
     let message = UMessageBuilder::publish(topic()).build().expect("message");
-    UFrameMetadata::new(message.attributes().clone(), Some(payload_encoding)).expect("metadata")
+    up_rust::try_project_attributes_to_frame_metadata(message.attributes(), Some(payload_encoding))
+        .expect("metadata")
 }
 
 fn notification_metadata_with_payload(destination: UUri) -> UFrameMetadata {
     let message = UMessageBuilder::notification(topic(), destination)
         .build()
         .expect("notification message");
-    UFrameMetadata::new(
-        message.attributes().clone(),
-        Some(PayloadEncoding::Standard(UPayloadFormat::Raw)),
+    up_rust::try_project_attributes_to_frame_metadata(
+        message.attributes(),
+        Some(PayloadEncoding::RAW),
     )
     .expect("notification metadata")
 }
@@ -572,9 +573,9 @@ fn notification_metadata_with_payload(destination: UUri) -> UFrameMetadata {
 fn nonmatching_metadata_with_payload() -> UFrameMetadata {
     let source = UUri::try_from_parts("other", 0x4210, 0x01, 0x9000).expect("other URI");
     let message = UMessageBuilder::publish(source).build().expect("message");
-    UFrameMetadata::new(
-        message.attributes().clone(),
-        Some(PayloadEncoding::Standard(UPayloadFormat::Raw)),
+    up_rust::try_project_attributes_to_frame_metadata(
+        message.attributes(),
+        Some(PayloadEncoding::RAW),
     )
     .expect("metadata")
 }

@@ -35,11 +35,11 @@ use crate::{SerializationError, UAttributes, UPayloadFormat};
 #[cfg(feature = "selected-wire-codec-core")]
 use crate::{UCode, UFrameMetadata, UFrameMetadataError, UStatus};
 
-#[cfg(feature = "selected-wire-protobuf-metadata")]
-const MAGIC: &[u8; 4] = b"UPWM";
-#[cfg(feature = "selected-wire-protobuf-metadata")]
+#[cfg(feature = "selected-wire-codec-core")]
+const NATIVE_PREFIX_MAGIC: &[u8; 4] = b"UPWM";
+#[cfg(feature = "selected-wire-codec-core")]
 const ID_REF_COMPACT: u8 = 0x00;
-#[cfg(feature = "selected-wire-protobuf-metadata")]
+#[cfg(feature = "selected-wire-codec-core")]
 const ID_REF_LITERAL: u8 = 0x01;
 #[cfg(feature = "selected-wire-protobuf-metadata")]
 const ENCODING_NONE: u8 = 0;
@@ -399,7 +399,19 @@ where
 {
 }
 
-/// Native-prefix metadata codec carrying protobuf-encoded `UAttributes`.
+/// **Legacy compatibility** native-prefix metadata codec carrying
+/// protobuf-encoded `UAttributes`.
+///
+/// This codec exists for wire compatibility with peers that still speak the
+/// protobuf-`UAttributes` metadata block. It is a *projection* codec: frame
+/// metadata is projected through legacy `UAttributes` on encode and decode,
+/// so it fails for native metadata that legacy types cannot represent (for
+/// example payload encodings without a `UPayloadFormat` equivalent, or TTLs
+/// outside the legacy 32-bit millisecond range).
+///
+/// New deployments should use [`NativePrefixFrameMetadataCodec`], the
+/// canonical codec, which serializes clean frame metadata directly and does
+/// not require protobuf support.
 #[cfg(feature = "selected-wire-protobuf-metadata")]
 #[derive(Clone, Copy, Debug, Default, Eq, PartialEq)]
 pub struct NativePrefixProtobufMetadataCodec;
@@ -425,6 +437,62 @@ impl UWireMetadataCodec for NativePrefixProtobufMetadataCodec {
 
 #[cfg(feature = "selected-wire-protobuf-metadata")]
 impl<W> UWireMetadataCodecFor<W> for NativePrefixProtobufMetadataCodec where W: UWire {}
+
+/// Canonical native-prefix metadata codec carrying the clean UFrame metadata
+/// field block.
+///
+/// This codec serializes [`UFrameMetadata`] directly using the canonical
+/// field block defined in [`crate::frame_codec`] — no protobuf, no legacy
+/// `UAttributes` projection, full fidelity for open payload encodings. The
+/// outer native-prefix framing (magic, metadata layout id, format version,
+/// wire id, payload family id) is identical to the legacy codec so that
+/// transports can carry either block behind the same placement layouts.
+#[cfg(feature = "selected-wire-codec-core")]
+#[derive(Clone, Copy, Debug, Default, Eq, PartialEq)]
+pub struct NativePrefixFrameMetadataCodec;
+
+#[cfg(feature = "selected-wire-codec-core")]
+impl UWireMetadataCodec for NativePrefixFrameMetadataCodec {
+    fn encode_frame_metadata(
+        &self,
+        context: UWireMetadataContext,
+        metadata: &UFrameMetadata,
+    ) -> Result<Vec<u8>, UWireMetadataError> {
+        let fields = crate::frame_codec::encode_frame_metadata_fields(metadata)
+            .map_err(|error| UWireMetadataError::FrameMetadata(error.to_string()))?;
+        let mut out = Vec::with_capacity(
+            NATIVE_PREFIX_MAGIC.len()
+                + (3 * (1 + std::mem::size_of::<u16>()))
+                + (2 * std::mem::size_of::<u16>())
+                + std::mem::size_of::<u32>()
+                + fields.len(),
+        );
+        out.extend_from_slice(NATIVE_PREFIX_MAGIC);
+        write_identity_ref(&mut out, context.metadata_layout_id);
+        write_u16(&mut out, context.format_version);
+        write_identity_ref(&mut out, context.wire_id);
+        write_identity_ref(&mut out, context.payload_family_id);
+        write_u16(&mut out, 0);
+        write_len_prefixed_bytes(&mut out, &fields)?;
+        Ok(out)
+    }
+
+    fn decode_frame_metadata(
+        &self,
+        context: UWireMetadataContext,
+        src: &[u8],
+    ) -> Result<UFrameMetadata, UWireMetadataError> {
+        let mut reader = MetadataReader::new(src);
+        read_and_check_native_prefix(&mut reader, context)?;
+        let fields = reader.read_len_prefixed_bytes()?;
+        reader.finish()?;
+        crate::frame_codec::decode_frame_metadata_fields(fields)
+            .map_err(|error| UWireMetadataError::MalformedMetadata(error.to_string()))
+    }
+}
+
+#[cfg(feature = "selected-wire-codec-core")]
+impl<W> UWireMetadataCodecFor<W> for NativePrefixFrameMetadataCodec where W: UWire {}
 
 /// Wire-level encode helper alias for existing payload codecs.
 pub trait UWireEncode<T: ?Sized>: EncodePayload<T> {}
@@ -572,18 +640,26 @@ fn encode_frame_metadata(
     context: UWireMetadataContext,
     metadata: &UFrameMetadata,
 ) -> Result<Vec<u8>, UWireMetadataError> {
-    metadata.validate()?;
-
-    let attributes = metadata.attributes().write_to_protobuf_bytes()?;
+    // The open payload encoding travels in this codec's dedicated encoding
+    // block; the serialized attributes carry the legacy `payload_format` only
+    // when the encoding has one, so non-legacy encodings remain fully
+    // representable by this codec.
+    let payload_format = metadata
+        .payload_encoding()
+        .and_then(crate::PayloadEncoding::to_legacy_format);
+    let attributes = metadata
+        .project_to_attributes_with_payload_format(payload_format)
+        .map_err(UWireMetadataError::from)?
+        .write_to_protobuf_bytes()?;
     let mut out = Vec::with_capacity(
-        MAGIC.len()
+        NATIVE_PREFIX_MAGIC.len()
             + (3 * (1 + std::mem::size_of::<u16>()))
             + (2 * std::mem::size_of::<u16>())
             + std::mem::size_of::<u32>()
             + attributes.len()
             + payload_encoding_encoded_len(metadata.payload_encoding()),
     );
-    out.extend_from_slice(MAGIC);
+    out.extend_from_slice(NATIVE_PREFIX_MAGIC);
     write_identity_ref(&mut out, context.metadata_layout_id);
     write_u16(&mut out, context.format_version);
     write_identity_ref(&mut out, context.wire_id);
@@ -606,7 +682,24 @@ fn decode_frame_metadata(
     src: &[u8],
 ) -> Result<UFrameMetadata, UWireMetadataError> {
     let mut reader = MetadataReader::new(src);
-    if reader.take(MAGIC.len())? != MAGIC.as_slice() {
+    read_and_check_native_prefix(&mut reader, context)?;
+
+    let attributes = UAttributes::parse_from_protobuf_bytes(reader.read_len_prefixed_bytes()?)?;
+    let payload_encoding = reader.read_payload_encoding()?;
+    reader.finish()?;
+
+    crate::try_project_attributes_to_frame_metadata(&attributes, payload_encoding)
+        .map_err(UWireMetadataError::from)
+}
+
+/// Reads and validates the shared native-prefix framing: magic, metadata
+/// layout id, format version, wire id, payload family id, and reserved flags.
+#[cfg(feature = "selected-wire-codec-core")]
+fn read_and_check_native_prefix(
+    reader: &mut MetadataReader<'_>,
+    context: UWireMetadataContext,
+) -> Result<(), UWireMetadataError> {
+    if reader.take(NATIVE_PREFIX_MAGIC.len())? != NATIVE_PREFIX_MAGIC.as_slice() {
         return Err(UWireMetadataError::WrongMagic);
     }
 
@@ -646,15 +739,10 @@ fn decode_frame_metadata(
     if flags != 0 {
         return Err(UWireMetadataError::UnsupportedReservedFlags(flags));
     }
-
-    let attributes = UAttributes::parse_from_protobuf_bytes(reader.read_len_prefixed_bytes()?)?;
-    let payload_encoding = reader.read_payload_encoding()?;
-    reader.finish()?;
-
-    UFrameMetadata::new(attributes, payload_encoding).map_err(UWireMetadataError::from)
+    Ok(())
 }
 
-#[cfg(feature = "selected-wire-protobuf-metadata")]
+#[cfg(feature = "selected-wire-codec-core")]
 fn write_identity_ref(out: &mut Vec<u8>, identity: WireIdentity) {
     out.push(ID_REF_COMPACT);
     write_u16(out, identity.compact_id());
@@ -667,19 +755,20 @@ fn write_payload_encoding(
 ) -> Result<(), UWireMetadataError> {
     match payload_encoding {
         None => out.push(ENCODING_NONE),
-        Some(PayloadEncoding::Standard(format)) => {
-            if *format == UPayloadFormat::Unspecified {
-                return Err(UWireMetadataError::UnsupportedPayloadEncoding(
-                    "UPayloadFormat::Unspecified is not a concrete payload encoding".to_string(),
-                ));
+        Some(encoding) => {
+            if let Some(format) = encoding.to_legacy_format() {
+                out.push(ENCODING_STANDARD);
+                write_i32(out, format.as_i32());
+            } else if let Some((id, content_type)) = encoding.custom_identity() {
+                out.push(ENCODING_CUSTOM);
+                write_len_prefixed_str(out, id)?;
+                write_len_prefixed_str(out, content_type)?;
+            } else {
+                return Err(UWireMetadataError::UnsupportedPayloadEncoding(format!(
+                    "payload encoding `{}` cannot be represented by the legacy protobuf metadata block",
+                    encoding.describe()
+                )));
             }
-            out.push(ENCODING_STANDARD);
-            write_i32(out, format.as_i32());
-        }
-        Some(PayloadEncoding::Custom { id, content_type }) => {
-            out.push(ENCODING_CUSTOM);
-            write_len_prefixed_str(out, id)?;
-            write_len_prefixed_str(out, content_type)?;
         }
     }
     Ok(())
@@ -689,22 +778,22 @@ fn write_payload_encoding(
 fn payload_encoding_encoded_len(payload_encoding: Option<&PayloadEncoding>) -> usize {
     match payload_encoding {
         None => 1,
-        Some(PayloadEncoding::Standard(_)) => 1 + std::mem::size_of::<i32>(),
-        Some(PayloadEncoding::Custom { id, content_type }) => {
+        Some(encoding) if encoding.to_legacy_format().is_some() => 1 + std::mem::size_of::<i32>(),
+        Some(encoding) => {
             1 + std::mem::size_of::<u32>()
-                + id.len()
+                + encoding.literal_id().map_or(0, str::len)
                 + std::mem::size_of::<u32>()
-                + content_type.len()
+                + encoding.content_type().map_or(0, str::len)
         }
     }
 }
 
-#[cfg(feature = "selected-wire-protobuf-metadata")]
+#[cfg(feature = "selected-wire-codec-core")]
 fn write_len_prefixed_str(out: &mut Vec<u8>, value: &str) -> Result<(), UWireMetadataError> {
     write_len_prefixed_bytes(out, value.as_bytes())
 }
 
-#[cfg(feature = "selected-wire-protobuf-metadata")]
+#[cfg(feature = "selected-wire-codec-core")]
 fn write_len_prefixed_bytes(out: &mut Vec<u8>, value: &[u8]) -> Result<(), UWireMetadataError> {
     let len = u32::try_from(value.len()).map_err(|_| {
         UWireMetadataError::MalformedMetadata(format!(
@@ -717,28 +806,28 @@ fn write_len_prefixed_bytes(out: &mut Vec<u8>, value: &[u8]) -> Result<(), UWire
     Ok(())
 }
 
-#[cfg(feature = "selected-wire-protobuf-metadata")]
+#[cfg(feature = "selected-wire-codec-core")]
 fn write_u16(out: &mut Vec<u8>, value: u16) {
     out.extend_from_slice(&value.to_le_bytes());
 }
 
-#[cfg(feature = "selected-wire-protobuf-metadata")]
+#[cfg(feature = "selected-wire-codec-core")]
 fn write_u32(out: &mut Vec<u8>, value: u32) {
     out.extend_from_slice(&value.to_le_bytes());
 }
 
-#[cfg(feature = "selected-wire-protobuf-metadata")]
+#[cfg(feature = "selected-wire-codec-core")]
 fn write_i32(out: &mut Vec<u8>, value: i32) {
     out.extend_from_slice(&value.to_le_bytes());
 }
 
-#[cfg(feature = "selected-wire-protobuf-metadata")]
+#[cfg(feature = "selected-wire-codec-core")]
 struct MetadataReader<'a> {
     src: &'a [u8],
     pos: usize,
 }
 
-#[cfg(feature = "selected-wire-protobuf-metadata")]
+#[cfg(feature = "selected-wire-codec-core")]
 impl<'a> MetadataReader<'a> {
     fn new(src: &'a [u8]) -> Self {
         Self { src, pos: 0 }
@@ -834,6 +923,7 @@ impl<'a> MetadataReader<'a> {
         Ok(value.to_string())
     }
 
+    #[cfg(feature = "selected-wire-protobuf-metadata")]
     fn read_payload_encoding(&mut self) -> Result<Option<PayloadEncoding>, UWireMetadataError> {
         match self.read_u8()? {
             ENCODING_NONE => Ok(None),
@@ -844,13 +934,9 @@ impl<'a> MetadataReader<'a> {
                         "unknown UPayloadFormat value {raw}"
                     ))
                 })?;
-                if format == UPayloadFormat::Unspecified {
-                    return Err(UWireMetadataError::UnsupportedPayloadEncoding(
-                        "UPayloadFormat::Unspecified is not a concrete payload encoding"
-                            .to_string(),
-                    ));
-                }
-                Ok(Some(PayloadEncoding::Standard(format)))
+                PayloadEncoding::try_from_legacy_format(format)
+                    .map(Some)
+                    .map_err(UWireMetadataError::from)
             }
             ENCODING_CUSTOM => {
                 let id = self.read_len_prefixed_string()?;

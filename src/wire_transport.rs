@@ -865,11 +865,10 @@ where
     W: UWire,
     C: UWireMetadataCodecFor<W>,
 {
-    source_filter.matches(frame.metadata().attributes().source())
+    source_filter.matches(frame.metadata().source())
         && sink_filter.is_none_or(|filter| {
             frame
                 .metadata()
-                .attributes()
                 .sink()
                 .is_some_and(|sink| filter.matches(sink))
         })
@@ -1226,11 +1225,10 @@ fn owned_frame_matches(
     source_filter: &UUri,
     sink_filter: Option<&UUri>,
 ) -> bool {
-    source_filter.matches(frame.metadata().attributes().source())
+    source_filter.matches(frame.metadata().source())
         && sink_filter.is_none_or(|filter| {
             frame
                 .metadata()
-                .attributes()
                 .sink()
                 .is_some_and(|sink| filter.matches(sink))
         })
@@ -1294,8 +1292,8 @@ mod tests {
     use crate::{
         ByteBackedStablePayload, EncodePayload, PayloadEncoding, PayloadLoanProvenance,
         ProtobufPayload, ProtobufWire, StableContainerPayload, StableContainerWireFormat,
-        StablePayload, UMessageBuilder, UPayloadFormat, UProtocolNativeWire, UTxPayloadSpec,
-        UVecRxLease, UVecTxBuffer, UVecUninitTxBuffer, UWireMetadataCodec, UZeroCopyTransportExt,
+        StablePayload, UMessageBuilder, UProtocolNativeWire, UTxPayloadSpec, UVecRxLease,
+        UVecTxBuffer, UVecUninitTxBuffer, UWireMetadataCodec, UZeroCopyTransportExt,
     };
 
     #[repr(C)]
@@ -1492,7 +1490,7 @@ mod tests {
     }
 
     fn metadata_with_payload() -> UFrameMetadata {
-        metadata_with_payload_encoding(PayloadEncoding::Standard(UPayloadFormat::Raw))
+        metadata_with_payload_encoding(PayloadEncoding::RAW)
     }
 
     fn metadata_with_payload_encoding(payload_encoding: PayloadEncoding) -> UFrameMetadata {
@@ -1505,14 +1503,18 @@ mod tests {
     ) -> UFrameMetadata {
         let topic = UUri::try_from_parts("vehicle", 0x4210, 0x01, resource_id).expect("topic URI");
         let message = UMessageBuilder::publish(topic).build().expect("message");
-        UFrameMetadata::new(message.attributes().clone(), Some(payload_encoding)).expect("metadata")
+        crate::try_project_attributes_to_frame_metadata(
+            message.attributes(),
+            Some(payload_encoding),
+        )
+        .expect("metadata")
     }
 
     fn stable_metadata<T: StablePayload>() -> UFrameMetadata {
         let topic = UUri::try_from_parts("vehicle", 0x4210, 0x01, 0x9000).expect("topic URI");
         let message = UMessageBuilder::publish(topic).build().expect("message");
-        UFrameMetadata::new(
-            message.attributes().clone(),
+        crate::try_project_attributes_to_frame_metadata(
+            message.attributes(),
             Some(StableContainerPayload::<T>::encoding()),
         )
         .expect("metadata")
@@ -1531,10 +1533,7 @@ mod tests {
     }
 
     fn raw_frame_for_topic(resource_id: u16, payload: &[u8]) -> RawRx {
-        let metadata = metadata_with_topic_and_payload_encoding(
-            resource_id,
-            PayloadEncoding::Standard(UPayloadFormat::Raw),
-        );
+        let metadata = metadata_with_topic_and_payload_encoding(resource_id, PayloadEncoding::RAW);
         RawRx {
             encoded_metadata: encode_metadata::<UProtocolNativeWire>(&metadata),
             payload: payload.to_vec(),

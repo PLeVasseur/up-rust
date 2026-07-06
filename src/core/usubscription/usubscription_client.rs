@@ -406,13 +406,7 @@ impl USubscription for RpcClientUSubscription {
         Ok(result)
     }
 
-    async fn reset(
-        &self,
-        reason: ResetReason,
-        message: Option<String>,
-        before: Option<u64>, // millis since Unix Epoch
-    ) -> Result<(), UStatus> {
-        let before_ts = unix_epoch_millis_as_protobuf_timestamp(before)?;
+    async fn reset(&self, reason: ResetReason, message: Option<String>) -> Result<(), UStatus> {
         let reset_request = crate::up_core_api::usubscription::ResetRequest {
             reason: Some(crate::up_core_api::usubscription::reset_request::Reason {
                 code: crate::up_core_api::usubscription::reset_request::reason::Code::from(reason)
@@ -421,7 +415,6 @@ impl USubscription for RpcClientUSubscription {
                 ..Default::default()
             })
             .into(),
-            before: before_ts.into(),
             ..Default::default()
         };
         self.rpc_client
@@ -848,11 +841,11 @@ mod tests {
         let usubscription_client = RpcClientUSubscription::new(Arc::new(rpc_client));
 
         assert!(usubscription_client
-            .reset(ResetReason::Unspecified, None, None)
+            .reset(ResetReason::Unspecified, None)
             .await
             .is_err_and(|e| e.get_code() == UCode::Internal));
         assert!(usubscription_client
-            .reset(ResetReason::Unspecified, None, None)
+            .reset(ResetReason::Unspecified, None)
             .await
             .is_ok());
     }

@@ -555,7 +555,7 @@ where
         let payload_bytes = <T::Wire as EncodePayload<Request>>::encode_payload_owned(request)
             .map_err(|error| ServiceInvocationError::InvalidArgument(error.to_string()))?;
         let payload_format = <T::Wire as PayloadCodec>::payload_encoding()
-            .standard_format()
+            .to_legacy_format()
             .ok_or_else(|| {
                 ServiceInvocationError::InvalidArgument(
                     "selected wire uses a native-only payload encoding that cannot be sent by P73U2 owned RPC"
@@ -882,7 +882,7 @@ where
         let payload_bytes = <T::Wire as EncodePayload<Payload>>::encode_payload_owned(payload)
             .map_err(|error| PubSubError::InvalidArgument(error.to_string()))?;
         let payload_format = <T::Wire as PayloadCodec>::payload_encoding()
-            .standard_format()
+            .to_legacy_format()
             .ok_or_else(|| {
                 PubSubError::InvalidArgument(
                     "selected wire uses a native-only payload encoding that cannot be sent by P73U1 owned publish"
@@ -1061,7 +1061,10 @@ mod tests {
             Some(&bytes::Bytes::from_static(b"hello"))
         );
         assert_eq!(
-            frames[0].metadata().attributes().payload_format(),
+            frames[0]
+                .metadata()
+                .payload_encoding()
+                .and_then(crate::PayloadEncoding::to_legacy_format),
             Some(UPayloadFormat::Text)
         );
     }
@@ -1417,7 +1420,7 @@ mod selected_wire_tests {
             <ProtobufWire as EncodePayload<StringValue>>::encode_payload_owned(&response_value)
                 .expect("encoded response");
         let response_format = <ProtobufWire as PayloadCodec>::payload_encoding()
-            .standard_format()
+            .to_legacy_format()
             .expect("standard format");
         let response = UMessageBuilder::response_for_request(request.attributes())
             .build_with_payload(response_bytes, response_format)

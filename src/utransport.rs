@@ -1062,7 +1062,7 @@ mod owned_transport_tests {
     use bytes::Bytes;
 
     use super::*;
-    use crate::{PayloadEncoding, UMessageBuilder, UPayloadFormat};
+    use crate::{PayloadEncoding, UMessageBuilder};
 
     fn topic() -> UUri {
         UUri::try_from_parts("vehicle", 0x4210, 0x01, 0x9000).expect("failed to create topic")
@@ -1074,14 +1074,15 @@ mod owned_transport_tests {
 
     fn metadata_without_encoding() -> UFrameMetadata {
         let message = UMessageBuilder::publish(topic()).build().expect("message");
-        UFrameMetadata::new(message.attributes().clone(), None).expect("metadata")
+        crate::try_project_attributes_to_frame_metadata(message.attributes(), None)
+            .expect("metadata")
     }
 
     fn metadata_with_encoding() -> UFrameMetadata {
         let message = UMessageBuilder::publish(topic()).build().expect("message");
-        UFrameMetadata::new(
-            message.attributes().clone(),
-            Some(PayloadEncoding::Standard(UPayloadFormat::Raw)),
+        crate::try_project_attributes_to_frame_metadata(
+            message.attributes(),
+            Some(PayloadEncoding::RAW),
         )
         .expect("metadata")
     }

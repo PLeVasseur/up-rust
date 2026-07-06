@@ -868,7 +868,8 @@ pub trait UZeroCopyTransportExt: UZeroCopyTransport {
     where
         C: PayloadCodec + LoanPayload<T> + Send + Sync,
     {
-        let metadata = UFrameMetadata::new(metadata.into_attributes(), Some(C::payload_encoding()))
+        let metadata = metadata
+            .with_payload_encoding(C::payload_encoding())
             .map_err(frame_metadata_error)?;
         let layout = C::loan_layout().map_err(UStatus::from)?;
         let mut buffer = self
@@ -946,7 +947,8 @@ pub trait UZeroCopyUninitTransportExt: UZeroCopyUninitTransport {
         C: PayloadCodec + LoanUninitPayload<T> + Send + Sync,
         T: Send,
     {
-        let metadata = UFrameMetadata::new(metadata.into_attributes(), Some(C::payload_encoding()))
+        let metadata = metadata
+            .with_payload_encoding(C::payload_encoding())
             .map_err(frame_metadata_error)?;
         let layout = C::loan_uninit_layout().map_err(UStatus::from)?;
         let mut buffer = self
@@ -1037,11 +1039,9 @@ pub trait UZeroCopyUninitTransportExt: UZeroCopyUninitTransport {
     where
         T: StablePayloadInit + Send,
     {
-        let metadata = UFrameMetadata::new(
-            metadata.into_attributes(),
-            Some(StableContainerPayload::<T>::encoding()),
-        )
-        .map_err(frame_metadata_error)?;
+        let metadata = metadata
+            .with_payload_encoding(StableContainerPayload::<T>::encoding())
+            .map_err(frame_metadata_error)?;
         let layout_len = std::mem::size_of::<T>();
         let layout_align = std::mem::align_of::<T>();
         let mut buffer = self
@@ -1097,11 +1097,9 @@ pub trait UZeroCopyUninitTransportExt: UZeroCopyUninitTransport {
     where
         T: StablePayload + Send,
     {
-        let metadata = UFrameMetadata::new(
-            metadata.into_attributes(),
-            Some(StableContainerPayload::<T>::encoding()),
-        )
-        .map_err(frame_metadata_error)?;
+        let metadata = metadata
+            .with_payload_encoding(StableContainerPayload::<T>::encoding())
+            .map_err(frame_metadata_error)?;
         let layout_len = std::mem::size_of::<T>();
         let layout_align = std::mem::align_of::<T>();
         let mut buffer = self
@@ -1914,7 +1912,7 @@ mod tests {
     use super::*;
     use crate::{
         payload::StablePayloadInitSlot, ByteBackedStablePayload, PayloadEncoding,
-        StablePayloadVariant, UMessageBuilder, UPayloadFormat,
+        StablePayloadVariant, UMessageBuilder,
     };
     use std::sync::Mutex as StdMutex;
 
@@ -2009,22 +2007,23 @@ mod tests {
 
     fn metadata_without_encoding() -> UFrameMetadata {
         let message = UMessageBuilder::publish(topic()).build().expect("message");
-        UFrameMetadata::new(message.attributes().clone(), None).expect("metadata")
+        crate::try_project_attributes_to_frame_metadata(message.attributes(), None)
+            .expect("metadata")
     }
 
     fn metadata_with_encoding() -> UFrameMetadata {
         let message = UMessageBuilder::publish(topic()).build().expect("message");
-        UFrameMetadata::new(
-            message.attributes().clone(),
-            Some(PayloadEncoding::Standard(UPayloadFormat::Raw)),
+        crate::try_project_attributes_to_frame_metadata(
+            message.attributes(),
+            Some(PayloadEncoding::RAW),
         )
         .expect("metadata")
     }
 
     fn stable_metadata<T: StablePayload>() -> UFrameMetadata {
         let message = UMessageBuilder::publish(topic()).build().expect("message");
-        UFrameMetadata::new(
-            message.attributes().clone(),
+        crate::try_project_attributes_to_frame_metadata(
+            message.attributes(),
             Some(StableContainerPayload::<T>::encoding()),
         )
         .expect("metadata")
@@ -2289,8 +2288,8 @@ mod tests {
     fn stable_borrow_rejects_wrong_size_metadata() {
         let value = StableBytes { bytes: *b"loan" };
         let message = UMessageBuilder::publish(topic()).build().expect("message");
-        let metadata = UFrameMetadata::new(
-            message.attributes().clone(),
+        let metadata = crate::try_project_attributes_to_frame_metadata(
+            message.attributes(),
             Some(stable_encoding_with::<StableBytes>(
                 StableBytes::TYPE_NAME,
                 StablePayloadVariant::FixedSize,
@@ -2309,8 +2308,8 @@ mod tests {
     #[test]
     fn stable_borrow_rejects_insufficient_advertised_alignment() {
         let message = UMessageBuilder::publish(topic()).build().expect("message");
-        let metadata = UFrameMetadata::new(
-            message.attributes().clone(),
+        let metadata = crate::try_project_attributes_to_frame_metadata(
+            message.attributes(),
             Some(stable_encoding_with::<AlignedStableBytes>(
                 AlignedStableBytes::TYPE_NAME,
                 StablePayloadVariant::FixedSize,

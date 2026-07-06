@@ -20,7 +20,7 @@ use crate::{
         LoanedPayloadUninitMut, PayloadLoanProvenance, UTxBuffer, UUninitTxBuffer,
         UVecUninitTxBuffer,
     },
-    PayloadEncoding, UFrameMetadata, UMessageBuilder, UUri, UWireError,
+    PayloadEncoding, UFrameMetadata, UUri, UWireError,
 };
 
 pub mod proto;
@@ -1050,13 +1050,14 @@ where
 }
 
 fn fixture_metadata(payload_encoding: Option<PayloadEncoding>) -> UFrameMetadata {
-    let message = UMessageBuilder::publish(
+    let mut builder = UFrameMetadata::publish(
         UUri::try_from_parts("payload-contract-fixture", 0x4210, 1, 0x9000)
             .expect("fixture URI is valid"),
-    )
-    .build()
-    .expect("fixture attributes are valid");
-    UFrameMetadata::new_unchecked(message.attributes().clone(), payload_encoding)
+    );
+    if let Some(payload_encoding) = payload_encoding {
+        builder = builder.with_payload_encoding(payload_encoding);
+    }
+    builder.build().expect("fixture metadata is valid")
 }
 
 fn validate_stable_encoding_for_case(

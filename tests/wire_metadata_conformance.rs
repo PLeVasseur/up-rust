@@ -54,24 +54,24 @@ fn topic() -> UUri {
 
 fn metadata_without_payload() -> UFrameMetadata {
     let message = UMessageBuilder::publish(topic()).build().expect("message");
-    UFrameMetadata::new(message.attributes().clone(), None).expect("metadata")
+    up_rust::try_project_attributes_to_frame_metadata(message.attributes(), None).expect("metadata")
 }
 
 fn metadata_with_standard_payload() -> UFrameMetadata {
     let message = UMessageBuilder::publish(topic())
         .build_with_payload(Bytes::from_static(b"payload"), UPayloadFormat::Raw)
         .expect("message");
-    UFrameMetadata::new(
-        message.attributes().clone(),
-        Some(PayloadEncoding::Standard(UPayloadFormat::Raw)),
+    up_rust::try_project_attributes_to_frame_metadata(
+        message.attributes(),
+        Some(PayloadEncoding::RAW),
     )
     .expect("metadata")
 }
 
 fn metadata_with_custom_payload() -> UFrameMetadata {
     let message = UMessageBuilder::publish(topic()).build().expect("message");
-    UFrameMetadata::new(
-        message.attributes().clone(),
+    up_rust::try_project_attributes_to_frame_metadata(
+        message.attributes(),
         Some(
             PayloadEncoding::custom("com.example.native", "application/vnd.example.native")
                 .expect("custom encoding"),
@@ -143,10 +143,7 @@ fn standard_payload_metadata_round_trips() {
     let decoded = decode::<UProtocolNativeWire>(&encoded).expect("decode");
 
     assert_eq!(decoded, metadata);
-    assert_eq!(
-        decoded.payload_encoding(),
-        Some(&PayloadEncoding::Standard(UPayloadFormat::Raw))
-    );
+    assert_eq!(decoded.payload_encoding(), Some(&PayloadEncoding::RAW));
 }
 
 #[test]

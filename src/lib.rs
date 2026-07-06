@@ -124,14 +124,20 @@ pub mod bench_fixtures;
 
 mod frame_metadata;
 pub use frame_metadata::{
-    try_project_frame_to_umessage, try_project_umessage_to_frame_metadata, PayloadEncoding,
-    UFrameMetadata, UFrameMetadataError,
+    try_project_attributes_to_frame_metadata, try_project_frame_to_umessage,
+    try_project_umessage_to_frame_metadata, FrameMessageKind, FramePriority, PayloadEncoding,
+    UFrameMetadata, UFrameMetadataBuilder, UFrameMetadataError,
 };
+
+pub mod frame_abi;
+pub mod frame_codec;
 
 #[cfg(feature = "wire-implementer-api")]
 pub mod wire;
 #[cfg(not(feature = "wire-implementer-api"))]
 mod wire;
+#[cfg(any(feature = "selected-wire-user-api", feature = "wire-implementer-api"))]
+pub use wire::NativePrefixFrameMetadataCodec;
 #[cfg(feature = "wire-implementer-api")]
 pub use wire::NativePrefixProtobufMetadataCodec;
 #[cfg(any(feature = "selected-wire-user-api", feature = "wire-implementer-api"))]
@@ -163,10 +169,12 @@ pub mod wire_implementer_api {
     };
 }
 
-#[cfg(all(feature = "owned-frame-transport", feature = "protobuf-support"))]
+#[cfg(feature = "owned-frame-transport")]
 pub mod frame_wire;
 #[cfg(all(feature = "owned-frame-transport", feature = "protobuf-support"))]
-pub use frame_wire::{ProtobufUMessageFrame, UFrameWireError, UFrameWireFormat};
+pub use frame_wire::ProtobufUMessageFrame;
+#[cfg(feature = "owned-frame-transport")]
+pub use frame_wire::{NativeUFrameEnvelope, UFrameWireError, UFrameWireFormat};
 
 #[cfg(feature = "owned-frame-transport")]
 mod owned_frame;

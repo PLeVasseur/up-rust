@@ -25,7 +25,7 @@ use mediatype::ReadParams;
 
 #[cfg(feature = "protobuf-support")]
 use crate::ProtobufMappable;
-use crate::{zero_copy::LoanedPayloadUninitMut, PayloadEncoding, UCode, UPayloadFormat, UStatus};
+use crate::{zero_copy::LoanedPayloadUninitMut, PayloadEncoding, UCode, UStatus};
 
 const STABLE_CONTAINER_ENCODING_ID: &str = "up.stable-container";
 const STABLE_CONTAINER_MEDIA_TYPE: &str = "application/vnd.uprotocol.stable-container";
@@ -203,7 +203,7 @@ impl<T> InitializedStablePayload<T> {
 ///     }
 ///
 ///     fn encoding() -> PayloadEncoding {
-///         PayloadEncoding::standard(UPayloadFormat::Json)
+///         PayloadEncoding::JSON
 ///     }
 /// }
 /// ```
@@ -523,7 +523,7 @@ impl PayloadFormat for RawBytes {
     }
 
     fn encoding() -> PayloadEncoding {
-        PayloadEncoding::standard(UPayloadFormat::Raw)
+        PayloadEncoding::RAW
     }
 }
 
@@ -1676,7 +1676,7 @@ impl PayloadFormat for ProtobufPayload {
     }
 
     fn encoding() -> PayloadEncoding {
-        PayloadEncoding::standard(UPayloadFormat::Protobuf)
+        PayloadEncoding::PROTOBUF
     }
 }
 
@@ -1741,7 +1741,7 @@ impl PayloadFormat for ProtobufAnyPayload {
     }
 
     fn encoding() -> PayloadEncoding {
-        PayloadEncoding::standard(UPayloadFormat::ProtobufWrappedInAny)
+        PayloadEncoding::PROTOBUF_WRAPPED_IN_ANY
     }
 }
 
@@ -1873,10 +1873,7 @@ mod tests {
 
         assert_eq!(encoded.as_ref(), payload);
         assert_eq!(decoded, payload);
-        assert_eq!(
-            RawBytes::encoding(),
-            PayloadEncoding::standard(UPayloadFormat::Raw)
-        );
+        assert_eq!(RawBytes::encoding(), PayloadEncoding::RAW);
     }
 
     #[test]
@@ -1986,8 +1983,8 @@ mod tests {
         let payload = Bytes::from_static(b"\x0a\x00\x00\x00\x14\x00\x00\x00");
         assert_eq!(payload.len(), mem::size_of::<VehiclePose>());
         let message = UMessageBuilder::publish(topic()).build().expect("message");
-        let metadata = UFrameMetadata::new(
-            message.attributes().clone(),
+        let metadata = crate::try_project_attributes_to_frame_metadata(
+            message.attributes(),
             Some(StableContainerPayload::<VehiclePose>::encoding()),
         )
         .expect("metadata");
@@ -2012,10 +2009,7 @@ mod tests {
             ProtobufPayload::decode_payload(&encoded).expect("decode protobuf");
 
         assert_eq!(decoded.value, input.value);
-        assert_eq!(
-            ProtobufPayload::encoding(),
-            PayloadEncoding::standard(UPayloadFormat::Protobuf)
-        );
+        assert_eq!(ProtobufPayload::encoding(), PayloadEncoding::PROTOBUF);
     }
 
     #[cfg(feature = "protobuf-support")]
@@ -2030,7 +2024,7 @@ mod tests {
         assert_eq!(decoded.value, input.value);
         assert_eq!(
             ProtobufAnyPayload::encoding(),
-            PayloadEncoding::standard(UPayloadFormat::ProtobufWrappedInAny)
+            PayloadEncoding::PROTOBUF_WRAPPED_IN_ANY
         );
     }
 
@@ -2052,9 +2046,9 @@ mod tests {
     #[test]
     fn segmented_frame_view_decodes_from_reader_without_contiguous_payload() {
         let message = UMessageBuilder::publish(topic()).build().expect("message");
-        let metadata = UFrameMetadata::new(
-            message.attributes().clone(),
-            Some(PayloadEncoding::standard(UPayloadFormat::Raw)),
+        let metadata = crate::try_project_attributes_to_frame_metadata(
+            message.attributes(),
+            Some(PayloadEncoding::RAW),
         )
         .expect("metadata");
         let frame = SegmentedFrame {

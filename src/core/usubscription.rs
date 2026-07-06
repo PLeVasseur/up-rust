@@ -287,16 +287,9 @@ pub trait USubscription: Send + Sync {
     ///
     /// * `reason` - The reason for the reset.
     /// * `message` - An optional human-readable message providing additional context about the reset.
-    /// * `before` - An optional timestamp (milliseconds since Unix epoch). All subscriptions created before
-    ///   this timestamp will be removed.
     ///
     /// # Errors
     ///
     /// Returns an error if the attempt to reset has failed.
-    async fn reset(
-        &self,
-        reason: ResetReason,
-        message: Option<String>,
-        before: Option<u64>,
-    ) -> Result<(), UStatus>;
+    async fn reset(&self, reason: ResetReason, message: Option<String>) -> Result<(), UStatus>;
 }
