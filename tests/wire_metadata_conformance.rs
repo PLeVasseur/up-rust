@@ -13,9 +13,9 @@
 
 use bytes::Bytes;
 use up_rust::{
-    NativePrefixFrameMetadataCodec, PayloadEncoding, UFrameMetadata, UMessageBuilder,
-    UPayloadFormat, UProtocolNativeWire, UUri, UWire, UWireMetadataCodec, UWireMetadataError,
-    WireIdentity,
+    try_project_umessage_to_frame_metadata, NativePrefixFrameMetadataCodec, PayloadEncoding,
+    UFrameMetadata, UMessageBuilder, UPayloadFormat, UProtocolNativeWire, UUri, UWire,
+    UWireMetadataCodec, UWireMetadataError, WireIdentity,
 };
 
 const LAYOUT_COMPACT_LO: usize = 5;
@@ -392,4 +392,52 @@ fn canonical_profile_identity_is_distinct_and_round_trips() {
         .decode_frame_metadata(UProtocolNativeWire::metadata_context(), &encoded)
         .expect("canonical decode");
     assert_eq!(decoded, metadata);
+}
+
+#[test]
+fn open_encoding_rides_classic_surface_losslessly() {
+    let encoding =
+        PayloadEncoding::custom("up.xcdr-v2", "application/vnd.eclipse.uprotocol.xcdr-v2")
+            .expect("encoding");
+    let message = UMessageBuilder::publish(topic())
+        .build_with_payload_encoding(Bytes::from_static(b"cdr-bytes"), encoding.clone())
+        .expect("message");
+    let attributes = message.attributes();
+
+    assert!(matches!(
+        attributes.payload_format(),
+        None | Some(UPayloadFormat::Unspecified)
+    ));
+    assert_eq!(
+        attributes.open_payload_encoding_parts(),
+        (
+            None,
+            Some("up.xcdr-v2"),
+            Some("application/vnd.eclipse.uprotocol.xcdr-v2")
+        )
+    );
+
+    use up_rust::ProtobufMappable as _;
+    let bytes = attributes.write_to_protobuf_bytes().expect("serialize");
+    let restored = up_rust::UAttributes::parse_from_protobuf_bytes(&bytes).expect("deserialize");
+    assert_eq!(
+        restored.open_payload_encoding_parts(),
+        attributes.open_payload_encoding_parts()
+    );
+
+    let metadata = try_project_umessage_to_frame_metadata(&message).expect("projection");
+    assert_eq!(metadata.payload_encoding(), Some(&encoding));
+    let back = metadata.try_project_to_attributes().expect("projection");
+    assert_eq!(
+        back.open_payload_encoding_parts(),
+        attributes.open_payload_encoding_parts()
+    );
+}
+
+#[test]
+fn legacy_encodings_remain_closed_on_classic_surface() {
+    let metadata = metadata_with_standard_payload();
+    let attributes = metadata.try_project_to_attributes().expect("projection");
+
+    assert_eq!(attributes.open_payload_encoding_parts(), (None, None, None));
 }

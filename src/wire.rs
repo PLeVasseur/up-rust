@@ -828,7 +828,7 @@ fn payload_encoding_encoded_len(payload_encoding: Option<&PayloadEncoding>) -> u
     }
 }
 
-#[cfg(feature = "selected-wire-codec-core")]
+#[cfg(feature = "selected-wire-protobuf-metadata")]
 fn write_len_prefixed_str(out: &mut Vec<u8>, value: &str) -> Result<(), UWireMetadataError> {
     write_len_prefixed_bytes(out, value.as_bytes())
 }
@@ -856,7 +856,7 @@ fn write_u32(out: &mut Vec<u8>, value: u32) {
     out.extend_from_slice(&value.to_le_bytes());
 }
 
-#[cfg(feature = "selected-wire-codec-core")]
+#[cfg(feature = "selected-wire-protobuf-metadata")]
 fn write_i32(out: &mut Vec<u8>, value: i32) {
     out.extend_from_slice(&value.to_le_bytes());
 }
@@ -921,6 +921,7 @@ impl<'a> MetadataReader<'a> {
         Ok(u32::from_le_bytes(array))
     }
 
+    #[cfg(feature = "selected-wire-protobuf-metadata")]
     fn read_i32(&mut self) -> Result<i32, UWireMetadataError> {
         let bytes = self.take(4)?;
         let array = <[u8; 4]>::try_from(bytes)
@@ -953,6 +954,7 @@ impl<'a> MetadataReader<'a> {
         self.take(len)
     }
 
+    #[cfg(feature = "selected-wire-protobuf-metadata")]
     fn read_len_prefixed_string(&mut self) -> Result<String, UWireMetadataError> {
         let bytes = self.read_len_prefixed_bytes()?;
         let value = std::str::from_utf8(bytes).map_err(|error| {

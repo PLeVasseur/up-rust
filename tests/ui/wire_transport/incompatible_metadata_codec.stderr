@@ -12,11 +12,11 @@ help: the trait `UWireMetadataCodecFor<UProtocolNativeWire>` is not implemented 
    |
 22 | struct IncompatibleMetadataCodec;
    | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
-help: the trait `UWireMetadataCodecFor<W>` is implemented for `NativePrefixProtobufMetadataCodec`
+help: the trait `UWireMetadataCodecFor<W>` is implemented for `NativePrefixFrameMetadataCodec`
   --> src/wire.rs
    |
-   | impl<W> UWireMetadataCodecFor<W> for NativePrefixProtobufMetadataCodec where W: UWire {}
-   | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+   | impl<W> UWireMetadataCodecFor<W> for NativePrefixFrameMetadataCodec where W: UWire {}
+   | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
 note: required by a bound in `UWireTransport::<TCore, W, C>::new`
   --> src/wire_transport.rs
    |
@@ -42,11 +42,11 @@ help: the trait `UWireMetadataCodecFor<UProtocolNativeWire>` is not implemented 
    |
 22 | struct IncompatibleMetadataCodec;
    | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
-help: the trait `UWireMetadataCodecFor<W>` is implemented for `NativePrefixProtobufMetadataCodec`
+help: the trait `UWireMetadataCodecFor<W>` is implemented for `NativePrefixFrameMetadataCodec`
   --> src/wire.rs
    |
-   | impl<W> UWireMetadataCodecFor<W> for NativePrefixProtobufMetadataCodec where W: UWire {}
-   | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+   | impl<W> UWireMetadataCodecFor<W> for NativePrefixFrameMetadataCodec where W: UWire {}
+   | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
 note: required by a bound in `UWireTransport`
   --> src/wire_transport.rs
    |

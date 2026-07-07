@@ -86,6 +86,7 @@ impl From<UFrameMetadataError> for UFrameWireError {
             | UFrameMetadataError::EmptyCustomEncodingId
             | UFrameMetadataError::EmptyCustomEncodingContentType
             | UFrameMetadataError::InvalidCustomEncodingContentType(_)
+            | UFrameMetadataError::RegisteredPayloadEncodingAlias { .. }
             | UFrameMetadataError::UnspecifiedPayloadFormat
             | UFrameMetadataError::PayloadWithoutEncoding
             | UFrameMetadataError::EncodingWithoutPayload
@@ -318,26 +319,28 @@ mod tests {
     }
 
     #[test]
-    fn protobuf_umessage_frame_rejects_custom_payload_encoding() {
+    fn protobuf_umessage_frame_round_trips_custom_payload_encoding() {
         let message = UMessageBuilder::publish(topic()).build().expect("message");
+        let encoding =
+            PayloadEncoding::custom("com.example.native", "application/vnd.example.native")
+                .expect("custom encoding");
         let metadata = crate::try_project_attributes_to_frame_metadata(
             message.attributes(),
-            Some(
-                PayloadEncoding::custom("com.example.native", "application/vnd.example.native")
-                    .expect("custom encoding"),
-            ),
+            Some(encoding.clone()),
         )
         .expect("metadata");
         let frame = UOwnedFrame::with_payload(metadata, Bytes::from_static(b"native payload"))
             .expect("frame");
 
-        let error = ProtobufUMessageFrame::serialize_frame(&frame).unwrap_err();
+        let encoded = ProtobufUMessageFrame::serialize_frame(&frame).expect("serialize frame");
+        let decoded =
+            ProtobufUMessageFrame::deserialize_frame(&encoded).expect("deserialize frame");
 
-        assert!(matches!(
-            error,
-            UFrameWireError::UnsupportedPayloadEncoding(message)
-                if message.contains("com.example.native")
-        ));
+        assert_eq!(decoded.metadata().payload_encoding(), Some(&encoding));
+        assert_eq!(
+            decoded.payload(),
+            Some(&Bytes::from_static(b"native payload"))
+        );
     }
 
     #[test]

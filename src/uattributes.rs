@@ -96,6 +96,9 @@ pub struct UAttributes {
     pub(crate) traceparent: Option<TraceparentString>,
     pub(crate) reqid: Option<UUID>,
     pub(crate) payload_format: Option<UPayloadFormat>,
+    pub(crate) payload_encoding_registry_id: Option<u32>,
+    pub(crate) payload_encoding: Option<String>,
+    pub(crate) payload_content_type: Option<String>,
 }
 
 impl UAttributes {
@@ -498,6 +501,17 @@ impl UAttributes {
         self.payload_format
     }
 
+    /// Gets the open payload-encoding identity components for encodings that
+    /// do not have a legacy [`UPayloadFormat`] equivalent.
+    #[must_use]
+    pub fn open_payload_encoding_parts(&self) -> (Option<u32>, Option<&str>, Option<&str>) {
+        (
+            self.payload_encoding_registry_id,
+            self.payload_encoding.as_deref(),
+            self.payload_content_type.as_deref(),
+        )
+    }
+
     /// Gets the payload format of the message these attributes belong to.
     ///
     /// # Panics
@@ -705,6 +719,9 @@ mod core_types_support {
                         UPayloadFormatProto::from(&pf)
                     })
                     .into(),
+                payload_encoding_registry_id: attribs.payload_encoding_registry_id,
+                payload_encoding: attribs.payload_encoding.clone(),
+                payload_content_type: attribs.payload_content_type.clone(),
                 ..Default::default()
             }
         }
@@ -775,6 +792,9 @@ mod core_types_support {
                         )))
                     }
                 },
+                payload_encoding_registry_id: attribs_proto.payload_encoding_registry_id,
+                payload_encoding: attribs_proto.payload_encoding.clone(),
+                payload_content_type: attribs_proto.payload_content_type.clone(),
             })
         }
     }
@@ -921,6 +941,9 @@ mod tests {
             traceparent: None,
             reqid: None,
             payload_format: None,
+            payload_encoding_registry_id: None,
+            payload_encoding: None,
+            payload_content_type: None,
         };
 
         assert!(attributes.check_expired().is_err() == should_be_expired);

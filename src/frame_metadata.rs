@@ -315,6 +315,63 @@ impl PayloadEncoding {
         Self::SHM,
     ];
 
+    fn legacy_by_registry_id(registry_id: u32) -> Option<Self> {
+        match registry_id {
+            1 => Some(Self::PROTOBUF_WRAPPED_IN_ANY),
+            2 => Some(Self::PROTOBUF),
+            3 => Some(Self::JSON),
+            4 => Some(Self::SOMEIP),
+            5 => Some(Self::SOMEIP_TLV),
+            6 => Some(Self::RAW),
+            7 => Some(Self::TEXT),
+            8 => Some(Self::SHM),
+            _ => None,
+        }
+    }
+
+    fn legacy_by_literal_id(literal_id: &str) -> Option<Self> {
+        Self::LEGACY_COMPATIBLE
+            .into_iter()
+            .find(|encoding| encoding.literal_id() == Some(literal_id))
+    }
+
+    fn canonicalize(self) -> Result<Self, UFrameMetadataError> {
+        if let Some(registry_id) = self.registry_id {
+            if let Some(legacy) = Self::legacy_by_registry_id(registry_id) {
+                if self
+                    .literal_id()
+                    .is_some_and(|literal_id| Some(literal_id) != legacy.literal_id())
+                    || self
+                        .content_type()
+                        .is_some_and(|content_type| Some(content_type) != legacy.content_type())
+                {
+                    return Err(UFrameMetadataError::InvalidMetadata(format!(
+                        "payload encoding registry id {registry_id} conflicts with `{}`",
+                        self.describe()
+                    )));
+                }
+                return Ok(legacy);
+            }
+        }
+
+        if let Some(literal_id) = self.literal_id() {
+            if let Some(legacy) = Self::legacy_by_literal_id(literal_id) {
+                if self
+                    .content_type()
+                    .is_some_and(|content_type| Some(content_type) != legacy.content_type())
+                {
+                    return Err(UFrameMetadataError::InvalidMetadata(format!(
+                        "payload encoding literal `{literal_id}` conflicts with content type `{}`",
+                        self.content_type().unwrap_or("<absent>")
+                    )));
+                }
+                return Ok(legacy);
+            }
+        }
+
+        Ok(self)
+    }
+
     /// Creates a validated custom payload encoding from a literal id and a
     /// media type.
     ///
@@ -332,7 +389,15 @@ impl PayloadEncoding {
             content_type: Some(Cow::Owned(content_type.into())),
         };
         encoding.validate()?;
-        Ok(encoding)
+        if let Some(literal_id) = encoding.literal_id() {
+            if let Some(legacy) = Self::legacy_by_literal_id(literal_id) {
+                return Err(UFrameMetadataError::RegisteredPayloadEncodingAlias {
+                    literal_id: literal_id.to_string(),
+                    registered: legacy.describe(),
+                });
+            }
+        }
+        encoding.canonicalize()
     }
 
     /// Creates a validated payload encoding from explicit identity components.
@@ -353,7 +418,7 @@ impl PayloadEncoding {
             content_type: content_type.map(Cow::Owned),
         };
         encoding.validate()?;
-        Ok(encoding)
+        encoding.canonicalize()
     }
 
     /// Returns the registered numeric identity, if present.
@@ -494,6 +559,13 @@ pub enum UFrameMetadataError {
         /// Diagnostic identity of the offending encoding.
         encoding: String,
     },
+    /// An open identity used a literal reserved for a registered legacy row.
+    RegisteredPayloadEncodingAlias {
+        /// Literal identity that aliases a registered legacy row.
+        literal_id: String,
+        /// Canonical registered spelling.
+        registered: String,
+    },
     /// A semantic field cannot be represented by legacy types.
     FieldNotRepresentable {
         /// Name of the offending field.
@@ -527,6 +599,12 @@ impl std::fmt::Display for UFrameMetadataError {
             Self::EncodingWithoutPayload => f.write_str("payload encoding requires payload bytes"),
             Self::EncodingNotRepresentable { encoding } => f.write_fmt(format_args!(
                 "payload encoding `{encoding}` cannot be represented by legacy UPayloadFormat"
+            )),
+            Self::RegisteredPayloadEncodingAlias {
+                literal_id,
+                registered,
+            } => f.write_fmt(format_args!(
+                "payload encoding literal `{literal_id}` aliases registered encoding `{registered}`; use the registered spelling"
             )),
             Self::FieldNotRepresentable { field, reason } => f.write_fmt(format_args!(
                 "frame metadata field `{field}` cannot be represented by legacy types: {reason}"
@@ -860,24 +938,29 @@ impl UFrameMetadata {
     /// Projects this metadata to legacy `UAttributes`.
     ///
     /// This is a compatibility projection for classic (`UTransport`-shaped)
-    /// boundaries and is fallible by design: it fails when the native
-    /// metadata cannot be represented by legacy types, for example a payload
-    /// encoding without a legacy `UPayloadFormat` equivalent or a TTL that
-    /// does not fit the legacy 32-bit millisecond field.
+    /// boundaries and is fallible by design only for fields that cannot be
+    /// represented by legacy types, such as a TTL that does not fit the
+    /// legacy 32-bit millisecond field. Open payload encodings are represented
+    /// by the `UAttributes` payload-encoding identity fields.
     ///
     /// # Errors
     ///
     /// Returns an error if the metadata is invalid or not representable.
     pub fn try_project_to_attributes(&self) -> Result<UAttributes, UFrameMetadataError> {
-        let payload_format = match &self.payload_encoding {
-            None => Some(UPayloadFormat::Unspecified),
-            Some(encoding) => Some(encoding.to_legacy_format().ok_or_else(|| {
-                UFrameMetadataError::EncodingNotRepresentable {
-                    encoding: encoding.describe(),
-                }
-            })?),
+        let (payload_format, open_encoding) = match &self.payload_encoding {
+            None => (Some(UPayloadFormat::Unspecified), None),
+            Some(encoding) => match encoding.to_legacy_format() {
+                Some(format) => (Some(format), None),
+                None => (None, Some(encoding)),
+            },
         };
-        self.project_to_attributes_with_payload_format(payload_format)
+        let mut attributes = self.project_to_attributes_with_payload_format(payload_format)?;
+        if let Some(encoding) = open_encoding {
+            attributes.payload_encoding_registry_id = encoding.registry_id();
+            attributes.payload_encoding = encoding.literal_id().map(str::to_owned);
+            attributes.payload_content_type = encoding.content_type().map(str::to_owned);
+        }
+        Ok(attributes)
     }
 
     /// Projects this metadata to legacy `UAttributes` with an explicitly
@@ -904,6 +987,9 @@ impl UFrameMetadata {
             traceparent: self.traceparent.clone(),
             reqid: self.reqid.clone(),
             payload_format,
+            payload_encoding_registry_id: None,
+            payload_encoding: None,
+            payload_content_type: None,
         })
     }
 }
@@ -1071,9 +1157,32 @@ pub fn try_project_attributes_to_frame_metadata(
     attributes: &UAttributes,
     payload_encoding: Option<PayloadEncoding>,
 ) -> Result<UFrameMetadata, UFrameMetadataError> {
-    let attributes_encoding = match attributes.payload_format() {
+    let legacy_encoding = match attributes.payload_format() {
         None | Some(UPayloadFormat::Unspecified) => None,
         Some(format) => Some(PayloadEncoding::try_from_legacy_format(format)?),
+    };
+    let open_present = attributes.open_payload_encoding_parts() != (None, None, None);
+    let attributes_encoding = match (legacy_encoding, open_present) {
+        (Some(_), true) => {
+            return Err(UFrameMetadataError::InvalidMetadata(
+                "attributes declare both a concrete payload_format and open payload-encoding fields; exactly one mechanism is allowed".into(),
+            ));
+        }
+        (Some(legacy), false) => Some(legacy),
+        (None, true) => {
+            let encoding = PayloadEncoding::from_parts(
+                attributes.payload_encoding_registry_id,
+                attributes.payload_encoding.clone(),
+                attributes.payload_content_type.clone(),
+            )?;
+            if encoding.to_legacy_format().is_some() {
+                return Err(UFrameMetadataError::InvalidMetadata(
+                    "registered-range payload encodings must use payload_format, not open payload-encoding fields".into(),
+                ));
+            }
+            Some(encoding)
+        }
+        (None, false) => None,
     };
     let payload_encoding = match (payload_encoding, attributes_encoding) {
         (Some(explicit), Some(from_attributes)) => {
@@ -1113,16 +1222,20 @@ pub fn try_project_attributes_to_frame_metadata(
 /// # Errors
 ///
 /// Returns an error when a message carries payload bytes without a concrete
-/// standard payload format, or a concrete payload format without payload
-/// bytes.
+/// payload encoding, or a concrete payload encoding without payload bytes.
 pub fn try_project_umessage_to_frame_metadata(
     message: &UMessage,
 ) -> Result<UFrameMetadata, UFrameMetadataError> {
-    match (message.payload(), message.payload_format()) {
-        (Some(_), Some(UPayloadFormat::Unspecified)) | (Some(_), None) => {
+    let open_present = message.attributes().open_payload_encoding_parts() != (None, None, None);
+    let legacy_present = matches!(
+        message.payload_format(),
+        Some(format) if format != UPayloadFormat::Unspecified
+    );
+    match (message.payload().is_some(), legacy_present || open_present) {
+        (true, false) => {
             return Err(UFrameMetadataError::PayloadWithoutEncoding);
         }
-        (None, Some(format)) if format != UPayloadFormat::Unspecified => {
+        (false, true) => {
             return Err(UFrameMetadataError::EncodingWithoutPayload);
         }
         _ => {}
@@ -1134,7 +1247,7 @@ pub fn try_project_umessage_to_frame_metadata(
 /// `UMessage`.
 ///
 /// Native payload encodings without a legacy `UPayloadFormat` equivalent are
-/// rejected because `UMessage` has only standard `payload_format` metadata.
+/// carried by the `UAttributes` open payload-encoding identity fields.
 ///
 /// # Errors
 ///
@@ -1305,7 +1418,7 @@ mod tests {
     }
 
     #[test]
-    fn custom_encoding_projection_to_umessage_is_rejected() {
+    fn custom_encoding_projection_to_umessage_carries_open_identity() {
         let metadata = UFrameMetadata::publish(topic())
             .with_payload_encoding(
                 PayloadEncoding::custom("up.native", "application/vnd.example.native").unwrap(),
@@ -1313,14 +1426,16 @@ mod tests {
             .build()
             .expect("metadata");
 
-        let error = try_project_frame_to_umessage(metadata, Some(Bytes::from_static(b"payload")))
-            .unwrap_err();
+        let message = try_project_frame_to_umessage(metadata, Some(Bytes::from_static(b"payload")))
+            .expect("projection");
 
         assert_eq!(
-            error,
-            UFrameMetadataError::EncodingNotRepresentable {
-                encoding: "up.native".to_string(),
-            }
+            message.attributes().open_payload_encoding_parts(),
+            (
+                None,
+                Some("up.native"),
+                Some("application/vnd.example.native")
+            )
         );
     }
 
@@ -1359,6 +1474,53 @@ mod tests {
             PayloadEncoding::from_parts(None, None, None).unwrap_err(),
             UFrameMetadataError::EmptyPayloadEncoding
         );
+        assert!(matches!(
+            PayloadEncoding::custom("up.raw", "application/octet-stream"),
+            Err(UFrameMetadataError::RegisteredPayloadEncodingAlias { .. })
+        ));
+    }
+
+    #[test]
+    fn registered_literal_decodes_to_canonical_encoding() {
+        let encoding = PayloadEncoding::from_parts(
+            None,
+            Some("up.raw".to_string()),
+            Some("application/octet-stream".to_string()),
+        )
+        .expect("canonicalized");
+
+        assert_eq!(encoding, PayloadEncoding::RAW);
+    }
+
+    #[test]
+    fn attributes_reject_both_encoding_mechanisms() {
+        let message = UMessageBuilder::publish(topic())
+            .build_with_payload(Bytes::from_static(b"x"), UPayloadFormat::Raw)
+            .expect("message");
+        let mut attributes = message.attributes().clone();
+        attributes.payload_encoding = Some("up.xcdr-v2".to_string());
+
+        let error = try_project_attributes_to_frame_metadata(&attributes, None).unwrap_err();
+
+        assert!(matches!(error, UFrameMetadataError::InvalidMetadata(_)));
+    }
+
+    #[test]
+    fn attributes_reject_registered_encoding_in_open_fields() {
+        let message = UMessageBuilder::publish(topic())
+            .build_with_payload_encoding(
+                Bytes::from_static(b"x"),
+                PayloadEncoding::custom("up.xcdr-v2", "application/vnd.uprotocol.xcdr-v2")
+                    .expect("encoding"),
+            )
+            .expect("message");
+        let mut attributes = message.attributes().clone();
+        attributes.payload_encoding = Some("up.raw".to_string());
+        attributes.payload_content_type = Some("application/octet-stream".to_string());
+
+        let error = try_project_attributes_to_frame_metadata(&attributes, None).unwrap_err();
+
+        assert!(matches!(error, UFrameMetadataError::InvalidMetadata(_)));
     }
 
     #[test]

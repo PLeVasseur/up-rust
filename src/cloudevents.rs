@@ -416,6 +416,9 @@ impl TryFrom<CloudEvent> for UMessage {
             token: event.get_token()?,
             traceparent: event.get_traceparent()?,
             payload_format: Some(event.get_payload_format()?),
+            payload_encoding_registry_id: None,
+            payload_encoding: None,
+            payload_content_type: None,
         };
         UAttributesValidators::get_validator_for_attributes(&attributes).validate(&attributes)?;
 

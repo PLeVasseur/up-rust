@@ -17,8 +17,9 @@ use crate::uattributes::NotificationValidator;
 #[cfg(feature = "protobuf-support")]
 use crate::ProtobufMappable;
 use crate::{
-    PublishValidator, RequestValidator, ResponseValidator, UAttributes, UAttributesValidator,
-    UCode, UMessage, UMessageError, UMessageType, UPayloadFormat, UPriority, UUri, UUID,
+    PayloadEncoding, PublishValidator, RequestValidator, ResponseValidator, UAttributes,
+    UAttributesValidator, UCode, UMessage, UMessageError, UMessageType, UPayloadFormat, UPriority,
+    UUri, UUID,
 };
 
 /// A builder for creating [`UMessage`]s.
@@ -31,6 +32,7 @@ pub struct UMessageBuilder {
     message_type: UMessageType,
     payload: Option<Bytes>,
     payload_format: UPayloadFormat,
+    open_payload_encoding: Option<PayloadEncoding>,
     permission_level: Option<u32>,
     priority: Option<UPriority>,
     request_id: Option<UUID>,
@@ -76,6 +78,7 @@ impl UMessageBuilder {
             message_type: UMessageType::Publish,
             payload: None,
             payload_format: UPayloadFormat::Unspecified,
+            open_payload_encoding: None,
             permission_level: None,
             priority: None,
             request_id: None,
@@ -123,6 +126,7 @@ impl UMessageBuilder {
             message_type: UMessageType::Notification,
             payload: None,
             payload_format: UPayloadFormat::Unspecified,
+            open_payload_encoding: None,
             permission_level: None,
             priority: None,
             request_id: None,
@@ -176,6 +180,7 @@ impl UMessageBuilder {
             message_type: UMessageType::Request,
             payload: None,
             payload_format: UPayloadFormat::Unspecified,
+            open_payload_encoding: None,
             permission_level: None,
             priority: Some(UPriority::CS4),
             request_id: None,
@@ -236,6 +241,7 @@ impl UMessageBuilder {
             message_type: UMessageType::Response,
             payload: None,
             payload_format: UPayloadFormat::Unspecified,
+            open_payload_encoding: None,
             permission_level: None,
             priority: Some(UPriority::CS4),
             request_id: Some(request_id),
@@ -302,6 +308,7 @@ impl UMessageBuilder {
             message_type: UMessageType::Response,
             payload: None,
             payload_format: UPayloadFormat::Unspecified,
+            open_payload_encoding: None,
             permission_level: None,
             priority: request_attributes.priority,
             request_id: Some(request_attributes.id.clone()),
@@ -657,6 +664,18 @@ impl UMessageBuilder {
             traceparent: self.traceparent.clone(),
             ttl: self.ttl,
             type_: self.message_type,
+            payload_encoding_registry_id: self
+                .open_payload_encoding
+                .as_ref()
+                .and_then(PayloadEncoding::registry_id),
+            payload_encoding: self
+                .open_payload_encoding
+                .as_ref()
+                .and_then(|encoding| encoding.literal_id().map(str::to_owned)),
+            payload_content_type: self
+                .open_payload_encoding
+                .as_ref()
+                .and_then(|encoding| encoding.content_type().map(str::to_owned)),
         };
         self.validator
             .validate(&attributes)
@@ -701,7 +720,35 @@ impl UMessageBuilder {
         self.payload = Some(payload.into());
         // [impl->dsn~up-attributes-payload-format~1]
         self.payload_format = format;
+        self.open_payload_encoding = None;
 
+        self.build()
+    }
+
+    /// Creates the message based on the builder's state and a payload labeled
+    /// with an open payload-encoding identity.
+    ///
+    /// Reserved-range encodings produce the same attributes as
+    /// [`Self::build_with_payload`]. Other encodings populate the open
+    /// payload-encoding identity fields and leave `payload_format` unspecified.
+    ///
+    /// # Errors
+    ///
+    /// If the properties set on the builder do not represent a consistent set
+    /// of [`UAttributes`], a [`UMessageError::AttributesValidationError`] is
+    /// returned.
+    pub fn build_with_payload_encoding<T: Into<Bytes>>(
+        &mut self,
+        payload: T,
+        encoding: PayloadEncoding,
+    ) -> Result<UMessage, UMessageError> {
+        if let Some(format) = encoding.to_legacy_format() {
+            return self.build_with_payload(payload, format);
+        }
+
+        self.payload = Some(payload.into());
+        self.payload_format = UPayloadFormat::Unspecified;
+        self.open_payload_encoding = Some(encoding);
         self.build()
     }
 

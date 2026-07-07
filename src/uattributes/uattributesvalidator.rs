@@ -11,7 +11,7 @@
  * SPDX-License-Identifier: Apache-2.0
  ********************************************************************************/
 
-use crate::{UAttributes, UMessageType, UPriority, UUri};
+use crate::{PayloadEncoding, UAttributes, UMessageType, UPayloadFormat, UPriority, UUri};
 
 use crate::UAttributesError;
 
@@ -83,6 +83,37 @@ pub fn validate_rpc_priority(attributes: &UAttributes) -> Result<(), UAttributes
                 Ok(())
             }
         })
+}
+
+fn validate_payload_encoding(attributes: &UAttributes) -> Result<(), UAttributesError> {
+    let legacy_present = matches!(
+        attributes.payload_format(),
+        Some(format) if format != UPayloadFormat::Unspecified
+    );
+    let open_present = attributes.open_payload_encoding_parts() != (None, None, None);
+
+    if legacy_present && open_present {
+        return Err(UAttributesError::validation_error(
+            "payload encoding must use exactly one mechanism: payload_format or open payload-encoding fields",
+        ));
+    }
+
+    if open_present {
+        let (registry_id, literal_id, content_type) = attributes.open_payload_encoding_parts();
+        let encoding = PayloadEncoding::from_parts(
+            registry_id,
+            literal_id.map(ToOwned::to_owned),
+            content_type.map(ToOwned::to_owned),
+        )
+        .map_err(|error| UAttributesError::validation_error(error.to_string()))?;
+        if encoding.to_legacy_format().is_some() {
+            return Err(UAttributesError::validation_error(
+                "registered-range payload encodings must use payload_format, not open payload-encoding fields",
+            ));
+        }
+    }
+
+    Ok(())
 }
 
 /// Enum that hold the implementations of uattributesValidator according to type.
@@ -188,6 +219,7 @@ impl UAttributesValidator for PublishValidator {
             self.validate_type(attributes),
             self.validate_source(attributes),
             self.validate_sink(attributes),
+            validate_payload_encoding(attributes),
         ]
         .into_iter()
         .filter_map(Result::err)
@@ -258,6 +290,7 @@ impl UAttributesValidator for NotificationValidator {
             self.validate_type(attributes),
             self.validate_source(attributes),
             self.validate_sink(attributes),
+            validate_payload_encoding(attributes),
         ]
         .into_iter()
         .filter_map(Result::err)
@@ -371,6 +404,7 @@ impl UAttributesValidator for RequestValidator {
             self.validate_source(attributes),
             self.validate_sink(attributes),
             validate_rpc_priority(attributes),
+            validate_payload_encoding(attributes),
         ]
         .into_iter()
         .filter_map(Result::err)
@@ -458,6 +492,7 @@ impl UAttributesValidator for ResponseValidator {
             self.validate_sink(attributes),
             self.validate_reqid(attributes),
             validate_rpc_priority(attributes),
+            validate_payload_encoding(attributes),
         ]
         .into_iter()
         .filter_map(Result::err)
@@ -541,6 +576,9 @@ mod tests {
             commstatus: None,
             id: UUID::build(),
             payload_format: None,
+            payload_encoding_registry_id: None,
+            payload_encoding: None,
+            payload_content_type: None,
             permission_level: None,
             priority: UPriority::CS1.into(),
             reqid: None,
@@ -588,6 +626,9 @@ mod tests {
             commstatus: None,
             id: UUID::build(),
             payload_format: None,
+            payload_encoding_registry_id: None,
+            payload_encoding: None,
+            payload_content_type: None,
             permission_level: None,
             priority: UPriority::CS1.into(),
             reqid: None,
@@ -646,6 +687,9 @@ mod tests {
             commstatus: None,
             id: UUID::build(),
             payload_format: None,
+            payload_encoding_registry_id: None,
+            payload_encoding: None,
+            payload_content_type: None,
             permission_level: perm_level,
             priority,
             reqid: None,
@@ -704,6 +748,9 @@ mod tests {
             commstatus,
             id: UUID::build(),
             payload_format: None,
+            payload_encoding_registry_id: None,
+            payload_encoding: None,
+            payload_content_type: None,
             permission_level: None,
             priority,
             reqid,

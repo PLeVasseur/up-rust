@@ -99,6 +99,39 @@ impl UMessage {
         })
     }
 
+    /// Returns this message with an assumed payload encoding stamped on its
+    /// attributes when the message has payload bytes and no encoding
+    /// declaration yet.
+    ///
+    /// This is for transports whose wire profile fixes payload encoding by
+    /// topic convention rather than carrying it per message. Existing encoding
+    /// declarations are preserved unchanged.
+    #[must_use]
+    pub fn with_assumed_payload_encoding(mut self, encoding: &crate::PayloadEncoding) -> Self {
+        if self.payload.is_none() {
+            return self;
+        }
+
+        let attributes = &mut self.attributes;
+        let has_legacy = !matches!(
+            attributes.payload_format,
+            None | Some(crate::UPayloadFormat::Unspecified)
+        );
+        let has_open = attributes.open_payload_encoding_parts() != (None, None, None);
+        if has_legacy || has_open {
+            return self;
+        }
+
+        if let Some(format) = encoding.to_legacy_format() {
+            attributes.payload_format = Some(format);
+        } else {
+            attributes.payload_encoding_registry_id = encoding.registry_id();
+            attributes.payload_encoding = encoding.literal_id().map(str::to_owned);
+            attributes.payload_content_type = encoding.content_type().map(str::to_owned);
+        }
+        self
+    }
+
     /// Get this message's attributes.
     #[must_use]
     pub fn attributes(&self) -> &UAttributes {
@@ -464,6 +497,11 @@ mod core_types_support {
 mod test {
 
     use super::*;
+    use crate::PayloadEncoding;
+
+    fn topic() -> UUri {
+        UUri::try_from_parts("vehicle", 0x4210, 0x01, 0x9000).expect("topic")
+    }
 
     #[test]
     fn test_from_attributes_error() {
@@ -479,6 +517,76 @@ mod test {
     fn test_from_error_msg() {
         let message_error = UMessageError::from("an error occurred");
         assert!(matches!(message_error, UMessageError::PayloadError(_)));
+    }
+
+    #[test]
+    fn with_assumed_payload_encoding_stamps_open_encoding_on_payload() {
+        let encoding = PayloadEncoding::custom("up.xcdr-v2", "application/vnd.uprotocol.xcdr-v2")
+            .expect("encoding");
+        let message = UMessageBuilder::publish(topic())
+            .build_with_payload(Bytes::from_static(b"payload"), UPayloadFormat::Unspecified)
+            .expect("message")
+            .with_assumed_payload_encoding(&encoding);
+
+        assert_eq!(
+            message.attributes().open_payload_encoding_parts(),
+            (
+                None,
+                Some("up.xcdr-v2"),
+                Some("application/vnd.uprotocol.xcdr-v2")
+            )
+        );
+        assert_eq!(
+            crate::try_project_umessage_to_frame_metadata(&message)
+                .expect("metadata")
+                .payload_encoding(),
+            Some(&encoding)
+        );
+    }
+
+    #[test]
+    fn with_assumed_payload_encoding_stamps_legacy_encoding_on_payload() {
+        let message = UMessageBuilder::publish(topic())
+            .build_with_payload(Bytes::from_static(b"payload"), UPayloadFormat::Unspecified)
+            .expect("message")
+            .with_assumed_payload_encoding(&PayloadEncoding::RAW);
+
+        assert_eq!(message.payload_format(), Some(UPayloadFormat::Raw));
+        assert_eq!(
+            message.attributes().open_payload_encoding_parts(),
+            (None, None, None)
+        );
+    }
+
+    #[test]
+    fn with_assumed_payload_encoding_preserves_existing_encoding() {
+        let message = UMessageBuilder::publish(topic())
+            .build_with_payload(Bytes::from_static(b"payload"), UPayloadFormat::Raw)
+            .expect("message")
+            .with_assumed_payload_encoding(
+                &PayloadEncoding::custom("up.xcdr-v2", "application/vnd.uprotocol.xcdr-v2")
+                    .expect("encoding"),
+            );
+
+        assert_eq!(message.payload_format(), Some(UPayloadFormat::Raw));
+        assert_eq!(
+            message.attributes().open_payload_encoding_parts(),
+            (None, None, None)
+        );
+    }
+
+    #[test]
+    fn with_assumed_payload_encoding_ignores_payloadless_message() {
+        let message = UMessageBuilder::publish(topic())
+            .build()
+            .expect("message")
+            .with_assumed_payload_encoding(&PayloadEncoding::RAW);
+
+        assert_eq!(message.payload_format(), Some(UPayloadFormat::Unspecified));
+        assert_eq!(
+            message.attributes().open_payload_encoding_parts(),
+            (None, None, None)
+        );
     }
 }
 

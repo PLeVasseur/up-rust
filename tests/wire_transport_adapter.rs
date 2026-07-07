@@ -26,11 +26,10 @@ use up_rust::{
     NativePrefixFrameMetadataCodec, PayloadCodec, PayloadEncoding, PreparedTxLoanSpec,
     ProtobufWire, ProtobufWireTransport, StableContainerPayload, StableContainerWireTransport,
     UCode, UEncodedLoanedRxFrame, UEncodedRxFrame, UEncodedZeroCopyListener, UFrameMetadata,
-    UFrameView, UHasWire, UMessageBuilder, UPayloadFormat, UProtocolNativeWire,
-    UProtocolNativeWireTransport, USelectedWireZeroCopyTransport, UStatus, UTxBuffer, UTxLoanSpec,
-    UTxPayloadSpec, UUri, UVecTxBuffer, UWire, UWireError, UWireMetadataCodec, UWireRx,
-    UWithNativePrefixWire, UZeroCopyListener, UZeroCopyTransport, UZeroCopyTransportCore,
-    WireIdentity,
+    UFrameView, UHasWire, UMessageBuilder, UProtocolNativeWire, UProtocolNativeWireTransport,
+    USelectedWireZeroCopyTransport, UStatus, UTxBuffer, UTxLoanSpec, UTxPayloadSpec, UUri,
+    UVecTxBuffer, UWire, UWireError, UWireMetadataCodec, UWireRx, UWithNativePrefixWire,
+    UZeroCopyListener, UZeroCopyTransport, UZeroCopyTransportCore, WireIdentity,
 };
 
 #[cfg(feature = "owned-frame-transport")]
@@ -570,6 +569,7 @@ fn notification_metadata_with_payload(destination: UUri) -> UFrameMetadata {
     .expect("notification metadata")
 }
 
+#[cfg(feature = "owned-frame-transport")]
 fn nonmatching_metadata_with_payload() -> UFrameMetadata {
     let source = UUri::try_from_parts("other", 0x4210, 0x01, 0x9000).expect("other URI");
     let message = UMessageBuilder::publish(source).build().expect("message");

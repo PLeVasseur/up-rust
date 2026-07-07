@@ -31,8 +31,8 @@ use std::path::PathBuf;
 
 use bytes::Bytes;
 use up_rust::{
-    NativePrefixFrameMetadataCodec, PayloadEncoding, UFrameMetadata, UMessageBuilder,
-    UPayloadFormat, UProtocolNativeWire, UUri, UWire, UWireMetadataCodec, UUID,
+    NativePrefixFrameMetadataCodec, PayloadEncoding, ProtobufMappable, UAttributes, UFrameMetadata,
+    UMessageBuilder, UPayloadFormat, UProtocolNativeWire, UUri, UWire, UWireMetadataCodec, UUID,
 };
 
 #[cfg(feature = "selected-wire-protobuf-metadata")]
@@ -161,6 +161,38 @@ fn fixtures() -> Vec<(&'static str, &'static str, UFrameMetadata)> {
     ]
 }
 
+fn classic_attribute_fixtures() -> Vec<(&'static str, &'static str, UAttributes)> {
+    let legacy_raw = UMessageBuilder::publish(topic())
+        .with_message_id(fixed_uuid(7))
+        .build_with_payload(Bytes::from_static(b"payload"), UPayloadFormat::Raw)
+        .expect("message")
+        .attributes()
+        .clone();
+    let open_xcdr2 = UMessageBuilder::publish(topic())
+        .with_message_id(fixed_uuid(8))
+        .build_with_payload_encoding(
+            Bytes::from_static(b"cdr-bytes"),
+            PayloadEncoding::custom("up.xcdr-v2", "application/vnd.uprotocol.xcdr-v2")
+                .expect("encoding"),
+        )
+        .expect("message")
+        .attributes()
+        .clone();
+
+    vec![
+        (
+            "classic-publish-raw-payload",
+            "classic UAttributes; legacy RAW payload_format",
+            legacy_raw,
+        ),
+        (
+            "classic-publish-open-xcdr2-payload",
+            "classic UAttributes; open XCDRv2 payload encoding fields",
+            open_xcdr2,
+        ),
+    ]
+}
+
 fn hex(bytes: &[u8]) -> String {
     let mut s = String::with_capacity(bytes.len() * 2 + 1);
     for b in bytes {
@@ -214,6 +246,20 @@ fn canonical_field_block_golden_vectors() {
         check_or_update(name, "uframe-fields", &bytes, &mut manifest);
     }
     finish_manifest("uframe-fields", manifest);
+}
+
+#[test]
+fn classic_uattributes_golden_vectors() {
+    let mut manifest = String::from("[\n");
+    for (name, _desc, attributes) in classic_attribute_fixtures() {
+        let bytes = attributes
+            .write_to_protobuf_bytes()
+            .expect("classic encode");
+        let decoded = UAttributes::parse_from_protobuf_bytes(&bytes).expect("classic decode");
+        assert_eq!(decoded, attributes, "classic round-trip for {name}");
+        check_or_update(name, "uattributes-classic", &bytes, &mut manifest);
+    }
+    finish_manifest("uattributes-classic", manifest);
 }
 
 #[cfg(feature = "selected-wire-protobuf-metadata")]
