@@ -205,6 +205,10 @@ name = "wire_metadata_conformance"
 required-features = ["wire-implementer-api"]
 
 [[test]]
+name = "wire_metadata_golden"
+required-features = ["wire-implementer-api"]
+
+[[test]]
 name = "wire_transport_adapter"
 required-features = ["selected-wire-user-api", "wire-implementer-api", "transport-implementer-api", "protobuf-wire"]
 
