@@ -707,13 +707,7 @@ where
                 .core
                 .receive_encoded_zero_copy(&core_source_filter, sink_filter)
                 .await?;
-            let frame = match UWireRx::try_from_encoded(frame, &self.metadata_codec) {
-                Ok(frame) => frame,
-                Err(error) => {
-                    warn!(%error, "dropping invalid selected-wire zero-copy frame");
-                    continue;
-                }
-            };
+            let frame = UWireRx::try_from_encoded(frame, &self.metadata_codec)?;
             if wire_frame_matches(&frame, source_filter, sink_filter) {
                 return Ok(frame);
             }
@@ -1728,7 +1722,7 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn receive_drops_invalid_selected_wire_frame_and_continues() {
+    async fn receive_rejects_invalid_selected_wire_frame_before_later_frames() {
         let core = RecordingCore::default();
         core.received.lock().unwrap().extend([
             RawRx {
@@ -1740,10 +1734,23 @@ mod tests {
         let transport = core.into_native_prefix_wire_transport(UProtocolNativeWire);
         let source_filter = UUri::try_from_parts("vehicle", 0x4210, 0x01, 0x9000).unwrap();
 
+        let status = match transport
+            .receive_validated_zero_copy(&source_filter, None)
+            .await
+        {
+            Ok(_) => panic!("invalid selected-wire metadata must be rejected"),
+            Err(status) => status,
+        };
+        assert_eq!(status.get_code(), UCode::InvalidArgument);
+        assert!(status
+            .get_message()
+            .is_some_and(|message| message.contains("wrong native-prefix metadata magic")));
+        assert_eq!(transport.core().received.lock().unwrap().len(), 1);
+
         let frame = transport
             .receive_validated_zero_copy(&source_filter, None)
             .await
-            .expect("matching decoded frame after invalid frame");
+            .expect("later matching decoded frame");
 
         assert_eq!(frame.try_contiguous_payload(), Some(&b"keep"[..]));
         assert!(transport.core().received.lock().unwrap().is_empty());
