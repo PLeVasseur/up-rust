@@ -5,26 +5,3 @@ error[E0432]: unresolved imports `up_rust::payload::UnsafeStablePayloadTxSlot`, 
   |                        ^^^^^^^^^^^^^^^^^^^^^^^^^  ^^^^^^^^^^^^^^^^^^^^^^^^^ no `ZeroedStablePayloadTxSlot` in `payload`
   |                        |
   |                        no `UnsafeStablePayloadTxSlot` in `payload`
-  |
-note: found an item that was configured out
- --> src/payload.rs
-  |
-  |   #[cfg(any(
-  |  __________-
-  | |     feature = "unsafe-stable-payload-tx",
-  | |     feature = "expert-unsafe-payloads"
-  | | ))]
-  | |_- the item is gated here
-  |   pub struct UnsafeStablePayloadTxSlot<'a, T> {
-  |              ^^^^^^^^^^^^^^^^^^^^^^^^^
-note: found an item that was configured out
- --> src/payload.rs
-  |
-  |   #[cfg(any(
-  |  __________-
-  | |     feature = "unsafe-stable-payload-tx",
-  | |     feature = "expert-unsafe-payloads"
-  | | ))]
-  | |_- the item is gated here
-  |   pub struct ZeroedStablePayloadTxSlot<'a, T> {
-  |              ^^^^^^^^^^^^^^^^^^^^^^^^^

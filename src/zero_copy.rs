@@ -27,11 +27,6 @@ use std::collections::VecDeque;
 use async_trait::async_trait;
 use tracing::warn;
 
-#[cfg(any(
-    feature = "unsafe-stable-payload-tx",
-    feature = "expert-unsafe-payloads"
-))]
-use crate::payload::UnsafeStablePayloadTxSlot;
 #[cfg(feature = "selected-wire-transport-adapter")]
 use crate::wire::UWirePayload;
 #[cfg(feature = "selected-wire-transport-adapter")]
@@ -1072,64 +1067,6 @@ pub trait UZeroCopyUninitTransportExt: UZeroCopyUninitTransport {
         let buffer = unsafe { buffer.assume_payload_init() };
         self.send_zero_copy(buffer).await
     }
-
-    /// Expert hatch for sending a stable-container payload whose bytes cannot be
-    /// proven byte-backed by the safe API.
-    ///
-    /// # Safety
-    ///
-    /// `init` must initialize every transported byte in the slot, including
-    /// implicit padding, before returning an initialized marker. Returning an
-    /// initialized marker before the full byte range contains one valid `T` is
-    /// undefined behavior for receivers that borrow the stable payload.
-    #[cfg(any(
-        feature = "unsafe-stable-payload-tx",
-        feature = "expert-unsafe-payloads"
-    ))]
-    async unsafe fn send_uninit_stable_payload_unchecked<T>(
-        &self,
-        metadata: UFrameMetadata,
-        init: impl for<'payload> FnOnce(
-                UnsafeStablePayloadTxSlot<'payload, T>,
-            ) -> Result<LoanedInitPayload<'payload, T>, UWireError>
-            + Send,
-    ) -> Result<(), UStatus>
-    where
-        T: StablePayload + Send,
-    {
-        let metadata = metadata
-            .with_payload_encoding(StableContainerPayload::<T>::encoding())
-            .map_err(frame_metadata_error)?;
-        let layout_len = std::mem::size_of::<T>();
-        let layout_align = std::mem::align_of::<T>();
-        let mut buffer = self
-            .loan_uninit_tx(UTxLoanSpec::payload(metadata, layout_len, layout_align)?)
-            .await?;
-        verify_uninit_tx_buffer_payload_layout(&mut buffer, layout_len, layout_align)?;
-        {
-            let payload = buffer.payload_uninit_mut();
-            // SAFETY: same loan/provenance argument as the safe uninit helpers;
-            // the expert slot validates the stable payload layout below.
-            let mut loaned = unsafe {
-                LoanedPayloadUninitMut::new_unchecked(
-                    payload,
-                    PayloadLoanProvenance::OpaqueTransportLoan,
-                )
-            };
-            let expected = stable_uninit_payload_ptr::<T>(&mut loaned).map_err(UStatus::from)?;
-            let slot = UnsafeStablePayloadTxSlot::new(loaned).map_err(UStatus::from)?;
-            let initialized = init(slot).map_err(UStatus::from)?;
-            if initialized.initialized_ptr().cast::<MaybeUninit<T>>() != expected {
-                return Err(invalid_argument(
-                    "expert stable payload proof does not match the TX loan",
-                ));
-            }
-        }
-        // SAFETY: this unsafe method requires the initializer to return only
-        // after the exact visible payload loan contains one initialized `T`.
-        let buffer = unsafe { buffer.assume_payload_init() };
-        self.send_zero_copy(buffer).await
-    }
 }
 
 impl<T> UZeroCopyUninitTransportExt for T where T: UZeroCopyUninitTransport + ?Sized {}
@@ -1910,10 +1847,8 @@ where
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::{
-        payload::StablePayloadInitSlot, ByteBackedStablePayload, PayloadEncoding,
-        StablePayloadVariant, UMessageBuilder,
-    };
+    use crate::payload::{StablePayloadInitSlot, StablePayloadVariant};
+    use crate::{ByteBackedStablePayload, PayloadEncoding, UMessageBuilder};
     use std::sync::Mutex as StdMutex;
 
     #[repr(C)]

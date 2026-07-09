@@ -14,3 +14,4 @@ error[E0599]: no method named `finish` found for struct `__UpRustStablePayloadIn
            candidate #1: `Hasher`
            candidate #2: `regex_syntax::ast::visitor::Visitor`
            candidate #3: `regex_syntax::hir::visitor::Visitor`
+           candidate #4: `tracing_subscriber::field::VisitOutput`

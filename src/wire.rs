@@ -1000,9 +1000,8 @@ mod tests {
     use protobuf::well_known_types::wrappers::StringValue;
 
     use super::*;
-    use crate::{
-        BorrowPayload, ByteBackedStablePayload, LoanPayload, LoanUninitPayload, PayloadCodec,
-    };
+    use crate::payload::BorrowPayload;
+    use crate::{ByteBackedStablePayload, LoanPayload, LoanUninitPayload, PayloadCodec};
 
     #[repr(C)]
     #[derive(Clone, Copy, Debug, Default, Eq, PartialEq)]

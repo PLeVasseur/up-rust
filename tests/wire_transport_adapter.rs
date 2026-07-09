@@ -24,12 +24,11 @@ use bytes::Bytes;
 use up_rust::{LoanedPayload, PayloadLoanProvenance, StableContainerWireFormat};
 use up_rust::{
     NativePrefixFrameMetadataCodec, PayloadCodec, PayloadEncoding, PreparedTxLoanSpec,
-    ProtobufWire, ProtobufWireTransport, StableContainerPayload, StableContainerWireTransport,
-    UCode, UEncodedLoanedRxFrame, UEncodedRxFrame, UEncodedZeroCopyListener, UFrameMetadata,
-    UFrameView, UHasWire, UMessageBuilder, UProtocolNativeWire, UProtocolNativeWireTransport,
-    USelectedWireZeroCopyTransport, UStatus, UTxBuffer, UTxLoanSpec, UTxPayloadSpec, UUri,
-    UVecTxBuffer, UWire, UWireError, UWireMetadataCodec, UWireRx, UWithNativePrefixWire,
-    UZeroCopyListener, UZeroCopyTransport, UZeroCopyTransportCore, WireIdentity,
+    ProtobufWire, StableContainerPayload, UCode, UEncodedLoanedRxFrame, UEncodedRxFrame,
+    UEncodedZeroCopyListener, UFrameMetadata, UFrameView, UMessageBuilder, UProtocolNativeWire,
+    UStatus, UTxBuffer, UTxLoanSpec, UTxPayloadSpec, UUri, UVecTxBuffer, UWire, UWireError,
+    UWireMetadataCodec, UWireRx, UWithNativePrefixWire, UZeroCopyListener, UZeroCopyTransport,
+    UZeroCopyTransportCore, WireIdentity,
 };
 
 #[cfg(feature = "owned-frame-transport")]
@@ -648,38 +647,6 @@ async fn zero_copy_loan_passes_encoded_metadata_to_core_for_selected_wires() {
     assert_wire(UProtocolNativeWire, metadata_with_payload()).await;
     assert_wire(SecondTestWire, metadata_with_payload()).await;
     assert_wire(ProtobufWire, metadata_with_protobuf_payload()).await;
-}
-
-#[test]
-fn native_prefix_profile_helpers_select_expected_static_wires() {
-    fn assert_selected_wire_transport<T, W>()
-    where
-        T: USelectedWireZeroCopyTransport<Wire = W, MetadataCodec = NativePrefixFrameMetadataCodec>,
-        W: UWire,
-    {
-    }
-    let native: UProtocolNativeWireTransport<InMemoryWireCore> =
-        InMemoryWireCore::default().into_uprotocol_native_transport();
-    let protobuf: ProtobufWireTransport<InMemoryWireCore> =
-        InMemoryWireCore::default().into_protobuf_transport();
-    let stable: StableContainerWireTransport<InMemoryWireCore> =
-        InMemoryWireCore::default().into_stable_container_transport();
-    let explicit = InMemoryWireCore::default().into_native_prefix_wire_transport(ProtobufWire);
-
-    assert_eq!(native.wire(), &UProtocolNativeWire);
-    assert_eq!(protobuf.wire(), &ProtobufWire);
-    assert_eq!(stable.wire(), &StableContainerWireFormat);
-    assert_eq!(explicit.wire(), &ProtobufWire);
-
-    assert_selected_wire_transport::<
-        UProtocolNativeWireTransport<InMemoryWireCore>,
-        UProtocolNativeWire,
-    >();
-    assert_selected_wire_transport::<ProtobufWireTransport<InMemoryWireCore>, ProtobufWire>();
-    assert_selected_wire_transport::<
-        StableContainerWireTransport<InMemoryWireCore>,
-        StableContainerWireFormat,
-    >();
 }
 
 #[tokio::test]

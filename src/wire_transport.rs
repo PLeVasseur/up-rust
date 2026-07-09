@@ -42,17 +42,17 @@ use async_trait::async_trait;
 use bytes::Bytes;
 use tracing::warn;
 
+use crate::payload::BorrowPayload;
 use crate::wire::NativePrefixFrameMetadataCodec;
 #[cfg(feature = "selected-wire-protobuf-metadata")]
 use crate::wire::NativePrefixProtobufMetadataCodec;
-use crate::wire::{ProtobufWire, StableContainerWireFormat, UProtocolNativeWire};
+use crate::wire::{ProtobufWire, StableContainerWireFormat};
 use crate::wire::{UWire, UWireMetadataCodecFor, UWirePayload};
 use crate::{
-    validate_frame_view_for_transport, BorrowPayload, LoanedPayload, PayloadAlignment,
-    ReadDecodePayload, UCode, UFrameMetadata, UFrameView, ULoanedContiguousZeroCopyRxFrame,
-    UStatus, UTxBuffer, UTxLoanSpec, UUninitTxBuffer, UUri, UWireError, UZeroCopyListener,
-    UZeroCopyRxLease, UZeroCopyTransport, UZeroCopyTransportImpl, UZeroCopyUninitTransportImpl,
-    ValidatedTxLoanSpec,
+    validate_frame_view_for_transport, LoanedPayload, PayloadAlignment, ReadDecodePayload, UCode,
+    UFrameMetadata, UFrameView, ULoanedContiguousZeroCopyRxFrame, UStatus, UTxBuffer, UTxLoanSpec,
+    UUninitTxBuffer, UUri, UWireError, UZeroCopyListener, UZeroCopyRxLease, UZeroCopyTransport,
+    UZeroCopyTransportImpl, UZeroCopyUninitTransportImpl, ValidatedTxLoanSpec,
 };
 #[cfg(feature = "owned-frame-transport")]
 use crate::{UOwnedFrame, UOwnedListener, UOwnedTransportImpl, ValidatedOwnedFrame};
@@ -154,10 +154,6 @@ where
 pub type UNativePrefixWireTransport<TCore, W> =
     UWireTransport<TCore, W, NativePrefixFrameMetadataCodec>;
 
-/// uProtocol-native selected-wire transport with canonical metadata.
-pub type UProtocolNativeWireTransport<TCore> =
-    UNativePrefixWireTransport<TCore, UProtocolNativeWire>;
-
 /// Protocol Buffers selected-wire transport with canonical metadata.
 pub type ProtobufWireTransport<TCore> = UNativePrefixWireTransport<TCore, ProtobufWire>;
 
@@ -179,10 +175,6 @@ pub trait UWithNativePrefixWire: Sized {
     where
         W: UWire;
 
-    /// Wraps this core with the uProtocol-native selected-wire profile.
-    #[must_use]
-    fn into_uprotocol_native_transport(self) -> UProtocolNativeWireTransport<Self>;
-
     /// Wraps this core with the Protocol Buffers selected-wire profile.
     #[must_use]
     fn into_protobuf_transport(self) -> ProtobufWireTransport<Self>;
@@ -198,10 +190,6 @@ impl<TCore> UWithNativePrefixWire for TCore {
         W: UWire,
     {
         UWireTransport::new(self, wire, NativePrefixFrameMetadataCodec)
-    }
-
-    fn into_uprotocol_native_transport(self) -> UProtocolNativeWireTransport<Self> {
-        self.into_native_prefix_wire_transport(UProtocolNativeWire)
     }
 
     fn into_protobuf_transport(self) -> ProtobufWireTransport<Self> {

@@ -41,15 +41,15 @@ note: found an item that was configured out
   |
   | #[cfg(feature = "wire-implementer-api")]
   |       -------------------------------- the item is gated behind the `wire-implementer-api` feature
-  | pub use wire::{UWire, UWireDecode, UWireDecodeOwned, UWireEncode, UWirePayload, UWireReadDecode};
+  | pub use wire::{UWire, UWireDecode, UWireEncode, UWirePayload, UWireReadDecode};
   |                ^^^^^
 note: found an item that was configured out
  --> src/lib.rs
   |
   | #[cfg(feature = "wire-implementer-api")]
   |       -------------------------------- the item is gated behind the `wire-implementer-api` feature
-  | pub use wire::{UWire, UWireDecode, UWireDecodeOwned, UWireEncode, UWirePayload, UWireReadDecode};
-  |                                                                   ^^^^^^^^^^^^
+  | pub use wire::{UWire, UWireDecode, UWireEncode, UWirePayload, UWireReadDecode};
+  |                                                 ^^^^^^^^^^^^
 note: found an item that was configured out
  --> src/lib.rs
   |
@@ -60,8 +60,8 @@ note: found an item that was configured out
   | |     )
   | |_____- the item is gated here
   |   ))]
-  |   pub use wire_transport::{UWireTransport, UWithWireAndMetadataCodec};
-  |                            ^^^^^^^^^^^^^^
+  |   pub use wire_transport::UWireTransport;
+  |                           ^^^^^^^^^^^^^^
 
 error[E0603]: module `wire` is private
  --> tests/ui/role_firewall/selected_wire_user_cannot_import_implementer_spi.rs:8:32

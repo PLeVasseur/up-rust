@@ -40,11 +40,6 @@ version = "0.10.0-SNAPSHOT"
 default = []
 cloudevents = ["protobuf-support"]
 communication = ["up-l2-notifier", "up-l2-publisher", "up-l2-subscriber", "up-l2-rpc-client", "up-l2-rpc-server"]
-expert-unsafe-payloads = [
-    "unsafe-stable-payload-tx",
-    "unsafe-stable-payload-init",
-    "unsafe-uninit-payload-bytes",
-]
 owned-frame-transport = ["selected-wire-transport-core", "up-core-types"]
 payload-contract-fixtures = ["protobuf-wire", "dep:serde", "dep:serde_json", "dep:sha2"]
 payload-contract-large-fixtures = ["payload-contract-fixtures"]
@@ -71,9 +66,6 @@ up-l2-subscriber =["up-l2-api", "usubscription"]
 up-l2-rpc-client = ["up-l2-api", "up-core-types", "tokio/sync", "tokio/time"]
 up-l2-rpc-server = ["up-l2-api", "up-core-types", "tokio/sync", "tokio/time"]
 udiscovery = ["up-l2-rpc-client"]
-unsafe-stable-payload-init = []
-unsafe-stable-payload-tx = []
-unsafe-uninit-payload-bytes = []
 usubscription = ["up-l2-rpc-client"]
 util = ["tokio/sync"]
 wire-implementer-api = ["selected-wire-codec-core", "up-core-types"]

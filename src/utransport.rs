@@ -23,13 +23,11 @@ use std::sync::{LazyLock, Mutex as StdMutex};
 
 use async_trait::async_trait;
 #[cfg(feature = "owned-frame-transport")]
-use bytes::Bytes;
-#[cfg(feature = "owned-frame-transport")]
 use tracing::warn;
 
 use crate::{UCode, UMessage, UStatus, UUri, UUriError};
 #[cfg(feature = "owned-frame-transport")]
-use crate::{UFrameMetadata, UFrameMetadataError, UOwnedFrame};
+use crate::{UFrameMetadataError, UOwnedFrame};
 
 #[cfg(feature = "owned-frame-transport")]
 mod owned_transport_sealed {
@@ -630,24 +628,6 @@ where
     }
 }
 
-/// Convenience methods for experimental owned native-frame transports.
-#[cfg(feature = "owned-frame-transport")]
-#[async_trait]
-pub trait UOwnedTransportExt: UOwnedTransport {
-    /// Creates an owned frame from already encoded bytes and sends it.
-    async fn send_owned_parts(
-        &self,
-        metadata: UFrameMetadata,
-        payload: Option<Bytes>,
-    ) -> Result<(), UStatus> {
-        let frame = UOwnedFrame::new(metadata, payload).map_err(owned_frame_validation_error)?;
-        self.send_owned(frame).await
-    }
-}
-
-#[cfg(feature = "owned-frame-transport")]
-impl<T> UOwnedTransportExt for T where T: UOwnedTransport + ?Sized {}
-
 #[cfg(not(tarpaulin_include))]
 #[cfg(all(feature = "owned-frame-transport", any(test, feature = "test-util")))]
 mockall::mock! {
@@ -1062,7 +1042,7 @@ mod owned_transport_tests {
     use bytes::Bytes;
 
     use super::*;
-    use crate::{PayloadEncoding, UMessageBuilder};
+    use crate::{PayloadEncoding, UFrameMetadata, UMessageBuilder};
 
     fn topic() -> UUri {
         UUri::try_from_parts("vehicle", 0x4210, 0x01, 0x9000).expect("failed to create topic")

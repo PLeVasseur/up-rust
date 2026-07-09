@@ -13,13 +13,14 @@
 
 use bytes::Bytes;
 
-use crate::uattributes::NotificationValidator;
+use crate::uattributes::{
+    NotificationValidator, PublishValidator, RequestValidator, ResponseValidator,
+};
 #[cfg(feature = "protobuf-support")]
 use crate::ProtobufMappable;
 use crate::{
-    PayloadEncoding, PublishValidator, RequestValidator, ResponseValidator, UAttributes,
-    UAttributesValidator, UCode, UMessage, UMessageError, UMessageType, UPayloadFormat, UPriority,
-    UUri, UUID,
+    PayloadEncoding, UAttributes, UAttributesValidator, UCode, UMessage, UMessageError,
+    UMessageType, UPayloadFormat, UPriority, UUri, UUID,
 };
 
 /// A builder for creating [`UMessage`]s.

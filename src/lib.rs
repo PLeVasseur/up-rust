@@ -62,7 +62,7 @@ from the ordinary `communication` entry point:
 | Zero-copy transport and loans | Root exports such as `UZeroCopyTransport`, `UZeroCopyUninitTransport`, `UTxBuffer`, `UUninitTxBuffer`, `UZeroCopyRxLease`, and the publish facade in `communication::zero_copy` | Loan-backed mechanics remain up-L1 capability. The L2 facade is intentionally narrower than raw transport capability. |
 | Selected-wire profiles | The public `wire` module plus root exports such as `UWire`, `UProtocolNativeWire`, `ProtobufWire`, `WireIdentity`, and selected-wire adapter exports such as `UWireTransport` | Selected-wire identity, metadata, and payload-family checks are up-L1 representation/profile semantics. |
 | Whole-frame envelopes | The public `frame_wire` module and root exports such as `UFrameWireFormat` and `ProtobufUMessageFrame` when the required features are enabled | Whole-frame serialization is separate from selected-wire profile metadata. |
-| Payload codecs and stable payload support | The public `payload` module plus root exports such as `PayloadCodec`, `EncodePayload`, `DecodePayload`, `StablePayload`, and `StablePayloadInit` | Safe derive/codegen paths are preferred for applications; manual unsafe slots are expert hatches. |
+| Payload codecs and stable payload support | The public `payload` module plus root exports such as `PayloadCodec`, `EncodePayload`, `DecodePayload`, `StablePayload`, and `StablePayloadInit` | Safe derive/codegen paths are the supported route; the former manual unsafe slot APIs were removed. |
 | Test, fake, and proof support | Feature-gated root exports such as `MockTransport`, `InMemoryZeroCopyTransport`, vector leases, and payload fixtures | These remain available for tests, benchmarks, and conformance proof, not as production transport evidence by themselves. |
 
 ## Features
@@ -88,7 +88,6 @@ None of the following features are enabled by default, so you can pick and choos
   implementations.
 * `owned-frame-transport` enables an experimental native owned-frame transport API. This is additive to `UTransport` and does not replace the ordinary `UMessage` compatibility path.
 * `payload-contract-fixtures` exposes representative benchmark payload fixtures, stable structs, validators, manifests, and protobuf schemas for transport benchmarks.
-* `unsafe-stable-payload-tx`, `unsafe-stable-payload-init`, and `unsafe-uninit-payload-bytes` enable expert stable-payload transmit APIs with caller-side initialization obligations. `expert-unsafe-payloads` enables all of them.
 * `util` provides some useful helper structs. In particular, provides a [local, in-memory UTransport](crate::local_transport::LocalTransport) for exchanging messages within a single process. This transport is also used by the examples illustrating usage of the Communication Layer API.
 
 ## References
@@ -126,7 +125,7 @@ mod frame_metadata;
 pub use frame_metadata::{
     try_project_attributes_to_frame_metadata, try_project_frame_to_umessage,
     try_project_umessage_to_frame_metadata, FrameMessageKind, FramePriority, PayloadEncoding,
-    UFrameMetadata, UFrameMetadataBuilder, UFrameMetadataError,
+    UFrameMetadata, UFrameMetadataError,
 };
 
 pub mod frame_abi;
@@ -152,7 +151,7 @@ pub use wire::{
     XCDR_V2_PAYLOAD_FAMILY_ID, XCDR_V2_WIRE_ID,
 };
 #[cfg(feature = "wire-implementer-api")]
-pub use wire::{UWire, UWireDecode, UWireDecodeOwned, UWireEncode, UWirePayload, UWireReadDecode};
+pub use wire::{UWire, UWireDecode, UWireEncode, UWirePayload, UWireReadDecode};
 #[cfg(feature = "wire-implementer-api")]
 pub use wire::{
     UWireMetadataCodec, UWireMetadataCodecFor, UWireMetadataContext, UWireMetadataError,
@@ -171,7 +170,7 @@ pub mod wire_implementer_api {
     pub use crate::NativePrefixProtobufMetadataCodec;
     pub use crate::{
         NativePrefixFrameMetadataCodec, ProtobufWire, StableContainerWireFormat,
-        UProtocolNativeWire, UWire, UWireDecode, UWireDecodeOwned, UWireEncode, UWireMetadataCodec,
+        UProtocolNativeWire, UWire, UWireDecode, UWireEncode, UWireMetadataCodec,
         UWireMetadataCodecFor, UWireMetadataContext, UWireMetadataError, UWirePayload,
         UWireReadDecode, WireCompatibility, WireIdentity, WireIdentityRef,
         NATIVE_EXPLICIT_PAYLOAD_FAMILY_ID, NATIVE_PREFIX_METADATA_LAYOUT_ID,
@@ -183,10 +182,8 @@ pub mod wire_implementer_api {
 
 #[cfg(feature = "owned-frame-transport")]
 pub mod frame_wire;
-#[cfg(all(feature = "owned-frame-transport", feature = "protobuf-support"))]
-pub use frame_wire::ProtobufUMessageFrame;
 #[cfg(feature = "owned-frame-transport")]
-pub use frame_wire::{NativeUFrameEnvelope, UFrameWireError, UFrameWireFormat};
+pub use frame_wire::{UFrameWireError, UFrameWireFormat};
 
 #[cfg(feature = "owned-frame-transport")]
 mod owned_frame;
@@ -196,19 +193,11 @@ pub use owned_frame::UOwnedFrame;
 pub mod payload;
 pub use payload::{
     assert_stable_payload_byte_backed_uninit, stable_payload_supports_byte_backed_uninit,
-    BorrowPayload, ByteBackedStablePayload, BytePayloadCodec, DecodePayload, EncodePayload,
-    InitializedStablePayload, LoanPayload, LoanUninitPayload, LoanedInitPayload,
-    LoanedUninitPayload, PayloadCodec, PayloadFormat, PayloadLayout, ProtobufAnyPayload,
-    ProtobufPayload, RawBytes, ReadDecodePayload, StableContainerPayload,
-    StableContainerPayloadInfo, StablePayload, StablePayloadInit, StablePayloadInitCompleteValue,
-    StablePayloadVariant, StableTypeDetail, UWireError,
+    ByteBackedStablePayload, DecodePayload, EncodePayload, InitializedStablePayload, LoanPayload,
+    LoanUninitPayload, LoanedUninitPayload, PayloadCodec, PayloadFormat, PayloadLayout,
+    ProtobufPayload, ReadDecodePayload, StableContainerPayload, StableContainerPayloadInfo,
+    StablePayload, StablePayloadInit, UWireError,
 };
-#[cfg(any(
-    feature = "unsafe-stable-payload-tx",
-    feature = "expert-unsafe-payloads"
-))]
-pub use payload::{UnsafeStablePayloadTxSlot, ZeroedStablePayloadTxSlot};
-
 #[doc(hidden)]
 pub mod __derive_support {
     pub use crate::payload::{
@@ -232,9 +221,8 @@ pub use zero_copy::{
 
 mod uattributes;
 pub use uattributes::{
-    NotificationValidator, PublishValidator, RequestValidator, ResponseValidator, UAttributes,
-    UAttributesError, UAttributesValidator, UAttributesValidators, UMessageType, UPayloadFormat,
-    UPriority,
+    UAttributes, UAttributesError, UAttributesValidator, UAttributesValidators, UMessageType,
+    UPayloadFormat, UPriority,
 };
 
 mod umessage;
@@ -252,13 +240,9 @@ pub use utransport::{
     UTransport,
 };
 #[cfg(feature = "test-util")]
-pub use utransport::{MockLocalUriProvider, MockTransport, MockUListener};
-#[cfg(all(feature = "owned-frame-transport", feature = "test-util"))]
-pub use utransport::{MockUOwnedListener, MockUOwnedTransport};
+pub use utransport::{MockTransport, MockUListener};
 #[cfg(feature = "owned-frame-transport")]
-pub use utransport::{
-    UOwnedListener, UOwnedTransport, UOwnedTransportExt, UOwnedTransportImpl, ValidatedOwnedFrame,
-};
+pub use utransport::{UOwnedListener, UOwnedTransport, UOwnedTransportImpl, ValidatedOwnedFrame};
 
 #[cfg(all(
     feature = "selected-wire-transport-core",
@@ -270,6 +254,14 @@ pub mod wire_transport;
     not(feature = "transport-implementer-api")
 ))]
 mod wire_transport;
+#[cfg(all(
+    feature = "selected-wire-transport-core",
+    any(
+        feature = "transport-implementer-api",
+        feature = "wire-implementer-api"
+    )
+))]
+pub use wire_transport::UWireTransport;
 #[cfg(all(
     feature = "owned-frame-transport",
     feature = "transport-implementer-api"
@@ -285,18 +277,10 @@ pub use wire_transport::{
 #[cfg(feature = "selected-wire-user-api")]
 pub use wire_transport::{
     ProtobufWireTransport, StableContainerWireTransport, UNativePrefixWireTransport,
-    UProtocolNativeWireTransport, UWithNativePrefixWire,
+    UWithNativePrefixWire,
 };
 #[cfg(feature = "selected-wire-user-api")]
 pub use wire_transport::{UHasWire, USelectedWireZeroCopyTransport, UWireRx};
-#[cfg(all(
-    feature = "selected-wire-transport-core",
-    any(
-        feature = "transport-implementer-api",
-        feature = "wire-implementer-api"
-    )
-))]
-pub use wire_transport::{UWireTransport, UWithWireAndMetadataCodec};
 
 #[cfg(feature = "selected-wire-user-api")]
 pub mod selected_wire_user_api {
@@ -304,8 +288,8 @@ pub mod selected_wire_user_api {
     pub use crate::{
         ProtobufWire, ProtobufWireTransport, StableContainerWireFormat,
         StableContainerWireTransport, UHasWire, UNativePrefixWireTransport, UProtocolNativeWire,
-        UProtocolNativeWireTransport, USelectedWireZeroCopyTransport, UWireRx,
-        UWithNativePrefixWire, WireCompatibility, WireIdentity, WireIdentityRef,
+        USelectedWireZeroCopyTransport, UWireRx, UWithNativePrefixWire, WireCompatibility,
+        WireIdentity, WireIdentityRef,
     };
 }
 
@@ -318,24 +302,8 @@ pub mod transport_implementer_api {
     };
     pub use crate::{
         PreparedTxLoanSpec, UEncodedLoanedRxFrame, UEncodedRxFrame, UEncodedZeroCopyListener,
-        UWireTransport, UWithWireAndMetadataCodec, UZeroCopyTransportCore,
-        UZeroCopyUninitTransportCore,
+        UWireTransport, UZeroCopyTransportCore, UZeroCopyUninitTransportCore,
     };
-}
-
-#[cfg(any(
-    feature = "unsafe-stable-payload-tx",
-    feature = "unsafe-stable-payload-init",
-    feature = "unsafe-uninit-payload-bytes",
-    feature = "expert-unsafe-payloads"
-))]
-pub mod expert_unsafe {
-    //! Expert stable/uninitialized payload hatches with caller-side obligations.
-    #[cfg(any(
-        feature = "unsafe-stable-payload-tx",
-        feature = "expert-unsafe-payloads"
-    ))]
-    pub use crate::{UnsafeStablePayloadTxSlot, ZeroedStablePayloadTxSlot};
 }
 
 #[cfg(any(feature = "test-util", feature = "payload-contract-fixtures"))]
@@ -344,9 +312,8 @@ pub mod test_support {
     #[cfg(feature = "payload-contract-fixtures")]
     pub use crate::bench_fixtures;
     #[cfg(feature = "test-util")]
-    pub use crate::{
-        InMemoryZeroCopyTransport, MockLocalUriProvider, MockTransport, MockUListener,
-    };
+    pub use crate::utransport::MockLocalUriProvider;
+    pub use crate::{InMemoryZeroCopyTransport, MockTransport, MockUListener};
 }
 
 mod uuid;

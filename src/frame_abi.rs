@@ -13,6 +13,12 @@
 
 //! Fixed-layout ABI **profile** of native frame metadata, version 1.
 //!
+//! MAINTENANCE NOTE (dead-code audits): the consumers of this module are
+//! **cross-language** — C/C++ peers reading typed shared-memory headers and
+//! future polyglot bindings. Zero references from Rust repositories is the
+//! expected steady state and is NOT evidence this module is unused. Do not
+//! remove it on the basis of a Rust-side usage census.
+//!
 //! [`UFrameMetadataAbiV1`] is a *derived representation* of the semantic
 //! [`UFrameMetadata`] — not the canonical model, not the default wire form.
 //! It exists for the boundaries that genuinely need a fixed, directly

@@ -25,7 +25,8 @@ use crate::{
 // [impl->dsn~communication-layer-api-declaration~1]
 #[derive(Debug, Error)]
 pub enum PubSubError {
-    /// Indicates that the given message cannot be sent because it is not a [valid Publish message](crate::PublishValidator).
+    /// Indicates that the given message cannot be sent because it is not a
+    /// [valid Publish message](crate::UAttributesValidators::Publish).
     #[error("invalid argument: {0}")]
     InvalidArgument(String),
     /// Indicates an unspecific error that occurred at the Transport Layer while trying to publish a message.

@@ -26,6 +26,8 @@ use std::sync::Arc;
 
 use async_trait::async_trait;
 
+#[cfg(feature = "selected-wire-transport-adapter")]
+use crate::wire::UWireDecodeOwned;
 use crate::{
     communication::{
         CallOptions, NotificationError, PubSubError, RegistrationError, ServiceInvocationError,
@@ -34,8 +36,7 @@ use crate::{
     LocalUriProvider, UCode, UListener, UMessage, UMessageBuilder, UOwnedFrame, UOwnedListener,
     UOwnedTransport, UStatus, UUri, UUID,
 };
-#[cfg(feature = "selected-wire-transport-adapter")]
-use crate::{DecodePayload, EncodePayload, PayloadCodec, UHasWire, UWireDecodeOwned, UWireEncode};
+use crate::{DecodePayload, EncodePayload, PayloadCodec, UHasWire, UWireEncode};
 
 pub use crate::communication::RequestHandler;
 

@@ -13,6 +13,10 @@
 
 //! Zero-copy communication-layer facade.
 //!
+//! SCOPE FREEZE: this facade intentionally stays transmit-only. Additions
+//! (in particular any receive-side convenience) require a design that does
+//! not hide lease lifetimes, per the rules below — bring the design first.
+//!
 //! This module exposes the simple L2 operations that can be expressed without
 //! hiding zero-copy lifetimes. Stable/no-zero publish is provided as an ordinary
 //! front-door API. Receive, listener, RPC server, and request handling remain at

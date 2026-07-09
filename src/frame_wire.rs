@@ -102,7 +102,7 @@ impl From<UFrameMetadataError> for UFrameWireError {
 /// This is distinct from payload codecs, which only transform an application
 /// value into frame payload bytes. Implementations must preserve native frame
 /// metadata and payload presence. If an envelope cannot represent a native-only
-/// [`PayloadEncoding`], it should return
+/// [`crate::PayloadEncoding`], it should return
 /// [`UFrameWireError::UnsupportedPayloadEncoding`] instead of silently dropping
 /// metadata.
 pub trait UFrameWireFormat {
@@ -284,9 +284,10 @@ impl UFrameWireFormat for NativeUFrameEnvelope {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::{PayloadEncoding, UFrameMetadata, UUri};
     #[cfg(feature = "protobuf-support")]
-    use crate::{RawBytes, UMessageBuilder, UPayloadFormat};
+    use crate::payload::RawBytes;
+    use crate::{PayloadEncoding, UFrameMetadata, UUri};
+    use crate::{UMessageBuilder, UPayloadFormat};
 
     fn topic() -> UUri {
         UUri::try_from_parts("vehicle", 0x4210, 0x01, 0x9000).expect("topic")
