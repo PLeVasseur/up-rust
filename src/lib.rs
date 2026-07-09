@@ -313,6 +313,7 @@ pub mod test_support {
     pub use crate::bench_fixtures;
     #[cfg(feature = "test-util")]
     pub use crate::utransport::MockLocalUriProvider;
+    #[cfg(feature = "test-util")]
     pub use crate::{InMemoryZeroCopyTransport, MockTransport, MockUListener};
 }
 
