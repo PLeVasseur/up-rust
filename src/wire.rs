@@ -18,18 +18,18 @@ use std::io::Read;
 #[cfg(feature = "selected-wire-codec-core")]
 use std::{error::Error, fmt::Display};
 
+#[cfg(feature = "protobuf-support")]
+use crate::payload::codec::{PayloadFormat, PayloadLayout, ProtobufPayload};
+#[cfg(feature = "protobuf-support")]
+use crate::payload::UWireError;
+use crate::payload::{
+    codec::{DecodePayload, EncodePayload, PayloadCodec, ReadDecodePayload},
+    stable::{StableContainerPayload, StablePayload},
+};
 #[cfg(any(feature = "protobuf-support", feature = "up-core-types"))]
 use crate::PayloadEncoding;
 #[cfg(feature = "protobuf-support")]
-use crate::PayloadFormat;
-use crate::{
-    DecodePayload, EncodePayload, PayloadCodec, ReadDecodePayload, StableContainerPayload,
-    StablePayload,
-};
-#[cfg(feature = "protobuf-support")]
-use crate::{PayloadLayout, UWireError};
-#[cfg(feature = "protobuf-support")]
-use crate::{ProtobufMappable, ProtobufPayload};
+use crate::ProtobufMappable;
 #[cfg(feature = "selected-wire-protobuf-metadata")]
 use crate::{SerializationError, UAttributes, UPayloadFormat};
 #[cfg(feature = "selected-wire-codec-core")]
@@ -478,7 +478,7 @@ impl<W> UWireMetadataCodecFor<W> for NativePrefixProtobufMetadataCodec where W: 
 /// field block.
 ///
 /// This codec serializes [`UFrameMetadata`] directly using the canonical
-/// field block defined in [`crate::frame_codec`] — no protobuf, no legacy
+/// field block defined in [`crate::frame::codec`] — no protobuf, no legacy
 /// `UAttributes` projection, full fidelity for open payload encodings. The
 /// outer native-prefix framing (magic, metadata layout id, format version,
 /// wire id, payload family id) is identical to the legacy codec so that
@@ -497,7 +497,7 @@ impl UWireMetadataCodec for NativePrefixFrameMetadataCodec {
         metadata: &UFrameMetadata,
     ) -> Result<Vec<u8>, UWireMetadataError> {
         let context = context.with_metadata_layout(Self::METADATA_LAYOUT_ID);
-        let fields = crate::frame_codec::encode_frame_metadata_fields(metadata)
+        let fields = crate::frame::codec::encode_frame_metadata_fields(metadata)
             .map_err(|error| UWireMetadataError::FrameMetadata(error.to_string()))?;
         let mut out = Vec::with_capacity(
             NATIVE_PREFIX_MAGIC.len()
@@ -526,7 +526,7 @@ impl UWireMetadataCodec for NativePrefixFrameMetadataCodec {
         read_and_check_native_prefix(&mut reader, context)?;
         let fields = reader.read_len_prefixed_bytes()?;
         reader.finish()?;
-        crate::frame_codec::decode_frame_metadata_fields(fields)
+        crate::frame::codec::decode_frame_metadata_fields(fields)
             .map_err(|error| UWireMetadataError::MalformedMetadata(error.to_string()))
     }
 }
@@ -1000,30 +1000,24 @@ mod tests {
     use protobuf::well_known_types::wrappers::StringValue;
 
     use super::*;
-    use crate::payload::BorrowPayload;
-    use crate::{ByteBackedStablePayload, LoanPayload, LoanUninitPayload, PayloadCodec};
-
-    #[repr(C)]
-    #[derive(Clone, Copy, Debug, Default, Eq, PartialEq)]
-    struct WireStableBytes {
-        bytes: [u8; 4],
-    }
-
-    // SAFETY: `WireStableBytes` is a fixed `repr(C)` test type containing only
-    // byte-backed fields and no padding-sensitive invariants.
-    unsafe impl StablePayload for WireStableBytes {
-        const TYPE_NAME: &'static str = "example.wire.WireStableBytes";
-    }
-
-    // SAFETY: The type has no drop glue and its full object representation is
-    // exactly the byte array field.
-    unsafe impl ByteBackedStablePayload for WireStableBytes {}
+    use crate::payload::{
+        codec::PayloadCodec,
+        loan::{BorrowPayload, LoanPayload},
+    };
+    use crate::test_support::StableTestBytes as WireStableBytes;
 
     fn assert_wire_payload<T, W>()
     where
         W: UWirePayload<T>,
-        <W as UWirePayload<T>>::Codec:
-            LoanPayload<T> + LoanUninitPayload<T> + BorrowPayload<T> + PayloadCodec,
+        <W as UWirePayload<T>>::Codec: LoanPayload<T> + BorrowPayload<T> + PayloadCodec,
+    {
+    }
+
+    #[cfg(feature = "zero-copy-uninit")]
+    fn assert_wire_uninit_payload<T, W>()
+    where
+        W: UWirePayload<T>,
+        <W as UWirePayload<T>>::Codec: crate::payload::loan::LoanUninitPayload<T>,
     {
     }
 
@@ -1076,6 +1070,8 @@ mod tests {
     #[test]
     fn stable_container_wire_maps_type_to_capable_codec() {
         assert_wire_payload::<WireStableBytes, StableContainerWireFormat>();
+        #[cfg(feature = "zero-copy-uninit")]
+        assert_wire_uninit_payload::<WireStableBytes, StableContainerWireFormat>();
 
         let encoding =
             <StableContainerWireFormat as UWirePayload<WireStableBytes>>::Codec::payload_encoding();

@@ -386,7 +386,11 @@ fn canonical_profile_identity_is_distinct_and_round_trips() {
         .encode_frame_metadata(UProtocolNativeWire::metadata_context(), &metadata)
         .expect("canonical encode");
     // The on-wire layout compact id names the canonical profile.
-    let compact = u16::from_le_bytes([encoded[LAYOUT_COMPACT_LO], encoded[LAYOUT_COMPACT_HI]]);
+    let compact_lo = *encoded.get(LAYOUT_COMPACT_LO).expect("compact id low byte");
+    let compact_hi = *encoded
+        .get(LAYOUT_COMPACT_HI)
+        .expect("compact id high byte");
+    let compact = u16::from_le_bytes([compact_lo, compact_hi]);
     assert_eq!(compact, UFRAME_FIELDS_METADATA_LAYOUT_ID.compact_id());
     let decoded = NativePrefixFrameMetadataCodec
         .decode_frame_metadata(UProtocolNativeWire::metadata_context(), &encoded)

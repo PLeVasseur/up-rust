@@ -12,520 +12,51 @@
  ********************************************************************************/
 
 use std::{
-    error::Error,
     fmt::Display,
-    io::Read,
     marker::PhantomData,
     mem,
     ptr::{self, NonNull},
 };
 
-use bytes::Bytes;
 use mediatype::ReadParams;
 
-#[cfg(feature = "protobuf-support")]
-use crate::ProtobufMappable;
-use crate::{zero_copy::LoanedPayloadUninitMut, PayloadEncoding, UCode, UStatus};
+#[cfg(feature = "zero-copy-uninit")]
+use crate::zero_copy::LoanedPayloadUninitMut;
+use crate::PayloadEncoding;
+
+#[cfg(feature = "zero-copy-uninit")]
+use super::loan::{LoanUninitPayload, LoanedUninitPayload};
+use super::{
+    codec::{PayloadCodec, PayloadLayout},
+    loan::{BorrowPayload, LoanPayload},
+    UWireError,
+};
 
 const STABLE_CONTAINER_ENCODING_ID: &str = "up.stable-container";
 const STABLE_CONTAINER_MEDIA_TYPE: &str = "application/vnd.uprotocol.stable-container";
-
-/// Error type used by serialization-neutral payload helpers.
-#[derive(Clone, Debug, Eq, PartialEq)]
-pub enum UWireError {
-    /// A caller-provided output buffer is too small for the serialized payload.
-    BufferTooSmall {
-        /// Required output size in bytes.
-        expected: usize,
-        /// Provided output size in bytes.
-        actual: usize,
-    },
-    /// Payload bytes are malformed for the selected decoder.
-    InvalidPayload(String),
-    /// A typed decode was requested, but the frame has no payload encoding.
-    MissingEncoding,
-    /// A typed decode was requested, but the frame has no payload bytes.
-    MissingPayload,
-    /// The frame's encoding is not compatible with the selected payload codec.
-    UnsupportedEncoding {
-        /// Encoding declared by the requested codec.
-        expected: Box<PayloadEncoding>,
-        /// Encoding carried by the frame being decoded.
-        actual: Box<PayloadEncoding>,
-    },
-    /// Serializer or deserializer implementation failed.
-    SerializationError(String),
-}
-
-impl UWireError {
-    /// Creates a [`UWireError::BufferTooSmall`] value.
-    #[must_use]
-    pub fn buffer_too_small(expected: usize, actual: usize) -> Self {
-        Self::BufferTooSmall { expected, actual }
-    }
-
-    /// Creates a [`UWireError::InvalidPayload`] value.
-    #[must_use]
-    pub fn invalid_payload(message: impl Into<String>) -> Self {
-        Self::InvalidPayload(message.into())
-    }
-
-    /// Creates a stable payload length error.
-    #[must_use]
-    pub fn invalid_payload_length(expected: usize, actual: usize) -> Self {
-        Self::invalid_payload(format!("payload length must be {expected}, got {actual}"))
-    }
-
-    /// Creates a [`UWireError::SerializationError`] value.
-    #[must_use]
-    pub fn serialization_error(message: impl Into<String>) -> Self {
-        Self::SerializationError(message.into())
-    }
-}
-
-impl Display for UWireError {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        match self {
-            Self::BufferTooSmall { expected, actual } => f.write_fmt(format_args!(
-                "buffer too small: expected at least {expected} bytes, got {actual} bytes"
-            )),
-            Self::InvalidPayload(message) => {
-                f.write_fmt(format_args!("invalid payload: {message}"))
-            }
-            Self::MissingEncoding => f.write_str("frame payload has no encoding metadata"),
-            Self::MissingPayload => f.write_str("frame has no payload"),
-            Self::UnsupportedEncoding { expected, actual } => f.write_fmt(format_args!(
-                "unsupported payload encoding: expected {expected:?}; got {actual:?}",
-            )),
-            Self::SerializationError(message) => {
-                f.write_fmt(format_args!("serialization error: {message}"))
-            }
-        }
-    }
-}
-
-impl Error for UWireError {}
-
-impl From<UWireError> for UStatus {
-    fn from(value: UWireError) -> Self {
-        UStatus::fail_with_code(UCode::InvalidArgument, value.to_string())
-    }
-}
-
-/// Byte layout requested by a payload codec.
-#[derive(Clone, Copy, Debug, Eq, PartialEq)]
-pub struct PayloadLayout {
-    len: usize,
-    align: usize,
-}
-
-impl PayloadLayout {
-    /// Creates a payload layout.
-    ///
-    /// # Errors
-    ///
-    /// Returns an error when `align` is zero or not a power of two.
-    pub fn new(len: usize, align: usize) -> Result<Self, UWireError> {
-        if align == 0 {
-            return Err(UWireError::invalid_payload(
-                "payload alignment must be non-zero",
-            ));
-        }
-        if !align.is_power_of_two() {
-            return Err(UWireError::invalid_payload(format!(
-                "payload alignment {align} is not a power of two"
-            )));
-        }
-        Ok(Self { len, align })
-    }
-
-    /// Returns the payload length in bytes.
-    #[must_use]
-    pub fn len(self) -> usize {
-        self.len
-    }
-
-    /// Returns the required payload alignment in bytes.
-    #[must_use]
-    pub fn align(self) -> usize {
-        self.align
-    }
-
-    /// Returns whether the payload has zero bytes.
-    #[must_use]
-    pub fn is_empty(self) -> bool {
-        self.len == 0
-    }
-}
 
 /// Completion proof returned by generated stable payload initializers.
 ///
 /// This token is intentionally not a typed reference into the loan. It proves
 /// that a generated typestate builder reached `finish()` after initializing all
 /// semantic fields and generated padding gaps.
-pub struct InitializedStablePayload<T> {
-    ptr: NonNull<mem::MaybeUninit<T>>,
-    _marker: PhantomData<fn() -> T>,
+pub struct InitializedStablePayload<'a, T> {
+    _marker: PhantomData<fn(&'a mut T) -> &'a mut T>,
 }
 
-impl<T> InitializedStablePayload<T> {
-    /// Creates a completion proof after an expert initializer has fully initialized `T`.
+impl<'a, T> InitializedStablePayload<'a, T> {
+    /// Creates a completion proof for a fully initialized internal slot.
     ///
     /// # Safety
     ///
-    /// The caller must guarantee that the corresponding storage contains one
-    /// valid initialized `T`, including all implicit padding bytes, before this
-    /// token is returned to a send helper.
-    #[doc(hidden)]
+    /// The corresponding slot must be exclusively borrowed for `'a` and contain
+    /// one valid initialized `T`, including all implicit padding bytes.
     #[must_use]
-    pub unsafe fn new_unchecked(ptr: NonNull<mem::MaybeUninit<T>>) -> Self {
+    #[inline(always)]
+    unsafe fn new_unchecked() -> Self {
         Self {
-            ptr,
             _marker: PhantomData,
         }
-    }
-
-    pub(crate) fn initialized_ptr(&self) -> NonNull<mem::MaybeUninit<T>> {
-        self.ptr
-    }
-}
-
-/// Compile-time identity for an application payload codec.
-///
-/// ```rust
-/// use up_rust::{payload::PayloadFormat, PayloadEncoding, UPayloadFormat};
-///
-/// struct JsonTelemetry;
-///
-/// impl PayloadFormat for JsonTelemetry {
-///     fn name() -> &'static str {
-///         "json-telemetry-v1"
-///     }
-///
-///     fn encoding() -> PayloadEncoding {
-///         PayloadEncoding::JSON
-///     }
-/// }
-/// ```
-pub trait PayloadFormat {
-    /// Stable codec name for logs, diagnostics, and configuration.
-    fn name() -> &'static str;
-
-    /// Payload encoding metadata written into frames that use this codec.
-    fn encoding() -> PayloadEncoding;
-}
-
-/// Payload-layer codec identity used by typed frame helpers.
-pub trait PayloadCodec {
-    /// Stable codec name for logs, diagnostics, and configuration.
-    fn codec_name() -> &'static str;
-
-    /// Payload encoding metadata written into frames that use this codec.
-    fn payload_encoding() -> PayloadEncoding;
-
-    /// Verifies frame encoding metadata against this codec.
-    ///
-    /// # Errors
-    ///
-    /// Returns an error if the frame is missing payload encoding metadata or if
-    /// the metadata is incompatible with this codec.
-    fn verify_encoding(actual: Option<&PayloadEncoding>) -> Result<(), UWireError> {
-        let expected = Self::payload_encoding();
-        let actual = actual.ok_or(UWireError::MissingEncoding)?;
-        if !actual.is_compatible_with(&expected) {
-            return Err(UWireError::UnsupportedEncoding {
-                expected: Box::new(expected),
-                actual: Box::new(actual.clone()),
-            });
-        }
-        Ok(())
-    }
-}
-
-impl<F> PayloadCodec for F
-where
-    F: PayloadFormat,
-{
-    fn codec_name() -> &'static str {
-        <F as PayloadFormat>::name()
-    }
-
-    fn payload_encoding() -> PayloadEncoding {
-        <F as PayloadFormat>::encoding()
-    }
-}
-
-/// Encodes a typed value with a [`PayloadCodec`].
-pub trait EncodePayload<T: ?Sized>: PayloadCodec {
-    /// Returns the exact payload layout required to encode `value`.
-    ///
-    /// # Errors
-    ///
-    /// Returns an error if the value cannot be measured for this codec.
-    fn payload_layout(value: &T) -> Result<PayloadLayout, UWireError>;
-
-    /// Encodes `value` into `dst`.
-    ///
-    /// # Errors
-    ///
-    /// Returns an error if `dst` is too small or serialization fails.
-    fn encode_payload(value: &T, dst: &mut [u8]) -> Result<(), UWireError>;
-
-    /// Encodes `value` into owned bytes.
-    ///
-    /// # Errors
-    ///
-    /// Returns an error if serialization fails.
-    fn encode_payload_owned(value: &T) -> Result<Bytes, UWireError> {
-        let layout = Self::payload_layout(value)?;
-        let mut bytes = vec![0_u8; layout.len()];
-        Self::encode_payload(value, &mut bytes)?;
-        Ok(Bytes::from(bytes))
-    }
-}
-
-/// Decodes a typed value from contiguous payload bytes.
-pub trait DecodePayload<'a, T>: PayloadCodec {
-    /// Decodes `T` from payload bytes.
-    ///
-    /// # Errors
-    ///
-    /// Returns an error if `src` is malformed for this codec.
-    fn decode_payload(src: &'a [u8]) -> Result<T, UWireError>;
-}
-
-/// Decodes a typed value from an ordered payload byte stream.
-pub trait ReadDecodePayload<T>: PayloadCodec {
-    /// Decodes `T` from `reader`, which must yield exactly `payload_len` bytes.
-    ///
-    /// # Errors
-    ///
-    /// Returns an error if the reader fails, yields an unexpected byte count, or
-    /// contains malformed payload bytes for this codec.
-    fn decode_payload_from_reader<R: Read>(reader: R, payload_len: usize) -> Result<T, UWireError>;
-}
-
-/// Borrows a typed payload directly from contiguous receive storage.
-///
-/// This is the receive-side true zero-copy codec hook. Implementors must not
-/// allocate, copy, or deserialize into owned storage before returning `&T`.
-///
-/// # Safety
-///
-/// Implementors must validate that `src` has the exact length and alignment for
-/// one initialized `T`, that the bytes are a valid representation for `T` under
-/// this codec, and that returning `&T` cannot observe uninitialized padding or
-/// process-local state.
-pub unsafe trait BorrowPayload<T>: PayloadCodec {
-    /// Borrows `T` from contiguous payload bytes.
-    ///
-    /// # Errors
-    ///
-    /// Returns an error if the payload bytes cannot be borrowed as one valid `T`.
-    fn borrow_payload(src: &[u8]) -> Result<&T, UWireError>;
-}
-
-/// Initializes and borrows a typed value directly in initialized transmit storage.
-///
-/// # Safety
-///
-/// Implementors must guarantee that [`LoanPayload::loan_payload`] returns
-/// `&mut T` only when the destination byte range is uniquely borrowed, has the
-/// exact layout returned by [`LoanPayload::loan_layout`], and contains one valid
-/// initialized `T` for the returned lifetime.
-pub unsafe trait LoanPayload<T>: PayloadCodec {
-    /// Returns the exact layout required for a typed initialized transmit loan.
-    ///
-    /// # Errors
-    ///
-    /// Returns an error if this codec cannot loan `T` into initialized TX storage.
-    fn loan_layout() -> Result<PayloadLayout, UWireError>;
-
-    /// Initializes `dst` and returns a typed mutable view over the loaned payload.
-    ///
-    /// # Errors
-    ///
-    /// Returns an error if `dst` does not have the required length or alignment.
-    fn loan_payload(dst: &mut [u8]) -> Result<&mut T, UWireError>;
-}
-
-/// Initializes a typed value directly in uninitialized transmit storage.
-///
-/// # Safety
-///
-/// Implementors must guarantee that [`LoanUninitPayload::loan_uninit_payload`]
-/// validates the destination range and only returns a slot when the range is one
-/// uniquely borrowed allocation, has the exact layout returned by
-/// [`LoanUninitPayload::loan_uninit_layout`], and is valid for writes of one
-/// `MaybeUninit<T>`.
-pub unsafe trait LoanUninitPayload<T>: PayloadCodec {
-    /// Returns the exact layout required for a typed uninitialized transmit loan.
-    ///
-    /// # Errors
-    ///
-    /// Returns an error if this codec cannot loan `T` into uninitialized TX storage.
-    fn loan_uninit_layout() -> Result<PayloadLayout, UWireError>;
-
-    /// Validates `dst` and returns an uninitialized typed payload slot.
-    ///
-    /// # Errors
-    ///
-    /// Returns an error if `dst` does not have the required length or alignment.
-    fn loan_uninit_payload<'a>(
-        dst: LoanedPayloadUninitMut<'a>,
-    ) -> Result<LoanedUninitPayload<'a, T>, UWireError>;
-}
-
-/// Uninitialized typed payload slot borrowed from a transmit loan.
-pub struct LoanedUninitPayload<'a, T> {
-    ptr: NonNull<mem::MaybeUninit<T>>,
-    _marker: PhantomData<&'a mut mem::MaybeUninit<T>>,
-}
-
-impl<'a, T> LoanedUninitPayload<'a, T> {
-    /// Creates an uninitialized typed payload slot.
-    ///
-    /// # Safety
-    ///
-    /// `ptr` must be non-null, valid for writes of one `MaybeUninit<T>`,
-    /// correctly aligned for `T`, and backed by the transmit loan for `'a`.
-    #[must_use]
-    pub unsafe fn new_unchecked(ptr: NonNull<mem::MaybeUninit<T>>) -> Self {
-        Self {
-            ptr,
-            _marker: PhantomData,
-        }
-    }
-
-    /// Writes `value` into the loaned slot and marks it initialized.
-    #[must_use]
-    pub fn write(self, value: T) -> LoanedInitPayload<'a, T> {
-        let ptr = self.ptr.as_ptr();
-        // SAFETY: `self.ptr` was created from a layout-checked loan-backed slot
-        // valid for writes of one `MaybeUninit<T>` and is consumed here.
-        unsafe { (*ptr).write(value) };
-        // SAFETY: the write above initialized one valid `T` in the loaned slot.
-        unsafe { LoanedInitPayload::new_unchecked(self.ptr.cast::<T>()) }
-    }
-
-    pub(crate) fn uninit_ptr(&self) -> NonNull<mem::MaybeUninit<T>> {
-        self.ptr
-    }
-}
-
-/// Initialized typed payload marker returned after constructing a loaned value.
-pub struct LoanedInitPayload<'a, T> {
-    ptr: NonNull<T>,
-    _marker: PhantomData<&'a mut T>,
-}
-
-impl<'a, T> LoanedInitPayload<'a, T> {
-    /// Creates an initialized typed payload marker.
-    ///
-    /// # Safety
-    ///
-    /// `ptr` must point at a valid initialized `T` borrowed from the transmit loan.
-    #[must_use]
-    pub unsafe fn new_unchecked(ptr: NonNull<T>) -> Self {
-        Self {
-            ptr,
-            _marker: PhantomData,
-        }
-    }
-
-    /// Returns the initialized payload as a mutable reference.
-    #[allow(clippy::should_implement_trait)]
-    pub fn as_mut(&mut self) -> &mut T {
-        // SAFETY: `self.ptr` was created only after the slot was marked initialized
-        // and `&mut self` guarantees unique access through this marker.
-        unsafe { self.ptr.as_mut() }
-    }
-
-    pub(crate) fn initialized_ptr(&self) -> NonNull<T> {
-        self.ptr
-    }
-}
-
-impl<T> AsMut<T> for LoanedInitPayload<'_, T> {
-    fn as_mut(&mut self) -> &mut T {
-        LoanedInitPayload::as_mut(self)
-    }
-}
-
-/// Marker for codecs whose payload value is already an opaque byte sequence.
-pub trait BytePayloadCodec: PayloadCodec {}
-
-/// Built-in raw byte payload codec.
-pub struct RawBytes;
-
-impl RawBytes {
-    /// Returns the raw-byte payload encoding metadata.
-    #[must_use]
-    pub fn encoding() -> PayloadEncoding {
-        <Self as PayloadFormat>::encoding()
-    }
-}
-
-impl PayloadFormat for RawBytes {
-    fn name() -> &'static str {
-        "raw-bytes"
-    }
-
-    fn encoding() -> PayloadEncoding {
-        PayloadEncoding::RAW
-    }
-}
-
-impl BytePayloadCodec for RawBytes {}
-
-impl EncodePayload<[u8]> for RawBytes {
-    fn payload_layout(value: &[u8]) -> Result<PayloadLayout, UWireError> {
-        PayloadLayout::new(value.len(), 1)
-    }
-
-    fn encode_payload(value: &[u8], dst: &mut [u8]) -> Result<(), UWireError> {
-        let actual = dst.len();
-        let out = dst
-            .get_mut(..value.len())
-            .ok_or_else(|| UWireError::buffer_too_small(value.len(), actual))?;
-        out.copy_from_slice(value);
-        Ok(())
-    }
-}
-
-impl<'a> DecodePayload<'a, &'a [u8]> for RawBytes {
-    fn decode_payload(src: &'a [u8]) -> Result<&'a [u8], UWireError> {
-        Ok(src)
-    }
-}
-
-impl<'a> DecodePayload<'a, Vec<u8>> for RawBytes {
-    fn decode_payload(src: &'a [u8]) -> Result<Vec<u8>, UWireError> {
-        Ok(src.to_vec())
-    }
-}
-
-impl<'a> DecodePayload<'a, Bytes> for RawBytes {
-    fn decode_payload(src: &'a [u8]) -> Result<Bytes, UWireError> {
-        Ok(Bytes::copy_from_slice(src))
-    }
-}
-
-impl ReadDecodePayload<Vec<u8>> for RawBytes {
-    fn decode_payload_from_reader<R: Read>(
-        reader: R,
-        payload_len: usize,
-    ) -> Result<Vec<u8>, UWireError> {
-        read_exact_payload(reader, payload_len)
-    }
-}
-
-impl ReadDecodePayload<Bytes> for RawBytes {
-    fn decode_payload_from_reader<R: Read>(
-        reader: R,
-        payload_len: usize,
-    ) -> Result<Bytes, UWireError> {
-        read_exact_payload(reader, payload_len).map(Bytes::from)
     }
 }
 
@@ -732,6 +263,20 @@ pub trait ByteBackedStablePayloadField:
 {
     #[doc(hidden)]
     const SUPPORTS_BYTE_BACKED_STABLE_FIELD: bool;
+    /// Views this plain-old-data value as its initialized bytes.
+    #[doc(hidden)]
+    fn init_bytes(&self) -> &[u8] {
+        // SAFETY: this sealed trait is implemented only for primitive fields,
+        // recursively byte-backed arrays, and types whose unsafe
+        // `ByteBackedStablePayload` contract proves the full live value has no
+        // uninitialized padding or process-local state.
+        unsafe {
+            core::slice::from_raw_parts(
+                (self as *const Self).cast::<u8>(),
+                core::mem::size_of::<Self>(),
+            )
+        }
+    }
 }
 
 macro_rules! impl_byte_backed_stable_field {
@@ -795,7 +340,7 @@ where
 /// Implementors must guarantee that copying or initializing exactly
 /// `size_of::<Self>()` bytes is a sound representation of one valid `Self` for
 /// stable-container paths. That requires stable layout, no implicit padding, no
-/// drop glue, and recursively byte-backed fields.
+/// drop glue, interior mutability, and recursively byte-backed fields.
 pub unsafe trait ByteBackedStablePayload: StablePayload {
     /// Whether this type's full object representation can be used by
     /// byte-backed stable-container paths.
@@ -873,6 +418,34 @@ pub enum StablePayloadInitUnset {}
 #[doc(hidden)]
 pub enum StablePayloadInitSet {}
 
+/// Generative context for initializing one stable payload slot.
+///
+/// The callback APIs that provide this context quantify over a fresh invariant
+/// slot lifetime. A completion proof can therefore be produced only by
+/// finishing the initializer carried by that callback invocation; a proof from
+/// separate storage cannot be substituted in safe Rust.
+pub struct StablePayloadInitContext<'slot, T: StablePayloadInit> {
+    init: T::Init<'slot>,
+    _invariant: PhantomData<fn(&'slot mut T) -> &'slot mut T>,
+}
+
+impl<'slot, T: StablePayloadInit> StablePayloadInitContext<'slot, T> {
+    #[inline(always)]
+    pub(crate) fn new(init: T::Init<'slot>) -> Self {
+        Self {
+            init,
+            _invariant: PhantomData,
+        }
+    }
+
+    /// Consumes the context and returns the generated typestate initializer.
+    #[must_use]
+    #[inline(always)]
+    pub fn into_init(self) -> T::Init<'slot> {
+        self.init
+    }
+}
+
 /// Safe generated initialization proof for stable-container payloads.
 ///
 /// Derived implementations initialize one stable payload directly in
@@ -900,7 +473,10 @@ pub unsafe trait StablePayloadInit: StablePayload {
     /// size and alignment.
     fn init_from_uninit_bytes<'a>(
         payload: &'a mut [mem::MaybeUninit<u8>],
-    ) -> Result<Self::Init<'a>, UWireError>;
+    ) -> Result<Self::Init<'a>, UWireError> {
+        let slot = StablePayloadInitSlot::<Self>::from_uninit_bytes(payload)?;
+        Self::__init_from_slot(slot)
+    }
 
     /// Creates a generated initializer from a transport loan's visible payload range.
     ///
@@ -908,6 +484,7 @@ pub unsafe trait StablePayloadInit: StablePayload {
     ///
     /// Returns an error if the payload range does not match this stable payload's
     /// size and alignment.
+    #[cfg(feature = "zero-copy-uninit")]
     fn init_from_uninit_payload<'a>(
         payload: LoanedPayloadUninitMut<'a>,
     ) -> Result<Self::Init<'a>, UWireError> {
@@ -919,6 +496,15 @@ pub unsafe trait StablePayloadInit: StablePayload {
     fn __init_from_slot<'a>(
         slot: StablePayloadInitSlot<'a, Self>,
     ) -> Result<Self::Init<'a>, UWireError>;
+
+    /// Creates a generative context from a nested slot.
+    #[doc(hidden)]
+    #[inline(always)]
+    fn __init_context_from_slot<'a>(
+        slot: StablePayloadInitSlot<'a, Self>,
+    ) -> Result<StablePayloadInitContext<'a, Self>, UWireError> {
+        Self::__init_from_slot(slot).map(StablePayloadInitContext::new)
+    }
 }
 
 /// Hidden typed view over uninitialized storage used by generated initializers.
@@ -928,116 +514,119 @@ pub unsafe trait StablePayloadInit: StablePayload {
 /// setters instead of constructing or manipulating slots directly.
 #[doc(hidden)]
 pub struct StablePayloadInitSlot<'a, T> {
-    ptr: NonNull<mem::MaybeUninit<T>>,
+    // Safe-by-construction: the slot IS the exclusive borrow of the target
+    // region. All writers below are bounds-checked safe code; the only
+    // `unsafe` in the initialization path is the final witness discharge in
+    // `assume_init` and the POD byte view in
+    // `ByteBackedStablePayloadField::init_bytes`.
+    bytes: &'a mut [mem::MaybeUninit<u8>],
     _marker: PhantomData<&'a mut mem::MaybeUninit<T>>,
 }
 
 impl<'a, T> StablePayloadInitSlot<'a, T> {
     /// Creates a slot from uninitialized payload bytes after exact stable layout validation.
-    #[doc(hidden)]
-    pub fn from_uninit_bytes(bytes: &'a mut [mem::MaybeUninit<u8>]) -> Result<Self, UWireError>
+    #[inline(always)]
+    fn from_uninit_bytes(bytes: &'a mut [mem::MaybeUninit<u8>]) -> Result<Self, UWireError>
     where
         T: StablePayload,
     {
         StableContainerPayload::<T>::check_uninit_layout(bytes)?;
-        let ptr =
-            NonNull::new(bytes.as_mut_ptr().cast::<mem::MaybeUninit<T>>()).ok_or_else(|| {
-                UWireError::invalid_payload("stable payload init slot pointer is null")
-            })?;
         Ok(Self {
-            ptr,
+            bytes,
             _marker: PhantomData,
         })
     }
 
-    fn byte_ptr(&self) -> *mut mem::MaybeUninit<u8> {
-        self.ptr.as_ptr().cast::<mem::MaybeUninit<u8>>()
+    /// Copies initialized bytes into an uninitialized destination region.
+    ///
+    /// This is one of exactly two `unsafe` kernels in the initialization
+    /// write path; every safe writer routes through it so that field and
+    /// array writes compile to `memcpy`, never to per-byte loops — a hard
+    /// requirement for zero-copy transports moving large fixed-size
+    /// payloads (64 KiB stream chunks, radar detection lists).
+    #[inline(always)]
+    fn copy_to_uninit(dst: &mut [mem::MaybeUninit<u8>], src: &[u8]) {
+        debug_assert_eq!(dst.len(), src.len());
+        // SAFETY: `dst` and `src` have equal length (checked above and by
+        // every bounds-checked caller); the regions cannot overlap because
+        // `dst` is an exclusive borrow of transport-loaned storage while
+        // `src` borrows caller memory; writing `u8` bytes through
+        // `MaybeUninit<u8>` is always valid.
+        unsafe {
+            ptr::copy_nonoverlapping(src.as_ptr(), dst.as_mut_ptr().cast::<u8>(), src.len());
+        }
     }
 
-    /// Initializes an implicit or trailing padding gap to zero.
+    /// Fills an uninitialized destination region with one byte value.
     ///
-    /// # Safety
-    ///
-    /// `offset..offset + len` must be in bounds for the slot and must not overlap
-    /// any semantic field that will later be initialized by a generated setter.
-    #[doc(hidden)]
-    pub unsafe fn write_padding(&mut self, offset: usize, len: usize) {
-        let start = self.byte_ptr().cast::<u8>();
-        // SAFETY: The caller guarantees the padding gap is in bounds for the
-        // slot and each byte is written at most once before commit.
-        unsafe { ptr::write_bytes(start.add(offset), 0, len) };
+    /// The second of the two write-path `unsafe` kernels; compiles to
+    /// `memset`.
+    #[inline(always)]
+    fn fill_uninit(dst: &mut [mem::MaybeUninit<u8>], value: u8) {
+        // SAFETY: writing `u8` bytes through `MaybeUninit<u8>` within the
+        // exclusive borrow is always valid.
+        unsafe {
+            ptr::write_bytes(dst.as_mut_ptr().cast::<u8>(), value, dst.len());
+        }
     }
 
-    /// Writes one typed field at a generated byte offset.
-    ///
-    /// # Safety
-    ///
-    /// `offset` must be the start of a properly aligned `U` field within this
-    /// slot, and the field must not have been initialized before this call.
-    #[doc(hidden)]
-    pub unsafe fn write_field<U>(&mut self, offset: usize, value: U) {
-        let ptr = self.byte_ptr().cast::<u8>();
-        // SAFETY: The generated caller proves `offset` names one uninitialized
-        // field of type `U` inside this slot.
-        unsafe { ptr.add(offset).cast::<U>().write(value) };
+    #[inline(always)]
+    fn checked_range(&mut self, offset: usize, len: usize) -> &mut [mem::MaybeUninit<u8>] {
+        let end = offset
+            .checked_add(len)
+            .expect("stable payload field range overflow: layout and derive offsets disagree");
+        self.bytes
+            .get_mut(offset..end)
+            .expect("stable payload field write out of bounds: layout and derive offsets disagree")
     }
 
-    /// Copies exact bytes into a `[u8; N]` field.
-    ///
-    /// # Safety
-    ///
-    /// `offset..offset + src.len()` must be the target byte array field and must
-    /// not overlap initialized bytes.
+    /// Zero-fills `len` bytes at `offset` (padding regions).
     #[doc(hidden)]
-    pub unsafe fn write_bytes(&mut self, offset: usize, src: &[u8]) {
-        let ptr = self.byte_ptr().cast::<u8>();
-        // SAFETY: The generated caller proves the target byte array field is in
-        // bounds and currently uninitialized.
-        unsafe { ptr::copy_nonoverlapping(src.as_ptr(), ptr.add(offset), src.len()) };
+    #[inline(always)]
+    pub fn write_padding(&mut self, offset: usize, len: usize) {
+        Self::fill_uninit(self.checked_range(offset, len), 0);
     }
 
-    /// Fills exact bytes in a `[u8; N]` field.
-    ///
-    /// # Safety
-    ///
-    /// `offset..offset + len` must be the target byte array field and must not
-    /// overlap initialized bytes.
+    /// Writes one plain-old-data field value at `offset`.
     #[doc(hidden)]
-    pub unsafe fn fill_bytes(&mut self, offset: usize, len: usize, value: u8) {
-        let ptr = self.byte_ptr().cast::<u8>();
-        // SAFETY: The generated caller proves the byte range is in bounds for
-        // the uninitialized byte array field.
-        unsafe { ptr::write_bytes(ptr.add(offset), value, len) };
+    #[inline(always)]
+    pub fn write_field<U: ByteBackedStablePayloadField>(&mut self, offset: usize, value: U) {
+        let src = value.init_bytes();
+        Self::copy_to_uninit(self.checked_range(offset, src.len()), src);
     }
 
-    /// Fills exact bytes in a `[u8; N]` field using an index-based generator.
-    ///
-    /// # Safety
-    ///
-    /// `offset..offset + len` must be the target byte array field and must not
-    /// overlap initialized bytes.
+    /// Copies raw bytes at `offset`.
     #[doc(hidden)]
-    pub unsafe fn fill_bytes_with(
+    #[inline(always)]
+    pub fn write_bytes(&mut self, offset: usize, src: &[u8]) {
+        Self::copy_to_uninit(self.checked_range(offset, src.len()), src);
+    }
+
+    /// Fills `len` bytes at `offset` with `value`.
+    #[doc(hidden)]
+    #[inline(always)]
+    pub fn fill_bytes(&mut self, offset: usize, len: usize, value: u8) {
+        Self::fill_uninit(self.checked_range(offset, len), value);
+    }
+
+    /// Fills `len` bytes at `offset` from a byte-producing function.
+    #[doc(hidden)]
+    #[inline(always)]
+    pub fn fill_bytes_with(
         &mut self,
         offset: usize,
         len: usize,
         mut value: impl FnMut(usize) -> u8,
     ) {
-        let ptr = self.byte_ptr().cast::<u8>();
-        for index in 0..len {
-            // SAFETY: The generated caller proves the target byte is in bounds
-            // for the uninitialized byte array field.
-            unsafe { ptr.add(offset + index).write(value(index)) };
+        for (index, dst) in self.checked_range(offset, len).iter_mut().enumerate() {
+            *dst = mem::MaybeUninit::new(value(index));
         }
     }
 
-    /// Copies a typed array field from a slice after an exact length check.
-    ///
-    /// # Safety
-    ///
-    /// `offset` must be the start of an uninitialized `[U; expected]` field.
+    /// Copies a `[U; N]`-shaped region from a slice of POD elements.
     #[doc(hidden)]
-    pub unsafe fn copy_array_from_slice<U: Copy>(
+    #[inline(always)]
+    pub fn copy_array_from_slice<U: ByteBackedStablePayloadField>(
         &mut self,
         offset: usize,
         src: &[U],
@@ -1046,84 +635,88 @@ impl<'a, T> StablePayloadInitSlot<'a, T> {
         if src.len() != expected {
             return Err(UWireError::invalid_payload_length(expected, src.len()));
         }
-        let dst = self.byte_ptr().cast::<u8>();
-        // SAFETY: The generated caller proves the target array field is in
-        // bounds and uninitialized. `src` contains valid initialized `U` values.
-        unsafe { ptr::copy_nonoverlapping(src.as_ptr(), dst.add(offset).cast::<U>(), expected) };
+        // POD contract: a `[U]` of byte-backed fields is itself a contiguous
+        // initialized byte region, so the whole array is ONE memcpy.
+        let byte_len = mem::size_of_val(src);
+        // SAFETY: `U: ByteBackedStablePayloadField` guarantees `U` (and
+        // therefore `[U]`) is plain-old-data with no padding surprises; the
+        // slice's bytes are fully initialized.
+        let src_bytes = unsafe { core::slice::from_raw_parts(src.as_ptr().cast::<u8>(), byte_len) };
+        Self::copy_to_uninit(self.checked_range(offset, byte_len), src_bytes);
         Ok(())
     }
 
-    /// Fills a typed array field with a valid copied element value.
-    ///
-    /// # Safety
-    ///
-    /// `offset` must be the start of an uninitialized `[U; len]` field.
+    /// Fills a `[U; N]`-shaped region with copies of one POD element.
     #[doc(hidden)]
-    pub unsafe fn fill_array<U: Copy>(&mut self, offset: usize, len: usize, value: U) {
-        let dst = self.byte_ptr().cast::<u8>();
-        for index in 0..len {
-            // SAFETY: The generated caller proves the target element is in
-            // bounds for the uninitialized array field.
-            unsafe { dst.add(offset).cast::<U>().add(index).write(value) };
+    #[inline(always)]
+    pub fn fill_array<U: ByteBackedStablePayloadField>(
+        &mut self,
+        offset: usize,
+        len: usize,
+        value: U,
+    ) {
+        let elem = mem::size_of::<U>();
+        let byte_len = elem
+            .checked_mul(len)
+            .expect("stable payload array fill length overflow");
+        if elem == 0 {
+            return;
+        }
+        let bytes = value.init_bytes();
+        for element in self.checked_range(offset, byte_len).chunks_exact_mut(elem) {
+            Self::copy_to_uninit(element, bytes);
         }
     }
 
-    /// Returns a typed nested field slot.
-    ///
-    /// # Safety
-    ///
-    /// `offset` must be the start of a properly aligned uninitialized `U` field
-    /// inside this slot.
+    /// Re-borrows the sub-region for one field as a typed slot.
     #[doc(hidden)]
-    pub unsafe fn field_slot<U>(&mut self, offset: usize) -> StablePayloadInitSlot<'a, U> {
-        let ptr = self.byte_ptr().cast::<u8>();
-        // SAFETY: The generated caller proves `offset` names a nested field of
-        // type `U` in this slot.
-        let ptr = unsafe { ptr.add(offset).cast::<mem::MaybeUninit<U>>() };
-        let ptr = NonNull::new(ptr).expect("stable payload nested field slot pointer is null");
+    #[inline(always)]
+    pub fn field_slot<U>(&mut self, offset: usize) -> StablePayloadInitSlot<'_, U> {
+        let len = mem::size_of::<U>();
+        let end = offset
+            .checked_add(len)
+            .expect("stable payload field slot offset overflow");
+        let bytes = self
+            .bytes
+            .get_mut(offset..end)
+            .expect("stable payload field slot out of bounds");
+        assert_eq!(
+            bytes.as_mut_ptr().align_offset(mem::align_of::<U>()),
+            0,
+            "stable payload field slot is misaligned"
+        );
         StablePayloadInitSlot {
-            ptr,
+            bytes,
             _marker: PhantomData,
         }
     }
 
-    /// Returns a typed nested array element slot.
-    ///
-    /// # Safety
-    ///
-    /// `offset` must be the start of an array field, and `index` must be in
-    /// bounds for that array.
+    /// Re-borrows the sub-region for one array element as a typed slot.
     #[doc(hidden)]
-    pub unsafe fn array_element_slot<U>(
+    #[inline(always)]
+    pub fn array_element_slot<U>(
         &mut self,
         offset: usize,
         index: usize,
-    ) -> StablePayloadInitSlot<'a, U> {
-        let ptr = self.byte_ptr().cast::<u8>();
-        let element_offset = offset + index * mem::size_of::<U>();
-        // SAFETY: The generated caller proves `element_offset` names one nested
-        // element of type `U` in this slot.
-        let ptr = unsafe { ptr.add(element_offset).cast::<mem::MaybeUninit<U>>() };
-        let ptr = NonNull::new(ptr).expect("stable payload array element slot pointer is null");
-        StablePayloadInitSlot {
-            ptr,
-            _marker: PhantomData,
-        }
+    ) -> StablePayloadInitSlot<'_, U> {
+        let element_offset = index
+            .checked_mul(mem::size_of::<U>())
+            .and_then(|relative| offset.checked_add(relative))
+            .expect("stable payload array element offset overflow");
+        self.field_slot::<U>(element_offset)
     }
 
-    /// Marks the slot as initialized after generated typestate completion.
+    /// Discharges the initialization witness.
     ///
-    /// # Safety
-    ///
-    /// Every byte in the slot, including implicit padding, must contain one valid
-    /// initialized `T`.
+    /// This is available only to generated all-set typestate builders. Safe
+    /// code cannot construct a slot directly.
     #[doc(hidden)]
     #[must_use]
-    pub unsafe fn assume_init(self) -> InitializedStablePayload<T> {
-        // SAFETY: The generated caller invokes this only from the all-set
-        // typestate state after all semantic fields and generated padding gaps
-        // have been initialized.
-        unsafe { InitializedStablePayload::new_unchecked(self.ptr) }
+    #[inline(always)]
+    pub fn assume_init(self) -> InitializedStablePayload<'a, T> {
+        // SAFETY: slots can originate only in `StablePayloadInit` entry points,
+        // and generated code exposes this method only on its all-set typestate.
+        unsafe { InitializedStablePayload::new_unchecked() }
     }
 }
 
@@ -1431,6 +1024,7 @@ where
 // - `T: ByteBackedStablePayload` proves safe no-zero TX cannot expose
 //   uninitialized implicit padding when the full `size_of::<T>()` byte range is
 //   committed after the returned initialized marker is produced.
+#[cfg(feature = "zero-copy-uninit")]
 unsafe impl<T> LoanUninitPayload<T> for StableContainerPayload<T>
 where
     T: ByteBackedStablePayload,
@@ -1444,11 +1038,15 @@ where
     ) -> Result<LoanedUninitPayload<'a, T>, UWireError> {
         let bytes = dst.as_uninit_bytes_mut_internal();
         Self::check_uninit_layout(bytes)?;
-        let ptr = NonNull::new(bytes.as_mut_ptr().cast::<mem::MaybeUninit<T>>())
-            .ok_or_else(|| UWireError::invalid_payload("stable payload slot pointer is null"))?;
-        // SAFETY: `check_uninit_layout` verified exact `T` length and alignment,
-        // and the loan wrapper preserves unique mutable access for `'a`.
-        Ok(unsafe { LoanedUninitPayload::new_unchecked(ptr) })
+        // This is the ONE byte-region -> typed-slot entry point of the safe
+        // loan path: layout is verified (exact `T` size, alignment) and the
+        // exclusive byte borrow is reinterpreted as an exclusive borrow of a
+        // single uninitialized `T`.
+        // SAFETY: `check_uninit_layout` verified exact `T` length and
+        // alignment; `MaybeUninit<T>` has no validity requirements; the
+        // returned reference inherits the exclusive `'a` borrow.
+        let slot = unsafe { &mut *bytes.as_mut_ptr().cast::<mem::MaybeUninit<T>>() };
+        Ok(LoanedUninitPayload::new(slot))
     }
 }
 
@@ -1465,188 +1063,19 @@ where
     }
 }
 
-/// Protocol Buffers application payload codec.
-///
-/// `ProtobufPayload` serializes and deserializes only application payload bytes.
-/// It does not wrap a complete uProtocol frame and does not serialize frame
-/// metadata. Use `ProtobufUMessageFrame` when an entire native frame must be
-/// encoded as a generated `UMessage` envelope.
-pub struct ProtobufPayload;
-
-impl ProtobufPayload {
-    /// Returns the generic Protocol Buffers payload encoding metadata.
-    #[must_use]
-    pub fn encoding() -> PayloadEncoding {
-        <Self as PayloadFormat>::encoding()
-    }
-}
-
-impl PayloadFormat for ProtobufPayload {
-    fn name() -> &'static str {
-        "protobuf"
-    }
-
-    fn encoding() -> PayloadEncoding {
-        PayloadEncoding::PROTOBUF
-    }
-}
-
-#[cfg(feature = "protobuf-support")]
-impl<T> EncodePayload<T> for ProtobufPayload
-where
-    T: ProtobufMappable,
-{
-    fn payload_layout(value: &T) -> Result<PayloadLayout, UWireError> {
-        PayloadLayout::new(Self::encode_payload_owned(value)?.len(), 1)
-    }
-
-    fn encode_payload(value: &T, dst: &mut [u8]) -> Result<(), UWireError> {
-        copy_encoded_payload(Self::encode_payload_owned(value)?, dst)
-    }
-
-    fn encode_payload_owned(value: &T) -> Result<Bytes, UWireError> {
-        value
-            .write_to_protobuf_bytes()
-            .map(Bytes::from)
-            .map_err(|error| UWireError::serialization_error(error.to_string()))
-    }
-}
-
-#[cfg(feature = "protobuf-support")]
-impl<'a, T> DecodePayload<'a, T> for ProtobufPayload
-where
-    T: ProtobufMappable,
-{
-    fn decode_payload(src: &'a [u8]) -> Result<T, UWireError> {
-        T::parse_from_protobuf_bytes(src)
-            .map_err(|error| UWireError::invalid_payload(error.to_string()))
-    }
-}
-
-#[cfg(feature = "protobuf-support")]
-impl<T> ReadDecodePayload<T> for ProtobufPayload
-where
-    T: ProtobufMappable,
-{
-    fn decode_payload_from_reader<R: Read>(reader: R, payload_len: usize) -> Result<T, UWireError> {
-        let bytes = read_exact_payload(reader, payload_len)?;
-        T::parse_from_protobuf_bytes(&bytes)
-            .map_err(|error| UWireError::invalid_payload(error.to_string()))
-    }
-}
-
-/// Protocol Buffers `google.protobuf.Any` application payload codec.
-pub struct ProtobufAnyPayload;
-
-impl ProtobufAnyPayload {
-    /// Returns the protobuf-Any payload encoding metadata.
-    #[must_use]
-    pub fn encoding() -> PayloadEncoding {
-        <Self as PayloadFormat>::encoding()
-    }
-}
-
-impl PayloadFormat for ProtobufAnyPayload {
-    fn name() -> &'static str {
-        "protobuf-any"
-    }
-
-    fn encoding() -> PayloadEncoding {
-        PayloadEncoding::PROTOBUF_WRAPPED_IN_ANY
-    }
-}
-
-#[cfg(feature = "protobuf-support")]
-impl<T> EncodePayload<T> for ProtobufAnyPayload
-where
-    T: ProtobufMappable,
-{
-    fn payload_layout(value: &T) -> Result<PayloadLayout, UWireError> {
-        PayloadLayout::new(Self::encode_payload_owned(value)?.len(), 1)
-    }
-
-    fn encode_payload(value: &T, dst: &mut [u8]) -> Result<(), UWireError> {
-        copy_encoded_payload(Self::encode_payload_owned(value)?, dst)
-    }
-
-    fn encode_payload_owned(value: &T) -> Result<Bytes, UWireError> {
-        value
-            .write_to_packed_protobuf_bytes()
-            .map(Bytes::from)
-            .map_err(|error| UWireError::serialization_error(error.to_string()))
-    }
-}
-
-#[cfg(feature = "protobuf-support")]
-impl<'a, T> DecodePayload<'a, T> for ProtobufAnyPayload
-where
-    T: ProtobufMappable,
-{
-    fn decode_payload(src: &'a [u8]) -> Result<T, UWireError> {
-        T::parse_from_packed_protobuf_bytes(src)
-            .map_err(|error| UWireError::invalid_payload(error.to_string()))
-    }
-}
-
-#[cfg(feature = "protobuf-support")]
-impl<T> ReadDecodePayload<T> for ProtobufAnyPayload
-where
-    T: ProtobufMappable,
-{
-    fn decode_payload_from_reader<R: Read>(reader: R, payload_len: usize) -> Result<T, UWireError> {
-        let bytes = read_exact_payload(reader, payload_len)?;
-        T::parse_from_packed_protobuf_bytes(&bytes)
-            .map_err(|error| UWireError::invalid_payload(error.to_string()))
-    }
-}
-
-#[cfg(feature = "protobuf-support")]
-fn copy_encoded_payload(bytes: Bytes, dst: &mut [u8]) -> Result<(), UWireError> {
-    let actual = dst.len();
-    let out = dst
-        .get_mut(..bytes.len())
-        .ok_or_else(|| UWireError::buffer_too_small(bytes.len(), actual))?;
-    out.copy_from_slice(&bytes);
-    Ok(())
-}
-
-fn read_exact_payload<R: Read>(mut reader: R, payload_len: usize) -> Result<Vec<u8>, UWireError> {
-    let mut bytes = Vec::with_capacity(payload_len);
-    reader
-        .read_to_end(&mut bytes)
-        .map_err(|error| UWireError::invalid_payload(error.to_string()))?;
-    if bytes.len() != payload_len {
-        return Err(UWireError::invalid_payload(format!(
-            "payload reader yielded {} bytes but payload_len returned {payload_len} bytes",
-            bytes.len()
-        )));
-    }
-    Ok(bytes)
-}
-
 #[cfg(test)]
 mod tests {
-    use std::io::{Chain, Cursor};
-
-    #[cfg(feature = "protobuf-support")]
-    use protobuf::well_known_types::wrappers::StringValue;
+    #[cfg(feature = "owned-frame-transport")]
+    use bytes::Bytes;
 
     #[cfg(feature = "owned-frame-transport")]
-    use crate::UOwnedFrame;
-    use crate::{UFrameMetadata, UFrameView, UMessageBuilder, UUri};
+    use crate::{UMessageBuilder, UOwnedFrame, UUri};
 
     use super::*;
 
+    #[cfg(feature = "owned-frame-transport")]
     fn topic() -> UUri {
         UUri::try_from_parts("vehicle", 0x4210, 0x01, 0x9000).expect("topic")
-    }
-
-    #[cfg(feature = "protobuf-support")]
-    fn message(value: &str) -> StringValue {
-        StringValue {
-            value: value.to_string(),
-            ..Default::default()
-        }
     }
 
     #[repr(C)]
@@ -1656,6 +1085,8 @@ mod tests {
         y: i32,
     }
 
+    // SAFETY: upholds the POD layout contract: repr(C), declared padding
+    // only, every byte of a live value initialized.
     unsafe impl StablePayload for VehiclePose {
         const TYPE_NAME: &'static str = "example.vehicle.VehiclePose";
     }
@@ -1673,31 +1104,6 @@ mod tests {
             ),
         )
         .expect("valid custom encoding")
-    }
-
-    #[test]
-    fn raw_bytes_owned_encode_decode_round_trips() {
-        let payload = b"raw payload".as_slice();
-
-        let encoded = RawBytes::encode_payload_owned(payload).expect("encode raw bytes");
-        let decoded: Vec<u8> = RawBytes::decode_payload(&encoded).expect("decode raw bytes");
-
-        assert_eq!(encoded.as_ref(), payload);
-        assert_eq!(decoded, payload);
-        assert_eq!(RawBytes::encoding(), PayloadEncoding::RAW);
-    }
-
-    #[test]
-    fn raw_bytes_rejects_too_small_output_buffer() {
-        let error = RawBytes::encode_payload(b"payload".as_slice(), &mut [0_u8; 3]).unwrap_err();
-
-        assert_eq!(
-            error,
-            UWireError::BufferTooSmall {
-                expected: 7,
-                actual: 3,
-            }
-        );
     }
 
     #[test]
@@ -1808,108 +1214,5 @@ mod tests {
         );
         assert_eq!(frame.payload(), Some(&payload));
         assert_eq!(frame.payload_bytes(), payload.as_ref());
-    }
-
-    #[cfg(feature = "protobuf-support")]
-    #[test]
-    fn protobuf_payload_encode_decode_round_trips() {
-        let input = message("protobuf payload");
-
-        let encoded = ProtobufPayload::encode_payload_owned(&input).expect("encode protobuf");
-        let decoded: StringValue =
-            ProtobufPayload::decode_payload(&encoded).expect("decode protobuf");
-
-        assert_eq!(decoded.value, input.value);
-        assert_eq!(ProtobufPayload::encoding(), PayloadEncoding::PROTOBUF);
-    }
-
-    #[cfg(feature = "protobuf-support")]
-    #[test]
-    fn protobuf_any_payload_encode_decode_round_trips() {
-        let input = message("protobuf any payload");
-
-        let encoded = ProtobufAnyPayload::encode_payload_owned(&input).expect("encode any");
-        let decoded: StringValue =
-            ProtobufAnyPayload::decode_payload(&encoded).expect("decode any");
-
-        assert_eq!(decoded.value, input.value);
-        assert_eq!(
-            ProtobufAnyPayload::encoding(),
-            PayloadEncoding::PROTOBUF_WRAPPED_IN_ANY
-        );
-    }
-
-    #[cfg(feature = "protobuf-support")]
-    #[test]
-    fn protobuf_payload_reader_decode_round_trips() {
-        let input = message("protobuf reader payload");
-        let encoded = ProtobufPayload::encode_payload_owned(&input).expect("encode protobuf");
-
-        let decoded: StringValue = ProtobufPayload::decode_payload_from_reader(
-            Cursor::new(encoded.as_ref()),
-            encoded.len(),
-        )
-        .expect("decode protobuf from reader");
-
-        assert_eq!(decoded.value, input.value);
-    }
-
-    #[test]
-    fn segmented_frame_view_decodes_from_reader_without_contiguous_payload() {
-        let message = UMessageBuilder::publish(topic()).build().expect("message");
-        let metadata = crate::try_project_attributes_to_frame_metadata(
-            message.attributes(),
-            Some(PayloadEncoding::RAW),
-        )
-        .expect("metadata");
-        let frame = SegmentedFrame {
-            metadata,
-            first: b"seg".to_vec(),
-            second: b"mented".to_vec(),
-        };
-
-        let decoded: Vec<u8> = frame
-            .decode_payload_from_reader_as::<RawBytes, _>()
-            .expect("decode segmented payload");
-
-        assert_eq!(decoded, b"segmented".as_slice());
-        assert!(frame.try_contiguous_payload().is_none());
-    }
-
-    struct SegmentedFrame {
-        metadata: UFrameMetadata,
-        first: Vec<u8>,
-        second: Vec<u8>,
-    }
-
-    impl UFrameView for SegmentedFrame {
-        type PayloadReader<'a>
-            = Chain<Cursor<&'a [u8]>, Cursor<&'a [u8]>>
-        where
-            Self: 'a;
-        type PayloadSlices<'a>
-            = std::array::IntoIter<&'a [u8], 2>
-        where
-            Self: 'a;
-
-        fn metadata(&self) -> &UFrameMetadata {
-            &self.metadata
-        }
-
-        fn payload_len(&self) -> usize {
-            self.first.len() + self.second.len()
-        }
-
-        fn has_payload(&self) -> bool {
-            true
-        }
-
-        fn payload_reader(&self) -> Self::PayloadReader<'_> {
-            Cursor::new(self.first.as_slice()).chain(Cursor::new(self.second.as_slice()))
-        }
-
-        fn payload_slices(&self) -> Self::PayloadSlices<'_> {
-            [self.first.as_slice(), self.second.as_slice()].into_iter()
-        }
     }
 }

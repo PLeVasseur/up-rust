@@ -5,7 +5,7 @@ error[E0277]: the trait bound `StableContainerWireFormat: EncodePayload<protobuf
    |                             ^^^^^^^^^^^^^^^^^^^^^^^^^ the trait `EncodePayload<protobuf::well_known_types::wrappers::StringValue>` is not implemented for `StableContainerWireFormat`
    |
 help: the following other types implement trait `EncodePayload<T>`
-  --> src/payload.rs
+  --> src/payload/codec.rs
    |
    |   impl EncodePayload<[u8]> for RawBytes {
    |   ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ `RawBytes` implements `EncodePayload<[u8]>`

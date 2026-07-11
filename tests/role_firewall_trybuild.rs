@@ -11,6 +11,11 @@
  * SPDX-License-Identifier: Apache-2.0
  ********************************************************************************/
 
+#[cfg(all(
+    feature = "selected-wire-user-api",
+    not(feature = "transport-implementer-api"),
+    not(feature = "wire-implementer-api")
+))]
 #[test]
 fn selected_wire_user_api_does_not_expose_implementer_spi() {
     let tests = trybuild::TestCases::new();

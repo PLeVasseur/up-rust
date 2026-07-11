@@ -26,6 +26,7 @@ use std::sync::Arc;
 
 use async_trait::async_trait;
 
+use crate::payload::codec::{DecodePayload, EncodePayload, PayloadCodec};
 #[cfg(feature = "selected-wire-transport-adapter")]
 use crate::wire::UWireDecodeOwned;
 use crate::{
@@ -36,7 +37,7 @@ use crate::{
     LocalUriProvider, UCode, UListener, UMessage, UMessageBuilder, UOwnedFrame, UOwnedListener,
     UOwnedTransport, UStatus, UUri, UUID,
 };
-use crate::{DecodePayload, EncodePayload, PayloadCodec, UHasWire, UWireEncode};
+use crate::{UHasWire, UWireEncode};
 
 pub use crate::communication::RequestHandler;
 
@@ -1057,12 +1058,10 @@ mod tests {
 
         let frames = transport.sent_frames();
         assert_eq!(frames.len(), 1);
+        let frame = frames.first().expect("one sent frame");
+        assert_eq!(frame.payload(), Some(&bytes::Bytes::from_static(b"hello")));
         assert_eq!(
-            frames[0].payload(),
-            Some(&bytes::Bytes::from_static(b"hello"))
-        );
-        assert_eq!(
-            frames[0]
+            frame
                 .metadata()
                 .payload_encoding()
                 .and_then(crate::PayloadEncoding::to_legacy_format),
@@ -1127,11 +1126,9 @@ mod tests {
 
         let messages = listener.messages();
         assert_eq!(messages.len(), 1);
-        assert!(messages[0].is_publish());
-        assert_eq!(
-            messages[0].payload(),
-            Some(bytes::Bytes::from_static(b"event"))
-        );
+        let message = messages.first().expect("one received message");
+        assert!(message.is_publish());
+        assert_eq!(message.payload(), Some(bytes::Bytes::from_static(b"event")));
 
         subscriber
             .unsubscribe(&topic, listener)
@@ -1171,14 +1168,16 @@ mod tests {
 
         let messages = listener.messages();
         assert_eq!(messages.len(), 1);
-        assert!(messages[0].is_notification());
+        let message = messages.first().expect("one received message");
+        assert!(message.is_notification());
         assert_eq!(
-            messages[0].payload(),
+            message.payload(),
             Some(bytes::Bytes::from_static(b"notification"))
         );
         let frames = transport.sent_frames();
         assert_eq!(frames.len(), 1);
-        let sent = message_from_frame(frames[0].clone()).expect("sent notification");
+        let sent = message_from_frame(frames.first().expect("one sent frame").clone())
+            .expect("sent notification");
         assert!(sent.is_notification());
         assert_eq!(sent.payload(), Some(bytes::Bytes::from_static(b"notify")));
 
@@ -1216,9 +1215,10 @@ mod tests {
         assert_eq!(result.payload(), &bytes::Bytes::from_static(b"response"));
         let frames = transport.sent_frames();
         assert_eq!(frames.len(), 1);
+        let frame = frames.first().expect("one sent frame");
         let sent = crate::try_project_frame_to_umessage(
-            frames[0].metadata().clone(),
-            frames[0].payload().cloned(),
+            frame.metadata().clone(),
+            frame.payload().cloned(),
         )
         .expect("sent request");
         assert!(sent.is_request());
@@ -1261,9 +1261,10 @@ mod tests {
 
         let frames = transport.sent_frames();
         assert_eq!(frames.len(), 1);
+        let frame = frames.first().expect("one sent frame");
         let response = crate::try_project_frame_to_umessage(
-            frames[0].metadata().clone(),
-            frames[0].payload().cloned(),
+            frame.metadata().clone(),
+            frame.payload().cloned(),
         )
         .expect("response");
         assert!(response.is_response());
@@ -1337,7 +1338,9 @@ mod selected_wire_tests {
 
         let payloads = core.sent_payloads();
         assert_eq!(payloads.len(), 1);
-        assert!(payloads[0]
+        assert!(payloads
+            .first()
+            .expect("one sent payload")
             .as_ref()
             .is_some_and(|payload| !payload.is_empty()));
         let _: NativePrefixFrameMetadataCodec = NativePrefixFrameMetadataCodec;
@@ -1444,7 +1447,9 @@ mod selected_wire_tests {
         assert_eq!(result.value, "typed response");
         let frames = transport.sent_frames();
         assert_eq!(frames.len(), 1);
-        assert!(frames[0]
+        assert!(frames
+            .first()
+            .expect("one sent frame")
             .payload()
             .is_some_and(|payload| !payload.is_empty()));
     }

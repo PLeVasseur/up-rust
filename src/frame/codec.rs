@@ -398,7 +398,10 @@ impl FieldsReader<'_> {
     }
 
     fn u8(&mut self) -> Result<u8, UFrameFieldsError> {
-        Ok(self.take(1)?[0])
+        self.take(1)?
+            .first()
+            .copied()
+            .ok_or_else(|| UFrameFieldsError::Malformed("missing byte".to_string()))
     }
 
     fn u16(&mut self) -> Result<u16, UFrameFieldsError> {
@@ -552,7 +555,7 @@ mod tests {
     fn unknown_presence_bits_are_rejected() {
         let metadata = UFrameMetadata::publish(topic()).build().expect("metadata");
         let mut bytes = encode_frame_metadata_fields(&metadata).expect("encode");
-        bytes[5] |= 0x01_u8; // presence bit 8, undefined in field block v1
+        *bytes.get_mut(5).expect("presence byte") |= 0x01_u8; // undefined presence bit 8
         assert!(matches!(
             decode_frame_metadata_fields(&bytes),
             Err(UFrameFieldsError::Malformed(_))
@@ -563,7 +566,7 @@ mod tests {
     fn unsupported_version_is_rejected() {
         let metadata = UFrameMetadata::publish(topic()).build().expect("metadata");
         let mut bytes = encode_frame_metadata_fields(&metadata).expect("encode");
-        bytes[0] = 2;
+        *bytes.first_mut().expect("version byte") = 2;
         assert!(matches!(
             decode_frame_metadata_fields(&bytes),
             Err(UFrameFieldsError::Malformed(_))

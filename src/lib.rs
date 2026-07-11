@@ -41,9 +41,9 @@ capability removals.
   should enable `selected-wire-user-api`; external wire authors should enable
   `wire-implementer-api`; physical transport authors should enable
   `transport-implementer-api`.
-* Unsafe stable-payload transmit/init APIs and unchecked constructors are expert
-  surfaces with caller-side safety obligations. They are not the default
-  application path.
+* `zero-copy-uninit` enables user-facing typed initialization directly in
+  uninitialized transport loans. Implementer-side uninitialized buffer and core
+  contracts remain available independently.
 * Mocks, in-memory proof transports, vector-backed leases, payload fixtures, and
   benchmark fixtures are test/proof support surfaces rather than ordinary
   production application APIs.
@@ -59,9 +59,9 @@ from the ordinary `communication` entry point:
 | --- | --- | --- |
 | Compatibility message transport | Root exports such as `UTransport`, `UListener`, `UMessage`, `UAttributes`, `UUri`, and `UStatus` | Direct up-L1 remains a supported compatibility path. |
 | Owned native-frame transport | Root exports such as `UOwnedTransport`, `UOwnedFrame`, `ValidatedOwnedFrame`, `PreparedOwnedFrame`, and the role facade in `communication::owned` | Available with the owned-frame transport features; it does not replace `UTransport`. |
-| Zero-copy transport and loans | Root exports such as `UZeroCopyTransport`, `UZeroCopyUninitTransport`, `UTxBuffer`, `UUninitTxBuffer`, `UZeroCopyRxLease`, and the publish facade in `communication::zero_copy` | Loan-backed mechanics remain up-L1 capability. The L2 facade is intentionally narrower than raw transport capability. |
+| Zero-copy transport and loans | Root exports such as `UZeroCopyTransport`, `UTxBuffer`, `UUninitTxBuffer`, and `UZeroCopyRxLease`; `zero-copy-uninit` adds the user uninitialized-loan and publish APIs | Loan-backed mechanics remain up-L1 capability. The L2 facade is intentionally narrower than raw transport capability. |
 | Selected-wire profiles | The public `wire` module plus root exports such as `UWire`, `UProtocolNativeWire`, `ProtobufWire`, `WireIdentity`, and selected-wire adapter exports such as `UWireTransport` | Selected-wire identity, metadata, and payload-family checks are up-L1 representation/profile semantics. |
-| Whole-frame envelopes | The public `frame_wire` module and root exports such as `UFrameWireFormat` and `ProtobufUMessageFrame` when the required features are enabled | Whole-frame serialization is separate from selected-wire profile metadata. |
+| Whole-frame envelopes | The public [`frame::envelope`] module and root exports such as `UFrameWireFormat` when `owned-frame-transport` is enabled | Whole-frame `UPFE` serialization is separate from selected-wire `UPWM` metadata prefixes. |
 | Payload codecs and stable payload support | The public `payload` module plus root exports such as `PayloadCodec`, `EncodePayload`, `DecodePayload`, `StablePayload`, and `StablePayloadInit` | Safe derive/codegen paths are the supported route; the former manual unsafe slot APIs were removed. |
 | Test, fake, and proof support | Feature-gated root exports such as `MockTransport`, `InMemoryZeroCopyTransport`, vector leases, and payload fixtures | These remain available for tests, benchmarks, and conformance proof, not as production transport evidence by themselves. |
 
@@ -88,6 +88,7 @@ None of the following features are enabled by default, so you can pick and choos
   implementations.
 * `owned-frame-transport` enables an experimental native owned-frame transport API. This is additive to `UTransport` and does not replace the ordinary `UMessage` compatibility path.
 * `payload-contract-fixtures` exposes representative benchmark payload fixtures, stable structs, validators, manifests, and protobuf schemas for transport benchmarks.
+* `zero-copy-uninit` enables user-facing typed uninitialized-loan payload APIs, transport conveniences, and selected-wire publish helpers. Physical transport implementer contracts remain available without it.
 * `util` provides some useful helper structs. In particular, provides a [local, in-memory UTransport](crate::local_transport::LocalTransport) for exchanging messages within a single process. This transport is also used by the examples illustrating usage of the Communication Layer API.
 
 ## References
@@ -121,15 +122,12 @@ pub use up_rust_macros::{ByteBackedStablePayload, StablePayload, StablePayloadIn
 #[cfg(feature = "payload-contract-fixtures")]
 pub mod bench_fixtures;
 
-mod frame_metadata;
-pub use frame_metadata::{
+pub mod frame;
+pub use frame::metadata::{
     try_project_attributes_to_frame_metadata, try_project_frame_to_umessage,
     try_project_umessage_to_frame_metadata, FrameMessageKind, FramePriority, PayloadEncoding,
     UFrameMetadata, UFrameMetadataError,
 };
-
-pub mod frame_abi;
-pub mod frame_codec;
 
 #[cfg(feature = "wire-implementer-api")]
 pub mod wire;
@@ -157,15 +155,20 @@ pub use wire::{
     UWireMetadataCodec, UWireMetadataCodecFor, UWireMetadataContext, UWireMetadataError,
 };
 
+/// # Start here: implementing a WIRE format
+///
+/// You define how payloads become bytes; you never touch a transport:
+///
+/// ```text
+/// payload codec:   impl PayloadCodec + EncodePayload + DecodePayload
+/// wire identity:   register ids per up-spec/basics/uframe.adoc §Registry
+/// metadata codec:  reuse the canonical field block (crate::frame::codec);
+///                  the selected-wire adapter writes the UPWM identity prefix
+/// conformance:     wire-metadata conformance + golden suites pin you;
+///                  up-wire-xcdrv2 is the reference external wire
+/// ```
 #[cfg(feature = "wire-implementer-api")]
 pub mod wire_implementer_api {
-    //! External selected-wire/profile authoring surface.
-    //!
-    //! Ordinary metadata is the canonical UFrame field block
-    //! ([`crate::NativePrefixFrameMetadataCodec`],
-    //! [`crate::UFRAME_FIELDS_METADATA_LAYOUT_ID`]); the legacy
-    //! protobuf-`UAttributes` profile is exported here only when the
-    //! `selected-wire-protobuf-metadata` feature is enabled.
     #[cfg(feature = "selected-wire-protobuf-metadata")]
     pub use crate::NativePrefixProtobufMetadataCodec;
     pub use crate::{
@@ -181,9 +184,7 @@ pub mod wire_implementer_api {
 }
 
 #[cfg(feature = "owned-frame-transport")]
-pub mod frame_wire;
-#[cfg(feature = "owned-frame-transport")]
-pub use frame_wire::{UFrameWireError, UFrameWireFormat};
+pub use frame::envelope::{UFrameWireError, UFrameWireFormat};
 
 #[cfg(feature = "owned-frame-transport")]
 mod owned_frame;
@@ -191,16 +192,58 @@ mod owned_frame;
 pub use owned_frame::UOwnedFrame;
 
 pub mod payload;
-pub use payload::{
-    assert_stable_payload_byte_backed_uninit, stable_payload_supports_byte_backed_uninit,
-    ByteBackedStablePayload, DecodePayload, EncodePayload, InitializedStablePayload, LoanPayload,
-    LoanUninitPayload, LoanedUninitPayload, PayloadCodec, PayloadFormat, PayloadLayout,
-    ProtobufPayload, ReadDecodePayload, StableContainerPayload, StableContainerPayloadInfo,
-    StablePayload, StablePayloadInit, UWireError,
+pub use payload::codec::{
+    DecodePayload, EncodePayload, PayloadCodec, PayloadFormat, PayloadLayout, ProtobufPayload,
+    ReadDecodePayload,
 };
+pub use payload::loan::LoanPayload;
+#[cfg(feature = "zero-copy-uninit")]
+pub use payload::loan::{LoanUninitPayload, LoanedInitPayload, LoanedUninitPayload};
+pub use payload::stable::{
+    assert_stable_payload_byte_backed_uninit, stable_payload_supports_byte_backed_uninit,
+    ByteBackedStablePayload, InitializedStablePayload, StableContainerPayload,
+    StableContainerPayloadInfo, StablePayload, StablePayloadInit, StablePayloadInitContext,
+};
+pub use payload::UWireError;
+/// # Start here: the end-user surface
+///
+/// You are an application developer: build, send, and receive uProtocol
+/// messages. You need this module and rarely anything below it.
+///
+/// ```text
+/// build:    UMessageBuilder::{publish, notification, request, response}
+/// send:     any UTransport (pick a transport crate; you never implement one)
+/// receive:  register a UListener with source/sink filters
+/// payloads: build_with_payload(bytes, UPayloadFormat) — or, for encodings
+///           outside the legacy enum, with_assumed_payload_encoding(&enc)
+/// L2:       communication::{RpcClient, RpcServer} for request/response
+///           without touching transports directly
+/// ```
+///
+/// With `zero-copy-uninit`,
+/// `UZeroCopyUninitTransportExt::send_uninit_stable_payload_as` plus the
+/// derive macros provide checked, borrow-backed initialization for fixed-size
+/// payloads.
+pub mod prelude {
+    #[cfg(feature = "up-l2-notifier")]
+    pub use crate::communication::Notifier;
+    #[cfg(feature = "up-l2-publisher")]
+    pub use crate::communication::Publisher;
+    #[cfg(feature = "up-l2-rpc-client")]
+    pub use crate::communication::RpcClient;
+    #[cfg(feature = "up-l2-rpc-server")]
+    pub use crate::communication::RpcServer;
+    #[cfg(feature = "up-l2-subscriber")]
+    pub use crate::communication::Subscriber;
+    pub use crate::{
+        UAttributes, UAttributesValidators, UCode, UListener, UMessage, UMessageBuilder,
+        UMessageType, UPayloadFormat, UPriority, UStatus, UTransport, UUri, UUID,
+    };
+}
+
 #[doc(hidden)]
 pub mod __derive_support {
-    pub use crate::payload::{
+    pub use crate::payload::stable::{
         ByteBackedStablePayloadField, StablePayloadInitSet, StablePayloadInitSlot,
         StablePayloadInitUnset,
     };
@@ -215,9 +258,11 @@ pub use zero_copy::{
     LoanedPayloadUninitMut, PayloadAlignment, PayloadLoanProvenance, UFrameView,
     ULoanedContiguousZeroCopyRxFrame, UTxBuffer, UTxLoanSpec, UTxPayloadSpec, UUninitTxBuffer,
     UVecRxLease, UVecTxBuffer, UVecUninitTxBuffer, UZeroCopyListener, UZeroCopyRxLease,
-    UZeroCopyTransport, UZeroCopyTransportExt, UZeroCopyTransportImpl, UZeroCopyUninitTransport,
-    UZeroCopyUninitTransportExt, UZeroCopyUninitTransportImpl, ValidatedTxLoanSpec,
+    UZeroCopyTransport, UZeroCopyTransportExt, UZeroCopyTransportImpl,
+    UZeroCopyUninitTransportImpl, ValidatedTxLoanSpec,
 };
+#[cfg(feature = "zero-copy-uninit")]
+pub use zero_copy::{UZeroCopyUninitTransport, UZeroCopyUninitTransportExt};
 
 mod uattributes;
 pub use uattributes::{
@@ -282,20 +327,43 @@ pub use wire_transport::{
 #[cfg(feature = "selected-wire-user-api")]
 pub use wire_transport::{UHasWire, USelectedWireZeroCopyTransport, UWireRx};
 
+/// # Selected-wire as a USER
+///
+/// Sending typed payloads over a configured wire without implementing
+/// anything: wrap any zero-copy core with the wire adapters here; encoding
+/// identity and envelopes are handled for you. Wire choice is per-link
+/// configuration — see `req~selected-wire-configuration~1`.
 #[cfg(feature = "selected-wire-user-api")]
 pub mod selected_wire_user_api {
-    //! Selected-wire construction and route-use surface for users of a chosen wire profile.
     pub use crate::{
         ProtobufWire, ProtobufWireTransport, StableContainerWireFormat,
         StableContainerWireTransport, UHasWire, UNativePrefixWireTransport, UProtocolNativeWire,
         USelectedWireZeroCopyTransport, UWireRx, UWithNativePrefixWire, WireCompatibility,
         WireIdentity, WireIdentityRef,
     };
+    #[cfg(feature = "zero-copy-uninit")]
+    pub use crate::{UZeroCopyUninitTransport, UZeroCopyUninitTransportExt};
 }
 
+/// # Start here: implementing a TRANSPORT
+///
+/// Implement the smallest contract that fits your technology; the generic
+/// layers above give you every wire format and family behavior:
+///
+/// ```text
+/// classic only:        impl UTransport             (up-l1/README.adoc)
+/// owned frames:        impl UOwnedTransportImpl    (validation handled above you)
+/// zero-copy:           impl UZeroCopyTransportImpl (loans + leases)
+/// zero-copy + uninit:  add the uninit core methods; the safe witness
+///                      machinery above you does the rest
+/// ```
+///
+/// Your core's obligations are `req~transport-core-*` in
+/// `up-spec/up-l1/transport_families.adoc`: move bytes; never interpret,
+/// relabel, or re-encode. Test against `InMemoryZeroCopyTransport`
+/// (`test-util`) — the executable specification.
 #[cfg(feature = "transport-implementer-api")]
 pub mod transport_implementer_api {
-    //! Physical transport-core implementation surface.
     #[cfg(feature = "owned-frame-transport")]
     pub use crate::{
         EncodedOwnedFrame, PreparedOwnedFrame, UEncodedOwnedListener, UOwnedTransportCore,
@@ -306,16 +374,8 @@ pub mod transport_implementer_api {
     };
 }
 
-#[cfg(any(feature = "test-util", feature = "payload-contract-fixtures"))]
-pub mod test_support {
-    //! Test, fake, proof, and fixture support. These are not production transport evidence.
-    #[cfg(feature = "payload-contract-fixtures")]
-    pub use crate::bench_fixtures;
-    #[cfg(feature = "test-util")]
-    pub use crate::utransport::MockLocalUriProvider;
-    #[cfg(feature = "test-util")]
-    pub use crate::{InMemoryZeroCopyTransport, MockTransport, MockUListener};
-}
+#[cfg(any(test, feature = "test-util", feature = "payload-contract-fixtures"))]
+pub mod test_support;
 
 mod uuid;
 pub use uuid::UUID;

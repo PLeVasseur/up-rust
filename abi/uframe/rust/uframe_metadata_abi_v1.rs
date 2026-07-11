@@ -10,10 +10,10 @@
 //! IMPORTANT — this is a *profile*, not the canonical model. The canonical
 //! semantic model is `up_rust::UFrameMetadata`; the canonical byte
 //! serialization is the variable-length metadata field block (see
-//! WIRE-FORMAT.md and `up_rust::frame_codec`); this fixed struct exists for
+//! WIRE-FORMAT.md and `up_rust::frame::codec`); this fixed struct exists for
 //! boundaries that explicitly opt into typed fixed-layout metadata interop.
 //! The `up-rust` crate ships this same layout with fallible conversions as
-//! `up_rust::frame_abi::UFrameMetadataAbiV1`.
+//! `up_rust::frame::abi::UFrameMetadataAbiV1`.
 //!
 //! Layout rules: `#[repr(C)]`, self-contained (no pointers, heap, or
 //! `Drop`), fixed-width integers and byte arrays only, explicit padding

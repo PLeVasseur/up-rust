@@ -1,6 +1,6 @@
-use std::{mem::MaybeUninit, ptr::NonNull};
+use std::mem::MaybeUninit;
 
-use up_rust::LoanedUninitPayload;
+use up_rust::payload::loan::LoanedUninitPayload;
 
 #[repr(C)]
 struct ManualPayload {
@@ -9,8 +9,7 @@ struct ManualPayload {
 
 fn main() {
     let mut storage = MaybeUninit::<ManualPayload>::uninit();
-    let ptr = NonNull::from(&mut storage);
-    let mut slot = unsafe { LoanedUninitPayload::new_unchecked(ptr) };
+    let mut slot = LoanedUninitPayload::new(&mut storage);
 
     let _raw = unsafe { slot.as_mut_ptr() };
 }

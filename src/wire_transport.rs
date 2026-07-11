@@ -42,17 +42,17 @@ use async_trait::async_trait;
 use bytes::Bytes;
 use tracing::warn;
 
-use crate::payload::BorrowPayload;
+use crate::payload::{codec::ReadDecodePayload, loan::BorrowPayload, UWireError};
 use crate::wire::NativePrefixFrameMetadataCodec;
 #[cfg(feature = "selected-wire-protobuf-metadata")]
 use crate::wire::NativePrefixProtobufMetadataCodec;
 use crate::wire::{ProtobufWire, StableContainerWireFormat};
 use crate::wire::{UWire, UWireMetadataCodecFor, UWirePayload};
 use crate::{
-    validate_frame_view_for_transport, LoanedPayload, PayloadAlignment, ReadDecodePayload, UCode,
-    UFrameMetadata, UFrameView, ULoanedContiguousZeroCopyRxFrame, UStatus, UTxBuffer, UTxLoanSpec,
-    UUninitTxBuffer, UUri, UWireError, UZeroCopyListener, UZeroCopyRxLease, UZeroCopyTransport,
-    UZeroCopyTransportImpl, UZeroCopyUninitTransportImpl, ValidatedTxLoanSpec,
+    validate_frame_view_for_transport, LoanedPayload, PayloadAlignment, UCode, UFrameMetadata,
+    UFrameView, ULoanedContiguousZeroCopyRxFrame, UStatus, UTxBuffer, UTxLoanSpec, UUninitTxBuffer,
+    UUri, UZeroCopyListener, UZeroCopyRxLease, UZeroCopyTransport, UZeroCopyTransportImpl,
+    UZeroCopyUninitTransportImpl, ValidatedTxLoanSpec,
 };
 #[cfg(feature = "owned-frame-transport")]
 use crate::{UOwnedFrame, UOwnedListener, UOwnedTransportImpl, ValidatedOwnedFrame};
@@ -495,7 +495,7 @@ where
         W: UWirePayload<T>,
         <W as UWirePayload<T>>::Codec: ReadDecodePayload<T>,
     {
-        <<W as UWirePayload<T>>::Codec as crate::PayloadCodec>::verify_encoding(
+        <<W as UWirePayload<T>>::Codec as crate::payload::codec::PayloadCodec>::verify_encoding(
             self.metadata.payload_encoding(),
         )?;
         if !self.has_payload() {
@@ -1310,23 +1310,12 @@ mod tests {
 
     use super::*;
     use crate::{
-        ByteBackedStablePayload, EncodePayload, PayloadEncoding, PayloadLoanProvenance,
-        ProtobufPayload, ProtobufWire, StableContainerPayload, StableContainerWireFormat,
-        StablePayload, UMessageBuilder, UProtocolNativeWire, UTxPayloadSpec, UVecRxLease,
-        UVecTxBuffer, UVecUninitTxBuffer, UWireMetadataCodec, UZeroCopyTransportExt,
+        test_support::StableTestBytes as WireStableBytes, EncodePayload, PayloadEncoding,
+        PayloadLoanProvenance, ProtobufPayload, ProtobufWire, StableContainerPayload,
+        StableContainerWireFormat, StablePayload, UMessageBuilder, UProtocolNativeWire,
+        UTxPayloadSpec, UVecRxLease, UVecTxBuffer, UVecUninitTxBuffer, UWireMetadataCodec,
+        UZeroCopyTransportExt,
     };
-
-    #[repr(C)]
-    #[derive(Clone, Copy, Debug, Default, Eq, PartialEq)]
-    struct WireStableBytes {
-        bytes: [u8; 4],
-    }
-
-    unsafe impl StablePayload for WireStableBytes {
-        const TYPE_NAME: &'static str = "uprotocol.test.WireStableBytes";
-    }
-
-    unsafe impl ByteBackedStablePayload for WireStableBytes {}
 
     #[derive(Clone)]
     struct RawRx {
@@ -1539,18 +1528,6 @@ mod tests {
         .expect("metadata")
     }
 
-    fn stable_bytes(value: &WireStableBytes) -> Vec<u8> {
-        // SAFETY: `WireStableBytes` is `repr(C)` over `[u8; 4]`, has no padding
-        // or drop glue, and every byte pattern is valid for the test type.
-        unsafe {
-            std::slice::from_raw_parts(
-                std::ptr::from_ref(value).cast::<u8>(),
-                std::mem::size_of::<WireStableBytes>(),
-            )
-            .to_vec()
-        }
-    }
-
     fn raw_frame_for_topic(resource_id: u16, payload: &[u8]) -> RawRx {
         let metadata = metadata_with_topic_and_payload_encoding(resource_id, PayloadEncoding::RAW);
         RawRx {
@@ -1631,7 +1608,7 @@ mod tests {
         let encoded_metadata = encode_metadata::<UProtocolNativeWire>(&metadata);
         let raw = RawRx {
             encoded_metadata,
-            payload: stable_bytes(&value),
+            payload: value.bytes.to_vec(),
         };
 
         let rx = UWireRx::<RawRx, UProtocolNativeWire, NativePrefixFrameMetadataCodec>::try_from_encoded(
@@ -1705,8 +1682,9 @@ mod tests {
         assert!(transport.core().received.lock().unwrap().is_empty());
         let filters = transport.core().receive_filters.lock().unwrap();
         assert_eq!(filters.len(), 2);
-        assert_eq!(filters[0].0, source_filter);
-        assert_eq!(filters[0].1, None);
+        let filter = filters.first().expect("first receive filter");
+        assert_eq!(filter.0, source_filter);
+        assert_eq!(filter.1, None);
     }
 
     #[tokio::test]
@@ -1744,8 +1722,9 @@ mod tests {
         assert!(transport.core().received.lock().unwrap().is_empty());
         let filters = transport.core().receive_filters.lock().unwrap();
         assert_eq!(filters.len(), 2);
-        assert_eq!(filters[0].0, source_filter);
-        assert_eq!(filters[0].1, None);
+        let filter = filters.first().expect("first receive filter");
+        assert_eq!(filter.0, source_filter);
+        assert_eq!(filter.1, None);
     }
 
     #[tokio::test]
@@ -1766,8 +1745,9 @@ mod tests {
         assert_eq!(frame.try_contiguous_payload(), Some(&b"keep"[..]));
         let filters = transport.core().receive_filters.lock().unwrap();
         assert_eq!(filters.len(), 1);
-        assert_eq!(filters[0].0, selected_wire_core_source_filter());
-        assert_eq!(filters[0].1, None);
+        let filter = filters.first().expect("one receive filter");
+        assert_eq!(filter.0, selected_wire_core_source_filter());
+        assert_eq!(filter.1, None);
     }
 
     #[cfg(feature = "owned-frame-transport")]
@@ -1789,8 +1769,9 @@ mod tests {
         assert_eq!(frame.payload_bytes(), b"owned");
         let filters = transport.core().receive_filters.lock().unwrap();
         assert_eq!(filters.len(), 1);
-        assert_eq!(filters[0].0, source_filter);
-        assert_eq!(filters[0].1, None);
+        let filter = filters.first().expect("one receive filter");
+        assert_eq!(filter.0, source_filter);
+        assert_eq!(filter.1, None);
     }
 
     #[cfg(feature = "owned-frame-transport")]
@@ -1812,8 +1793,9 @@ mod tests {
         assert_eq!(frame.payload_bytes(), b"owned");
         let filters = transport.core().receive_filters.lock().unwrap();
         assert_eq!(filters.len(), 1);
-        assert_eq!(filters[0].0, selected_wire_core_source_filter());
-        assert_eq!(filters[0].1, None);
+        let filter = filters.first().expect("one receive filter");
+        assert_eq!(filter.0, selected_wire_core_source_filter());
+        assert_eq!(filter.1, None);
     }
 
     #[test]
@@ -1850,7 +1832,8 @@ mod tests {
 
         let frames = listener.frames.lock().unwrap();
         assert_eq!(frames.len(), 1);
-        assert_eq!(frames[0].try_contiguous_payload(), Some(&b"keep"[..]));
+        let frame = frames.first().expect("one received frame");
+        assert_eq!(frame.try_contiguous_payload(), Some(&b"keep"[..]));
     }
 
     #[test]

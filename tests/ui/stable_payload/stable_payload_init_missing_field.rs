@@ -6,7 +6,7 @@
 
 use std::mem::{self, MaybeUninit};
 
-use up_rust::StablePayloadInit;
+use up_rust::{InitializedStablePayload, StablePayloadInit};
 
 #[repr(C)]
 #[derive(up_rust::StablePayload, up_rust::StablePayloadInit)]
@@ -28,5 +28,5 @@ fn uninit_bytes<T>(storage: &mut MaybeUninit<T>) -> &mut [MaybeUninit<u8>] {
 fn main() {
     let mut storage = MaybeUninit::<InitMissingField>::uninit();
     let init = InitMissingField::init_from_uninit_bytes(uninit_bytes(&mut storage)).unwrap();
-    let _ = init.tag(1).finish().unwrap();
+    let _: InitializedStablePayload<'_, InitMissingField> = init.tag(1);
 }

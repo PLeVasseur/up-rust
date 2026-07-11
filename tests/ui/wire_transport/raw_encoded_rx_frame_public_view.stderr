@@ -21,7 +21,7 @@ help: the following other types implement trait `UFrameView`
    | |     C: UWireMetadataCodecFor<W>,
    | |________________________________^ `UWireRx<Rx, W, C>`
    |
-  ::: src/zero_copy.rs
+  ::: src/zero_copy/tests.rs
    |
    |   impl UFrameView for UVecRxLease {
    |   ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ `UVecRxLease`
@@ -54,7 +54,7 @@ help: the following other types implement trait `UZeroCopyRxLease`
    | |     C: UWireMetadataCodecFor<W>,
    | |________________________________^ `UWireRx<Rx, W, C>`
    |
-  ::: src/zero_copy.rs
+  ::: src/zero_copy/tests.rs
    |
    |   impl UZeroCopyRxLease for UVecRxLease {}
    |   ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ `UVecRxLease`

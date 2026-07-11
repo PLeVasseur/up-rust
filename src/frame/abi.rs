@@ -51,7 +51,7 @@ use crate::{FrameMessageKind, FramePriority, PayloadEncoding, UCode, UFrameMetad
 
 // Reuse the canonical presence-bit vocabulary of the field block so the two
 // representations stay aligned.
-pub use crate::frame_codec::{
+pub use crate::frame::codec::{
     FIELD_COMM_STATUS, FIELD_MASK_V1, FIELD_PAYLOAD_ENCODING, FIELD_PERMISSION_LEVEL, FIELD_REQID,
     FIELD_SINK, FIELD_TOKEN, FIELD_TRACEPARENT, FIELD_TTL,
 };
@@ -333,7 +333,10 @@ fn fill_str(
     if bytes.len() > target_len_max {
         return Err(UFrameAbiError::CapacityExceeded { field });
     }
-    target[..bytes.len()].copy_from_slice(bytes);
+    let target = target
+        .get_mut(..bytes.len())
+        .ok_or(UFrameAbiError::CapacityExceeded { field })?;
+    target.copy_from_slice(bytes);
     Ok(bytes.len())
 }
 
@@ -348,7 +351,13 @@ fn read_str<'a>(
             "`{field}` length {len} exceeds capacity {capacity}"
         )));
     }
-    core::str::from_utf8(&bytes[..len])
+    let bytes = bytes.get(..len).ok_or_else(|| {
+        UFrameAbiError::InvalidProfile(format!(
+            "`{field}` length {len} exceeds available bytes {}",
+            bytes.len()
+        ))
+    })?;
+    core::str::from_utf8(bytes)
         .map_err(|error| UFrameAbiError::InvalidProfile(format!("`{field}` is not UTF-8: {error}")))
 }
 
@@ -414,12 +423,14 @@ impl UFrameMetadataAbiV1 {
             }
         }
 
-        let mut abi = Self::default();
-        abi.kind = metadata.kind().wire_code();
-        abi.priority = metadata.priority().map_or(0, FramePriority::wire_code);
         let (msb, lsb) = metadata.id().as_u64_pair();
-        abi.id = UUuidAbi { msb, lsb };
-        abi.source = uuri_to_abi(metadata.source(), "source.authority_name")?;
+        let mut abi = Self {
+            kind: metadata.kind().wire_code(),
+            priority: metadata.priority().map_or(0, FramePriority::wire_code),
+            id: UUuidAbi { msb, lsb },
+            source: uuri_to_abi(metadata.source(), "source.authority_name")?,
+            ..Self::default()
+        };
 
         if let Some(sink) = metadata.sink() {
             abi.sink = uuri_to_abi(sink, "sink.authority_name")?;

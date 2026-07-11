@@ -5,7 +5,7 @@ error[E0277]: the trait bound `ProtobufPayload: LoanPayload<protobuf::well_known
    |                        ^^^^^^^^^^^^ the trait `LoanPayload<protobuf::well_known_types::wrappers::StringValue>` is not implemented for `ProtobufPayload`
    |
 help: the trait `LoanPayload<T>` is implemented for `StableContainerPayload<T>`
-  --> src/payload.rs
+  --> src/payload/stable.rs
    |
    | / unsafe impl<T> LoanPayload<T> for StableContainerPayload<T>
    | | where

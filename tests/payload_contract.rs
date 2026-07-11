@@ -163,42 +163,42 @@ async fn send_case(
         PayloadContractCaseKind::CanClassicMax => transport
             .send_uninit_stable_payload_as::<CanClassicFrameV1>(
                 metadata(0x9000 + case.case_id() as u16),
-                |init| fixtures::init_can_classic_max(init, sequence),
+                |context| fixtures::init_can_classic_max(context.into_init(), sequence),
             )
             .await
             .expect("send CAN Classic"),
         PayloadContractCaseKind::CanFdMax => transport
             .send_uninit_stable_payload_as::<CanFdFrameV1>(
                 metadata(0x9000 + case.case_id() as u16),
-                |init| fixtures::init_can_fd_max(init, sequence),
+                |context| fixtures::init_can_fd_max(context.into_init(), sequence),
             )
             .await
             .expect("send CAN FD"),
         PayloadContractCaseKind::SomeIpSingleMtu => transport
             .send_uninit_stable_payload_as::<SomeIpSignalBatchMtuV1>(
                 metadata(0x9000 + case.case_id() as u16),
-                |init| fixtures::init_someip_single_mtu(init, sequence),
+                |context| fixtures::init_someip_single_mtu(context.into_init(), sequence),
             )
             .await
             .expect("send SOME/IP"),
         PayloadContractCaseKind::Streamer4k => transport
             .send_uninit_stable_payload_as::<StreamChunk4kV1>(
                 metadata(0x9000 + case.case_id() as u16),
-                |init| fixtures::init_streamer_4k(init, sequence),
+                |context| fixtures::init_streamer_4k(context.into_init(), sequence),
             )
             .await
             .expect("send stream 4K"),
         PayloadContractCaseKind::RadarArs548DetectionList => transport
             .send_uninit_stable_payload_as::<RadarDetectionListArs548V1>(
                 metadata(0x9000 + case.case_id() as u16),
-                |init| fixtures::init_radar_ars548_detection_list(init, sequence),
+                |context| fixtures::init_radar_ars548_detection_list(context.into_init(), sequence),
             )
             .await
             .expect("send radar"),
         PayloadContractCaseKind::Streamer64k => transport
             .send_uninit_stable_payload_as::<StreamChunk64kV1>(
                 metadata(0x9000 + case.case_id() as u16),
-                |init| fixtures::init_streamer_64k(init, sequence),
+                |context| fixtures::init_streamer_64k(context.into_init(), sequence),
             )
             .await
             .expect("send stream 64K"),
@@ -206,7 +206,9 @@ async fn send_case(
         PayloadContractCaseKind::LidarHesaiAt128PointCloud => transport
             .send_uninit_stable_payload_as::<LidarPointCloudHesaiAt128V1>(
                 metadata(0x9000 + case.case_id() as u16),
-                |init| fixtures::init_lidar_hesai_at128_point_cloud(init, sequence),
+                |context| {
+                    fixtures::init_lidar_hesai_at128_point_cloud(context.into_init(), sequence)
+                },
             )
             .await
             .expect("send LiDAR"),
@@ -214,7 +216,7 @@ async fn send_case(
         PayloadContractCaseKind::Camera8mpBayerRggb12p => transport
             .send_uninit_stable_payload_as::<CameraBayerRggb12pFrame8mpV1>(
                 metadata(0x9000 + case.case_id() as u16),
-                |init| fixtures::init_camera_8mp_bayer_rggb12p(init, sequence),
+                |context| fixtures::init_camera_8mp_bayer_rggb12p(context.into_init(), sequence),
             )
             .await
             .expect("send camera"),

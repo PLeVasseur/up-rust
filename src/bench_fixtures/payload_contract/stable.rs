@@ -7,7 +7,7 @@
 // These benchmark fixtures are intentionally large fixed-layout stable payloads.
 #![allow(clippy::type_complexity)]
 
-use crate::payload::StablePayloadInit;
+use crate::payload::stable::StablePayloadInit;
 
 pub const PAYLOAD_CONTRACT_FIXTURE_VERSION: u32 = 1;
 

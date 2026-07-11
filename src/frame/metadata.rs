@@ -32,7 +32,7 @@
 //! [`PayloadEncoding`] that has no legacy `UPayloadFormat` equivalent).
 //!
 //! Fixed-layout representations of this metadata (for C/C++ shared-memory
-//! interop) are *derived profiles*, not this type: see the `frame_abi`
+//! interop) are *derived profiles*, not this type: see the `frame::abi`
 //! module. Byte serializations for transports are produced by selected-wire
 //! metadata codecs: see the `wire` module.
 
@@ -995,7 +995,7 @@ impl UFrameMetadata {
 }
 
 fn project_ttl_to_legacy_millis(ttl: Duration) -> Result<u32, UFrameMetadataError> {
-    if ttl.subsec_nanos() % 1_000_000 != 0 {
+    if !ttl.subsec_nanos().is_multiple_of(1_000_000) {
         return Err(UFrameMetadataError::FieldNotRepresentable {
             field: "ttl",
             reason: format!(

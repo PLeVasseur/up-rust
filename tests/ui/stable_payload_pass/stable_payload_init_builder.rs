@@ -54,7 +54,7 @@ fn main() -> Result<(), up_rust::UWireError> {
         .leaf_value(Leaf { x: 1, y: 2 })
         .bytes_fill_with(|index| index as u8)
         .words_from_slice(&[10, 11])?
-        .leaves(|index, leaf| leaf.x(index as u16).y(9).finish())?;
+        .leaves(|index, context| context.into_init().x(index as u16).y(9).finish())?;
     let _finished = init.finish()?;
     Ok(())
 }

@@ -9,7 +9,7 @@ metadata field block**.
 
 | path | what | verified with |
 |---|---|---|
-| `WIRE-FORMAT.md` | **Normative** byte contracts: metadata field block v1, `UPFE` whole-frame envelope, kind/priority/presence/encoding registries | round-trip unit tests in `up-rust` (`frame_codec`, `frame_wire`) |
+| `WIRE-FORMAT.md` | **Normative** byte contracts: metadata field block v1, `UPFE` whole-frame envelope, kind/priority/presence/encoding registries | round-trip unit tests in `up-rust` (`frame::codec`, `frame::envelope`) |
 | `rust/uframe_metadata_abi_v1.rs` | standalone `no_std` Rust reference definition of the fixed ABI profile | `rustc 1.89 --edition 2021 -D warnings` + `const` layout asserts |
 | `c/uframe_metadata_abi_v1.h` (+ `check_layout.c`) | C11 definition | `gcc -std=c11 -Wall -Wextra -Werror -pedantic` + `static_assert` |
 | `cpp/uframe_metadata_abi_v1.hpp` (+ `check_layout.cpp`) | C++17 definition | `g++ -std=c++17 -Wall -Wextra -Werror -pedantic` + `static_assert` |

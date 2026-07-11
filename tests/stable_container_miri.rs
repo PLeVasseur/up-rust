@@ -13,27 +13,12 @@
 
 use std::mem::{self, MaybeUninit};
 
+use up_rust::test_support::StableTestBytes as StableBytes;
 use up_rust::{
     LoanPayload, LoanUninitPayload, LoanedPayloadUninitMut, PayloadLoanProvenance,
     StableContainerPayload, StablePayloadInit, UFrameMetadata, ULoanedContiguousZeroCopyRxFrame,
     UMessageBuilder, UUri, UVecRxLease, UUID,
 };
-
-#[repr(C)]
-#[derive(
-    Clone,
-    Copy,
-    Debug,
-    Default,
-    Eq,
-    PartialEq,
-    up_rust::StablePayload,
-    up_rust::ByteBackedStablePayload,
-)]
-#[stable_payload(type_name = "example.miri.StableBytes")]
-struct StableBytes {
-    bytes: [u8; 4],
-}
 
 #[repr(C)]
 #[derive(
@@ -82,18 +67,6 @@ fn metadata<T: up_rust::StablePayload>() -> UFrameMetadata {
     .expect("stable metadata")
 }
 
-fn stable_bytes(value: &StableBytes) -> Vec<u8> {
-    // SAFETY: `StableBytes` is `repr(C)` over `[u8; 4]`, has alignment 1, and
-    // every byte pattern is valid for the test payload.
-    unsafe {
-        std::slice::from_raw_parts(
-            std::ptr::from_ref(value).cast::<u8>(),
-            std::mem::size_of::<StableBytes>(),
-        )
-        .to_vec()
-    }
-}
-
 fn uninit_bytes<T>(storage: &mut MaybeUninit<T>) -> &mut [MaybeUninit<u8>] {
     // SAFETY: The returned byte slice covers exactly the uninitialized storage
     // for `T` and inherits its alignment.
@@ -110,7 +83,7 @@ fn stable_payload_derive_loan_borrow_is_miri_friendly() {
     up_rust::assert_stable_payload_byte_backed_uninit::<StableBytes>();
 
     let value = StableBytes { bytes: *b"miri" };
-    let frame = UVecRxLease::new(metadata::<StableBytes>(), Some(stable_bytes(&value)))
+    let frame = UVecRxLease::new(metadata::<StableBytes>(), Some(value.bytes.to_vec()))
         .expect("loan-backed stable frame");
 
     let borrowed = frame
@@ -130,7 +103,7 @@ fn stable_payload_init_builder_initializes_fields_and_padding() -> Result<(), up
         .leaf_value(InitLeaf { x: 1, y: 2 })
         .bytes_from_array(b"miri")
         .words_from_slice(&[10, 11])?
-        .leaves(|index, leaf| leaf.x(index as u16).y(9).finish())?;
+        .leaves(|index, context| context.into_init().x(index as u16).y(9).finish())?;
     let _finished = init.finish()?;
 
     // SAFETY: `finish()` proves every semantic field and generated padding gap

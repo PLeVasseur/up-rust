@@ -29,9 +29,19 @@ use std::sync::Arc;
 
 use crate::{
     communication::{CallOptions, PubSubError},
-    LocalUriProvider, StableContainerPayload, StablePayloadInit, UFrameMetadata, UMessageBuilder,
-    UZeroCopyTransport, UZeroCopyTransportExt, UZeroCopyUninitTransport,
-    UZeroCopyUninitTransportExt,
+    payload::loan::LoanPayload,
+    LocalUriProvider, UFrameMetadata, UMessageBuilder, UZeroCopyTransport, UZeroCopyTransportExt,
+};
+#[cfg(feature = "zero-copy-uninit")]
+use crate::{
+    payload::{
+        stable::{
+            InitializedStablePayload, StableContainerPayload, StablePayloadInit,
+            StablePayloadInitContext,
+        },
+        UWireError,
+    },
+    UZeroCopyUninitTransport, UZeroCopyUninitTransportExt,
 };
 use crate::{wire::UWirePayload, wire_transport::UHasWire};
 
@@ -130,7 +140,7 @@ where
     ) -> Result<(), PubSubError>
     where
         T::Wire: UWirePayload<Payload>,
-        <T::Wire as UWirePayload<Payload>>::Codec: crate::LoanPayload<Payload> + Send + Sync,
+        <T::Wire as UWirePayload<Payload>>::Codec: LoanPayload<Payload> + Send + Sync,
     {
         let metadata = self.build_metadata(resource_id, call_options)?;
         self.transport
@@ -141,22 +151,23 @@ where
     }
 }
 
+#[cfg(feature = "zero-copy-uninit")]
 impl<T, P> Publisher<T, P>
 where
     T: UZeroCopyUninitTransport + UHasWire + ?Sized,
     P: LocalUriProvider + ?Sized,
 {
     /// Publishes a stable payload by initializing it directly in uninitialized transport storage.
+    ///
     pub async fn publish_uninit_stable<Payload>(
         &self,
         resource_id: u16,
         call_options: CallOptions,
         init: impl for<'payload> FnOnce(
-                <Payload as StablePayloadInit>::Init<'payload>,
-            ) -> Result<
-                crate::InitializedStablePayload<Payload>,
-                crate::UWireError,
-            > + Send,
+                StablePayloadInitContext<'payload, Payload>,
+            )
+                -> Result<InitializedStablePayload<'payload, Payload>, UWireError>
+            + Send,
     ) -> Result<(), PubSubError>
     where
         T::Wire: UWirePayload<Payload, Codec = StableContainerPayload<Payload>>,
@@ -177,8 +188,8 @@ mod tests {
 
     use super::*;
     use crate::{
-        payload::StablePayloadInitSlot, ByteBackedStablePayload, InMemoryZeroCopyTransport,
-        StableContainerWireFormat, StablePayload, StaticUriProvider, UCode, UFrameView,
+        test_support::StableTestBytes as StableBytes, InMemoryZeroCopyTransport,
+        StableContainerWireFormat, StaticUriProvider, UCode, UFrameView,
         ULoanedContiguousZeroCopyRxFrame, UStatus, UVecRxLease, UVecTxBuffer, UVecUninitTxBuffer,
         UZeroCopyTransportImpl, UZeroCopyUninitTransportImpl, ValidatedTxLoanSpec,
     };
@@ -235,64 +246,6 @@ mod tests {
         }
     }
 
-    #[repr(C)]
-    #[derive(Clone, Copy, Debug, Default, Eq, PartialEq)]
-    struct StableBytes {
-        bytes: [u8; 4],
-    }
-
-    unsafe impl StablePayload for StableBytes {
-        const TYPE_NAME: &'static str = "uprotocol.communication.zero_copy.StableBytes";
-    }
-
-    unsafe impl ByteBackedStablePayload for StableBytes {}
-
-    struct StableBytesInit<'a> {
-        slot: StablePayloadInitSlot<'a, StableBytes>,
-        written: bool,
-    }
-
-    impl StableBytesInit<'_> {
-        fn bytes_from_array(mut self, bytes: &[u8; 4]) -> Self {
-            // SAFETY: `StableBytes` is `repr(C)` over exactly one `[u8; 4]` field at offset zero.
-            unsafe { self.slot.write_bytes(0, bytes) };
-            self.written = true;
-            self
-        }
-
-        fn finish(self) -> Result<crate::InitializedStablePayload<StableBytes>, crate::UWireError> {
-            if !self.written {
-                return Err(crate::UWireError::invalid_payload(
-                    "StableBytes.bytes was not initialized",
-                ));
-            }
-            // SAFETY: the only field spans the full payload and has been written.
-            Ok(unsafe { self.slot.assume_init() })
-        }
-    }
-
-    unsafe impl StablePayloadInit for StableBytes {
-        type Init<'a> = StableBytesInit<'a>;
-
-        fn init_from_uninit_bytes<'a>(
-            payload: &'a mut [std::mem::MaybeUninit<u8>],
-        ) -> Result<Self::Init<'a>, crate::UWireError> {
-            Ok(StableBytesInit {
-                slot: StablePayloadInitSlot::from_uninit_bytes(payload)?,
-                written: false,
-            })
-        }
-
-        fn __init_from_slot<'a>(
-            slot: StablePayloadInitSlot<'a, Self>,
-        ) -> Result<Self::Init<'a>, crate::UWireError> {
-            Ok(StableBytesInit {
-                slot,
-                written: false,
-            })
-        }
-    }
-
     fn uri_provider() -> Arc<StaticUriProvider> {
         Arc::new(StaticUriProvider::new("", 0x0005, 0x02).expect("uri provider"))
     }
@@ -313,9 +266,10 @@ mod tests {
 
         let frames = transport.sent_frames();
         assert_eq!(frames.len(), 1);
-        assert_eq!(frames[0].payload_len(), std::mem::size_of::<StableBytes>());
+        let frame = frames.first().expect("one sent frame");
+        assert_eq!(frame.payload_len(), std::mem::size_of::<StableBytes>());
         assert_eq!(
-            frames[0].borrow_stable_payload::<StableBytes>().unwrap(),
+            frame.borrow_stable_payload::<StableBytes>().unwrap(),
             &StableBytes { bytes: *b"init" }
         );
     }
@@ -329,15 +283,16 @@ mod tests {
             .publish_uninit_stable::<StableBytes>(
                 0x9A00,
                 CallOptions::for_publish(None, None, None),
-                |init| init.bytes_from_array(b"zero").finish(),
+                |context| context.into_init().bytes_from_array(b"zero").finish(),
             )
             .await
             .expect("uninit stable publish succeeds");
 
         let frames = transport.sent_frames();
         assert_eq!(frames.len(), 1);
+        let frame = frames.first().expect("one sent frame");
         assert_eq!(
-            frames[0].borrow_stable_payload::<StableBytes>().unwrap(),
+            frame.borrow_stable_payload::<StableBytes>().unwrap(),
             &StableBytes { bytes: *b"zero" }
         );
     }

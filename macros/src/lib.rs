@@ -56,7 +56,7 @@ fn expand_stable_payload(input: DeriveInput) -> syn::Result<proc_macro2::TokenSt
         // - Field checks recursively require every field to satisfy up-rust's
         //   stable payload field proof.
         // - The user-provided `type_name` is the stable identity for this type.
-        unsafe impl ::up_rust::payload::StablePayload for #name {
+        unsafe impl ::up_rust::payload::stable::StablePayload for #name {
             const TYPE_NAME: &'static str = #type_name;
 
             fn __stable_payload_field_check(&self) {
@@ -66,7 +66,7 @@ fn expand_stable_payload(input: DeriveInput) -> syn::Result<proc_macro2::TokenSt
 
         // SAFETY: The generated `StablePayload` impl above establishes the field
         // proof required when this type is nested in another stable payload.
-        unsafe impl ::up_rust::payload::StablePayloadField for #name {}
+        unsafe impl ::up_rust::payload::stable::StablePayloadField for #name {}
     })
 }
 
@@ -96,7 +96,7 @@ fn expand_byte_backed_stable_payload(input: DeriveInput) -> syn::Result<proc_mac
         //   there is no implicit inter-field or trailing padding.
         // - Every field is recursively byte-backed and `Self` does not need drop
         //   glue, so safe construction initializes every transported byte.
-        unsafe impl ::up_rust::payload::ByteBackedStablePayload for #name {}
+        unsafe impl ::up_rust::payload::stable::ByteBackedStablePayload for #name {}
     })
 }
 
@@ -141,6 +141,7 @@ fn expand_stable_payload_init(input: DeriveInput) -> syn::Result<proc_macro2::To
 
         #[allow(private_bounds, private_interfaces)]
         impl #constructor_impl_generics #constructor_ty {
+            #[inline(always)]
             fn __up_rust_from_slot(
                 __up_rust_slot: ::up_rust::__derive_support::StablePayloadInitSlot<'__up_rust_payload, #name>,
             ) -> Self {
@@ -160,16 +161,10 @@ fn expand_stable_payload_init(input: DeriveInput) -> syn::Result<proc_macro2::To
         // - The generated `finish()` is implemented only for the all-set
         //   typestate, so successful completion proves the transported byte range
         //   contains one initialized `Self`.
-        unsafe impl ::up_rust::payload::StablePayloadInit for #name {
+        unsafe impl ::up_rust::payload::stable::StablePayloadInit for #name {
             type Init<'__up_rust_payload> = #initial_ty;
 
-            fn init_from_uninit_bytes<'__up_rust_payload>(
-                __up_rust_payload: &'__up_rust_payload mut [::core::mem::MaybeUninit<u8>],
-            ) -> Result<Self::Init<'__up_rust_payload>, ::up_rust::payload::UWireError> {
-                let __up_rust_slot = ::up_rust::__derive_support::StablePayloadInitSlot::<Self>::from_uninit_bytes(__up_rust_payload)?;
-                <Self as ::up_rust::payload::StablePayloadInit>::__init_from_slot(__up_rust_slot)
-            }
-
+            #[inline(always)]
             fn __init_from_slot<'__up_rust_payload>(
                 mut __up_rust_slot: ::up_rust::__derive_support::StablePayloadInitSlot<'__up_rust_payload, Self>,
             ) -> Result<Self::Init<'__up_rust_payload>, ::up_rust::payload::UWireError> {
@@ -180,16 +175,17 @@ fn expand_stable_payload_init(input: DeriveInput) -> syn::Result<proc_macro2::To
 
         #[allow(private_bounds, private_interfaces)]
         impl<'__up_rust_payload> #finish_ty {
+            #[inline(always)]
             pub fn finish(
                 self,
             ) -> Result<
-                ::up_rust::payload::InitializedStablePayload<#name>,
+                ::up_rust::payload::stable::InitializedStablePayload<'__up_rust_payload, #name>,
                 ::up_rust::payload::UWireError,
             > {
                 // SAFETY: This impl exists only for the all-set typestate. The
                 // generated constructor initialized padding gaps, and each setter
                 // transitions exactly one field from unset to set after writing it.
-                let __up_rust_initialized = unsafe { self.__up_rust_slot.assume_init() };
+                let __up_rust_initialized = self.__up_rust_slot.assume_init();
                 Ok(__up_rust_initialized)
             }
         }
@@ -333,12 +329,10 @@ fn padding_step_for_field(
         if __up_rust_padding_cursor < __up_rust_field_offset {
             // SAFETY: The generated offset calculation names only the implicit
             // padding gap before this field.
-            unsafe {
-                __up_rust_slot.write_padding(
+                            __up_rust_slot.write_padding(
                     __up_rust_padding_cursor,
                     __up_rust_field_offset - __up_rust_padding_cursor,
                 );
-            }
         }
         __up_rust_padding_cursor = __up_rust_field_offset + ::core::mem::size_of::<#ty>();
         let _ = ::core::mem::size_of::<#name>();
@@ -357,12 +351,10 @@ fn padding_init_tokens(
         if __up_rust_padding_cursor < __up_rust_payload_size {
             // SAFETY: The generated cursor has advanced past every semantic
             // field; the remaining range is trailing padding.
-            unsafe {
-                __up_rust_slot.write_padding(
+                            __up_rust_slot.write_padding(
                     __up_rust_padding_cursor,
                     __up_rust_payload_size - __up_rust_padding_cursor,
                 );
-            }
         }
     }
 }
@@ -472,11 +464,10 @@ fn generate_init_field_methods(
 
     let methods = match &field.kind {
         InitFieldKind::Scalar => quote_spanned! {method.span()=>
+            #[inline(always)]
             pub fn #method(self, value: #ty) -> #next_ty {
                 let mut __up_rust_slot = self.__up_rust_slot;
-                // SAFETY: The derive computed `offset` for this field and this
-                // setter exists only while the field is unset.
-                unsafe { __up_rust_slot.write_field::<#ty>(#offset, value); }
+                __up_rust_slot.write_field::<#ty>(#offset, value);
                 #init_ident::__up_rust_from_slot(__up_rust_slot)
             }
         },
@@ -545,47 +536,42 @@ fn nested_field_methods(
     let value_method = helper_ident(method, "value", field);
     let value_method_tokens = value_method.map(|value_method| {
         quote_spanned! {value_method.span()=>
+            #[inline(always)]
             pub fn #value_method<__UpRustValue>(self, value: __UpRustValue) -> #next_ty
             where
-                __UpRustValue: ::up_rust::payload::StablePayloadInitCompleteValue<#ty>,
+                __UpRustValue: ::up_rust::payload::stable::StablePayloadInitCompleteValue<#ty>,
             {
                 let mut __up_rust_slot = self.__up_rust_slot;
-                // SAFETY: The byte-backed bound proves moving the complete value
-                // cannot expose uninitialized padding, and this setter exists
-                // only while the field is unset.
-                unsafe {
-                    __up_rust_slot.write_field::<#ty>(
-                        #offset,
-                        ::up_rust::payload::StablePayloadInitCompleteValue::into_complete_value(value),
-                    );
-                }
+                __up_rust_slot.write_field::<#ty>(
+                    #offset,
+                    ::up_rust::payload::stable::StablePayloadInitCompleteValue::into_complete_value(value),
+                );
                 #init_ident::__up_rust_from_slot(__up_rust_slot)
             }
         }
     });
 
     quote_spanned! {method.span()=>
+        #[inline(always)]
         pub fn #method(
             self,
-            init: impl FnOnce(
-                <#ty as ::up_rust::payload::StablePayloadInit>::Init<'__up_rust_payload>,
+            init: impl for<'__up_rust_slot> FnOnce(
+                ::up_rust::payload::stable::StablePayloadInitContext<'__up_rust_slot, #ty>,
             ) -> Result<
-                ::up_rust::payload::InitializedStablePayload<#ty>,
+                ::up_rust::payload::stable::InitializedStablePayload<'__up_rust_slot, #ty>,
                 ::up_rust::payload::UWireError,
             >,
         ) -> Result<#next_ty, ::up_rust::payload::UWireError>
         where
-            #ty: ::up_rust::payload::StablePayloadInit,
+            #ty: ::up_rust::payload::stable::StablePayloadInit,
         {
             let mut __up_rust_slot = self.__up_rust_slot;
-            // SAFETY: The derive computed `offset` for this nested field and this
-            // setter exists only while the field is unset.
-            let __up_rust_nested_slot = unsafe { __up_rust_slot.field_slot::<#ty>(#offset) };
-            let __up_rust_nested_init =
-                <#ty as ::up_rust::payload::StablePayloadInit>::__init_from_slot(
+            let __up_rust_nested_slot = __up_rust_slot.field_slot::<#ty>(#offset);
+            let __up_rust_context =
+                <#ty as ::up_rust::payload::stable::StablePayloadInit>::__init_context_from_slot(
                     __up_rust_nested_slot,
                 )?;
-            let _initialized = init(__up_rust_nested_init)?;
+            let _ = init(__up_rust_context)?;
             Ok(#init_ident::__up_rust_from_slot(__up_rust_slot))
         }
 
@@ -633,17 +619,17 @@ fn u8_array_methods(
     let fill_with = helper_ident(method, "fill_with", field);
     let from_array_tokens = from_array.map(|ident| {
         quote_spanned! {ident.span()=>
+            #[inline(always)]
             pub fn #ident(self, value: &[u8; #len]) -> #next_ty {
                 let mut __up_rust_slot = self.__up_rust_slot;
-                // SAFETY: The derive computed `offset` for this byte array field and
-                // this setter exists only while the field is unset.
-                unsafe { __up_rust_slot.write_bytes(#offset, &value[..]); }
+                __up_rust_slot.write_bytes(#offset, value);
                 #init_ident::__up_rust_from_slot(__up_rust_slot)
             }
         }
     });
     let from_slice_tokens = from_slice.map(|ident| {
         quote_spanned! {ident.span()=>
+            #[inline(always)]
             pub fn #ident(self, value: &[u8]) -> Result<#next_ty, ::up_rust::payload::UWireError> {
                 let __up_rust_expected = #len;
                 if value.len() != __up_rust_expected {
@@ -653,42 +639,37 @@ fn u8_array_methods(
                     ));
                 }
                 let mut __up_rust_slot = self.__up_rust_slot;
-                // SAFETY: The exact length check above covers the whole byte array
-                // field, and this setter exists only while the field is unset.
-                unsafe { __up_rust_slot.write_bytes(#offset, value); }
+                __up_rust_slot.write_bytes(#offset, value);
                 Ok(#init_ident::__up_rust_from_slot(__up_rust_slot))
             }
         }
     });
     let fill_tokens = fill.map(|ident| {
         quote_spanned! {ident.span()=>
+            #[inline(always)]
             pub fn #ident(self, value: u8) -> #next_ty {
                 let mut __up_rust_slot = self.__up_rust_slot;
-                // SAFETY: The derive computed the exact byte array length and offset,
-                // and this setter exists only while the field is unset.
-                unsafe { __up_rust_slot.fill_bytes(#offset, #len, value); }
+                __up_rust_slot.fill_bytes(#offset, #len, value);
                 #init_ident::__up_rust_from_slot(__up_rust_slot)
             }
         }
     });
     let fill_with_tokens = fill_with.map(|ident| {
         quote_spanned! {ident.span()=>
+            #[inline(always)]
             pub fn #ident(self, value: impl FnMut(usize) -> u8) -> #next_ty {
                 let mut __up_rust_slot = self.__up_rust_slot;
-                // SAFETY: The derive computed the exact byte array length and offset,
-                // and this setter exists only while the field is unset.
-                unsafe { __up_rust_slot.fill_bytes_with(#offset, #len, value); }
+                __up_rust_slot.fill_bytes_with(#offset, #len, value);
                 #init_ident::__up_rust_from_slot(__up_rust_slot)
             }
         }
     });
 
     quote_spanned! {method.span()=>
+        #[inline(always)]
         pub fn #method(self, value: #ty) -> #next_ty {
             let mut __up_rust_slot = self.__up_rust_slot;
-            // SAFETY: The derive computed `offset` for this array field and this
-            // setter exists only while the field is unset.
-            unsafe { __up_rust_slot.write_field::<#ty>(#offset, value); }
+            __up_rust_slot.write_field::<#ty>(#offset, value);
             #init_ident::__up_rust_from_slot(__up_rust_slot)
         }
 
@@ -712,57 +693,53 @@ fn typed_array_methods(
     let from_array = helper_ident(method, "from_array", field);
     let from_slice = helper_ident(method, "from_slice", field);
     let fill = helper_ident(method, "fill", field);
-    let from_array_tokens = from_array.map(|ident| quote_spanned! {ident.span()=>
-        pub fn #ident(self, value: &[#elem; #len]) -> #next_ty
-        where
-            #elem: Copy,
-        {
-            let mut __up_rust_slot = self.__up_rust_slot;
-            // SAFETY: The array reference length is statically `len`, and this
-            // setter exists only while the field is unset.
-            unsafe {
+    let from_array_tokens = from_array.map(|ident| {
+        quote_spanned! {ident.span()=>
+            #[inline(always)]
+            pub fn #ident(self, value: &[#elem; #len]) -> #next_ty
+            where
+                #elem: Copy,
+            {
+                let mut __up_rust_slot = self.__up_rust_slot;
                 __up_rust_slot
-                    .copy_array_from_slice::<#elem>(#offset, &value[..], #len)
+                    .copy_array_from_slice::<#elem>(#offset, value, #len)
                     .expect("array reference length matches generated stable payload field length");
+                #init_ident::__up_rust_from_slot(__up_rust_slot)
             }
-            #init_ident::__up_rust_from_slot(__up_rust_slot)
         }
     });
     let from_slice_tokens = from_slice.map(|ident| {
         quote_spanned! {ident.span()=>
+            #[inline(always)]
             pub fn #ident(self, value: &[#elem]) -> Result<#next_ty, ::up_rust::payload::UWireError>
             where
                 #elem: Copy,
             {
                 let mut __up_rust_slot = self.__up_rust_slot;
-                // SAFETY: The helper checks exact length before copying typed valid
-                // elements, and this setter exists only while the field is unset.
-                unsafe { __up_rust_slot.copy_array_from_slice::<#elem>(#offset, value, #len)?; }
+                __up_rust_slot.copy_array_from_slice::<#elem>(#offset, value, #len)?;
                 Ok(#init_ident::__up_rust_from_slot(__up_rust_slot))
             }
         }
     });
     let fill_tokens = fill.map(|ident| {
         quote_spanned! {ident.span()=>
+            #[inline(always)]
             pub fn #ident(self, value: #elem) -> #next_ty
             where
                 #elem: Copy,
             {
                 let mut __up_rust_slot = self.__up_rust_slot;
-                // SAFETY: The derive computed the exact array length and offset, and
-                // this setter exists only while the field is unset.
-                unsafe { __up_rust_slot.fill_array::<#elem>(#offset, #len, value); }
+                __up_rust_slot.fill_array::<#elem>(#offset, #len, value);
                 #init_ident::__up_rust_from_slot(__up_rust_slot)
             }
         }
     });
 
     quote_spanned! {method.span()=>
+        #[inline(always)]
         pub fn #method(self, value: #ty) -> #next_ty {
             let mut __up_rust_slot = self.__up_rust_slot;
-            // SAFETY: The derive computed `offset` for this array field and this
-            // setter exists only while the field is unset.
-            unsafe { __up_rust_slot.write_field::<#ty>(#offset, value); }
+            __up_rust_slot.write_field::<#ty>(#offset, value);
             #init_ident::__up_rust_from_slot(__up_rust_slot)
         }
 
@@ -785,52 +762,46 @@ fn nested_array_methods(
     let value_method = helper_ident(method, "value", field);
     let value_method_tokens = value_method.map(|value_method| {
         quote_spanned! {value_method.span()=>
+            #[inline(always)]
             pub fn #value_method<__UpRustValue>(self, value: __UpRustValue) -> #next_ty
             where
-                __UpRustValue: ::up_rust::payload::StablePayloadInitCompleteValue<#ty>,
+                __UpRustValue: ::up_rust::payload::stable::StablePayloadInitCompleteValue<#ty>,
             {
                 let mut __up_rust_slot = self.__up_rust_slot;
-                // SAFETY: The byte-backed bound proves moving the complete array
-                // cannot expose uninitialized element padding, and this setter
-                // exists only while the field is unset.
-                unsafe {
-                    __up_rust_slot.write_field::<#ty>(
-                        #offset,
-                        ::up_rust::payload::StablePayloadInitCompleteValue::into_complete_value(value),
-                    );
-                }
+                __up_rust_slot.write_field::<#ty>(
+                    #offset,
+                    ::up_rust::payload::stable::StablePayloadInitCompleteValue::into_complete_value(value),
+                );
                 #init_ident::__up_rust_from_slot(__up_rust_slot)
             }
         }
     });
 
     quote_spanned! {method.span()=>
+        #[inline(always)]
         pub fn #method(
             self,
-            mut init: impl FnMut(
+            mut init: impl for<'__up_rust_slot> FnMut(
                 usize,
-                <#elem as ::up_rust::payload::StablePayloadInit>::Init<'__up_rust_payload>,
+                ::up_rust::payload::stable::StablePayloadInitContext<'__up_rust_slot, #elem>,
             ) -> Result<
-                ::up_rust::payload::InitializedStablePayload<#elem>,
+                ::up_rust::payload::stable::InitializedStablePayload<'__up_rust_slot, #elem>,
                 ::up_rust::payload::UWireError,
             >,
         ) -> Result<#next_ty, ::up_rust::payload::UWireError>
         where
-            #elem: ::up_rust::payload::StablePayloadInit,
+            #elem: ::up_rust::payload::stable::StablePayloadInit,
         {
             let mut __up_rust_slot = self.__up_rust_slot;
             let __up_rust_len = #len;
             for __up_rust_index in 0..__up_rust_len {
-                // SAFETY: The derive computed `offset` for this array field and
-                // the loop bounds keep the element slot inside the array.
-                let __up_rust_element_slot = unsafe {
-                    __up_rust_slot.array_element_slot::<#elem>(#offset, __up_rust_index)
-                };
-                let __up_rust_element_init =
-                    <#elem as ::up_rust::payload::StablePayloadInit>::__init_from_slot(
+                let __up_rust_element_slot = __up_rust_slot
+                    .array_element_slot::<#elem>(#offset, __up_rust_index);
+                let __up_rust_context =
+                    <#elem as ::up_rust::payload::stable::StablePayloadInit>::__init_context_from_slot(
                         __up_rust_element_slot,
                     )?;
-                let _initialized = init(__up_rust_index, __up_rust_element_init)?;
+                let _ = init(__up_rust_index, __up_rust_context)?;
             }
             Ok(#init_ident::__up_rust_from_slot(__up_rust_slot))
         }
@@ -896,7 +867,7 @@ fn analyze_stable_payload_shape(input: &DeriveInput) -> syn::Result<StablePayloa
                     validate_stable_field_type(&field.ty)?;
                     let ty = &field.ty;
                     checks.push(quote_spanned! {ty.span()=>
-                        <#ty as ::up_rust::payload::StablePayloadField>::__stable_payload_field_check(&self.#ident);
+                        <#ty as ::up_rust::payload::stable::StablePayloadField>::__stable_payload_field_check(&self.#ident);
                     });
 
                     let expected_offset =
@@ -922,7 +893,7 @@ fn analyze_stable_payload_shape(input: &DeriveInput) -> syn::Result<StablePayloa
                     );
                     byte_backed_field_checks.push(quote_spanned! {ty.span()=>
                         assert!(
-                            <#ty as ::up_rust::payload::ByteBackedStablePayloadField>::SUPPORTS_BYTE_BACKED_STABLE_FIELD,
+                            <#ty as ::up_rust::payload::stable::ByteBackedStablePayloadField>::SUPPORTS_BYTE_BACKED_STABLE_FIELD,
                             #byte_backed_message
                         );
                     });
@@ -947,7 +918,7 @@ fn analyze_stable_payload_shape(input: &DeriveInput) -> syn::Result<StablePayloa
                     let index = syn::Index::from(field_index);
                     let ty = &field.ty;
                     checks.push(quote_spanned! {ty.span()=>
-                        <#ty as ::up_rust::payload::StablePayloadField>::__stable_payload_field_check(&self.#index);
+                        <#ty as ::up_rust::payload::stable::StablePayloadField>::__stable_payload_field_check(&self.#index);
                     });
 
                     let byte_backed_message = LitStr::new(
@@ -958,7 +929,7 @@ fn analyze_stable_payload_shape(input: &DeriveInput) -> syn::Result<StablePayloa
                     );
                     byte_backed_field_checks.push(quote_spanned! {ty.span()=>
                         assert!(
-                            <#ty as ::up_rust::payload::ByteBackedStablePayloadField>::SUPPORTS_BYTE_BACKED_STABLE_FIELD,
+                            <#ty as ::up_rust::payload::stable::ByteBackedStablePayloadField>::SUPPORTS_BYTE_BACKED_STABLE_FIELD,
                             #byte_backed_message
                         );
                     });

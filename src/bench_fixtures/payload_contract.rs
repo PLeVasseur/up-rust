@@ -15,12 +15,18 @@ use serde::Serialize;
 use sha2::{Digest, Sha256};
 
 use crate::{
-    payload::{InitializedStablePayload, StableContainerPayload, StablePayload, StablePayloadInit},
+    payload::{
+        stable::{
+            InitializedStablePayload, StableContainerPayload, StablePayload, StablePayloadInit,
+            StablePayloadInitContext,
+        },
+        UWireError,
+    },
     zero_copy::{
         LoanedPayloadUninitMut, PayloadLoanProvenance, UTxBuffer, UUninitTxBuffer,
         UVecUninitTxBuffer,
     },
-    PayloadEncoding, UFrameMetadata, UUri, UWireError,
+    PayloadEncoding, UFrameMetadata, UUri,
 };
 
 pub mod proto;
@@ -499,42 +505,42 @@ pub fn stable_owned_fixture_for(
 ) -> Result<StableOwnedFixture, UWireError> {
     match case.kind {
         PayloadContractCaseKind::CanClassicMax => {
-            stable_owned_fixture_for_type::<CanClassicFrameV1>(|init| {
+            stable_owned_fixture_for_type::<CanClassicFrameV1>(|init, _| {
                 init_can_classic_max(init, sequence)
             })
         }
         PayloadContractCaseKind::CanFdMax => {
-            stable_owned_fixture_for_type::<CanFdFrameV1>(|init| init_can_fd_max(init, sequence))
+            stable_owned_fixture_for_type::<CanFdFrameV1>(|init, _| init_can_fd_max(init, sequence))
         }
         PayloadContractCaseKind::SomeIpSingleMtu => {
-            stable_owned_fixture_for_type::<SomeIpSignalBatchMtuV1>(|init| {
+            stable_owned_fixture_for_type::<SomeIpSignalBatchMtuV1>(|init, _| {
                 init_someip_single_mtu(init, sequence)
             })
         }
         PayloadContractCaseKind::Streamer4k => {
-            stable_owned_fixture_for_type::<StreamChunk4kV1>(|init| {
+            stable_owned_fixture_for_type::<StreamChunk4kV1>(|init, _| {
                 init_streamer_4k(init, sequence)
             })
         }
         PayloadContractCaseKind::RadarArs548DetectionList => {
-            stable_owned_fixture_for_type::<RadarDetectionListArs548V1>(|init| {
+            stable_owned_fixture_for_type::<RadarDetectionListArs548V1>(|init, _| {
                 init_radar_ars548_detection_list(init, sequence)
             })
         }
         PayloadContractCaseKind::Streamer64k => {
-            stable_owned_fixture_for_type::<StreamChunk64kV1>(|init| {
+            stable_owned_fixture_for_type::<StreamChunk64kV1>(|init, _| {
                 init_streamer_64k(init, sequence)
             })
         }
         #[cfg(feature = "payload-contract-large-fixtures")]
         PayloadContractCaseKind::LidarHesaiAt128PointCloud => {
-            stable_owned_fixture_for_type::<LidarPointCloudHesaiAt128V1>(|init| {
+            stable_owned_fixture_for_type::<LidarPointCloudHesaiAt128V1>(|init, _| {
                 init_lidar_hesai_at128_point_cloud(init, sequence)
             })
         }
         #[cfg(feature = "payload-contract-large-fixtures")]
         PayloadContractCaseKind::Camera8mpBayerRggb12p => {
-            stable_owned_fixture_for_type::<CameraBayerRggb12pFrame8mpV1>(|init| {
+            stable_owned_fixture_for_type::<CameraBayerRggb12pFrame8mpV1>(|init, _| {
                 init_camera_8mp_bayer_rggb12p(init, sequence)
             })
         }
@@ -573,10 +579,10 @@ pub fn validate_stable_owned_bytes_exact(
     Ok(())
 }
 
-pub fn init_can_classic_max(
-    init: CanClassicFrameV1Init<'_>,
+pub fn init_can_classic_max<'a>(
+    init: CanClassicFrameV1Init<'a>,
     sequence: u32,
-) -> Result<InitializedStablePayload<CanClassicFrameV1>, UWireError> {
+) -> Result<InitializedStablePayload<'a, CanClassicFrameV1>, UWireError> {
     let case = case_by_kind(PayloadContractCaseKind::CanClassicMax);
     init.header(|header| init_header(header, case, sequence))?
         .interface_id(CAN_INTERFACE_ID)
@@ -592,10 +598,10 @@ pub fn init_can_classic_max(
         .finish()
 }
 
-pub fn init_can_fd_max(
-    init: CanFdFrameV1Init<'_>,
+pub fn init_can_fd_max<'a>(
+    init: CanFdFrameV1Init<'a>,
     sequence: u32,
-) -> Result<InitializedStablePayload<CanFdFrameV1>, UWireError> {
+) -> Result<InitializedStablePayload<'a, CanFdFrameV1>, UWireError> {
     let case = case_by_kind(PayloadContractCaseKind::CanFdMax);
     init.header(|header| init_header(header, case, sequence))?
         .interface_id(CAN_INTERFACE_ID)
@@ -610,10 +616,10 @@ pub fn init_can_fd_max(
         .finish()
 }
 
-pub fn init_someip_single_mtu(
-    init: SomeIpSignalBatchMtuV1Init<'_>,
+pub fn init_someip_single_mtu<'a>(
+    init: SomeIpSignalBatchMtuV1Init<'a>,
     sequence: u32,
-) -> Result<InitializedStablePayload<SomeIpSignalBatchMtuV1>, UWireError> {
+) -> Result<InitializedStablePayload<'a, SomeIpSignalBatchMtuV1>, UWireError> {
     let case = case_by_kind(PayloadContractCaseKind::SomeIpSingleMtu);
     init.header(|header| init_header(header, case, sequence))?
         .source_timestamp_ns(timestamp_ns(sequence))
@@ -634,20 +640,20 @@ pub fn init_someip_single_mtu(
         .finish()
 }
 
-pub fn init_streamer_4k(
-    init: StreamChunk4kV1Init<'_>,
+pub fn init_streamer_4k<'a>(
+    init: StreamChunk4kV1Init<'a>,
     sequence: u32,
-) -> Result<InitializedStablePayload<StreamChunk4kV1>, UWireError> {
+) -> Result<InitializedStablePayload<'a, StreamChunk4kV1>, UWireError> {
     let case = case_by_kind(PayloadContractCaseKind::Streamer4k);
     init.meta(|meta| init_stream_meta(meta, case, sequence, 4 * 1_024))?
         .chunk_fill_with(|index| pattern_byte(case.case_id, sequence, index))
         .finish()
 }
 
-pub fn init_radar_ars548_detection_list(
-    init: RadarDetectionListArs548V1Init<'_>,
+pub fn init_radar_ars548_detection_list<'a>(
+    init: RadarDetectionListArs548V1Init<'a>,
     sequence: u32,
-) -> Result<InitializedStablePayload<RadarDetectionListArs548V1>, UWireError> {
+) -> Result<InitializedStablePayload<'a, RadarDetectionListArs548V1>, UWireError> {
     let case = case_by_kind(PayloadContractCaseKind::RadarArs548DetectionList);
     init.header(|header| init_header(header, case, sequence))?
         .measurement_timestamp_ns(timestamp_ns(sequence))
@@ -661,10 +667,10 @@ pub fn init_radar_ars548_detection_list(
         .finish()
 }
 
-pub fn init_streamer_64k(
-    init: StreamChunk64kV1Init<'_>,
+pub fn init_streamer_64k<'a>(
+    init: StreamChunk64kV1Init<'a>,
     sequence: u32,
-) -> Result<InitializedStablePayload<StreamChunk64kV1>, UWireError> {
+) -> Result<InitializedStablePayload<'a, StreamChunk64kV1>, UWireError> {
     let case = case_by_kind(PayloadContractCaseKind::Streamer64k);
     init.meta(|meta| init_stream_meta(meta, case, sequence, 64 * 1_024))?
         .chunk_fill_with(|index| pattern_byte(case.case_id, sequence, index))
@@ -672,10 +678,10 @@ pub fn init_streamer_64k(
 }
 
 #[cfg(feature = "payload-contract-large-fixtures")]
-pub fn init_lidar_hesai_at128_point_cloud(
-    init: LidarPointCloudHesaiAt128V1Init<'_>,
+pub fn init_lidar_hesai_at128_point_cloud<'a>(
+    init: LidarPointCloudHesaiAt128V1Init<'a>,
     sequence: u32,
-) -> Result<InitializedStablePayload<LidarPointCloudHesaiAt128V1>, UWireError> {
+) -> Result<InitializedStablePayload<'a, LidarPointCloudHesaiAt128V1>, UWireError> {
     let case = case_by_kind(PayloadContractCaseKind::LidarHesaiAt128PointCloud);
     init.header(|header| init_header(header, case, sequence))?
         .frame_counter(sequence as u64)
@@ -705,10 +711,10 @@ pub fn init_lidar_hesai_at128_point_cloud(
 }
 
 #[cfg(feature = "payload-contract-large-fixtures")]
-pub fn init_camera_8mp_bayer_rggb12p(
-    init: CameraBayerRggb12pFrame8mpV1Init<'_>,
+pub fn init_camera_8mp_bayer_rggb12p<'a>(
+    init: CameraBayerRggb12pFrame8mpV1Init<'a>,
     sequence: u32,
-) -> Result<InitializedStablePayload<CameraBayerRggb12pFrame8mpV1>, UWireError> {
+) -> Result<InitializedStablePayload<'a, CameraBayerRggb12pFrame8mpV1>, UWireError> {
     let case = case_by_kind(PayloadContractCaseKind::Camera8mpBayerRggb12p);
     init.header(|header| init_header(header, case, sequence))?
         .frame_counter(sequence as u64)
@@ -726,7 +732,8 @@ pub fn init_camera_8mp_bayer_rggb12p(
         .digital_gain(1.0)
         .intrinsics(init_camera_intrinsics)?
         .extrinsics(|pose| init_pose(pose, sequence))?
-        .roi(|roi| {
+        .roi(|context| {
+            let roi = context.into_init();
             roi.x(0)
                 .y(0)
                 .width(CAMERA_8MP_WIDTH)
@@ -1016,7 +1023,8 @@ fn protobuf_message_name(case: &PayloadContractCase) -> &'static str {
 fn stable_owned_fixture_for_type<T>(
     init: impl for<'a> FnOnce(
         <T as StablePayloadInit>::Init<'a>,
-    ) -> Result<InitializedStablePayload<T>, UWireError>,
+        std::marker::PhantomData<&'a mut T>,
+    ) -> Result<InitializedStablePayload<'a, T>, UWireError>,
 ) -> Result<StableOwnedFixture, UWireError>
 where
     T: StablePayload + StablePayloadInit,
@@ -1036,7 +1044,7 @@ where
             )
         };
         let initializer = T::init_from_uninit_payload(loaned)?;
-        init(initializer)?;
+        init(initializer, std::marker::PhantomData)?;
     }
     // SAFETY: the generated initializer returned the completion proof consumed above.
     let buffer = unsafe { buffer.assume_payload_init() };
@@ -1097,7 +1105,7 @@ fn validate_stable_encoding_for_case(
 fn validate_stable_encoding<T: StablePayload>(
     encoding: Option<&PayloadEncoding>,
 ) -> Result<(), UWireError> {
-    <StableContainerPayload<T> as crate::payload::PayloadCodec>::verify_encoding(encoding)
+    <StableContainerPayload<T> as crate::payload::codec::PayloadCodec>::verify_encoding(encoding)
 }
 
 fn build_proto_can_classic(case: &PayloadContractCase, sequence: u32) -> proto::CanClassicFrame {
@@ -1310,11 +1318,12 @@ fn proto_camera_intrinsics() -> proto::CameraIntrinsics {
     message
 }
 
-fn init_header(
-    init: <BenchHeaderV1 as StablePayloadInit>::Init<'_>,
+fn init_header<'a>(
+    context: StablePayloadInitContext<'a, BenchHeaderV1>,
     case: &PayloadContractCase,
     sequence: u32,
-) -> Result<InitializedStablePayload<BenchHeaderV1>, UWireError> {
+) -> Result<InitializedStablePayload<'a, BenchHeaderV1>, UWireError> {
+    let init = context.into_init();
     init.case_id(case.case_id)
         .sequence(sequence)
         .semantic_reference_len(case.semantic_reference_len as u32)
@@ -1322,11 +1331,12 @@ fn init_header(
         .finish()
 }
 
-fn init_signal_sample(
-    init: <SignalSampleV1 as StablePayloadInit>::Init<'_>,
+fn init_signal_sample<'a>(
+    context: StablePayloadInitContext<'a, SignalSampleV1>,
     sequence: u32,
     index: usize,
-) -> Result<InitializedStablePayload<SignalSampleV1>, UWireError> {
+) -> Result<InitializedStablePayload<'a, SignalSampleV1>, UWireError> {
+    let init = context.into_init();
     let sample = signal_sample_value(sequence, index);
     init.signal_id(sample.signal_id)
         .status(sample.status)
@@ -1335,12 +1345,13 @@ fn init_signal_sample(
         .finish()
 }
 
-fn init_stream_meta(
-    init: <StreamChunkHeaderV1 as StablePayloadInit>::Init<'_>,
+fn init_stream_meta<'a>(
+    context: StablePayloadInitContext<'a, StreamChunkHeaderV1>,
     case: &PayloadContractCase,
     sequence: u32,
     chunk_len: usize,
-) -> Result<InitializedStablePayload<StreamChunkHeaderV1>, UWireError> {
+) -> Result<InitializedStablePayload<'a, StreamChunkHeaderV1>, UWireError> {
+    let init = context.into_init();
     init.header(|header| init_header(header, case, sequence))?
         .stream_id(STREAM_ID)
         .codec(STREAM_CODEC_RAW)
@@ -1354,11 +1365,12 @@ fn init_stream_meta(
         .finish()
 }
 
-fn init_radar_detection(
-    init: <Ars548DetectionV1 as StablePayloadInit>::Init<'_>,
+fn init_radar_detection<'a>(
+    context: StablePayloadInitContext<'a, Ars548DetectionV1>,
     sequence: u32,
     index: usize,
-) -> Result<InitializedStablePayload<Ars548DetectionV1>, UWireError> {
+) -> Result<InitializedStablePayload<'a, Ars548DetectionV1>, UWireError> {
+    let init = context.into_init();
     let detection = radar_detection_value(sequence, index);
     init.azimuth_angle(detection.azimuth_angle)
         .azimuth_angle_std(detection.azimuth_angle_std)
@@ -1381,11 +1393,12 @@ fn init_radar_detection(
 }
 
 #[cfg(feature = "payload-contract-large-fixtures")]
-fn init_lidar_point(
-    init: <LidarPointXyzircaedtV1 as StablePayloadInit>::Init<'_>,
+fn init_lidar_point<'a>(
+    context: StablePayloadInitContext<'a, LidarPointXyzircaedtV1>,
     sequence: u32,
     index: usize,
-) -> Result<InitializedStablePayload<LidarPointXyzircaedtV1>, UWireError> {
+) -> Result<InitializedStablePayload<'a, LidarPointXyzircaedtV1>, UWireError> {
+    let init = context.into_init();
     let point = lidar_point_value(sequence, index);
     init.x(point.x)
         .y(point.y)
@@ -1401,19 +1414,22 @@ fn init_lidar_point(
 }
 
 #[cfg(feature = "payload-contract-large-fixtures")]
-fn init_pose(
-    init: <Pose3dV1 as StablePayloadInit>::Init<'_>,
+fn init_pose<'a>(
+    context: StablePayloadInitContext<'a, Pose3dV1>,
     sequence: u32,
-) -> Result<InitializedStablePayload<Pose3dV1>, UWireError> {
+) -> Result<InitializedStablePayload<'a, Pose3dV1>, UWireError> {
+    let init = context.into_init();
     let pose = pose_value(sequence);
-    init.translation_m(|translation| {
+    init.translation_m(|context| {
+        let translation = context.into_init();
         translation
             .x(pose.translation_m.x)
             .y(pose.translation_m.y)
             .z(pose.translation_m.z)
             .finish()
     })?
-    .rotation(|rotation| {
+    .rotation(|context| {
+        let rotation = context.into_init();
         rotation
             .x(pose.rotation.x)
             .y(pose.rotation.y)
@@ -1425,9 +1441,10 @@ fn init_pose(
 }
 
 #[cfg(feature = "payload-contract-large-fixtures")]
-fn init_camera_intrinsics(
-    init: <CameraIntrinsicsV1 as StablePayloadInit>::Init<'_>,
-) -> Result<InitializedStablePayload<CameraIntrinsicsV1>, UWireError> {
+fn init_camera_intrinsics<'a>(
+    context: StablePayloadInitContext<'a, CameraIntrinsicsV1>,
+) -> Result<InitializedStablePayload<'a, CameraIntrinsicsV1>, UWireError> {
+    let init = context.into_init();
     init.fx(1_950.0)
         .fy(1_950.0)
         .cx(1_920.0)

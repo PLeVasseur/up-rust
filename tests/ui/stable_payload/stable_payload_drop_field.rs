@@ -12,7 +12,7 @@ impl Drop for DropField {
 
 // SAFETY: This intentionally bogus impl allows the derive to reach the
 // top-level `needs_drop` rejection used by the compile-fail test.
-unsafe impl up_rust::payload::StablePayloadField for DropField {}
+unsafe impl up_rust::payload::stable::StablePayloadField for DropField {}
 
 #[repr(C)]
 #[derive(up_rust::StablePayload)]

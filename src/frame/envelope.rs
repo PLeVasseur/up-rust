@@ -180,7 +180,7 @@ impl UFrameWireFormat for ProtobufUMessageFrame {
 /// 6       2     reserved, MUST be zero
 /// 8       4     metadata_len (u32, little-endian)
 /// 12      8     payload_len (u64, little-endian; 0 when absent)
-/// 20      ...   metadata field block (see [`crate::frame_codec`])
+/// 20      ...   metadata field block (see [`crate::frame::codec`])
 /// 20+m    ...   payload bytes
 /// ```
 ///
@@ -209,7 +209,7 @@ impl UFrameWireFormat for NativeUFrameEnvelope {
 
     fn serialize_frame(frame: &UOwnedFrame) -> Result<Bytes, UFrameWireError> {
         frame.validate().map_err(UFrameWireError::from)?;
-        let metadata = crate::frame_codec::encode_frame_metadata_fields(frame.metadata())
+        let metadata = crate::frame::codec::encode_frame_metadata_fields(frame.metadata())
             .map_err(|error| UFrameWireError::invalid_frame(error.to_string()))?;
         let metadata_len = u32::try_from(metadata.len()).map_err(|_| {
             UFrameWireError::invalid_frame("metadata exceeds the u32 envelope limit")
@@ -237,16 +237,25 @@ impl UFrameWireFormat for NativeUFrameEnvelope {
         let header = src
             .get(..NATIVE_ENVELOPE_HEADER_LEN)
             .ok_or_else(|| UFrameWireError::invalid_frame("input shorter than envelope header"))?;
-        if header[..4] != NATIVE_ENVELOPE_MAGIC {
+        let magic = header
+            .get(..4)
+            .ok_or_else(|| UFrameWireError::invalid_frame("input shorter than envelope magic"))?;
+        if magic != NATIVE_ENVELOPE_MAGIC {
             return Err(UFrameWireError::invalid_frame("wrong envelope magic"));
         }
-        if header[4] != NATIVE_ENVELOPE_VERSION {
+        let version = *header
+            .get(4)
+            .ok_or_else(|| UFrameWireError::invalid_frame("input shorter than envelope version"))?;
+        if version != NATIVE_ENVELOPE_VERSION {
             return Err(UFrameWireError::invalid_frame(format!(
                 "unsupported envelope version {}",
-                header[4]
+                version
             )));
         }
-        let payload_present = match header[5] {
+        let payload_marker = *header.get(5).ok_or_else(|| {
+            UFrameWireError::invalid_frame("input shorter than payload presence marker")
+        })?;
+        let payload_present = match payload_marker {
             0 => false,
             1 => true,
             other => {
@@ -255,26 +264,40 @@ impl UFrameWireFormat for NativeUFrameEnvelope {
                 )))
             }
         };
-        if header[6..8] != [0, 0] {
+        let reserved = header.get(6..8).ok_or_else(|| {
+            UFrameWireError::invalid_frame("input shorter than reserved envelope bytes")
+        })?;
+        if reserved != [0, 0] {
             return Err(UFrameWireError::invalid_frame(
                 "reserved envelope bytes must be zero",
             ));
         }
-        let metadata_len = u32::from_le_bytes(header[8..12].try_into().expect("4 bytes")) as usize;
-        let payload_len = u64::from_le_bytes(header[12..20].try_into().expect("8 bytes"));
+        let metadata_len_bytes = header
+            .get(8..12)
+            .ok_or_else(|| UFrameWireError::invalid_frame("input shorter than metadata length"))?;
+        let metadata_len =
+            u32::from_le_bytes(metadata_len_bytes.try_into().expect("4 bytes")) as usize;
+        let payload_len_bytes = header
+            .get(12..20)
+            .ok_or_else(|| UFrameWireError::invalid_frame("input shorter than payload length"))?;
+        let payload_len = u64::from_le_bytes(payload_len_bytes.try_into().expect("8 bytes"));
 
-        let body = &src[NATIVE_ENVELOPE_HEADER_LEN..];
+        let body = src
+            .get(NATIVE_ENVELOPE_HEADER_LEN..)
+            .ok_or_else(|| UFrameWireError::invalid_frame("input shorter than envelope header"))?;
         let metadata_bytes = body.get(..metadata_len).ok_or_else(|| {
             UFrameWireError::invalid_frame("input shorter than declared metadata length")
         })?;
-        let payload_bytes = &body[metadata_len..];
+        let payload_bytes = body.get(metadata_len..).ok_or_else(|| {
+            UFrameWireError::invalid_frame("input shorter than declared metadata length")
+        })?;
         if payload_bytes.len() as u64 != payload_len || (!payload_present && payload_len != 0) {
             return Err(UFrameWireError::invalid_frame(
                 "payload length disagrees with envelope header",
             ));
         }
 
-        let metadata = crate::frame_codec::decode_frame_metadata_fields(metadata_bytes)
+        let metadata = crate::frame::codec::decode_frame_metadata_fields(metadata_bytes)
             .map_err(|error| UFrameWireError::invalid_frame(error.to_string()))?;
         let payload = payload_present.then(|| Bytes::copy_from_slice(payload_bytes));
         UOwnedFrame::new(metadata, payload).map_err(UFrameWireError::from)
@@ -285,7 +308,7 @@ impl UFrameWireFormat for NativeUFrameEnvelope {
 mod tests {
     use super::*;
     #[cfg(feature = "protobuf-support")]
-    use crate::payload::RawBytes;
+    use crate::payload::codec::RawBytes;
     use crate::{PayloadEncoding, UFrameMetadata, UUri};
     use crate::{UMessageBuilder, UPayloadFormat};
 
@@ -441,7 +464,7 @@ mod tests {
         let encoded = NativeUFrameEnvelope::serialize_frame(&frame).expect("serialize");
 
         let mut bad = encoded.to_vec();
-        bad[0] = b'X';
+        *bad.first_mut().expect("magic byte") = b'X';
         assert!(NativeUFrameEnvelope::deserialize_frame(&bad).is_err());
 
         let mut bad = encoded.to_vec();
