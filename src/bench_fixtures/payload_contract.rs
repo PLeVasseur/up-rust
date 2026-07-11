@@ -683,6 +683,44 @@ pub fn init_lidar_hesai_at128_point_cloud<'a>(
     sequence: u32,
 ) -> Result<InitializedStablePayload<'a, LidarPointCloudHesaiAt128V1>, UWireError> {
     let case = case_by_kind(PayloadContractCaseKind::LidarHesaiAt128PointCloud);
+    let cache = LidarPointTrigCache::new();
+    init.header(|header| init_header(header, case, sequence))?
+        .frame_counter(sequence as u64)
+        .sensor_timestamp_ns(timestamp_ns(sequence))
+        .scan_duration_ns(LIDAR_HESAI_AT128_SCAN_DURATION_NS)
+        .lidar_id(LIDAR_ID)
+        .width(LIDAR_HESAI_AT128_WIDTH)
+        .height(LIDAR_HESAI_AT128_HEIGHT)
+        .point_count(LIDAR_HESAI_AT128_POINT_COUNT as u32)
+        .point_step(LIDAR_XYZIRCAEDT_POINT_BYTES as u32)
+        .row_step(LIDAR_HESAI_AT128_ROW_STEP_BYTES)
+        .points_per_second(LIDAR_HESAI_AT128_POINTS_PER_SECOND)
+        .horizontal_fov_mdeg(LIDAR_HESAI_AT128_HORIZONTAL_FOV_MDEG)
+        .vertical_fov_mdeg(LIDAR_HESAI_AT128_VERTICAL_FOV_MDEG)
+        .horizontal_resolution_mdeg(LIDAR_HESAI_AT128_HORIZONTAL_RESOLUTION_MDEG)
+        .vertical_resolution_mdeg(LIDAR_HESAI_AT128_VERTICAL_RESOLUTION_MDEG)
+        .range_10pct_reflectivity_m(LIDAR_HESAI_AT128_RANGE_10PCT_REFLECTIVITY_M)
+        .point_format(LIDAR_POINT_FORMAT_XYZIRCAEDT)
+        .is_bigendian(0)
+        .is_dense(1)
+        .reserved0([0; 2])
+        .checksum(fixture_checksum(case, sequence))
+        .extrinsics(|pose| init_pose(pose, sequence))?
+        .points(|index, point| init_lidar_point_cached(point, sequence, index, &cache))?
+        .reserved1(0)
+        .finish()
+}
+
+#[cfg(all(
+    feature = "perf-diagnostics",
+    feature = "payload-contract-large-fixtures"
+))]
+#[doc(hidden)]
+pub fn init_lidar_hesai_at128_point_cloud_per_point_trig<'a>(
+    init: LidarPointCloudHesaiAt128V1Init<'a>,
+    sequence: u32,
+) -> Result<InitializedStablePayload<'a, LidarPointCloudHesaiAt128V1>, UWireError> {
+    let case = case_by_kind(PayloadContractCaseKind::LidarHesaiAt128PointCloud);
     init.header(|header| init_header(header, case, sequence))?
         .frame_counter(sequence as u64)
         .sensor_timestamp_ns(timestamp_ns(sequence))
@@ -1410,6 +1448,62 @@ fn init_lidar_point<'a>(
         .elevation(point.elevation)
         .distance(point.distance)
         .time_offset_ns(point.time_offset_ns)
+        .finish()
+}
+
+#[cfg(feature = "payload-contract-large-fixtures")]
+struct LidarPointTrigCache {
+    azimuth: [(f32, f32, f32); LIDAR_HESAI_AT128_WIDTH as usize],
+    elevation: [(f32, f32); LIDAR_HESAI_AT128_HEIGHT as usize],
+}
+
+#[cfg(feature = "payload-contract-large-fixtures")]
+impl LidarPointTrigCache {
+    fn new() -> Self {
+        Self {
+            azimuth: std::array::from_fn(|column| {
+                let azimuth = -60.0 + column as f32 * 0.1;
+                (
+                    azimuth,
+                    azimuth.to_radians().cos(),
+                    azimuth.to_radians().sin(),
+                )
+            }),
+            elevation: std::array::from_fn(|row| {
+                let elevation = -12.7 + row as f32 * 0.2;
+                (elevation, elevation.to_radians().sin())
+            }),
+        }
+    }
+}
+
+#[cfg(feature = "payload-contract-large-fixtures")]
+fn init_lidar_point_cached<'a>(
+    context: StablePayloadInitContext<'a, LidarPointXyzircaedtV1>,
+    sequence: u32,
+    index: usize,
+    cache: &LidarPointTrigCache,
+) -> Result<InitializedStablePayload<'a, LidarPointXyzircaedtV1>, UWireError> {
+    let column = index % LIDAR_HESAI_AT128_WIDTH as usize;
+    let row = index / LIDAR_HESAI_AT128_WIDTH as usize;
+    let (azimuth, azimuth_cos, azimuth_sin) = cache.azimuth[column];
+    let (elevation, elevation_sin) = cache.elevation[row];
+    let distance = 5.0 + (index % 2_000) as f32 * 0.05;
+    context
+        .into_init()
+        .x(distance * azimuth_cos)
+        .y(distance * azimuth_sin)
+        .z(distance * elevation_sin)
+        .intensity(pattern_byte(7, sequence, index))
+        .return_type(1)
+        .channel(row as u16)
+        .azimuth(azimuth)
+        .elevation(elevation)
+        .distance(distance)
+        .time_offset_ns(
+            ((index as u64 * u64::from(LIDAR_HESAI_AT128_SCAN_DURATION_NS))
+                / LIDAR_HESAI_AT128_POINT_COUNT as u64) as u32,
+        )
         .finish()
 }
 

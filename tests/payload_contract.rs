@@ -10,7 +10,8 @@ use std::mem;
 
 use up_rust::bench_fixtures::payload_contract::{self as fixtures, *};
 use up_rust::{
-    ByteBackedStablePayload, LoanUninitPayload, StableContainerWireFormat, UWirePayload,
+    ByteBackedStablePayload, LoanUninitPayload, StableContainerWireFormat, StablePayloadInit,
+    UWirePayload,
 };
 
 #[cfg(feature = "test-util")]
@@ -136,6 +137,42 @@ fn payload_contract_stable_owned_fixtures_validate_representative_and_exact_byte
         )
         .unwrap_or_else(|_| panic!("{}", case.name()));
     }
+}
+
+#[cfg(all(
+    feature = "perf-diagnostics",
+    feature = "payload-contract-large-fixtures"
+))]
+#[test]
+fn cached_trig_lidar_matches_per_point_control_bytes() {
+    fn bytes(per_point: bool) -> Vec<u8> {
+        let mut storage = Box::<LidarPointCloudHesaiAt128V1>::new_uninit();
+        let raw = unsafe {
+            std::slice::from_raw_parts_mut(
+                storage.as_mut_ptr().cast::<mem::MaybeUninit<u8>>(),
+                mem::size_of::<LidarPointCloudHesaiAt128V1>(),
+            )
+        };
+        {
+            let init = LidarPointCloudHesaiAt128V1::init_from_uninit_bytes(raw)
+                .expect("valid LiDAR storage");
+            let _initialized = if per_point {
+                fixtures::init_lidar_hesai_at128_point_cloud_per_point_trig(init, 17)
+            } else {
+                fixtures::init_lidar_hesai_at128_point_cloud(init, 17)
+            }
+            .expect("LiDAR fixture initializes");
+        }
+        unsafe {
+            std::slice::from_raw_parts(
+                storage.as_ptr().cast::<u8>(),
+                mem::size_of::<LidarPointCloudHesaiAt128V1>(),
+            )
+            .to_vec()
+        }
+    }
+
+    assert_eq!(bytes(false), bytes(true));
 }
 
 #[tokio::test]

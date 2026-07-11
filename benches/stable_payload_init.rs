@@ -497,6 +497,43 @@ fn stable_payload_init(c: &mut Criterion) {
         },
     );
 
+    #[cfg(all(
+        feature = "perf-diagnostics",
+        feature = "payload-contract-large-fixtures"
+    ))]
+    {
+        use up_rust::bench_fixtures::payload_contract::{
+            self, stable::LidarPointCloudHesaiAt128V1,
+        };
+        bench_owned_storage(
+            &mut group,
+            "borrowed/lidar_per_point_trig",
+            |storage: &mut MaybeUninit<LidarPointCloudHesaiAt128V1>| {
+                let init =
+                    LidarPointCloudHesaiAt128V1::init_from_uninit_bytes(uninit_bytes(storage))
+                        .expect("valid LiDAR storage");
+                let _initialized =
+                    payload_contract::init_lidar_hesai_at128_point_cloud_per_point_trig(
+                        init,
+                        black_box(7),
+                    )
+                    .expect("complete LiDAR point cloud");
+            },
+        );
+        bench_owned_storage(
+            &mut group,
+            "borrowed/lidar_cached_trig",
+            |storage: &mut MaybeUninit<LidarPointCloudHesaiAt128V1>| {
+                let init =
+                    LidarPointCloudHesaiAt128V1::init_from_uninit_bytes(uninit_bytes(storage))
+                        .expect("valid LiDAR storage");
+                let _initialized =
+                    payload_contract::init_lidar_hesai_at128_point_cloud(init, black_box(7))
+                        .expect("complete LiDAR point cloud");
+            },
+        );
+    }
+
     group.finish();
 }
 
