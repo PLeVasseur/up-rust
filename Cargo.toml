@@ -44,6 +44,7 @@ owned-frame-transport = ["selected-wire-transport-core", "up-core-types"]
 payload-contract-fixtures = ["protobuf-wire", "zero-copy-uninit", "dep:serde", "dep:serde_json", "dep:sha2"]
 payload-contract-large-fixtures = ["payload-contract-fixtures"]
 payload-contract-simulator-fixtures = ["payload-contract-large-fixtures"]
+perf-diagnostics = ["zero-copy-uninit"]
 protobuf-support = ["dep:protobuf"]
 protobuf-wire = ["up-core-types"]
 # R2W split: ordinary selected-wire surfaces provide canonical field-block

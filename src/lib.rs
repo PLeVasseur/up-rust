@@ -252,6 +252,9 @@ pub mod __derive_support {
 mod zero_copy;
 #[cfg(feature = "test-util")]
 pub use zero_copy::InMemoryZeroCopyTransport;
+#[cfg(feature = "perf-diagnostics")]
+#[doc(hidden)]
+pub use zero_copy::UninitStableSendPhases;
 pub use zero_copy::{
     validate_frame_view_for_transport, validate_tx_buffer_for_transport,
     verify_tx_buffer_payload_layout, verify_uninit_tx_buffer_payload_layout, LoanedPayload,

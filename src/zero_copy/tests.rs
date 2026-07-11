@@ -924,6 +924,33 @@ mod unit_tests {
         );
     }
 
+    #[cfg(feature = "perf-diagnostics")]
+    #[tokio::test]
+    async fn phased_stable_uninit_helper_preserves_send_semantics() {
+        let transport = InMemoryZeroCopyTransport::default();
+
+        let phases = transport
+            .send_uninit_stable_payload_as_phased::<StableBytes>(
+                stable_metadata::<StableBytes>(),
+                |context| context.into_init().bytes_from_array(b"perf").finish(),
+            )
+            .await
+            .expect("send phased stable init payload");
+
+        assert!(phases.total >= phases.accounted());
+        assert_eq!(phases.residual, phases.total - phases.accounted());
+        let sent = transport.sent_frames();
+        assert_eq!(sent.len(), 1);
+        assert_eq!(
+            sent.first()
+                .expect("one sent frame")
+                .borrow_stable_payload::<StableBytes>()
+                .unwrap(),
+            &StableBytes { bytes: *b"perf" }
+        );
+        let _clock_overhead = UninitStableSendPhases::calibrate_clock_overhead(32);
+    }
+
     #[cfg(feature = "owned-frame-transport")]
     #[test]
     fn owned_frame_implements_frame_view_when_feature_enabled() {
