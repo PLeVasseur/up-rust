@@ -134,6 +134,7 @@ impl UTxPayloadSpec {
 
 /// Validated transport-independent transmit loan specification.
 #[derive(Clone, Debug, PartialEq)]
+#[must_use = "a transmit loan specification has no effect until passed to a loan method"]
 pub struct UTxLoanSpec {
     metadata: UFrameMetadata,
     payload: UTxPayloadSpec,
@@ -153,7 +154,7 @@ impl UTxLoanSpec {
     }
 
     /// Creates a transmit loan spec without validation.
-    #[must_use]
+    #[must_use = "pass the resulting specification to a transmit loan method"]
     pub fn new_unchecked(metadata: UFrameMetadata, payload: UTxPayloadSpec) -> Self {
         Self { metadata, payload }
     }
@@ -239,13 +240,13 @@ pub struct ValidatedTxLoanSpec(UTxLoanSpec);
 
 impl ValidatedTxLoanSpec {
     /// Returns the validated transmit loan spec.
-    #[must_use]
+    #[must_use = "use the validated specification when preparing a transport loan"]
     pub fn as_spec(&self) -> &UTxLoanSpec {
         &self.0
     }
 
     /// Consumes the wrapper and returns the validated transmit loan spec.
-    #[must_use]
+    #[must_use = "use the validated specification when preparing a transport loan"]
     pub fn into_inner(self) -> UTxLoanSpec {
         self.0
     }

@@ -133,6 +133,11 @@ where
 }
 
 /// Encodes a typed value with a [`PayloadCodec`].
+#[diagnostic::on_unimplemented(
+    message = "the payload codec `{Self}` cannot encode `{T}`",
+    label = "no `EncodePayload<{T}>` implementation",
+    note = "wire implementers provide `payload_layout` and `encode_payload`; see the wire-implementer walkthrough"
+)]
 pub trait EncodePayload<T: ?Sized>: PayloadCodec {
     /// Returns the exact payload layout required to encode `value`.
     ///

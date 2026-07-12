@@ -164,6 +164,7 @@ jobs:
             --no-dev-deps \
             --feature-powerset \
             --group-features communication,usubscription,udiscovery,symphony \
+            --group-features owned-frame-transport,selected-wire-user-api,up-l2-rpc-client \
             --depth 2
 
   # [impl->req~up-language-ci-test~1]

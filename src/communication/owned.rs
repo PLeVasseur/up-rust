@@ -37,7 +37,7 @@ use crate::{
     LocalUriProvider, UCode, UListener, UMessage, UMessageBuilder, UOwnedFrame, UOwnedListener,
     UOwnedTransport, UStatus, UUri, UUID,
 };
-use crate::{UHasWire, UWireEncode};
+use crate::{wire::UWireEncode, UHasWire};
 
 pub use crate::communication::RequestHandler;
 

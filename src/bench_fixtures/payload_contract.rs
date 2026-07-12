@@ -1082,7 +1082,7 @@ where
             )
         };
         let initializer = T::init_from_uninit_payload(loaned)?;
-        init(initializer, std::marker::PhantomData)?;
+        let _initialized = init(initializer, std::marker::PhantomData)?;
     }
     // SAFETY: the generated initializer returned the completion proof consumed above.
     let buffer = unsafe { buffer.assume_payload_init() };

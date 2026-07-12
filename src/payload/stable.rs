@@ -93,6 +93,7 @@ const STABLE_CONTAINER_MEDIA_TYPE: &str = "application/vnd.uprotocol.stable-cont
 /// This token is intentionally not a typed reference into the loan. It proves
 /// that a generated typestate builder reached `finish()` after initializing all
 /// semantic fields and generated padding gaps.
+#[must_use = "return this completion witness to the transmit path or consume it explicitly"]
 pub struct InitializedStablePayload<'a, T> {
     _marker: PhantomData<fn(&'a mut T) -> &'a mut T>,
 }
@@ -104,7 +105,7 @@ impl<'a, T> InitializedStablePayload<'a, T> {
     ///
     /// The corresponding slot must be exclusively borrowed for `'a` and contain
     /// one valid initialized `T`, including all implicit padding bytes.
-    #[must_use]
+    #[must_use = "return this completion witness to the transmit path or consume it explicitly"]
     #[inline(always)]
     unsafe fn new_unchecked() -> Self {
         Self {
@@ -240,6 +241,12 @@ where
 /// Implementors must choose a stable cross-process type name and only implement
 /// the trait for types whose size/alignment and initialized byte representation
 /// are suitable for the stable-container contract used by the application.
+#[diagnostic::on_unimplemented(
+    message = "`{Self}` does not implement the stable-payload contract",
+    label = "this type cannot be carried as a stable payload",
+    note = "add `#[repr(C)]`, derive `StablePayload`, and provide `#[stable_payload(type_name = \"...\")]`",
+    note = "derive `ByteBackedStablePayload` only when every field and byte representation satisfies its stronger safety contract"
+)]
 pub unsafe trait StablePayload: Sized + 'static {
     /// Stable-container variant supported by this type.
     const VARIANT: StablePayloadVariant = StablePayloadVariant::FixedSize;
@@ -311,6 +318,11 @@ mod byte_backed_stable_field_seal {
 /// Use [`ByteBackedStablePayload`] for payload-level public bounds.
 #[doc(hidden)]
 #[allow(private_bounds)]
+#[diagnostic::on_unimplemented(
+    message = "`{Self}` is not a byte-backed stable-payload field",
+    label = "this field does not satisfy the recursive byte-backed contract",
+    note = "use a supported primitive/array field, or derive `ByteBackedStablePayload` for an eligible nested stable type"
+)]
 pub trait ByteBackedStablePayloadField:
     byte_backed_stable_field_seal::Sealed + Sized + 'static
 {
@@ -394,6 +406,11 @@ where
 /// `size_of::<Self>()` bytes is a sound representation of one valid `Self` for
 /// stable-container paths. That requires stable layout, no implicit padding, no
 /// drop glue, interior mutability, and recursively byte-backed fields.
+#[diagnostic::on_unimplemented(
+    message = "`{Self}` does not implement the byte-backed stable-payload contract",
+    label = "this type cannot use byte-backed stable-container paths",
+    note = "derive `ByteBackedStablePayload` only for an eligible `#[repr(C)]` type with no implicit padding and recursively byte-backed fields"
+)]
 pub unsafe trait ByteBackedStablePayload: StablePayload {
     /// Whether this type's full object representation can be used by
     /// byte-backed stable-container paths.
@@ -477,6 +494,7 @@ pub enum StablePayloadInitSet {}
 /// slot lifetime. A completion proof can therefore be produced only by
 /// finishing the initializer carried by that callback invocation; a proof from
 /// separate storage cannot be substituted in safe Rust.
+#[must_use = "consume this context to initialize the loaned stable-payload slot"]
 pub struct StablePayloadInitContext<'slot, T: StablePayloadInit> {
     init: T::Init<'slot>,
     _invariant: PhantomData<fn(&'slot mut T) -> &'slot mut T>,
@@ -514,6 +532,11 @@ impl<'slot, T: StablePayloadInit> StablePayloadInitContext<'slot, T> {
 /// including implicit padding, contains one valid initialized `Self` in the
 /// stable-container representation. Ordinary payload types should use the derive
 /// macro; manual implementations are an expert unsafe extension point.
+#[diagnostic::on_unimplemented(
+    message = "`{Self}` has no stable-payload initializer",
+    label = "missing `StablePayloadInit` implementation",
+    note = "derive `StablePayloadInit` to get the typestate builder used by `send_uninit_stable_payload`"
+)]
 pub unsafe trait StablePayloadInit: StablePayload {
     /// Generated any-order typestate initializer for this payload type.
     type Init<'a>;
@@ -764,7 +787,7 @@ impl<'a, T> StablePayloadInitSlot<'a, T> {
     /// This is available only to generated all-set typestate builders. Safe
     /// code cannot construct a slot directly.
     #[doc(hidden)]
-    #[must_use]
+    #[must_use = "the discharged witness must be returned to or consumed by the completion path"]
     #[inline(always)]
     pub fn assume_init(self) -> InitializedStablePayload<'a, T> {
         // SAFETY: slots can originate only in `StablePayloadInit` entry points,
