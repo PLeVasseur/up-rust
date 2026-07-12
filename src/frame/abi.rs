@@ -43,6 +43,24 @@
 //! truncate**: a value that exceeds a profile capacity is an error. The
 //! per-field capacities are profile policy (documented on each constant),
 //! not limits of the semantic model.
+//!
+//! ## Cross-language reader checklist
+//!
+//! 1. Match `UFRAME_ABI_TYPE_NAME`, size, alignment, magic, and version before
+//!    interpreting a header.
+//! 2. Mirror every field with fixed-width integer/byte-array types and C layout;
+//!    never substitute native pointer, string, boolean, or enum layouts.
+//! 3. Check the presence mask before reading optional fields and reject unknown
+//!    mask/flag bits.
+//! 4. Treat stored lengths as untrusted and verify each against its documented
+//!    capacity before constructing a language-level string/view.
+//! 5. Use the fallible conversion/golden byte-image tests as the arbiter. A
+//!    value too large for this profile remains valid semantic metadata; choose
+//!    the canonical field block instead of truncating it.
+//!
+//! The normative semantic model and metadata-profile registry live in
+//! `up-spec/basics/uframe.adoc`; this Rust struct is one derived ABI profile,
+//! not a language-specific conformance requirement.
 
 use core::mem::{align_of, offset_of, size_of};
 use std::time::Duration;

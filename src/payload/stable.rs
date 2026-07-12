@@ -11,6 +11,59 @@
  * SPDX-License-Identifier: Apache-2.0
  ********************************************************************************/
 
+//! # Stable payloads: explicit layouts initialized in transport storage
+//!
+//! A stable payload is one fixed-layout value whose type name, size, alignment,
+//! fields, and padding are known to both peers. The supported path is:
+//!
+//! 1. define a `#[repr(C)]` struct and make every padding byte explicit;
+//! 2. derive `StablePayload` for layout/type identity;
+//! 3. derive `ByteBackedStablePayload` only when every byte pattern is valid;
+//! 4. derive `StablePayloadInit` for the generated typestate initializer;
+//! 5. initialize the value inside the higher-ranked closure accepted by
+//!    `send_uninit_stable_payload`, then return `finish()`.
+//!
+//! ```text
+//! #[repr(C)]
+//! #[derive(StablePayload, ByteBackedStablePayload, StablePayloadInit)]
+//! #[stable_payload(type_name = "com.example.CanFrameV1")]
+//! struct CanFrameV1 {
+//!     id: u32,
+//!     len: u8,
+//!     flags: u8,
+//!     data: [u8; 64],
+//!     reserved: [u8; 2], // explicit trailing padding
+//! }
+//!
+//! transport.send_uninit_stable_payload::<CanFrameV1>(metadata, |init| {
+//!     init.id(0x1ff)
+//!         .len(64)
+//!         .flags(0)
+//!         .data_from_fn(|index| index as u8)
+//!         .reserved([0; 2])
+//!         .finish()
+//! }).await?;
+//! ```
+//!
+//! The snippet is schematic because transport construction and metadata are
+//! application choices. The derive and generated setter names are the real
+//! shape.
+//!
+//! ## Where the guarantee lives
+//!
+//! `InitializedStablePayload` has no public constructor. Generated typestate
+//! exposes `finish()` only after every semantic field and generated padding gap
+//! has been written. The send helper accepts a `for<'payload>` closure, so a
+//! proof tied to one invocation cannot escape that invocation or be substituted
+//! into another in safe Rust. The final witness discharge is the implementation
+//! of `req~zero-copy-uninit-two-phase~1`.
+//!
+//! Generated field writes route through centralized bounds-checked copy/fill
+//! kernels. Unsafe codec implementation, byte-backed layout proof, and typed
+//! borrow remain separate expert contracts; deriving these traits is the normal
+//! user path. Compile-fail tests in `tests/ui/stable_payload/`, Miri tests, exact
+//! byte fixtures, and selected-wire round trips are the executable arbiters.
+
 use std::{
     fmt::Display,
     marker::PhantomData,

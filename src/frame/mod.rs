@@ -9,7 +9,8 @@
 //!   projections to and from `UMessage` attributes.
 //! - [`codec`] — the canonical metadata field-block profile: how metadata
 //!   becomes bytes under a metadata profile.
-//! - [`envelope`] — complete-frame `UPFE` serialization for transports that
+//! - `envelope` — complete-frame `UPFE` serialization, available with
+//!   `owned-frame-transport`, for transports that
 //!   carry metadata and payload in one byte envelope. Selected-wire `UPWM`
 //!   profile prefixes are owned by the wire adapter, not this module.
 //! - [`abi`] — `UFrameMetadataAbiV1`, the fixed-layout `#[repr(C)]` profile

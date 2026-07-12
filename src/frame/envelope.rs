@@ -11,6 +11,26 @@
  * SPDX-License-Identifier: Apache-2.0
  ********************************************************************************/
 
+//! # Whole-frame envelopes
+//!
+//! A whole-frame envelope serializes semantic metadata and application payload
+//! into one classic byte value. It is distinct from selected-wire `UPWM`, which
+//! prefixes a configured metadata profile while the physical core carries
+//! payload storage separately.
+//!
+//! ## Walkthrough
+//!
+//! 1. Start with a validated `UOwnedFrame`.
+//! 2. Use `NativeUFrameEnvelope::serialize_frame` when open payload identities
+//!    must survive losslessly. Use `ProtobufUMessageFrame` only for legacy
+//!    compatibility and accept its representability checks.
+//! 3. Carry the resulting bytes through a classic byte channel.
+//! 4. Deserialize with the same `UFrameWireFormat`; malformed lengths,
+//!    reserved fields, metadata, payload presence, and unsupported identities
+//!    fail before a frame is returned.
+//! 5. Verify changes with the envelope round-trip, malformed-input, and
+//!    projection tests in this module.
+
 use std::{error::Error, fmt::Display};
 
 use bytes::Bytes;

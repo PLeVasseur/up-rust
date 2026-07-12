@@ -13,6 +13,20 @@
 
 #![cfg_attr(not(feature = "wire-implementer-api"), allow(dead_code))]
 
+//! Selected-wire identities, payload codecs, and metadata profiles.
+//!
+//! Wire authors define a [`UWire`] marker and stable [`WireIdentity`], associate
+//! payload types through [`UWirePayload`], and implement the codec traits the
+//! payload family requires. Physical carriage does not belong here. The
+//! adapter in `wire_transport` composes a wire and metadata codec over any
+//! compatible encoded core.
+//!
+//! Receive checks identity before profile decoding. A mismatch is an explicit
+//! unknown-identity error, never fallback to another decoder
+//! (`req~selected-wire-explicit-rejection~1`). The conformance and golden tests
+//! under `tests/wire_metadata_*` plus external `up-wire-xcdrv2-rust` are the
+//! implementation references.
+
 #[cfg(any(feature = "protobuf-support", feature = "up-core-types"))]
 use std::io::Read;
 #[cfg(feature = "selected-wire-codec-core")]
@@ -103,7 +117,7 @@ pub const NATIVE_PREFIX_METADATA_LAYOUT_ID: WireIdentity =
 /// Distinct from [`NATIVE_PREFIX_METADATA_LAYOUT_ID`] (the legacy
 /// protobuf-`UAttributes` block) so that canonical and legacy metadata are
 /// selectable, rejectable profiles: decoding bytes of one profile with the
-/// other codec fails as [`UWireMetadataError::UnknownMetadataLayoutId`],
+/// other codec fails as `UWireMetadataError::UnknownMetadataLayoutId`,
 /// never as generic malformed metadata.
 pub const UFRAME_FIELDS_METADATA_LAYOUT_ID: WireIdentity =
     WireIdentity::new("org.eclipse.uprotocol.metadata.uframe-fields", 0x0002);

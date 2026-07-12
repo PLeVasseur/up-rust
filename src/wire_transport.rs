@@ -28,6 +28,25 @@
 //! exposure. Product transport modules should not import, match on, or branch
 //! by concrete wire families such as `UProtocolNativeWire`; the selected wire is
 //! owned by [`UWireTransport<TCore, W, C>`].
+//!
+//! ## Composition walk
+//!
+//! 1. Implement [`UZeroCopyTransportCore`] (and, when supported,
+//!    [`UZeroCopyUninitTransportCore`]) for physical storage and encoded metadata
+//!    carriage. These core methods do not choose a wire.
+//! 2. Wrap the core with [`UWithNativePrefixWire::into_native_prefix_wire_transport`]
+//!    for an external/custom wire, or use `into_protobuf_transport` /
+//!    `into_stable_container_transport`.
+//! 3. Use the resulting adapter through the public semantic transport traits and
+//!    typed extension helpers. The adapter encodes metadata before core TX,
+//!    checks the envelope and selected identities on RX, validates physical
+//!    mirror fields, and only then exposes semantic metadata.
+//! 4. Run `wire_transport_adapter`, trybuild role-firewall tests, wrong-identity
+//!    tests, and the payload-contract round trips.
+//!
+//! This boundary is the N+M seam from
+//! `up-spec/up-l1/transport_families.adoc`: a core must not branch on concrete
+//! wire types, and a wire must not contain transport-specific carriage code.
 
 use std::{
     any::Any,
@@ -603,7 +622,17 @@ where
     async fn on_receive_encoded_zero_copy(&self, frame: Rx);
 }
 
-/// Physical zero-copy mechanics implemented by product transports.
+/// Encoded physical zero-copy mechanics implemented by product transports.
+///
+/// Implementing this core buys [`UWireTransport`] composition with every
+/// compatible `UWire` and metadata codec. The prepared loan spec contains
+/// metadata bytes already encoded by the selected profile; this trait must
+/// carry them without interpreting, relabeling, or re-encoding them.
+///
+/// TX loan and commit are required. Pull receive and listener hooks default to
+/// unsupported. [`UZeroCopyUninitTransportCore`] adds one uninitialized-loan
+/// operation, while the adapter supplies validation, identity checks, stable
+/// initialization, semantic public traits, and listener wrappers.
 #[async_trait]
 pub trait UZeroCopyTransportCore: Send + Sync {
     /// Transport-specific transmit loan type.
@@ -648,7 +677,11 @@ pub trait UZeroCopyTransportCore: Send + Sync {
     }
 }
 
-/// Optional physical uninitialized-loan mechanics implemented by product transports.
+/// Optional encoded-core capability for uninitialized transmit loans.
+///
+/// This one additional operation enables the adapter's checked two-phase stable
+/// initialization paths. The core returns storage matching the prepared layout;
+/// the generic layer owns initialization witnesses and commit eligibility.
 #[async_trait]
 pub trait UZeroCopyUninitTransportCore: UZeroCopyTransportCore {
     /// Transport-specific uninitialized transmit loan type.
@@ -1024,7 +1057,13 @@ pub trait UEncodedOwnedListener: Send + Sync {
 }
 
 #[cfg(feature = "owned-frame-transport")]
-/// Physical owned-frame mechanics implemented by product transports.
+/// Encoded physical owned-frame mechanics implemented by product transports.
+///
+/// Implementing this core buys selected-wire metadata encoding/decoding,
+/// identity rejection, semantic frame validation, and the public owned-frame
+/// transport API from [`UWireTransport`]. The required send receives metadata
+/// already encoded for the selected profile. Pull receive and listener hooks
+/// default to unsupported.
 #[async_trait]
 pub trait UOwnedTransportCore: Send + Sync {
     /// Sends an owned frame with already encoded metadata bytes.

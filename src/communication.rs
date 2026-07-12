@@ -13,6 +13,24 @@
 
 /*!
 Traits representing uProtocol's [Communication Layer API](https://github.com/eclipse-uprotocol/up-spec/blob/v1.6.0-alpha.7/up-l2/api.adoc) for publishing and subscribing to topics and for invoking RPC methods. Also contains default implementations of the traits employing uProtocol's [Transport & Session Layer API](crate::UTransport).
+
+## Application walkthrough
+
+1. Pick the role that matches the interaction: [`Publisher`] / [`Subscriber`]
+   for topics, [`Notifier`] for directed one-way delivery, or [`RpcClient`] /
+   [`RpcServer`] for request/response.
+2. Construct the role over a configured transport. The role owns message type,
+   addressing, TTL, priority, correlation, and validation rules; application
+   code does not hand-build those attributes repeatedly.
+3. Supply [`UPayload`] and [`CallOptions`] at the call boundary. Protobuf
+   conveniences are available when `protobuf-support` is enabled, while raw
+   bytes remain valid without it.
+4. Verify behavior first with the local/in-memory examples (`simple_publish`,
+   `simple_notify`, and `simple_rpc`), then with the selected physical transport.
+
+The role traits are the user contract. `Simple*` and `InMemory*` types are
+provided implementations selected by narrower features; implementing a physical
+transport belongs to the Transport Layer, not this module.
 */
 
 use bytes::Bytes;

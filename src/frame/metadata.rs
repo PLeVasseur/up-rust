@@ -633,14 +633,14 @@ impl From<UMessageError> for UFrameMetadataError {
 
 /// Canonical semantic metadata of a native uProtocol frame.
 ///
-/// This is the model that owned frames ([`crate::UOwnedFrame`]), zero-copy
+/// This is the model that owned frames (`UOwnedFrame`), zero-copy
 /// frame views, and selected-wire metadata codecs reason about. It owns its
 /// fields ergonomically (strings, options, [`Duration`]) because it is never
 /// reinterpreted as raw bytes across processes or languages; fixed-layout
 /// and byte-serialized representations are derived from it.
 ///
 /// The frame's payload presence is a property of the frame carrier
-/// ([`crate::UOwnedFrame`], `UFrameView`, TX loan specs), not of the
+/// (`UOwnedFrame`, `UFrameView`, TX loan specs), not of the
 /// metadata; the v1 invariant "payload present if and only if
 /// `payload_encoding` is present" is enforced at those boundaries.
 #[derive(Clone, Debug, PartialEq)]

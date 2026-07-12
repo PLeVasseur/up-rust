@@ -21,6 +21,25 @@ This crate can be used to
   over one of the supported transport protocols.
 * implement support for an additional transport protocol by means of implementing the [Transport & Session Layer API](https://github.com/eclipse-uprotocol/up-spec/blob/v1.6.0-alpha.7/up-l1/README.adoc).
 
+## The machine in one diagram
+
+```text
+applications       communication roles, UMessage, selected-wire typed payloads
+                         |                       |
+generic layers     validation and families      wire + metadata codecs
+                         |                       |
+implementation     semantic native-frame seam   encoded selected-wire core seam
+                         \_______________________/
+                                     |
+physical transport          addresses and moves storage
+```
+
+A transport can implement the semantic native-frame traits directly, or expose
+an encoded core and let `UWireTransport` compose the selected wire and metadata
+codec above it. The second seam is the `N + M` composition point: transport
+authors implement physical carriage once, while wire authors implement encoding
+once. See [`guide`] for audience-specific, end-to-end walkthroughs.
+
 ## Public API Tiers
 
 The crate root is a compatibility import surface. Existing root imports such
@@ -61,7 +80,7 @@ from the ordinary `communication` entry point:
 | Owned native-frame transport | Root exports such as `UOwnedTransport`, `UOwnedFrame`, `ValidatedOwnedFrame`, `PreparedOwnedFrame`, and the role facade in `communication::owned` | Available with the owned-frame transport features; it does not replace `UTransport`. |
 | Zero-copy transport and loans | Root exports such as `UZeroCopyTransport`, `UTxBuffer`, `UUninitTxBuffer`, and `UZeroCopyRxLease`; `zero-copy-uninit` adds the user uninitialized-loan and publish APIs | Loan-backed mechanics remain up-L1 capability. The L2 facade is intentionally narrower than raw transport capability. |
 | Selected-wire profiles | The public `wire` module plus root exports such as `UWire`, `UProtocolNativeWire`, `ProtobufWire`, `WireIdentity`, and selected-wire adapter exports such as `UWireTransport` | Selected-wire identity, metadata, and payload-family checks are up-L1 representation/profile semantics. |
-| Whole-frame envelopes | The public [`frame::envelope`] module and root exports such as `UFrameWireFormat` when `owned-frame-transport` is enabled | Whole-frame `UPFE` serialization is separate from selected-wire `UPWM` metadata prefixes. |
+| Whole-frame envelopes | The public `frame::envelope` module and root exports such as `UFrameWireFormat` when `owned-frame-transport` is enabled | Whole-frame `UPFE` serialization is separate from selected-wire `UPWM` metadata prefixes. |
 | Payload codecs and stable payload support | The public `payload` module plus root exports such as `PayloadCodec`, `EncodePayload`, `DecodePayload`, `StablePayload`, and `StablePayloadInit` | Safe derive/codegen paths are the supported route; the former manual unsafe slot APIs were removed. |
 | Test, fake, and proof support | Feature-gated root exports such as `MockTransport`, `InMemoryZeroCopyTransport`, vector leases, and payload fixtures | These remain available for tests, benchmarks, and conformance proof, not as production transport evidence by themselves. |
 
@@ -69,19 +88,19 @@ from the ordinary `communication` entry point:
 
 None of the following features are enabled by default, so you can pick and choose which parts of the library you want to use by enabling the corresponding features. Note that some features depend on each other, so enabling one feature might automatically enable other features as well. For example, enabling `up-core-types` will also enable `protobuf-support` since the generated types require that.
 
-* `cloudevents` Enables support for mapping [crate::UMessage]s to/from [crate::CloudEvent]s using Protobuf Format according to the
+* `cloudevents` Enables support for mapping [crate::UMessage]s to/from `CloudEvent`s using Protobuf Format according to the
   [uProtocol specification](https://github.com/eclipse-uprotocol/up-spec/blob/v1.6.0-alpha.7/up-l1/cloudevents.adoc).
 * `communication` Enables default implementations for all [Communication Layer API](https://github.com/eclipse-uprotocol/up-spec/blob/v1.6.0-alpha.7/up-l2/api.adoc) traits on top of the [Transport & Session Layer API](https://github.com/eclipse-uprotocol/up-spec/blob/v1.6.0-alpha.7/up-l1/README.adoc).
-* `protobuf-support` Enables convenience functions on the Transport & Session as well as the Communcation Layer APIs for implicitly mapping objects to protobuf payloads on the fly. This is particularly useful for using protoc-generated types as payloads using the [message builder](crate::UMessageBuilder::build_with_protobuf_payload) or [payload constructor](crate::communication::UPayload::try_from_protobuf). The only requirement for the object types is that they implement the [crate::ProtobufMappable] trait. A blanket implementation for types generated by the `protobuf` crate is also provided. Note that it is still possible to use protobufs as payloads even without enabling this feature. The payload of a [crate::UMessage] can be set to an arbitrary byte array, so protobuf messages can be serialized to bytes and set as payload without any support from the library. Enabling this feature just adds some convenient helper functions for automatically handling the mapping to protobuf payloads. The examples also illustrate the usage of these helper functions.
-* `symphony` Enables support for implementing an [Eclipse Symphony](https://github.com/eclipse-symphony) Target Provider as a uService exposed via the Communication Layer API's [RPC Server](crate::communication::RpcServer).
+* `protobuf-support` Enables convenience functions on the Transport & Session as well as the Communication Layer APIs for implicitly mapping objects to protobuf payloads on the fly. This is particularly useful for using protoc-generated types with `UMessageBuilder::build_with_protobuf_payload` or `communication::UPayload::try_from_protobuf`. The object type implements `ProtobufMappable`; a blanket implementation covers types generated by the `protobuf` crate. It remains possible to serialize protobuf payloads manually without this feature.
+* `symphony` Enables support for implementing an [Eclipse Symphony](https://github.com/eclipse-symphony) Target Provider as a uService exposed via the Communication Layer API's `RpcServer`.
 * `test-util` provides some useful mock implementations for testing. In particular, provides mock implementations of [UTransport] and Communication Layer API traits which make implementing unit tests a lot easier.
 * `up-core-types` Enables support for mapping the crate's public API types to protobufs as defined in the uProtocol specification. This includes, for example, the `UStatus` type which is used in the Communication Layer API for conveying errors. Enabling this feature also enables `protobuf-support` since the generated types require that.
-* `up-l2-api` Enables support for the [Communication Layer API](https://github.com/eclipse-uprotocol/up-spec/blob/v1.6.0-alpha.7/up-l2/api.adoc). This includes the trait definitions for the various roles defined by the API, such as [Notifier](crate::communication::Notifier), [Publisher](crate::communication::Publisher), [Subscriber](crate::communication::Subscriber), [RpcClient](crate::communication::RpcClient) and [RpcServer](crate::communication::RpcServer).
-* `up-l2-notifier` Enables a default implementation of the [Notifier](crate::communication::Notifier) trait on top of the Transport Layer API.
-* `up-l2-publisher` Enables a default implementation of the [Publisher](crate::communication::Publisher) trait on top of the Transport Layer API.
-* `up-l2-subscriber` Enables a default implementation of the [Subscriber](crate::communication::Subscriber) trait on top of the Transport Layer API.
-* `up-l2-rpc-client` Enables a default implementation of the [RpcClient](crate::communication::RpcClient) trait on top of the Transport Layer API.
-* `up-l2-rpc-server` Enables a default implementation of the [RpcServer](crate::communication::RpcServer) trait on top of the Transport Layer API.
+* `up-l2-api` Enables support for the [Communication Layer API](https://github.com/eclipse-uprotocol/up-spec/blob/v1.6.0-alpha.7/up-l2/api.adoc), including the `Notifier`, `Publisher`, `Subscriber`, `RpcClient`, and `RpcServer` role traits.
+* `up-l2-notifier` Enables the default `Notifier` implementation on top of the Transport Layer API.
+* `up-l2-publisher` Enables the default `Publisher` implementation on top of the Transport Layer API.
+* `up-l2-subscriber` Enables the default `Subscriber` implementation on top of the Transport Layer API.
+* `up-l2-rpc-client` Enables the default `RpcClient` implementation on top of the Transport Layer API.
+* `up-l2-rpc-server` Enables the default `RpcServer` implementation on top of the Transport Layer API.
 * `udiscovery` Enables support for types required to interact with [uDiscovery service](https://github.com/eclipse-uprotocol/up-spec/blob/v1.6.0-alpha.7/up-l3/udiscovery/v3/README.adoc)
   implementations.
 * `usubscription` Enables support for types required to interact with [uSubscription service](https://github.com/eclipse-uprotocol/up-spec/blob/v1.6.0-alpha.7/up-l3/usubscription/v3/README.adoc)
@@ -89,7 +108,7 @@ None of the following features are enabled by default, so you can pick and choos
 * `owned-frame-transport` enables an experimental native owned-frame transport API. This is additive to `UTransport` and does not replace the ordinary `UMessage` compatibility path.
 * `payload-contract-fixtures` exposes representative benchmark payload fixtures, stable structs, validators, manifests, and protobuf schemas for transport benchmarks.
 * `zero-copy-uninit` enables user-facing typed uninitialized-loan payload APIs, transport conveniences, and selected-wire publish helpers. Physical transport implementer contracts remain available without it.
-* `util` provides some useful helper structs. In particular, provides a [local, in-memory UTransport](crate::local_transport::LocalTransport) for exchanging messages within a single process. This transport is also used by the examples illustrating usage of the Communication Layer API.
+* `util` provides helper structs, including the local in-memory `LocalTransport` used by Communication Layer examples.
 
 ## References
 
@@ -123,6 +142,8 @@ pub use up_rust_macros::{ByteBackedStablePayload, StablePayload, StablePayloadIn
 pub mod bench_fixtures;
 
 pub mod frame;
+#[doc = include_str!("guide.md")]
+pub mod guide {}
 pub use frame::metadata::{
     try_project_attributes_to_frame_metadata, try_project_frame_to_umessage,
     try_project_umessage_to_frame_metadata, FrameMessageKind, FramePriority, PayloadEncoding,
@@ -155,18 +176,27 @@ pub use wire::{
     UWireMetadataCodec, UWireMetadataCodecFor, UWireMetadataContext, UWireMetadataError,
 };
 
-/// # Start here: implementing a WIRE format
+/// # Start here: implementing a wire format
 ///
-/// You define how payloads become bytes; you never touch a transport:
+/// Implementing this surface buys transport independence: every conforming
+/// encoded core can carry the wire without transport-specific codec code.
 ///
-/// ```text
-/// payload codec:   impl PayloadCodec + EncodePayload + DecodePayload
-/// wire identity:   register ids per up-spec/basics/uframe.adoc §Registry
-/// metadata codec:  reuse the canonical field block (crate::frame::codec);
-///                  the selected-wire adapter writes the UPWM identity prefix
-/// conformance:     wire-metadata conformance + golden suites pin you;
-///                  up-wire-xcdrv2 is the reference external wire
-/// ```
+/// ## The walk
+///
+/// 1. Implement [`PayloadCodec`], [`EncodePayload`], [`DecodePayload`], and,
+///    where streaming owned decode is useful, [`ReadDecodePayload`].
+/// 2. Define a [`WireIdentity`] and a marker implementing [`UWire`]. Register
+///    identities according to `up-spec/basics/uframe.adoc`.
+/// 3. Associate payload types through [`UWirePayload`]. Reuse
+///    [`NativePrefixFrameMetadataCodec`] unless the wire needs another
+///    registered metadata profile.
+/// 4. Exercise wrong-wire, wrong-payload-family, unknown-layout, golden, and
+///    round-trip cases. `up-wire-xcdrv2-rust` is the external reference.
+///
+/// The selected-wire adapter writes and checks the `UPWM` identity prefix
+/// before profile decoding. Unknown identities therefore fail before bytes can
+/// reach the wrong metadata or payload decoder
+/// (`req~selected-wire-explicit-rejection~1`).
 #[cfg(feature = "wire-implementer-api")]
 pub mod wire_implementer_api {
     #[cfg(feature = "selected-wire-protobuf-metadata")]
@@ -224,6 +254,20 @@ pub use payload::UWireError;
 /// `UZeroCopyUninitTransportExt::send_uninit_stable_payload_as` plus the
 /// derive macros provide checked, borrow-backed initialization for fixed-size
 /// payloads.
+///
+/// The compatibility message path is available with no optional feature:
+///
+/// ```
+/// use up_rust::prelude::*;
+///
+/// # fn main() -> Result<(), Box<dyn std::error::Error>> {
+/// let topic = UUri::try_from("//my-vehicle/4210/1/B24D")?;
+/// let message = UMessageBuilder::publish(topic)
+///     .build_with_payload("closed", UPayloadFormat::Text)?;
+/// assert!(message.is_publish());
+/// # Ok(())
+/// # }
+/// ```
 pub mod prelude {
     #[cfg(feature = "up-l2-notifier")]
     pub use crate::communication::Notifier;
@@ -330,12 +374,27 @@ pub use wire_transport::{
 #[cfg(feature = "selected-wire-user-api")]
 pub use wire_transport::{UHasWire, USelectedWireZeroCopyTransport, UWireRx};
 
-/// # Selected-wire as a USER
+/// # Selected-wire as a user
 ///
-/// Sending typed payloads over a configured wire without implementing
-/// anything: wrap any zero-copy core with the wire adapters here; encoding
-/// identity and envelopes are handled for you. Wire choice is per-link
-/// configuration — see `req~selected-wire-configuration~1`.
+/// Wrap an encoded physical core once, then use typed payload helpers without
+/// implementing a wire or transport. Wire choice is construction-time link
+/// configuration, never per-message negotiation
+/// (`req~selected-wire-configuration~1`).
+///
+/// ```text
+/// use up_rust::{StableContainerWireFormat, UWithNativePrefixWire};
+///
+/// let transport = core.into_native_prefix_wire_transport(StableContainerWireFormat);
+/// transport.send_uninit_stable_payload::<MyStablePayload>(metadata, |init| {
+///     init.field(value)?.finish()
+/// }).await?;
+/// ```
+///
+/// The snippet is schematic because `core`, metadata, and the payload type come
+/// from the chosen transport/application. The constructor and helper names are
+/// the real API. Receive leases expose [`UFrameView`] directly; contiguous
+/// stable payloads are borrowed with
+/// [`ULoanedContiguousZeroCopyRxFrame::borrow_stable_payload`].
 #[cfg(feature = "selected-wire-user-api")]
 pub mod selected_wire_user_api {
     pub use crate::{
@@ -348,23 +407,33 @@ pub mod selected_wire_user_api {
     pub use crate::{UZeroCopyUninitTransport, UZeroCopyUninitTransportExt};
 }
 
-/// # Start here: implementing a TRANSPORT
+/// # Start here: implementing a transport
 ///
-/// Implement the smallest contract that fits your technology; the generic
-/// layers above give you every wire format and family behavior:
+/// First choose the honest seam; the two zero-copy seams are related but not
+/// interchangeable.
 ///
-/// ```text
-/// classic only:        impl UTransport             (up-l1/README.adoc)
-/// owned frames:        impl UOwnedTransportImpl    (validation handled above you)
-/// zero-copy:           impl UZeroCopyTransportImpl (loans + leases)
-/// zero-copy + uninit:  add the uninit core methods; the safe witness
-///                      machinery above you does the rest
-/// ```
+/// 1. Implement [`UTransport`] for classic `UMessage` carriage.
+/// 2. Implement `UOwnedTransportImpl` or [`UZeroCopyTransportImpl`] when the
+///    technology exposes semantic native frames. These traits receive validated
+///    semantic metadata.
+/// 3. Implement the encoded core traits exported by this module when selected
+///    wires should compose above the technology. [`UZeroCopyTransportCore`]
+///    receives encoded metadata bytes and storage layouts, not attributes.
 ///
-/// Your core's obligations are `req~transport-core-*` in
-/// `up-spec/up-l1/transport_families.adoc`: move bytes; never interpret,
-/// relabel, or re-encode. Test against `InMemoryZeroCopyTransport`
-/// (`test-util`) — the executable specification.
+/// For zero-copy, the required semantic operations are TX loan and commit;
+/// pull receive and listener registration hooks have default unsupported
+/// implementations. [`UZeroCopyUninitTransportImpl`] adds one required
+/// uninitialized-loan operation. The encoded core has the corresponding split.
+///
+/// Implementing the encoded core buys every compatible selected wire, metadata
+/// validation and identity rejection, typed stable initialization, and family
+/// adapters without teaching the physical transport those semantics. Its
+/// obligations are the `req~transport-core-*~1` and `req~zero-copy-*~1`
+/// requirements in `up-spec/up-l1/transport_families.adoc`.
+///
+/// Use `InMemoryZeroCopyTransport` (feature `test-util`) for semantic behavior and the
+/// `wire_transport_adapter` plus payload-contract suites for encoded-core
+/// conformance.
 #[cfg(feature = "transport-implementer-api")]
 pub mod transport_implementer_api {
     #[cfg(feature = "owned-frame-transport")]

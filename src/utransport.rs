@@ -460,8 +460,16 @@ pub trait UOwnedListener: Send + Sync {
 
 /// Implementation boundary for experimental owned native-frame transports.
 ///
-/// Transport authors implement this trait. The public [`UOwnedTransport`]
-/// blanket implementation validates frames and filters before delegating here.
+/// Implementing this trait buys the public [`UOwnedTransport`] API, frame and
+/// filter validation, listener validation, and compatibility projections above
+/// the transport. Only [`ValidatedOwnedFrame`] reaches the required send method;
+/// its constructor is not public, so
+/// `req~owned-frame-validate-before-send~1` is enforced before delegation.
+///
+/// Send is required. Pull receive and listener registration have default
+/// unsupported implementations and are overridden only for carriage patterns
+/// the technology supports. `UOwnedTransportCore` is the different,
+/// selected-wire seam for transports that carry encoded metadata bytes.
 #[cfg(feature = "owned-frame-transport")]
 #[async_trait]
 pub trait UOwnedTransportImpl: Send + Sync {

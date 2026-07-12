@@ -48,6 +48,23 @@
 //!
 //! Values that do not fit a length field are rejected at encode time —
 //! encoding never truncates.
+//!
+//! ## Walkthrough
+//!
+//! 1. Construct and validate semantic [`UFrameMetadata`].
+//! 2. Call [`encode_frame_metadata_fields`] once; transports carry the returned
+//!    block as opaque bytes in their binding-specific placement.
+//! 3. On receive, call [`decode_frame_metadata_fields`]. Version, reserved bits,
+//!    lengths, UTF-8, payload identity, and metadata invariants are checked
+//!    before a semantic frame is exposed.
+//! 4. Pin changes with round trips, malformed/truncated inputs, unknown-bit
+//!    rejection, and golden vectors in `wire_metadata_conformance` and
+//!    `wire_metadata_golden`.
+//!
+//! This is a metadata profile, not a whole-frame envelope and not an
+//! application payload codec. `up-spec/basics/uframe.adoc` defines the profile
+//! registry; `up-spec/up-l1/transport_families.adoc` defines selected-wire
+//! identity and rejection behavior.
 
 use std::time::Duration;
 
