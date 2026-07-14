@@ -7,4 +7,4 @@ error[E0308]: mismatched types
    |            expected due to this
    |
    = note: expected struct `InitializedStablePayload<'_, InitMissingField>`
-              found struct `__UpRustStablePayloadInitForInitMissingField<'_, StablePayloadInitSet, StablePayloadInitUnset>`
+              found struct `__UpRustStablePayloadInitForInitMissingField<'_, up_rust::payload::stable::StablePayloadInitSet, up_rust::payload::stable::StablePayloadInitUnset>`
