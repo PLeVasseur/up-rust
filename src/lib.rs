@@ -185,20 +185,29 @@ pub use wire::{
 ///
 /// ## The walk
 ///
-/// 1. Implement [`PayloadCodec`], [`EncodePayload`], [`DecodePayload`], and,
-///    where streaming owned decode is useful, [`ReadDecodePayload`].
-/// 2. Define a [`WireIdentity`] and a marker implementing [`UWire`]. Register
-///    identities according to `up-spec/basics/uframe.adoc`.
-/// 3. Associate payload types through [`UWirePayload`]. Reuse
-///    [`NativePrefixFrameMetadataCodec`] unless the wire needs another
-///    registered metadata profile.
-/// 4. Exercise wrong-wire, wrong-payload-family, unknown-layout, golden, and
-///    round-trip cases. `up-wire-xcdrv2-rust` is the external reference.
+/// 1. Define the representation profile, canonical bytes or allowed variants,
+///    byte order, complete-consumption rule, and negative vectors.
+/// 2. Implement [`PayloadCodec`], [`EncodePayload`], [`DecodePayload`], and,
+///    where ordered-reader decode is useful, [`ReadDecodePayload`].
+/// 3. Define a literal-labeled experimental [`WireIdentity`] and marker
+///    implementing [`UWire`]. Compact codes are unique within the selected-wire,
+///    metadata-layout, or payload-family namespace; experimental codes are not
+///    registered or stable.
+/// 4. Associate payload types through [`UWirePayload`]. The associated codec can
+///    be a separate type. Reuse [`NativePrefixFrameMetadataCodec`] unless the
+///    wire needs another documented metadata profile.
+/// 5. Exercise wrong-wire, wrong-payload-family, unknown-layout, full-consumption,
+///    golden/independent-vector, malformed-reader, and round-trip cases. The
+///    external XCDRv2, Arrow, and OMGIDL crates show different profile choices;
+///    none replaces the governing selected-wire contract.
 ///
 /// The selected-wire adapter writes and checks the `UPWM` identity prefix
 /// before profile decoding. Unknown identities therefore fail before bytes can
 /// reach the wrong metadata or payload decoder
-/// (`req~selected-wire-explicit-rejection~1`).
+/// (`req~selected-wire-explicit-rejection~1`). Identity allocation, payload
+/// representation, metadata layout, and transport carriage are separate
+/// concerns; a wire implementation must not silently merge their registries or
+/// put transport-specific mechanics in its codec.
 #[cfg(feature = "wire-implementer-api")]
 pub mod wire_implementer_api {
     #[cfg(feature = "selected-wire-protobuf-metadata")]

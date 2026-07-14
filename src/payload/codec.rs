@@ -141,6 +141,13 @@ where
 pub trait EncodePayload<T: ?Sized>: PayloadCodec {
     /// Returns the exact payload layout required to encode `value`.
     ///
+    /// This is a measurement operation, not necessarily a constant-time size
+    /// lookup. A variable-length codec may serialize or traverse `value` here
+    /// and perform the work again in [`Self::encode_payload`]. Benchmarks and
+    /// callers that care about this cost should label the probe and write phases
+    /// separately. The returned length and alignment are the complete contract
+    /// for the destination passed to `encode_payload`.
+    ///
     /// # Errors
     ///
     /// Returns an error if the value cannot be measured for this codec.
@@ -179,6 +186,14 @@ pub trait DecodePayload<'a, T>: PayloadCodec {
 /// Decodes a typed value from an ordered payload byte stream.
 pub trait ReadDecodePayload<T>: PayloadCodec {
     /// Decodes `T` from `reader`, which must yield exactly `payload_len` bytes.
+    ///
+    /// Implementations must treat `payload_len` as a finite allocation and read
+    /// bound before reserving payload-sized storage. They must consume exactly
+    /// that many bytes, distinguish an early EOF from malformed payload data,
+    /// and check for an additional byte so overlong input is rejected. Reader
+    /// errors and malformed input must return [`UWireError`], not panic. A codec
+    /// may enforce a lower implementation-specific maximum, but must report that
+    /// limit rather than allocating first and rejecting later.
     ///
     /// # Errors
     ///

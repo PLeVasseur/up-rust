@@ -570,9 +570,13 @@ impl<C, T> UWireReadDecode<T> for C where C: ReadDecodePayload<T> {}
 
 /// Selected-wire payload mapping for typed payloads.
 ///
-/// A wire chooses one payload codec for `T`. The codec's implemented capability
-/// traits then decide which operations are available: encode/decode, initialized
-/// TX loan, uninitialized TX loan, and receive-side typed borrow.
+/// The wire marker, not the payload type, chooses one payload codec for `T`.
+/// The associated codec need not be the wire marker itself. Its implemented
+/// capability traits decide which operations are available: encode/decode,
+/// initialized TX loan, uninitialized TX loan, and receive-side typed borrow.
+/// Implementing this mapping does not grant capabilities the codec does not
+/// implement and does not make [`ReadDecodePayload`] a borrowed or in-place
+/// decode API.
 pub trait UWirePayload<T>: UWire {
     /// Concrete payload codec used by this selected wire for `T`.
     type Codec: PayloadCodec;
