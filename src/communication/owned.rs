@@ -1035,6 +1035,7 @@ mod tests {
         sent: Mutex<Vec<UOwnedFrame>>,
         received: Mutex<VecDeque<UOwnedFrame>>,
         listener: Mutex<Option<Arc<dyn UOwnedListener>>>,
+        lifecycle: Option<Arc<Mutex<Vec<&'static str>>>>,
     }
 
     impl RecordingOwnedTransport {
@@ -1043,6 +1044,23 @@ mod tests {
                 sent: Mutex::new(Vec::new()),
                 received: Mutex::new(VecDeque::new()),
                 listener: Mutex::new(None),
+                lifecycle: None,
+            }
+        }
+
+        fn with_lifecycle(lifecycle: Arc<Mutex<Vec<&'static str>>>) -> Self {
+            Self {
+                lifecycle: Some(lifecycle),
+                ..Self::new()
+            }
+        }
+
+        fn record_lifecycle(&self, event: &'static str) {
+            if let Some(lifecycle) = &self.lifecycle {
+                lifecycle
+                    .lock()
+                    .expect("lifecycle lock poisoned")
+                    .push(event);
             }
         }
 
@@ -1092,6 +1110,7 @@ mod tests {
             _sink_filter: Option<&UUri>,
             listener: Arc<dyn UOwnedListener>,
         ) -> Result<(), UStatus> {
+            self.record_lifecycle("register");
             *self.listener.lock().expect("listener lock poisoned") = Some(listener);
             Ok(())
         }
@@ -1102,6 +1121,7 @@ mod tests {
             _sink_filter: Option<&UUri>,
             _listener: Arc<dyn UOwnedListener>,
         ) -> Result<(), UStatus> {
+            self.record_lifecycle("unregister");
             *self.listener.lock().expect("listener lock poisoned") = None;
             Ok(())
         }
@@ -1206,7 +1226,27 @@ mod tests {
         assert!(matches!(result, Err(PubSubError::PublishError(_))));
     }
 
-    struct StubUSubscription;
+    #[derive(Default)]
+    struct StubUSubscription {
+        lifecycle: Option<Arc<Mutex<Vec<&'static str>>>>,
+    }
+
+    impl StubUSubscription {
+        fn recording(lifecycle: Arc<Mutex<Vec<&'static str>>>) -> Self {
+            Self {
+                lifecycle: Some(lifecycle),
+            }
+        }
+
+        fn record_lifecycle(&self, event: &'static str) {
+            if let Some(lifecycle) = &self.lifecycle {
+                lifecycle
+                    .lock()
+                    .expect("lifecycle lock poisoned")
+                    .push(event);
+            }
+        }
+    }
 
     #[async_trait]
     impl crate::core::usubscription::USubscription for StubUSubscription {
@@ -1216,9 +1256,11 @@ mod tests {
             _expiration: Option<u64>,
             _min_sample_period: Option<u32>,
         ) -> Result<SubscriptionStatus, crate::UStatus> {
+            self.record_lifecycle("subscribe");
             Ok(SubscriptionStatus::Subscribed)
         }
         async fn unsubscribe(&self, _topic: &UUri) -> Result<(), crate::UStatus> {
+            self.record_lifecycle("unsubscribe");
             Ok(())
         }
         async fn fetch_subscriptions_by_topic(
@@ -1255,7 +1297,7 @@ mod tests {
     async fn subscriber_registers_owned_listener_and_delivers_messages() {
         let transport = Arc::new(RecordingOwnedTransport::new());
         let subscriber = Endpoint::new(transport.clone(), uri_provider())
-            .subscriber(Arc::new(StubUSubscription));
+            .subscriber(Arc::new(StubUSubscription::default()));
         let topic = uri_provider().get_resource_uri(0x9A00);
         let listener = Arc::new(RecordingMessageListener::default());
 
@@ -1281,6 +1323,30 @@ mod tests {
             .unsubscribe(&topic, listener)
             .await
             .expect("subscriber unregistered");
+    }
+
+    #[tokio::test]
+    async fn subscriber_contacts_usubscription_before_listener_changes() {
+        let lifecycle = Arc::new(Mutex::new(Vec::new()));
+        let transport = Arc::new(RecordingOwnedTransport::with_lifecycle(lifecycle.clone()));
+        let subscriber = Endpoint::new(transport, uri_provider())
+            .subscriber(Arc::new(StubUSubscription::recording(lifecycle.clone())));
+        let topic = uri_provider().get_resource_uri(0x9A00);
+        let listener = Arc::new(RecordingMessageListener::default());
+
+        subscriber
+            .subscribe(&topic, listener.clone(), None)
+            .await
+            .expect("subscriber registered");
+        subscriber
+            .unsubscribe(&topic, listener)
+            .await
+            .expect("subscriber unregistered");
+
+        assert_eq!(
+            *lifecycle.lock().expect("lifecycle lock poisoned"),
+            ["subscribe", "register", "unsubscribe", "unregister"]
+        );
     }
 
     #[tokio::test]
