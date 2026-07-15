@@ -15,12 +15,15 @@ use std::{error::Error, fmt::Display};
 
 use crate::{PayloadEncoding, UCode, UStatus};
 
+/// Payload codec traits: measure, encode, and decode typed payloads.
 pub mod codec;
+/// Loan-aware payload construction: write typed payloads into transport storage.
 pub mod loan;
 pub mod stable;
 
 /// Error type used by serialization-neutral payload helpers.
 #[derive(Clone, Debug, Eq, PartialEq)]
+#[non_exhaustive]
 pub enum UWireError {
     /// A caller-provided output buffer is too small for the serialized payload.
     BufferTooSmall {

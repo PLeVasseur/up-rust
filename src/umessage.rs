@@ -28,9 +28,14 @@ mod umessagebuilder;
 pub(crate) type Payload = Bytes;
 
 #[derive(Debug)]
+/// Errors produced when building or converting a [`UMessage`].
+#[non_exhaustive]
 pub enum UMessageError {
+    /// The message attributes failed validation.
     AttributesValidationError(UAttributesError),
+    /// The payload could not be (de)serialized.
     DataSerializationError(SerializationError),
+    /// The payload is inconsistent with the message (wrong format or presence).
     PayloadError(String),
 }
 
@@ -83,6 +88,7 @@ impl From<&str> for UMessageError {
 
 #[derive(Debug, Clone, PartialEq)]
 #[repr(C)]
+/// One uProtocol message: attributes plus optional payload bytes.
 pub struct UMessage {
     attributes: UAttributes,
     payload: Option<Payload>,
@@ -279,6 +285,7 @@ impl UMessage {
     }
 
     #[must_use]
+    /// Returns the payload bytes, if the message carries any.
     pub fn payload(&self) -> Option<Bytes> {
         self.payload.clone()
     }
@@ -537,7 +544,7 @@ mod test {
             )
         );
         assert_eq!(
-            crate::try_project_umessage_to_frame_metadata(&message)
+            crate::frame::metadata::try_project_umessage_to_frame_metadata(&message)
                 .expect("metadata")
                 .payload_encoding(),
             Some(&encoding)

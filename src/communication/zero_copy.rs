@@ -32,7 +32,7 @@ use crate::{
     payload::loan::LoanPayload,
     LocalUriProvider, UFrameMetadata, UMessageBuilder, UZeroCopyTransport, UZeroCopyTransportExt,
 };
-#[cfg(feature = "zero-copy-uninit")]
+#[cfg(feature = "zero-copy-transport")]
 use crate::{
     payload::{
         stable::{
@@ -45,6 +45,11 @@ use crate::{
 };
 use crate::{wire::UWirePayload, wire_transport::UHasWire};
 
+/// *Role: the up-L2 publish surface over a **selected-wire zero-copy
+/// transport** — typed payloads written directly into transport loans,
+/// with role ergonomics. See the
+/// [guide](crate::guide::applications::communication).*
+///
 /// Front door for zero-copy communication-layer clients.
 pub struct Endpoint<T, P>
 where
@@ -53,6 +58,16 @@ where
 {
     transport: Arc<T>,
     uri_provider: Arc<P>,
+}
+
+impl<T, P> core::fmt::Debug for Endpoint<T, P>
+where
+    T: UZeroCopyTransport + ?Sized,
+    P: LocalUriProvider + ?Sized,
+{
+    fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
+        f.debug_struct("Endpoint").finish_non_exhaustive()
+    }
 }
 
 impl<T, P> Endpoint<T, P>
@@ -84,6 +99,16 @@ where
 {
     transport: Arc<T>,
     uri_provider: Arc<P>,
+}
+
+impl<T, P> core::fmt::Debug for Publisher<T, P>
+where
+    T: UZeroCopyTransport + ?Sized,
+    P: LocalUriProvider + ?Sized,
+{
+    fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
+        f.debug_struct("Publisher").finish_non_exhaustive()
+    }
 }
 
 impl<T, P> Publisher<T, P>
@@ -118,7 +143,7 @@ where
                 "failed to create zero-copy Publish message metadata from parameters: {error}"
             ))
         })?;
-        crate::try_project_umessage_to_frame_metadata(&message).map_err(|error| {
+        crate::frame::metadata::try_project_umessage_to_frame_metadata(&message).map_err(|error| {
             PubSubError::InvalidArgument(format!(
                 "failed to create zero-copy Publish frame metadata from parameters: {error}"
             ))
@@ -151,7 +176,7 @@ where
     }
 }
 
-#[cfg(feature = "zero-copy-uninit")]
+#[cfg(feature = "zero-copy-transport")]
 impl<T, P> Publisher<T, P>
 where
     T: UZeroCopyUninitTransport + UHasWire + ?Sized,
@@ -190,8 +215,8 @@ mod tests {
     use crate::{
         test_support::StableTestBytes as StableBytes, InMemoryZeroCopyTransport,
         StableContainerWireFormat, StaticUriProvider, UCode, UFrameView,
-        ULoanedContiguousZeroCopyRxFrame, UStatus, UVecRxLease, UVecTxBuffer, UVecUninitTxBuffer,
-        UZeroCopyTransportImpl, UZeroCopyUninitTransportImpl, ValidatedTxLoanSpec,
+        ULoanedContiguousZeroCopyRxFrame, UStatus, UTxLoanSpec, UVecRxLease, UVecTxBuffer,
+        UVecUninitTxBuffer, UZeroCopyTransportImpl, UZeroCopyUninitTransportImpl,
     };
 
     struct SelectedStableTransport {
@@ -225,7 +250,7 @@ mod tests {
         type Tx = UVecTxBuffer;
         type Rx = UVecRxLease;
 
-        async fn loan_validated_tx(&self, spec: ValidatedTxLoanSpec) -> Result<Self::Tx, UStatus> {
+        async fn loan_validated_tx(&self, spec: UTxLoanSpec) -> Result<Self::Tx, UStatus> {
             UZeroCopyTransportImpl::loan_validated_tx(&self.inner, spec).await
         }
 
@@ -240,7 +265,7 @@ mod tests {
 
         async fn loan_validated_uninit_tx(
             &self,
-            spec: ValidatedTxLoanSpec,
+            spec: UTxLoanSpec,
         ) -> Result<Self::UninitTx, UStatus> {
             UZeroCopyUninitTransportImpl::loan_validated_uninit_tx(&self.inner, spec).await
         }
@@ -331,7 +356,7 @@ mod tests {
         type Tx = UVecTxBuffer;
         type Rx = UVecRxLease;
 
-        async fn loan_validated_tx(&self, _spec: ValidatedTxLoanSpec) -> Result<Self::Tx, UStatus> {
+        async fn loan_validated_tx(&self, _spec: UTxLoanSpec) -> Result<Self::Tx, UStatus> {
             Err(UStatus::fail_with_code(
                 UCode::Unavailable,
                 "transport unavailable",

@@ -146,7 +146,9 @@ impl From<crate::UFrameMetadataError> for UFrameAbiError {
 #[repr(C)]
 #[derive(Clone, Copy, Debug, Default, Eq, PartialEq)]
 pub struct UUuidAbi {
+    /// Most significant 64 bits of the UUID.
     pub msb: u64,
+    /// Least significant 64 bits of the UUID.
     pub lsb: u64,
 }
 
@@ -154,10 +156,15 @@ pub struct UUuidAbi {
 #[repr(C)]
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub struct UUriAbi {
+    /// uEntity identifier.
     pub ue_id: u32,
+    /// Resource identifier within the uEntity.
     pub resource_id: u16,
+    /// uEntity API major version.
     pub ue_version_major: u8,
+    /// Length in bytes of the authority name.
     pub authority_name_len: u8,
+    /// Authority name bytes (fixed capacity; `authority_name_len` bytes valid).
     pub authority_name: [u8; UFRAME_ABI_AUTHORITY_CAPACITY],
 }
 
@@ -181,14 +188,19 @@ impl Default for UUriAbi {
 #[repr(C)]
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub struct UPayloadEncodingAbi {
+    /// Compact registry identifier of the payload encoding.
     pub registry_id: u32,
+    /// Length in bytes of the literal encoding id.
     pub literal_id_len: u8,
+    /// Length in bytes of the content type.
     pub content_type_len: u8,
     /// bit0: registry_id present; bits 1..=7 MUST be zero.
     pub component_flags: u8,
     /// MUST be zero.
     pub _reserved: u8,
+    /// Literal encoding id bytes (fixed capacity; `literal_id_len` bytes valid).
     pub literal_id: [u8; UFRAME_ABI_LITERAL_ID_CAPACITY],
+    /// Content type bytes (fixed capacity; `content_type_len` bytes valid).
     pub content_type: [u8; UFRAME_ABI_CONTENT_TYPE_CAPACITY],
 }
 
@@ -213,7 +225,9 @@ impl Default for UPayloadEncodingAbi {
 #[repr(C)]
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub struct UTraceparentAbi {
+    /// Length in bytes of the traceparent value.
     pub len: u8,
+    /// Traceparent bytes (fixed capacity; `len` bytes valid).
     pub bytes: [u8; UFRAME_ABI_TRACEPARENT_CAPACITY],
 }
 
@@ -230,7 +244,9 @@ impl Default for UTraceparentAbi {
 #[repr(C)]
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub struct UTokenAbi {
+    /// Length in bytes of the token value.
     pub len: u16,
+    /// Token bytes (fixed capacity; `len` bytes valid).
     pub bytes: [u8; UFRAME_ABI_TOKEN_CAPACITY],
 }
 
@@ -286,6 +302,7 @@ pub struct UFrameMetadataAbiV1 {
     pub _reserved1: u32,
 
     // identifiers: 32..64
+    /// Message id as a fixed-layout UUID.
     pub id: UUuidAbi,
     /// Valid iff [`FIELD_REQID`].
     pub reqid: UUuidAbi,
@@ -298,6 +315,7 @@ pub struct UFrameMetadataAbiV1 {
     pub payload_encoding: UPayloadEncodingAbi,
 
     // addressing: 244..516
+    /// Source address as a fixed-layout URI.
     pub source: UUriAbi,
     /// Valid iff [`FIELD_SINK`].
     pub sink: UUriAbi,
@@ -749,6 +767,8 @@ const _: () = {
 
 #[cfg(test)]
 mod tests {
+    use pretty_assertions::assert_eq;
+
     use super::*;
 
     fn topic() -> UUri {

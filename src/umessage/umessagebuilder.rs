@@ -45,6 +45,12 @@ pub struct UMessageBuilder {
     validator: Box<dyn UAttributesValidator>,
 }
 
+impl core::fmt::Debug for UMessageBuilder {
+    fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
+        f.debug_struct("UMessageBuilder").finish_non_exhaustive()
+    }
+}
+
 impl UMessageBuilder {
     /// Gets a builder for creating *publish* messages.
     ///
@@ -646,6 +652,11 @@ impl UMessageBuilder {
     /// # Ok(())
     /// # }
     /// ```
+    ///
+    /// # Errors
+    ///
+    /// Returns an error if the accumulated attributes fail validation for
+    /// the message type being built.
     pub fn build(&self) -> Result<UMessage, UMessageError> {
         // [impl->dsn~up-attributes-id~1]
         let message_id = self

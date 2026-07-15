@@ -56,7 +56,7 @@
 //! has been written. The send helper accepts a `for<'payload>` closure, so a
 //! proof tied to one invocation cannot escape that invocation or be substituted
 //! into another in safe Rust. The final witness discharge is the implementation
-//! of `req~zero-copy-uninit-two-phase~1`.
+//! of `req~zero-copy-transport-two-phase~1`.
 //!
 //! Generated field writes route through centralized bounds-checked copy/fill
 //! kernels. Unsafe codec implementation, byte-backed layout proof, and typed
@@ -73,11 +73,11 @@ use std::{
 
 use mediatype::ReadParams;
 
-#[cfg(feature = "zero-copy-uninit")]
+#[cfg(feature = "zero-copy-transport")]
 use crate::zero_copy::LoanedPayloadUninitMut;
 use crate::PayloadEncoding;
 
-#[cfg(feature = "zero-copy-uninit")]
+#[cfg(feature = "zero-copy-transport")]
 use super::loan::{LoanUninitPayload, LoanedUninitPayload};
 use super::{
     codec::{PayloadCodec, PayloadLayout},
@@ -96,6 +96,13 @@ const STABLE_CONTAINER_MEDIA_TYPE: &str = "application/vnd.uprotocol.stable-cont
 #[must_use = "return this completion witness to the transmit path or consume it explicitly"]
 pub struct InitializedStablePayload<'a, T> {
     _marker: PhantomData<fn(&'a mut T) -> &'a mut T>,
+}
+
+impl<'a, T> core::fmt::Debug for InitializedStablePayload<'a, T> {
+    fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
+        f.debug_struct("InitializedStablePayload")
+            .finish_non_exhaustive()
+    }
 }
 
 impl<'a, T> InitializedStablePayload<'a, T> {
@@ -482,10 +489,12 @@ where
 
 /// Hidden typestate marker used by `StablePayloadInit` derive output.
 #[doc(hidden)]
+#[derive(Debug)]
 pub enum StablePayloadInitUnset {}
 
 /// Hidden typestate marker used by `StablePayloadInit` derive output.
 #[doc(hidden)]
+#[derive(Debug)]
 pub enum StablePayloadInitSet {}
 
 /// Generative context for initializing one stable payload slot.
@@ -498,6 +507,13 @@ pub enum StablePayloadInitSet {}
 pub struct StablePayloadInitContext<'slot, T: StablePayloadInit> {
     init: T::Init<'slot>,
     _invariant: PhantomData<fn(&'slot mut T) -> &'slot mut T>,
+}
+
+impl<'slot, T: StablePayloadInit> core::fmt::Debug for StablePayloadInitContext<'slot, T> {
+    fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
+        f.debug_struct("StablePayloadInitContext")
+            .finish_non_exhaustive()
+    }
 }
 
 impl<'slot, T: StablePayloadInit> StablePayloadInitContext<'slot, T> {
@@ -560,7 +576,7 @@ pub unsafe trait StablePayloadInit: StablePayload {
     ///
     /// Returns an error if the payload range does not match this stable payload's
     /// size and alignment.
-    #[cfg(feature = "zero-copy-uninit")]
+    #[cfg(feature = "zero-copy-transport")]
     fn init_from_uninit_payload<'a>(
         payload: LoanedPayloadUninitMut<'a>,
     ) -> Result<Self::Init<'a>, UWireError> {
@@ -597,6 +613,13 @@ pub struct StablePayloadInitSlot<'a, T> {
     // `ByteBackedStablePayloadField::init_bytes`.
     bytes: &'a mut [mem::MaybeUninit<u8>],
     _marker: PhantomData<&'a mut mem::MaybeUninit<T>>,
+}
+
+impl<'a, T> core::fmt::Debug for StablePayloadInitSlot<'a, T> {
+    fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
+        f.debug_struct("StablePayloadInitSlot")
+            .finish_non_exhaustive()
+    }
 }
 
 impl<'a, T> StablePayloadInitSlot<'a, T> {
@@ -906,6 +929,13 @@ fn required_stable_parameter(
 /// zero-copy borrows are intentionally deferred to the stable borrow proof API.
 pub struct StableContainerPayload<T>(PhantomData<T>);
 
+impl<T> core::fmt::Debug for StableContainerPayload<T> {
+    fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
+        f.debug_struct("StableContainerPayload")
+            .finish_non_exhaustive()
+    }
+}
+
 impl<T: StablePayload> StableContainerPayload<T> {
     /// Native custom encoding id for stable-container payloads.
     pub const ENCODING_ID: &'static str = STABLE_CONTAINER_ENCODING_ID;
@@ -1100,7 +1130,7 @@ where
 // - `T: ByteBackedStablePayload` proves safe no-zero TX cannot expose
 //   uninitialized implicit padding when the full `size_of::<T>()` byte range is
 //   committed after the returned initialized marker is produced.
-#[cfg(feature = "zero-copy-uninit")]
+#[cfg(feature = "zero-copy-transport")]
 unsafe impl<T> LoanUninitPayload<T> for StableContainerPayload<T>
 where
     T: ByteBackedStablePayload,
@@ -1276,7 +1306,7 @@ mod tests {
         let payload = Bytes::from_static(b"\x0a\x00\x00\x00\x14\x00\x00\x00");
         assert_eq!(payload.len(), mem::size_of::<VehiclePose>());
         let message = UMessageBuilder::publish(topic()).build().expect("message");
-        let metadata = crate::try_project_attributes_to_frame_metadata(
+        let metadata = crate::frame::metadata::try_project_attributes_to_frame_metadata(
             message.attributes(),
             Some(StableContainerPayload::<VehiclePose>::encoding()),
         )

@@ -1,9 +1,11 @@
-error[E0277]: the trait bound `StableContainerWireFormat: EncodePayload<protobuf::well_known_types::wrappers::StringValue>` is not satisfied
+error[E0277]: the payload codec `StableContainerWireFormat` cannot encode `protobuf::well_known_types::wrappers::StringValue`
   --> tests/ui/wire_transport/stable_container_wire_protobuf_codec.rs:17:29
    |
 17 |     needs_protobuf_encode::<StableContainerWireFormat, StringValue>();
-   |                             ^^^^^^^^^^^^^^^^^^^^^^^^^ the trait `EncodePayload<protobuf::well_known_types::wrappers::StringValue>` is not implemented for `StableContainerWireFormat`
+   |                             ^^^^^^^^^^^^^^^^^^^^^^^^^ no `EncodePayload<protobuf::well_known_types::wrappers::StringValue>` implementation
    |
+   = help: the trait `EncodePayload<protobuf::well_known_types::wrappers::StringValue>` is not implemented for `StableContainerWireFormat`
+   = note: wire implementers provide `payload_layout` and `encode_payload`; see the wire-implementer walkthrough
 help: the following other types implement trait `EncodePayload<T>`
   --> src/payload/codec.rs
    |

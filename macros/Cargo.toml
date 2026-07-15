@@ -20,3 +20,7 @@ proc-macro = true
 proc-macro2 = "1"
 quote = "1"
 syn = { version = "2", features = ["full"] }
+
+[lints.rust]
+missing_docs = "deny"
+missing_debug_implementations = "deny"

@@ -60,11 +60,10 @@ fn metadata<T: up_rust::StablePayload>() -> UFrameMetadata {
         .with_message_id(fixed_id)
         .build()
         .expect("message");
-    up_rust::try_project_attributes_to_frame_metadata(
-        message.attributes(),
-        Some(StableContainerPayload::<T>::encoding()),
-    )
-    .expect("stable metadata")
+    message
+        .attributes()
+        .to_frame_metadata(StableContainerPayload::<T>::encoding())
+        .expect("stable metadata")
 }
 
 fn uninit_bytes<T>(storage: &mut MaybeUninit<T>) -> &mut [MaybeUninit<u8>] {

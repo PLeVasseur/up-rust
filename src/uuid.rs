@@ -54,6 +54,7 @@ impl std::error::Error for UuidConversionError {}
 
 #[derive(Debug, Clone, PartialEq)]
 #[repr(C)]
+/// A uProtocol UUIDv7 message identifier (RFC 9562 layout).
 pub struct UUID {
     msb: u64,
     lsb: u64,
@@ -181,7 +182,7 @@ impl UUID {
     /// use up_rust::UUID;
     ///
     /// let uuid = UUID::build();
-    /// assert!(uuid.get_time() <= SystemTime::now()
+    /// assert!(uuid.time() <= SystemTime::now()
     ///     .duration_since(SystemTime::UNIX_EPOCH)
     ///     .expect("current system time is set to a point in time before UNIX Epoch")
     ///     .as_millis() as u64);
@@ -240,13 +241,13 @@ impl UUID {
     /// let msb = 0x018D548EA8E07000u64;
     /// // variant = 0b10
     /// let lsb = 0x8000000000000000u64;
-    /// let creation_time = UUID::from_u64_pair(msb, lsb).unwrap().get_time();
+    /// let creation_time = UUID::from_u64_pair(msb, lsb).unwrap().time();
     /// assert_eq!(creation_time, 0x018D548EA8E0_u64);
     /// ```
     // [impl->dsn~uuid-spec~1]
     // [utest->dsn~uuid-spec~1]
     #[must_use]
-    pub fn get_time(&self) -> u64 {
+    pub fn time(&self) -> u64 {
         // the timestamp is contained in the 48 most significant bits
         self.msb >> 16
     }
@@ -365,7 +366,7 @@ impl TryFrom<Vec<u8>> for UUID {
     /// let conversion_attempt = UUID::try_from(bytes);
     /// assert!(conversion_attempt.is_ok());
     /// let uuid = conversion_attempt.unwrap();
-    /// assert_eq!(uuid.get_time(), 0x1_u64);
+    /// assert_eq!(uuid.time(), 0x1_u64);
     /// ```
     fn try_from(value: Vec<u8>) -> Result<Self, Self::Error> {
         let mut buf: Bytes = value.into();
@@ -485,9 +486,8 @@ mod tests {
         // variant = 0b10
         let lsb = 0x8000000000000000_u64;
         let conversion_attempt = UUID::from_u64_pair(msb, lsb);
-        assert!(conversion_attempt.is_ok_and(|uuid| {
-            uuid.get_time() == 0x1_u64 && uuid.msb == msb && uuid.lsb == lsb
-        }));
+        assert!(conversion_attempt
+            .is_ok_and(|uuid| { uuid.time() == 0x1_u64 && uuid.msb == msb && uuid.lsb == lsb }));
 
         // timestamp = 1, (invalid) ver = 0b0000
         let msb = 0x0000000000010000_u64;
@@ -513,7 +513,7 @@ mod tests {
         let conversion_attempt = UUID::from_bytes(&bytes);
         assert!(conversion_attempt.is_ok());
         let uuid = conversion_attempt.unwrap();
-        assert_eq!(uuid.get_time(), 0x1_u64);
+        assert_eq!(uuid.time(), 0x1_u64);
     }
 
     #[test]

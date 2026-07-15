@@ -43,9 +43,9 @@ mod notification;
 pub use notification::MockNotifier;
 pub use notification::{NotificationError, Notifier};
 
-#[cfg(feature = "up-l2-notifier")]
+#[cfg(feature = "communication")]
 mod simple_notifier;
-#[cfg(feature = "up-l2-notifier")]
+#[cfg(feature = "communication")]
 pub use simple_notifier::SimpleNotifier;
 
 mod pubsub;
@@ -53,20 +53,28 @@ mod pubsub;
 pub use pubsub::MockSubscriptionChangeHandler;
 pub use pubsub::{PubSubError, Publisher, Subscriber, SubscriptionChangeHandler};
 
-#[cfg(feature = "up-l2-publisher")]
+#[cfg(feature = "communication")]
 mod simple_publisher;
-#[cfg(feature = "up-l2-publisher")]
+#[cfg(feature = "communication")]
 pub use simple_publisher::SimplePublisher;
 
-#[cfg(feature = "owned-frame-transport")]
+#[cfg(all(
+    feature = "owned-frame-transport",
+    feature = "usubscription",
+    feature = "selected-wire-transport-core"
+))]
 pub mod owned;
 
-#[cfg(all(feature = "selected-wire-transport-adapter", feature = "up-l2-api"))]
+#[cfg(all(
+    feature = "selected-wire-transport-adapter",
+    feature = "up-l2-api",
+    feature = "zero-copy-transport"
+))]
 pub mod zero_copy;
 
-#[cfg(feature = "up-l2-subscriber")]
+#[cfg(feature = "communication")]
 mod in_memory_subscriber;
-#[cfg(feature = "up-l2-subscriber")]
+#[cfg(feature = "communication")]
 pub use in_memory_subscriber::InMemorySubscriber;
 
 mod rpc;
@@ -74,14 +82,14 @@ mod rpc;
 pub use rpc::{MockRequestHandler, MockRpcClient, MockRpcServerImpl};
 pub use rpc::{RequestHandler, RpcClient, RpcServer, ServiceInvocationError};
 
-#[cfg(feature = "up-l2-rpc-client")]
+#[cfg(feature = "communication")]
 mod in_memory_rpc_client;
-#[cfg(feature = "up-l2-rpc-client")]
+#[cfg(feature = "communication")]
 pub use in_memory_rpc_client::InMemoryRpcClient;
 
-#[cfg(feature = "up-l2-rpc-server")]
+#[cfg(feature = "communication")]
 mod in_memory_rpc_server;
-#[cfg(feature = "up-l2-rpc-server")]
+#[cfg(feature = "communication")]
 pub use in_memory_rpc_server::InMemoryRpcServer;
 
 /// Moves all common call options into the given message builder.
@@ -90,7 +98,7 @@ pub use in_memory_rpc_server::InMemoryRpcServer;
 /// * ttl
 /// * message ID
 /// * priority
-#[cfg(any(feature = "up-l2-notifier", feature = "up-l2-publisher"))]
+#[cfg(feature = "communication")]
 pub(crate) fn apply_common_options(
     call_options: CallOptions,
     message_builder: &mut crate::UMessageBuilder,
@@ -105,12 +113,7 @@ pub(crate) fn apply_common_options(
 }
 
 /// Creates a message with given payload from a builder.
-#[cfg(any(
-    feature = "up-l2-notifier",
-    feature = "up-l2-publisher",
-    feature = "up-l2-rpc-client",
-    feature = "up-l2-rpc-server"
-))]
+#[cfg(feature = "communication")]
 pub(crate) fn build_message(
     message_builder: &mut crate::UMessageBuilder,
     payload: Option<UPayload>,
@@ -130,9 +133,13 @@ pub(crate) fn build_message(
 #[derive(Clone, Debug, PartialEq)]
 #[repr(C)]
 pub enum SubscriptionStatus {
+    /// Not subscribed.
     Unsubscribed,
+    /// Subscription requested; confirmation pending.
     SubscribePending,
+    /// Actively subscribed.
     Subscribed,
+    /// Unsubscription requested; confirmation pending.
     UnsubscribePending,
 }
 
@@ -163,6 +170,7 @@ mod core_types_support {
 
 /// An error indicating a problem with registering or unregistering a message listener.
 #[derive(Clone, Debug, Error)]
+#[non_exhaustive]
 pub enum RegistrationError {
     /// Indicates that a listener for a given address already exists.
     #[error("a listener for the given filter criteria already exists")]
@@ -188,13 +196,13 @@ pub enum RegistrationError {
 
 impl From<UStatus> for RegistrationError {
     fn from(value: UStatus) -> Self {
-        match value.get_code() {
+        match value.code() {
             UCode::AlreadyExists => RegistrationError::AlreadyExists,
             UCode::NotFound => RegistrationError::NoSuchListener,
             UCode::ResourceExhausted => RegistrationError::MaxListenersExceeded,
             UCode::Unimplemented => RegistrationError::PushDeliveryMethodNotSupported,
             UCode::InvalidArgument => {
-                RegistrationError::InvalidFilter(value.get_message().unwrap_or("N/A").to_string())
+                RegistrationError::InvalidFilter(value.message().unwrap_or("N/A").to_string())
             }
             UCode::Ok
             | UCode::Cancelled

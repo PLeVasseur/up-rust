@@ -14,8 +14,8 @@
 //! # Whole-frame envelopes
 //!
 //! A whole-frame envelope serializes semantic metadata and application payload
-//! into one classic byte value. It is distinct from selected-wire `UPWM`, which
-//! prefixes a configured metadata profile while the physical core carries
+//! into one envelope byte value. It is distinct from selected-wire `UPWM`, which
+//! prefixes a configured metadata profile while the encoded core carries
 //! payload storage separately.
 //!
 //! ## Walkthrough
@@ -24,7 +24,7 @@
 //! 2. Use `NativeUFrameEnvelope::serialize_frame` when open payload identities
 //!    must survive losslessly. Use `ProtobufUMessageFrame` only for legacy
 //!    compatibility and accept its representability checks.
-//! 3. Carry the resulting bytes through a classic byte channel.
+//! 3. Carry the resulting bytes through an ordinary byte channel.
 //! 4. Deserialize with the same `UFrameWireFormat`; malformed lengths,
 //!    reserved fields, metadata, payload presence, and unsupported identities
 //!    fail before a frame is returned.
@@ -36,10 +36,7 @@ use std::{error::Error, fmt::Display};
 use bytes::Bytes;
 
 #[cfg(feature = "protobuf-support")]
-use crate::{
-    try_project_frame_to_umessage, try_project_umessage_to_frame_metadata, ProtobufMappable,
-    SerializationError, UMessage,
-};
+use crate::{ProtobufMappable, SerializationError, UMessage};
 use crate::{UFrameMetadataError, UOwnedFrame};
 
 /// Error type used by whole-frame wire formats.
@@ -154,8 +151,9 @@ pub trait UFrameWireFormat {
 /// This envelope projects native frames through legacy `UMessage`, so it is
 /// *not* full-fidelity: frames whose payload encoding has no legacy
 /// `UPayloadFormat` equivalent are rejected. Use [`NativeUFrameEnvelope`]
-/// for lossless transport of native frames over classic byte channels.
+/// for lossless transport of native frames over ordinary byte channels.
 #[cfg(feature = "protobuf-support")]
+#[derive(Debug)]
 pub struct ProtobufUMessageFrame;
 
 #[cfg(feature = "protobuf-support")]
@@ -169,8 +167,10 @@ impl UFrameWireFormat for ProtobufUMessageFrame {
     }
 
     fn serialize_frame(frame: &UOwnedFrame) -> Result<Bytes, UFrameWireError> {
-        let message =
-            try_project_frame_to_umessage(frame.metadata().clone(), frame.payload().cloned())?;
+        let message = crate::frame::metadata::try_project_frame_to_umessage(
+            frame.metadata().clone(),
+            frame.payload().cloned(),
+        )?;
         message
             .write_to_protobuf_bytes()
             .map(Bytes::from)
@@ -179,7 +179,7 @@ impl UFrameWireFormat for ProtobufUMessageFrame {
 
     fn deserialize_frame(src: &[u8]) -> Result<UOwnedFrame, UFrameWireError> {
         let message = UMessage::parse_from_protobuf_bytes(src)?;
-        let metadata = try_project_umessage_to_frame_metadata(&message)?;
+        let metadata = crate::frame::metadata::try_project_umessage_to_frame_metadata(&message)?;
         let payload = message.payload().as_deref().map(Bytes::copy_from_slice);
         UOwnedFrame::new(metadata, payload).map_err(UFrameWireError::from)
     }
@@ -204,11 +204,12 @@ impl UFrameWireFormat for ProtobufUMessageFrame {
 /// 20+m    ...   payload bytes
 /// ```
 ///
-/// This is the recommended carrier for native frames over classic byte
+/// This is the recommended carrier for native frames over ordinary byte
 /// channels (an MQTT payload, a SOME/IP payload, a Zenoh attachment+payload
 /// pair collapsed into one buffer, a file, ...). Unlike
 /// [`ProtobufUMessageFrame`] it preserves open payload encodings and does
 /// not require protobuf support.
+#[derive(Debug)]
 pub struct NativeUFrameEnvelope;
 
 /// Magic bytes of the native whole-frame envelope.
@@ -228,7 +229,7 @@ impl UFrameWireFormat for NativeUFrameEnvelope {
     }
 
     fn serialize_frame(frame: &UOwnedFrame) -> Result<Bytes, UFrameWireError> {
-        frame.validate().map_err(UFrameWireError::from)?;
+        // `UOwnedFrame<Validated>` by type: validity is guaranteed by construction.
         let metadata = crate::frame::codec::encode_frame_metadata_fields(frame.metadata())
             .map_err(|error| UFrameWireError::invalid_frame(error.to_string()))?;
         let metadata_len = u32::try_from(metadata.len()).map_err(|_| {
@@ -340,7 +341,7 @@ mod tests {
         let message = UMessageBuilder::publish(topic())
             .build_with_payload(Bytes::new(), UPayloadFormat::Raw)
             .expect("message");
-        crate::try_project_attributes_to_frame_metadata(
+        crate::frame::metadata::try_project_attributes_to_frame_metadata(
             message.attributes(),
             Some(RawBytes::encoding()),
         )
@@ -368,7 +369,7 @@ mod tests {
         let encoding =
             PayloadEncoding::custom("com.example.native", "application/vnd.example.native")
                 .expect("custom encoding");
-        let metadata = crate::try_project_attributes_to_frame_metadata(
+        let metadata = crate::frame::metadata::try_project_attributes_to_frame_metadata(
             message.attributes(),
             Some(encoding.clone()),
         )
@@ -390,20 +391,26 @@ mod tests {
     #[test]
     fn protobuf_umessage_frame_rejects_invalid_metadata() {
         let message = UMessageBuilder::publish(topic()).build().expect("message");
-        let metadata = crate::try_project_umessage_to_frame_metadata(&message).expect("metadata");
+        let metadata = crate::frame::metadata::try_project_umessage_to_frame_metadata(&message)
+            .expect("metadata");
         // payload bytes without a payload encoding violate the frame invariant
         let frame = UOwnedFrame::with_payload_unchecked(metadata, Bytes::from_static(b"payload"));
 
-        let error = ProtobufUMessageFrame::serialize_frame(&frame).unwrap_err();
+        // An invalid frame cannot reach serialize_frame; the rejection lives at
+        // the typestate transition:
+        let error = frame.validate().unwrap_err();
 
-        assert!(matches!(error, UFrameWireError::InvalidFrame(_)));
+        assert!(matches!(error, UFrameMetadataError::PayloadWithoutEncoding));
     }
 
     #[test]
     fn protobuf_umessage_frame_round_trips_unspecified_absent_payload() {
         let message = UMessageBuilder::publish(topic()).build().expect("message");
-        let metadata = crate::try_project_attributes_to_frame_metadata(message.attributes(), None)
-            .expect("metadata");
+        let metadata = crate::frame::metadata::try_project_attributes_to_frame_metadata(
+            message.attributes(),
+            None,
+        )
+        .expect("metadata");
         let frame = UOwnedFrame::without_payload(metadata).expect("frame");
 
         let encoded = ProtobufUMessageFrame::serialize_frame(&frame).expect("serialize frame");

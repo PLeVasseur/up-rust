@@ -30,7 +30,9 @@ fn metadata(resource_id: u16) -> UFrameMetadata {
     let message = UMessageBuilder::publish(topic(resource_id))
         .build()
         .expect("valid publish metadata");
-    up_rust::try_project_umessage_to_frame_metadata(&message).expect("valid frame metadata")
+    message
+        .to_frame_metadata_unencoded()
+        .expect("valid frame metadata")
 }
 
 #[test]

@@ -204,6 +204,13 @@ pub struct RpcClientUSubscription {
     rpc_client: Arc<dyn RpcClient>,
 }
 
+impl core::fmt::Debug for RpcClientUSubscription {
+    fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
+        f.debug_struct("RpcClientUSubscription")
+            .finish_non_exhaustive()
+    }
+}
+
 impl RpcClientUSubscription {
     /// Creates a new Notifier for a given transport.
     ///
@@ -534,7 +541,7 @@ mod tests {
         assert!(usubscription_client
             .subscribe(&topic, None, None)
             .await
-            .is_err_and(|e| e.get_code() == UCode::Internal));
+            .is_err_and(|e| e.code() == UCode::Internal));
         assert!(usubscription_client
             .subscribe(&topic, None, None)
             .await
@@ -584,7 +591,7 @@ mod tests {
         assert!(usubscription_client
             .unsubscribe(&topic)
             .await
-            .is_err_and(|e| e.get_code() == UCode::Internal));
+            .is_err_and(|e| e.code() == UCode::Internal));
         assert!(usubscription_client.unsubscribe(&topic).await.is_ok());
     }
 
@@ -633,7 +640,7 @@ mod tests {
         assert!(usubscription_client
             .fetch_subscriptions_by_topic(&topic)
             .await
-            .is_err_and(|e| e.get_code() == UCode::Internal));
+            .is_err_and(|e| e.code() == UCode::Internal));
         assert!(usubscription_client
             .fetch_subscriptions_by_topic(&topic)
             .await
@@ -685,7 +692,7 @@ mod tests {
         assert!(usubscription_client
             .fetch_subscribers(&topic)
             .await
-            .is_err_and(|e| e.get_code() == UCode::Internal));
+            .is_err_and(|e| e.code() == UCode::Internal));
         assert!(usubscription_client.fetch_subscribers(&topic).await.is_ok());
     }
 
@@ -735,7 +742,7 @@ mod tests {
         assert!(usubscription_client
             .register_for_notifications(&topic)
             .await
-            .is_err_and(|e| e.get_code() == UCode::Internal));
+            .is_err_and(|e| e.code() == UCode::Internal));
         assert!(usubscription_client
             .register_for_notifications(&topic)
             .await
@@ -788,7 +795,7 @@ mod tests {
         assert!(usubscription_client
             .unregister_for_notifications(&topic)
             .await
-            .is_err_and(|e| e.get_code() == UCode::Internal));
+            .is_err_and(|e| e.code() == UCode::Internal));
         assert!(usubscription_client
             .unregister_for_notifications(&topic)
             .await
@@ -843,7 +850,7 @@ mod tests {
         assert!(usubscription_client
             .reset(ResetReason::Unspecified, None)
             .await
-            .is_err_and(|e| e.get_code() == UCode::Internal));
+            .is_err_and(|e| e.code() == UCode::Internal));
         assert!(usubscription_client
             .reset(ResetReason::Unspecified, None)
             .await

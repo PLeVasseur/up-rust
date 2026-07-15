@@ -17,9 +17,9 @@ use mockall::automock;
 
 use crate::{communication::SubscriptionStatus, UStatus, UUri};
 
-#[cfg(all(feature = "up-l2-rpc-client", feature = "up-core-types"))]
+#[cfg(feature = "up-l2-api")]
 mod usubscription_client;
-#[cfg(all(feature = "up-l2-rpc-client", feature = "up-core-types"))]
+#[cfg(feature = "up-l2-api")]
 pub use usubscription_client::RpcClientUSubscription;
 
 /// The uEntity (type) identifier of the uSubscription service.
@@ -46,6 +46,7 @@ pub const RESOURCE_ID_SUBSCRIPTION_CHANGE: u16 = 0x8000;
 
 #[derive(Clone, Debug, PartialEq)]
 #[repr(C)]
+/// One active subscription as reported by the uSubscription service.
 pub struct SubscriptionInfo {
     topic: UUri,
     subscriber: UUri,
@@ -64,7 +65,7 @@ impl SubscriptionInfo {
     /// * `expiration` - The point in time at which the subscription expires (milliseconds since Unix epoch).
     ///   If not specified, the subscription is valid until explicitly unsubscribed.
     /// * `min_sample_period` - The minimum duration (in seconds) between two events that should be maintained
-    ///   for remote only topics. Device dispatchers (i.e. streamers) use this attribute to reduce the publication
+    ///   for remote only topics. Device dispatchers use this attribute to reduce the publication
     ///   rates of events sent between devices.
     ///   This attribute is commonly used for mobile/cloud components subscribing to vehicle topics that are published
     ///   at a high rate. If the desired sampling period set by the subscriber is lower than the original
@@ -88,26 +89,31 @@ impl SubscriptionInfo {
     }
 
     #[must_use]
+    /// Returns the subscribed topic.
     pub fn topic(&self) -> &UUri {
         &self.topic
     }
 
     #[must_use]
+    /// Returns the subscriber's URI.
     pub fn subscriber(&self) -> &UUri {
         &self.subscriber
     }
 
     #[must_use]
+    /// Returns the subscription's current status.
     pub fn status(&self) -> &SubscriptionStatus {
         &self.status
     }
 
     #[must_use]
+    /// Returns the subscription's expiration time, if bounded.
     pub fn expiration(&self) -> &Option<u64> {
         &self.expiration
     }
 
     #[must_use]
+    /// Returns the minimum sample period, if rate-limited.
     pub fn min_sample_period(&self) -> &Option<u32> {
         &self.min_sample_period
     }
@@ -140,8 +146,11 @@ impl SubscriptionInfo {
 #[derive(Debug, PartialEq)]
 #[repr(C)]
 pub enum ResetReason {
+    /// No reason specified.
     Unspecified,
+    /// The service state was factory reset.
     FactoryReset,
+    /// The service detected corrupted subscription data.
     CorruptedData,
 }
 
@@ -188,7 +197,7 @@ pub trait USubscription: Send + Sync {
     /// * `expiration` - The point in time at which the subscription expires (milliseconds since Unix epoch).
     ///   If not specified, the subscription is valid until explicitly unsubscribed.
     /// * `min_sample_period` - The minimum duration (in seconds) between two events that should be maintained
-    ///   for remote only topics. Device dispatchers (i.e. streamers) use this attribute to reduce the
+    ///   for remote only topics. Device dispatchers use this attribute to reduce the
     ///   publication rates of events sent between devices.
     ///   This attribute is commonly used for mobile/cloud components subscribing to vehicle topics that are published
     ///   at a high rate. If the desired sampling period set by the subscriber is lower than the original publisher's

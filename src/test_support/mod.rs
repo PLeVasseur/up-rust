@@ -17,8 +17,10 @@
 pub use crate::bench_fixtures;
 #[cfg(feature = "test-util")]
 pub use crate::utransport::MockLocalUriProvider;
+#[cfg(all(feature = "test-util", feature = "zero-copy-transport"))]
+pub use crate::InMemoryZeroCopyTransport;
 #[cfg(feature = "test-util")]
-pub use crate::{InMemoryZeroCopyTransport, MockTransport, MockUListener};
+pub use crate::{MockTransport, MockUListener};
 
 #[cfg(any(test, feature = "test-util"))]
 #[repr(C)]
@@ -34,6 +36,8 @@ pub use crate::{InMemoryZeroCopyTransport, MockTransport, MockUListener};
     crate::StablePayloadInit,
 )]
 #[stable_payload(type_name = "uprotocol.test.StableTestBytes")]
+/// Four fixed bytes with stable-payload derives, for contract tests.
 pub struct StableTestBytes {
+    /// The payload bytes.
     pub bytes: [u8; 4],
 }

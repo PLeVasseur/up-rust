@@ -13,6 +13,11 @@
 
 use super::*;
 
+#[cfg(all(test, feature = "owned-frame-transport"))]
+use crate::UOwnedFrame;
+#[cfg(test)]
+use std::io::Read;
+
 /// Owned buffer useful for tests, examples, and adapters that emulate a transmit loan.
 #[derive(Clone, Debug, PartialEq)]
 pub struct UVecTxBuffer {
@@ -326,6 +331,14 @@ pub struct InMemoryZeroCopyTransport {
 }
 
 #[cfg(any(test, feature = "test-util"))]
+impl core::fmt::Debug for InMemoryZeroCopyTransport {
+    fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
+        f.debug_struct("InMemoryZeroCopyTransport")
+            .finish_non_exhaustive()
+    }
+}
+
+#[cfg(any(test, feature = "test-util"))]
 impl InMemoryZeroCopyTransport {
     /// Returns frames sent through [`UZeroCopyTransport::send_zero_copy`].
     #[must_use]
@@ -360,7 +373,7 @@ impl UZeroCopyTransportImpl for InMemoryZeroCopyTransport {
     type Tx = UVecTxBuffer;
     type Rx = UVecRxLease;
 
-    async fn loan_validated_tx(&self, spec: ValidatedTxLoanSpec) -> Result<Self::Tx, UStatus> {
+    async fn loan_validated_tx(&self, spec: UTxLoanSpec) -> Result<Self::Tx, UStatus> {
         UVecTxBuffer::with_alignment(
             spec.metadata().clone(),
             spec.payload_len(),
@@ -435,10 +448,7 @@ impl UZeroCopyTransportImpl for InMemoryZeroCopyTransport {
 impl UZeroCopyUninitTransportImpl for InMemoryZeroCopyTransport {
     type UninitTx = UVecUninitTxBuffer;
 
-    async fn loan_validated_uninit_tx(
-        &self,
-        spec: ValidatedTxLoanSpec,
-    ) -> Result<Self::UninitTx, UStatus> {
+    async fn loan_validated_uninit_tx(&self, spec: UTxLoanSpec) -> Result<Self::UninitTx, UStatus> {
         UVecUninitTxBuffer::with_alignment(
             spec.metadata().clone(),
             spec.payload_len(),
@@ -488,13 +498,13 @@ mod unit_tests {
 
     fn metadata_without_encoding() -> UFrameMetadata {
         let message = UMessageBuilder::publish(topic()).build().expect("message");
-        crate::try_project_attributes_to_frame_metadata(message.attributes(), None)
+        crate::frame::metadata::try_project_attributes_to_frame_metadata(message.attributes(), None)
             .expect("metadata")
     }
 
     fn metadata_with_encoding() -> UFrameMetadata {
         let message = UMessageBuilder::publish(topic()).build().expect("message");
-        crate::try_project_attributes_to_frame_metadata(
+        crate::frame::metadata::try_project_attributes_to_frame_metadata(
             message.attributes(),
             Some(PayloadEncoding::RAW),
         )
@@ -503,7 +513,7 @@ mod unit_tests {
 
     fn stable_metadata<T: StablePayload>() -> UFrameMetadata {
         let message = UMessageBuilder::publish(topic()).build().expect("message");
-        crate::try_project_attributes_to_frame_metadata(
+        crate::frame::metadata::try_project_attributes_to_frame_metadata(
             message.attributes(),
             Some(StableContainerPayload::<T>::encoding()),
         )
@@ -528,13 +538,13 @@ mod unit_tests {
     #[test]
     fn tx_loan_no_payload_rejects_encoding() {
         let error = UTxLoanSpec::no_payload(metadata_with_encoding()).unwrap_err();
-        assert_eq!(error.get_code(), UCode::InvalidArgument);
+        assert_eq!(error.code(), UCode::InvalidArgument);
     }
 
     #[test]
     fn tx_loan_payload_rejects_missing_encoding() {
         let error = UTxLoanSpec::payload(metadata_without_encoding(), 8, 1).unwrap_err();
-        assert_eq!(error.get_code(), UCode::InvalidArgument);
+        assert_eq!(error.code(), UCode::InvalidArgument);
     }
 
     #[test]
@@ -552,19 +562,19 @@ mod unit_tests {
     #[test]
     fn payload_alignment_must_be_power_of_two() {
         let error = UTxPayloadSpec::present(16, 3).unwrap_err();
-        assert_eq!(error.get_code(), UCode::InvalidArgument);
+        assert_eq!(error.code(), UCode::InvalidArgument);
     }
 
     #[test]
     fn payload_alignment_proof_rejects_zero() {
         let error = PayloadAlignment::new(0).unwrap_err();
-        assert_eq!(error.get_code(), UCode::InvalidArgument);
+        assert_eq!(error.code(), UCode::InvalidArgument);
     }
 
     #[test]
     fn payload_alignment_proof_rejects_non_power_of_two() {
         let error = PayloadAlignment::new(6).unwrap_err();
-        assert_eq!(error.get_code(), UCode::InvalidArgument);
+        assert_eq!(error.code(), UCode::InvalidArgument);
     }
 
     #[test]
@@ -575,11 +585,9 @@ mod unit_tests {
             UTxPayloadSpec::present_with_alignment(16, alignment),
         )
         .unwrap();
-        let validated = ValidatedTxLoanSpec::try_from(spec).unwrap();
-
         assert_eq!(alignment.as_usize(), 8);
-        assert_eq!(validated.payload_alignment(), 8);
-        assert_eq!(validated.payload_alignment_proof(), alignment);
+        assert_eq!(spec.payload_alignment(), 8);
+        assert_eq!(spec.payload_alignment_proof(), alignment);
     }
 
     struct CountingTransport {
@@ -593,7 +601,7 @@ mod unit_tests {
         type Tx = UVecTxBuffer;
         type Rx = UVecRxLease;
 
-        async fn loan_validated_tx(&self, spec: ValidatedTxLoanSpec) -> Result<Self::Tx, UStatus> {
+        async fn loan_validated_tx(&self, spec: UTxLoanSpec) -> Result<Self::Tx, UStatus> {
             *self.loan_calls.lock().expect("loan lock") += 1;
             UVecTxBuffer::with_alignment(
                 spec.metadata().clone(),
@@ -621,18 +629,12 @@ mod unit_tests {
     }
 
     #[tokio::test]
-    async fn invalid_metadata_rejected_before_loan_implementation() {
-        let transport = CountingTransport {
-            loan_calls: StdMutex::new(0),
-            send_calls: StdMutex::new(0),
-            receive: StdMutex::new(None),
-        };
+    async fn invalid_spec_rejected_at_the_typestate_transition() {
+        // Passing an unvalidated spec to `loan_tx` is a compile error; the
+        // runtime rejection lives at the typestate transition:
         let invalid = UTxLoanSpec::new_unchecked(metadata_with_encoding(), UTxPayloadSpec::Absent);
-
-        let error = transport.loan_tx(invalid).await.unwrap_err();
-
-        assert_eq!(error.get_code(), UCode::InvalidArgument);
-        assert_eq!(*transport.loan_calls.lock().expect("loan lock"), 0);
+        let error = invalid.validate().unwrap_err();
+        assert_eq!(error.code(), UCode::InvalidArgument);
     }
 
     #[tokio::test]
@@ -646,7 +648,7 @@ mod unit_tests {
 
         let error = transport.send_zero_copy(buffer).await.unwrap_err();
 
-        assert_eq!(error.get_code(), UCode::InvalidArgument);
+        assert_eq!(error.code(), UCode::InvalidArgument);
         assert_eq!(*transport.send_calls.lock().expect("send lock"), 0);
     }
 
@@ -666,7 +668,7 @@ mod unit_tests {
             .await
             .unwrap_err();
 
-        assert_eq!(error.get_code(), UCode::InvalidArgument);
+        assert_eq!(error.code(), UCode::InvalidArgument);
     }
 
     struct SegmentedFrame {
@@ -757,7 +759,7 @@ mod unit_tests {
     fn stable_borrow_rejects_wrong_size_metadata() {
         let value = StableBytes { bytes: *b"loan" };
         let message = UMessageBuilder::publish(topic()).build().expect("message");
-        let metadata = crate::try_project_attributes_to_frame_metadata(
+        let metadata = crate::frame::metadata::try_project_attributes_to_frame_metadata(
             message.attributes(),
             Some(stable_encoding_with::<StableBytes>(
                 StableBytes::TYPE_NAME,
@@ -777,7 +779,7 @@ mod unit_tests {
     #[test]
     fn stable_borrow_rejects_insufficient_advertised_alignment() {
         let message = UMessageBuilder::publish(topic()).build().expect("message");
-        let metadata = crate::try_project_attributes_to_frame_metadata(
+        let metadata = crate::frame::metadata::try_project_attributes_to_frame_metadata(
             message.attributes(),
             Some(stable_encoding_with::<AlignedStableBytes>(
                 AlignedStableBytes::TYPE_NAME,
@@ -880,7 +882,7 @@ mod unit_tests {
         );
     }
 
-    #[cfg(feature = "zero-copy-uninit")]
+    #[cfg(feature = "zero-copy-transport")]
     #[tokio::test]
     async fn stable_uninit_tx_helper_sends_byte_backed_payload() {
         let transport = InMemoryZeroCopyTransport::default();
@@ -902,7 +904,7 @@ mod unit_tests {
         );
     }
 
-    #[cfg(feature = "zero-copy-uninit")]
+    #[cfg(feature = "zero-copy-transport")]
     #[tokio::test]
     async fn stable_uninit_tx_helper_uses_stable_payload_init_builder() {
         let transport = InMemoryZeroCopyTransport::default();

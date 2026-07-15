@@ -16,7 +16,7 @@
 use std::{
     any::Any,
     collections::HashMap,
-    io::{Cursor, Read},
+    io::Cursor,
     mem::MaybeUninit,
     ops::Deref,
     sync::{Arc, LazyLock, Mutex},
@@ -27,7 +27,7 @@ use async_trait::async_trait;
 use std::collections::VecDeque;
 use tracing::warn;
 
-#[cfg(feature = "zero-copy-uninit")]
+#[cfg(feature = "zero-copy-transport")]
 use crate::payload::{
     loan::{LoanUninitPayload, LoanedInitPayload, LoanedUninitPayload},
     stable::{InitializedStablePayload, StablePayloadInit, StablePayloadInitContext},
@@ -36,17 +36,15 @@ use crate::payload::{
 use crate::wire::UWirePayload;
 #[cfg(feature = "selected-wire-transport-adapter")]
 use crate::wire_transport::UHasWire;
-#[cfg(feature = "owned-frame-transport")]
-use crate::UOwnedFrame;
 use crate::{
     payload::{
-        codec::{PayloadCodec, ReadDecodePayload},
+        codec::PayloadCodec,
         loan::{BorrowPayload, LoanPayload},
         stable::{StableContainerPayload, StablePayload},
         UWireError,
     },
     utransport::verify_filter_criteria,
-    UCode, UFrameMetadata, UFrameMetadataError, UStatus, UUri,
+    UCode, UFrameMetadata, UStatus, UUri,
 };
 
 mod rx;
@@ -63,7 +61,7 @@ pub use transport::UZeroCopyUninitTransportImpl;
 #[doc(hidden)]
 pub use transport::UninitStableSendPhases;
 pub use transport::{UZeroCopyTransport, UZeroCopyTransportExt, UZeroCopyTransportImpl};
-#[cfg(feature = "zero-copy-uninit")]
+#[cfg(feature = "zero-copy-transport")]
 pub use transport::{UZeroCopyUninitTransport, UZeroCopyUninitTransportExt};
 pub use tx::*;
 
@@ -95,21 +93,25 @@ impl<'a> LoanedPayload<'a> {
     }
 
     #[must_use]
+    /// Returns where this payload's storage came from.
     pub fn provenance(self) -> PayloadLoanProvenance {
         self.provenance
     }
 
     #[must_use]
+    /// Returns the payload as one contiguous byte slice.
     pub fn as_bytes(self) -> &'a [u8] {
         self.bytes
     }
 
     #[must_use]
+    /// Returns the payload length in bytes.
     pub fn len(self) -> usize {
         self.bytes.len()
     }
 
     #[must_use]
+    /// Returns `true` if the payload is empty.
     pub fn is_empty(self) -> bool {
         self.bytes.is_empty()
     }
@@ -139,29 +141,9 @@ fn validate_tx_loan_spec(spec: &UTxLoanSpec) -> Result<(), UStatus> {
     validate_payload_layout(spec.payload_len(), spec.payload_alignment())
 }
 
-fn validate_metadata(metadata: &UFrameMetadata) -> Result<(), UStatus> {
-    metadata.validate().map_err(frame_metadata_error)
-}
-
-fn frame_metadata_error(error: UFrameMetadataError) -> UStatus {
-    invalid_argument(format!("invalid frame metadata: {error}"))
-}
-
-fn validate_payload_presence(
-    has_payload: bool,
-    has_encoding: bool,
-    context: &str,
-) -> Result<(), UStatus> {
-    match (has_payload, has_encoding) {
-        (true, true) | (false, false) => Ok(()),
-        (true, false) => Err(invalid_argument(format!(
-            "{context} carries payload bytes without payload encoding"
-        ))),
-        (false, true) => Err(invalid_argument(format!(
-            "{context} carries payload encoding without payload bytes"
-        ))),
-    }
-}
+pub(crate) use crate::frame::view::{
+    frame_metadata_error, validate_metadata, validate_payload_presence,
+};
 
 fn validate_payload_layout(payload_len: usize, alignment: usize) -> Result<(), UStatus> {
     PayloadAlignment::new(alignment)?;

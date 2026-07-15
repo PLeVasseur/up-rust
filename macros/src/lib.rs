@@ -1,3 +1,6 @@
+//! Derive macros for up-rust stable payloads: `StablePayload`,
+//! `ByteBackedStablePayload`, and `StablePayloadInit`.
+
 /********************************************************************************
  * Copyright (c) 2026 Contributors to the Eclipse Foundation
  *
@@ -15,6 +18,7 @@ struct StablePayloadArgs {
 }
 
 #[proc_macro_derive(StablePayload, attributes(stable_payload))]
+/// Derives `StablePayload`: a fixed-layout type whose bytes are stable across processes.
 pub fn derive_stable_payload(input: TokenStream) -> TokenStream {
     expand_stable_payload(parse_macro_input!(input as DeriveInput))
         .unwrap_or_else(syn::Error::into_compile_error)
@@ -22,6 +26,7 @@ pub fn derive_stable_payload(input: TokenStream) -> TokenStream {
 }
 
 #[proc_macro_derive(ByteBackedStablePayload, attributes(stable_payload))]
+/// Derives `ByteBackedStablePayload`: marks every byte pattern of the type as valid.
 pub fn derive_byte_backed_stable_payload(input: TokenStream) -> TokenStream {
     expand_byte_backed_stable_payload(parse_macro_input!(input as DeriveInput))
         .unwrap_or_else(syn::Error::into_compile_error)
@@ -29,6 +34,7 @@ pub fn derive_byte_backed_stable_payload(input: TokenStream) -> TokenStream {
 }
 
 #[proc_macro_derive(StablePayloadInit, attributes(stable_payload, stable_payload_init))]
+/// Derives `StablePayloadInit`: a typestate initializer that writes the type into uninitialized storage field by field.
 pub fn derive_stable_payload_init(input: TokenStream) -> TokenStream {
     expand_stable_payload_init(parse_macro_input!(input as DeriveInput))
         .unwrap_or_else(syn::Error::into_compile_error)

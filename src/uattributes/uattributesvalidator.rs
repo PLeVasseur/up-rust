@@ -15,6 +15,8 @@ use crate::{PayloadEncoding, UAttributes, UMessageType, UPayloadFormat, UPriorit
 
 use crate::UAttributesError;
 
+/// *Role: standalone utility validating message attributes per message kind; used by transports at boundaries — see the [trait map](crate::guide::trait_map).*
+///
 /// `UAttributes` is the struct that defines the Payload. It serves as the configuration for various aspects
 /// like time to live, priority, security tokens, and more. Each variant of `UAttributes` defines a different
 /// type of message payload. The payload could represent a simple published payload with some state change,
@@ -117,10 +119,15 @@ fn validate_payload_encoding(attributes: &UAttributes) -> Result<(), UAttributes
 }
 
 /// Enum that hold the implementations of uattributesValidator according to type.
+#[derive(Debug)]
 pub enum UAttributesValidators {
+    /// Validates publish-message attributes.
     Publish,
+    /// Validates notification-message attributes.
     Notification,
+    /// Validates request-message attributes.
     Request,
+    /// Validates response-message attributes.
     Response,
 }
 
@@ -160,14 +167,14 @@ impl UAttributesValidators {
     /// # fn main() -> Result<(), Box<dyn std::error::Error>> {
     /// let topic = UUri::try_from("//my-vehicle/D45/23/A001")?;
     /// let msg = UMessageBuilder::publish(topic).build()?;
-    /// let validator = UAttributesValidators::get_validator_for_attributes(msg.attributes());
+    /// let validator = UAttributesValidators::validator_for_attributes(msg.attributes());
     /// assert!(validator.validate(msg.attributes()).is_ok());
     /// # Ok(())
     /// # }
     /// ```
     #[must_use]
-    pub fn get_validator_for_attributes(attributes: &UAttributes) -> Box<dyn UAttributesValidator> {
-        Self::get_validator(attributes.type_())
+    pub fn validator_for_attributes(attributes: &UAttributes) -> Box<dyn UAttributesValidator> {
+        Self::validator_for(attributes.type_())
     }
 
     /// Gets a validator that can be used to check attributes of a given type of message.
@@ -180,13 +187,13 @@ impl UAttributesValidators {
     /// # fn main() -> Result<(), Box<dyn std::error::Error>> {
     /// let topic = UUri::try_from("//my-vehicle/D45/23/A001")?;
     /// let msg = UMessageBuilder::publish(topic).build()?;
-    /// let validator = UAttributesValidators::get_validator(UMessageType::Publish);
+    /// let validator = UAttributesValidators::validator_for(UMessageType::Publish);
     /// assert!(validator.validate(msg.attributes()).is_ok());
     /// # Ok(())
     /// # }
     /// ```
     #[must_use]
-    pub fn get_validator(message_type: UMessageType) -> Box<dyn UAttributesValidator> {
+    pub fn validator_for(message_type: UMessageType) -> Box<dyn UAttributesValidator> {
         match message_type {
             UMessageType::Publish => Box::new(PublishValidator),
             UMessageType::Notification => Box::new(NotificationValidator),
@@ -556,7 +563,7 @@ mod tests {
         expected_validator_type: UMessageType,
     ) {
         let validator: Box<dyn UAttributesValidator> =
-            UAttributesValidators::get_validator(message_type);
+            UAttributesValidators::validator_for(message_type);
         assert_eq!(validator.message_type(), expected_validator_type);
     }
 

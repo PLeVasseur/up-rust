@@ -38,41 +38,89 @@ version = "0.10.0-SNAPSHOT"
 
 [features]
 default = []
-cloudevents = ["protobuf-support"]
-communication = ["up-l2-notifier", "up-l2-publisher", "up-l2-subscriber", "up-l2-rpc-client", "up-l2-rpc-server"]
+
+#! ## Features for applications
+## Ready-made implementations of every Communication Layer role. The
+## default choice for applications. Silently enables everything it
+## requires (the role traits, `up-core-types`, `usubscription`, tokio).
+communication = ["up-l2-api", "up-core-types", "usubscription", "tokio/sync", "tokio/time"]
+## Just the role *traits* (`Publisher`, `Subscriber`, `Notifier`,
+## `RpcClient`, `RpcServer`), for libraries that accept any
+## implementation.
+up-l2-api = ["dep:thiserror"]
+## Client types for the [uDiscovery service](https://github.com/eclipse-uprotocol/up-spec/blob/v1.6.0-alpha.7/up-l3/udiscovery/v3/README.adoc),
+## generic over any `RpcClient`. Requires `up-l2-api` and `up-core-types`.
+udiscovery = ["up-l2-api", "up-core-types"]
+## Client types for the [uSubscription service](https://github.com/eclipse-uprotocol/up-spec/blob/v1.6.0-alpha.7/up-l3/usubscription/v3/README.adoc),
+## generic over any `RpcClient`. Requires `up-l2-api` and `up-core-types`.
+usubscription = ["up-l2-api", "up-core-types"]
+
+#! ## Features for transport implementers
+## The contracts a transport implements. The `UTransport` contracts come
+## with the feature itself; owned-frame contracts require
+## `owned-frame-transport` and zero-copy contracts require
+## `zero-copy-transport`.
+transport-implementer-api = ["selected-wire-transport-core"]
+## The *owned-frame* family: transports that exchange whole validated
+## frames as owned values (experimental; additive to `UTransport`).
+## Requires `up-core-types`.
 owned-frame-transport = ["selected-wire-transport-core", "up-core-types"]
-payload-contract-fixtures = ["protobuf-wire", "zero-copy-uninit", "dep:serde", "dep:serde_json", "dep:sha2"]
-payload-contract-large-fixtures = ["payload-contract-fixtures"]
-payload-contract-simulator-fixtures = ["payload-contract-large-fixtures"]
-perf-diagnostics = ["zero-copy-uninit"]
-protobuf-support = ["dep:protobuf"]
-protobuf-wire = ["up-core-types"]
+## The zero-copy transport family: loans, leases, the
+## `UZeroCopyTransport`/`UZeroCopyTransportCore` traits, and the typed
+## API for initializing payloads directly inside uninitialized transmit
+## loans (experimental, like the owned family).
+zero-copy-transport = []
+
+#! ## Features for wire formats and payloads
+## Everything an external wire format implements. Wire authoring is
+## core-types-free: identities, metadata codecs, and payload codecs
+## operate on frame-native types only.
+wire-implementer-api = ["selected-wire-codec-core"]
 # R2W split: ordinary selected-wire surfaces provide canonical field-block
 # metadata via selected-wire-codec-core and no longer pull protobuf metadata.
+## Using a chosen wire's typed payload API over a capable transport.
+## Requires `up-core-types`.
 selected-wire-user-api = ["selected-wire-transport-adapter", "up-core-types"]
+## Implicit protobuf payload mapping
+## (`UMessageBuilder::build_with_protobuf_payload`,
+## `UPayload::try_from_protobuf`) for any `protobuf`-generated type.
+protobuf-support = ["dep:protobuf"]
+## uProtocol's standard protobuf message definitions (e.g. `UStatus` as
+## a wire type) — the name mirrors up-spec's `up-core-api` module.
+## Requires `protobuf-support`.
+up-core-types = ["protobuf-support"]
+## Mapping `UMessage`s to and from [CloudEvents](https://cloudevents.io/)
+## per the [uProtocol CloudEvents mapping](https://github.com/eclipse-uprotocol/up-spec/blob/v1.6.0-alpha.7/up-l1/cloudevents.adoc).
+## Requires `protobuf-support`.
+cloudevents = ["protobuf-support"]
+
+#! ## Supporting features
+## Implementing an [Eclipse Symphony](https://github.com/eclipse-symphony)
+## Target Provider as a uService (generic over any `RpcServer`). Requires
+## `up-l2-api` and `up-core-types`.
+symphony = ["up-l2-api", "up-core-types", "dep:serde", "dep:serde_json", "dep:symphony"]
+## Mock transports and role mocks for unit tests, plus the in-memory
+## `InMemoryZeroCopyTransport` and `InMemoryOwnedTransport` loopbacks
+## the guide's family tutorials run on.
+test-util = ["dep:mockall"]
+## Helpers including the in-memory `LocalTransport` the examples use.
+util = ["tokio/sync"]
+## Shared benchmark payload fixtures and validators, for transport
+## benchmark suites.
+payload-contract-fixtures = ["protobuf-wire", "zero-copy-transport", "dep:serde", "dep:serde_json", "dep:sha2"]
+
+# Internal plumbing features (not part of the documented surface):
+payload-contract-large-fixtures = ["payload-contract-fixtures"]
+payload-contract-simulator-fixtures = ["payload-contract-large-fixtures"]
+perf-diagnostics = ["zero-copy-transport"]
+protobuf-wire = ["up-core-types"]
 selected-wire-codec-core = []
-selected-wire-protobuf-metadata = ["selected-wire-codec-core", "up-core-types"]
-# Explicit opt-in for the legacy protobuf-UAttributes metadata profile.
-selected-wire-legacy-protobuf-metadata = ["selected-wire-protobuf-metadata"]
 selected-wire-transport-adapter = ["selected-wire-transport-core"]
 selected-wire-transport-core = ["selected-wire-codec-core"]
-symphony = ["up-l2-rpc-server", "dep:serde", "dep:serde_json", "dep:symphony"]
-test-util = ["dep:mockall"]
-transport-implementer-api = ["selected-wire-transport-core"]
-up-core-types = ["protobuf-support"]
-up-l2-api = ["dep:thiserror"]
-up-l2-notifier = ["up-l2-api"]
-up-l2-publisher = ["up-l2-api"]
-up-l2-subscriber =["up-l2-api", "usubscription"]
-up-l2-rpc-client = ["up-l2-api", "up-core-types", "tokio/sync", "tokio/time"]
-up-l2-rpc-server = ["up-l2-api", "up-core-types", "tokio/sync", "tokio/time"]
-udiscovery = ["up-l2-rpc-client"]
-usubscription = ["up-l2-rpc-client"]
-util = ["tokio/sync"]
-wire-implementer-api = ["selected-wire-codec-core", "up-core-types"]
-zero-copy-uninit = []
+
 
 [dependencies]
+document-features = { version = "0.2", optional = true }
 async-trait = { version = "0.1" }
 bytes = { version = "1.11.1" }
 mediatype = "0.20"
@@ -103,6 +151,8 @@ cucumber = { version = "0.23.0", features = ["output-junit"] }
 hex = { version = "0.4.3" }
 mockall = { version = "0.13.1" }
 test-case = { version = "3.3.1" }
+pretty_assertions = { version = "1.4" }
+proptest = { version = "1.5" }
 time = { version = "0.3.47" }
 tokio = { version = "1.45.1", default-features = false, features = [
     "macros",
@@ -120,6 +170,7 @@ codegen-units = 1
 
 [package.metadata.docs.rs]
 all-features = true
+rustdoc-args = ["--cfg", "docsrs"]
 
 [package.metadata.cargo-all-features]
 denylist = ["test-util"]
@@ -128,37 +179,23 @@ skip_feature_sets = [
     # so there is no need to test them together
     ["up-core-types", "protobuf-support"],
     ["cloudevents", "protobuf-support"],
-    ["symphony", "up-l2-rpc-server"],
     ["symphony", "up-l2-api"],
-    ["communication", "up-l2-notifier"],
-    ["communication", "up-l2-publisher"],
-    ["communication", "up-l2-subscriber"],
-    ["communication", "up-l2-rpc-client"],
-    ["communication", "up-l2-rpc-server"],
+    ["symphony", "up-core-types"],
     ["communication", "up-l2-api"],
     ["communication", "up-core-types"],
     ["communication", "protobuf-support"],
     ["communication", "usubscription"],
-    ["up-l2-notifier", "up-l2-api"],
-    ["up-l2-publisher", "up-l2-api"],
-    ["up-l2-subscriber", "up-l2-api"],
-    ["up-l2-subscriber", "usubscription"],
-    ["up-l2-subscriber", "up-l2-rpc-client"],
-    ["up-l2-subscriber", "up-core-types"],
-    ["up-l2-rpc-client", "up-l2-api"],
-    ["up-l2-rpc-client", "up-core-types"],
-    ["up-l2-rpc-client", "protobuf-support"],
-    ["up-l2-rpc-server", "up-l2-api"],
-    ["up-l2-rpc-server", "up-core-types"],
-    ["up-l2-rpc-server", "protobuf-support"],
-    ["usubscription", "up-l2-rpc-client"],
     ["usubscription", "up-l2-api"],
     ["usubscription", "up-core-types"],
     ["usubscription", "protobuf-support"],
-    ["udiscovery", "up-l2-rpc-client"],
     ["udiscovery", "up-l2-api"],
     ["udiscovery", "up-core-types"],
     ["udiscovery", "protobuf-support"],
+    ["owned-frame-transport", "up-core-types"],
+    ["owned-frame-transport", "selected-wire-transport-core"],
+    ["transport-implementer-api", "selected-wire-transport-core"],
+    ["wire-implementer-api", "selected-wire-codec-core"],
+    ["selected-wire-user-api", "selected-wire-transport-adapter"],
 ]
 # optional dependencies are activated by means of features only
 skip_optional_dependencies = true
@@ -166,15 +203,15 @@ max_combination_size = 3
 
 [[example]]
 name = "simple_notify"
-required-features = ["up-l2-notifier", "util"]
+required-features = ["communication", "util"]
 
 [[example]]
 name = "simple_publish"
-required-features = ["up-l2-publisher", "util"]
+required-features = ["communication", "util"]
 
 [[example]]
 name = "simple_rpc"
-required-features = ["up-l2-rpc-client", "up-l2-rpc-server", "util"]
+required-features = ["communication", "util"]
 
 [[example]]
 name = "symphony_target"
@@ -204,15 +241,15 @@ required-features = ["wire-implementer-api"]
 
 [[test]]
 name = "wire_transport_adapter"
-required-features = ["selected-wire-user-api", "wire-implementer-api", "transport-implementer-api", "protobuf-wire"]
+required-features = ["selected-wire-user-api", "wire-implementer-api", "transport-implementer-api", "protobuf-wire", "zero-copy-transport"]
 
 [[test]]
 name = "wire_transport_trybuild"
-required-features = ["selected-wire-user-api", "wire-implementer-api", "transport-implementer-api", "protobuf-wire", "zero-copy-uninit"]
+required-features = ["selected-wire-user-api", "wire-implementer-api", "transport-implementer-api", "protobuf-wire", "zero-copy-transport"]
 
 [[test]]
 name = "stable_container_miri"
-required-features = ["test-util", "zero-copy-uninit"]
+required-features = ["test-util", "zero-copy-transport"]
 
 [[test]]
 name = "role_firewall_trybuild"
@@ -220,36 +257,44 @@ required-features = ["selected-wire-user-api"]
 
 [[test]]
 name = "zero_copy_uninit_surface_trybuild"
-required-features = ["selected-wire-user-api", "transport-implementer-api", "up-l2-api"]
+required-features = ["selected-wire-user-api", "transport-implementer-api", "up-l2-api", "zero-copy-transport"]
+
+[[test]]
+name = "validation_typestate_trybuild"
+required-features = ["owned-frame-transport", "zero-copy-transport"]
 
 [[bench]]
 name = "selected_wire_metadata"
 harness = false
-required-features = ["selected-wire-user-api", "wire-implementer-api", "transport-implementer-api", "protobuf-wire"]
+required-features = ["selected-wire-user-api", "wire-implementer-api", "transport-implementer-api", "protobuf-wire", "zero-copy-transport"]
 
 [[bench]]
 name = "selected_wire_rx"
 harness = false
-required-features = ["selected-wire-user-api", "wire-implementer-api", "transport-implementer-api", "protobuf-wire"]
+required-features = ["selected-wire-user-api", "wire-implementer-api", "transport-implementer-api", "protobuf-wire", "zero-copy-transport"]
 
 [[bench]]
 name = "selected_wire_filter"
 harness = false
-required-features = ["selected-wire-user-api", "wire-implementer-api", "transport-implementer-api", "protobuf-wire"]
+required-features = ["selected-wire-user-api", "wire-implementer-api", "transport-implementer-api", "protobuf-wire", "zero-copy-transport"]
 
 [[bench]]
 name = "selected_wire_adapter_receive"
 harness = false
-required-features = ["selected-wire-user-api", "wire-implementer-api", "transport-implementer-api", "protobuf-wire"]
+required-features = ["selected-wire-user-api", "wire-implementer-api", "transport-implementer-api", "protobuf-wire", "zero-copy-transport"]
 
 [[bench]]
 name = "stable_payload_init"
 harness = false
+required-features = ["zero-copy-transport"]
 
 [lints.rust]
 # this prevents cargo from complaining about code blocks
 # excluded from tarpaulin coverage checks
 unexpected_cfgs = { level = "warn", check-cfg = ['cfg(tarpaulin_include)'] }
+# every public item is documented; every public type is inspectable.
+# missing_copy_implementations is deliberately not enforced: implementing
+# Copy is a semver commitment we make per-type, not a hygiene default.
 
 [lints.clippy]
 # see https://corrode.dev/blog/defensive-programming/#clippy-lints-for-defensive-programming

@@ -6,10 +6,10 @@
 
 #[test]
 fn zero_copy_uninit_feature_surface() {
+    // The uninitialized-loan surface (implementer and user side) ships
+    // with the zero-copy family as one unit; this harness requires the
+    // family feature, so both pins are unconditional.
     let tests = trybuild::TestCases::new();
     tests.pass("tests/ui/zero_copy_uninit/implementer_present.rs");
-    #[cfg(not(feature = "zero-copy-uninit"))]
-    tests.compile_fail("tests/ui/zero_copy_uninit/user_absent.rs");
-    #[cfg(feature = "zero-copy-uninit")]
     tests.pass("tests/ui/zero_copy_uninit/user_present.rs");
 }

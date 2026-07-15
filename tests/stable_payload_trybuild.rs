@@ -11,7 +11,7 @@ fn stable_payload_layout_compile_tests() {
     cases.compile_fail("tests/ui/stable_payload/*.rs");
 }
 
-#[cfg(all(feature = "owned-frame-transport", feature = "zero-copy-uninit"))]
+#[cfg(all(feature = "owned-frame-transport", feature = "zero-copy-transport"))]
 #[test]
 fn unsafe_feature_disabled_compile_tests() {
     let cases = trybuild::TestCases::new();

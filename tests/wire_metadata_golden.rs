@@ -35,9 +35,6 @@ use up_rust::{
     UMessageBuilder, UPayloadFormat, UProtocolNativeWire, UUri, UWire, UWireMetadataCodec, UUID,
 };
 
-#[cfg(feature = "selected-wire-protobuf-metadata")]
-use up_rust::NativePrefixProtobufMetadataCodec;
-
 fn golden_dir() -> PathBuf {
     PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("tests/golden/wire-metadata")
 }
@@ -72,8 +69,11 @@ fn project(
     message: &up_rust::UMessage,
     payload_encoding: Option<PayloadEncoding>,
 ) -> UFrameMetadata {
-    up_rust::try_project_attributes_to_frame_metadata(message.attributes(), payload_encoding)
-        .expect("metadata")
+    up_rust::frame::metadata::try_project_attributes_to_frame_metadata(
+        message.attributes(),
+        payload_encoding,
+    )
+    .expect("metadata")
 }
 
 /// The deterministic fixture set. Names are stable file names; extend by
@@ -260,23 +260,6 @@ fn classic_uattributes_golden_vectors() {
         check_or_update(name, "uattributes-classic", &bytes, &mut manifest);
     }
     finish_manifest("uattributes-classic", manifest);
-}
-
-#[cfg(feature = "selected-wire-protobuf-metadata")]
-#[test]
-fn legacy_protobuf_golden_vectors() {
-    let mut manifest = String::from("[\n");
-    for (name, _desc, metadata) in fixtures() {
-        let bytes = NativePrefixProtobufMetadataCodec
-            .encode_frame_metadata(UProtocolNativeWire::metadata_context(), &metadata)
-            .expect("legacy encode");
-        let decoded = NativePrefixProtobufMetadataCodec
-            .decode_frame_metadata(UProtocolNativeWire::metadata_context(), &bytes)
-            .expect("legacy decode");
-        assert_eq!(decoded, metadata, "legacy round-trip for {name}");
-        check_or_update(name, "native-prefix", &bytes, &mut manifest);
-    }
-    finish_manifest("native-prefix", manifest);
 }
 
 fn finish_manifest(profile: &str, mut manifest: String) {

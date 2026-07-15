@@ -20,7 +20,9 @@ pub enum UTxPayloadSpec {
     Absent,
     /// The frame carries a payload, including a present empty payload.
     Present {
+        /// Payload length in bytes.
         len: usize,
+        /// Required payload alignment.
         alignment: PayloadAlignment,
     },
 }
@@ -135,12 +137,13 @@ impl UTxPayloadSpec {
 /// Validated transport-independent transmit loan specification.
 #[derive(Clone, Debug, PartialEq)]
 #[must_use = "a transmit loan specification has no effect until passed to a loan method"]
-pub struct UTxLoanSpec {
+pub struct UTxLoanSpec<S = crate::Validated> {
     metadata: UFrameMetadata,
     payload: UTxPayloadSpec,
+    _state: core::marker::PhantomData<S>,
 }
 
-impl UTxLoanSpec {
+impl UTxLoanSpec<crate::Validated> {
     /// Creates a validated transmit loan spec.
     ///
     /// # Errors
@@ -148,15 +151,7 @@ impl UTxLoanSpec {
     /// Returns an error if metadata is invalid or if payload presence and payload
     /// encoding metadata disagree.
     pub(crate) fn new(metadata: UFrameMetadata, payload: UTxPayloadSpec) -> Result<Self, UStatus> {
-        let spec = Self::new_unchecked(metadata, payload);
-        validate_tx_loan_spec(&spec)?;
-        Ok(spec)
-    }
-
-    /// Creates a transmit loan spec without validation.
-    #[must_use = "pass the resulting specification to a transmit loan method"]
-    pub fn new_unchecked(metadata: UFrameMetadata, payload: UTxPayloadSpec) -> Self {
-        Self { metadata, payload }
+        UTxLoanSpec::new_unchecked(metadata, payload).validate()
     }
 
     /// Creates a no-payload transmit loan spec.
@@ -190,7 +185,37 @@ impl UTxLoanSpec {
     pub fn present_empty_payload(metadata: UFrameMetadata) -> Result<Self, UStatus> {
         Self::new(metadata, UTxPayloadSpec::present_empty())
     }
+}
 
+impl UTxLoanSpec<crate::Unvalidated> {
+    /// Creates a transmit loan spec without validation.
+    #[must_use = "validate the specification before loaning"]
+    pub fn new_unchecked(metadata: UFrameMetadata, payload: UTxPayloadSpec) -> Self {
+        Self {
+            metadata,
+            payload,
+            _state: core::marker::PhantomData,
+        }
+    }
+
+    /// Validates the spec, transitioning it to the [`Validated`](crate::Validated) state.
+    ///
+    /// # Errors
+    ///
+    /// Returns an error if metadata is invalid or if payload presence and
+    /// payload encoding metadata disagree.
+    pub fn validate(self) -> Result<UTxLoanSpec<crate::Validated>, UStatus> {
+        let spec = UTxLoanSpec {
+            metadata: self.metadata,
+            payload: self.payload,
+            _state: core::marker::PhantomData,
+        };
+        validate_tx_loan_spec(&spec)?;
+        Ok(spec)
+    }
+}
+
+impl<S> UTxLoanSpec<S> {
     /// Returns the immutable frame metadata associated with this loan.
     #[must_use]
     pub fn metadata(&self) -> &UFrameMetadata {
@@ -234,71 +259,8 @@ impl UTxLoanSpec {
     }
 }
 
-/// Transmit loan spec that has passed the public transport validation boundary.
-#[derive(Clone, Debug, PartialEq)]
-pub struct ValidatedTxLoanSpec(UTxLoanSpec);
-
-impl ValidatedTxLoanSpec {
-    /// Returns the validated transmit loan spec.
-    #[must_use = "use the validated specification when preparing a transport loan"]
-    pub fn as_spec(&self) -> &UTxLoanSpec {
-        &self.0
-    }
-
-    /// Consumes the wrapper and returns the validated transmit loan spec.
-    #[must_use = "use the validated specification when preparing a transport loan"]
-    pub fn into_inner(self) -> UTxLoanSpec {
-        self.0
-    }
-
-    /// Returns the immutable frame metadata associated with this loan.
-    #[must_use]
-    pub fn metadata(&self) -> &UFrameMetadata {
-        self.0.metadata()
-    }
-
-    /// Consumes the spec and returns its metadata.
-    #[must_use]
-    pub fn into_metadata(self) -> UFrameMetadata {
-        self.0.into_metadata()
-    }
-
-    /// Returns the visible application payload length.
-    #[must_use]
-    pub fn payload_len(&self) -> usize {
-        self.0.payload_len()
-    }
-
-    /// Returns the requested visible application payload alignment.
-    #[must_use]
-    pub fn payload_alignment(&self) -> usize {
-        self.0.payload_alignment()
-    }
-
-    /// Returns the validated payload alignment proof.
-    #[must_use]
-    pub fn payload_alignment_proof(&self) -> PayloadAlignment {
-        self.0.payload_alignment_proof()
-    }
-}
-
-impl TryFrom<UTxLoanSpec> for ValidatedTxLoanSpec {
-    type Error = UStatus;
-
-    fn try_from(value: UTxLoanSpec) -> Result<Self, Self::Error> {
-        validate_tx_loan_spec(&value)?;
-        Ok(Self(value))
-    }
-}
-
-impl Deref for ValidatedTxLoanSpec {
-    type Target = UTxLoanSpec;
-
-    fn deref(&self) -> &Self::Target {
-        &self.0
-    }
-}
-
+/// *Role: transmit storage a zero-copy transport lends; write the payload in place, then commit — see the [trait map](crate::guide::trait_map).*
+///
 /// Mutable transmit storage reserved from a zero-copy transport.
 pub trait UTxBuffer {
     /// Returns the immutable frame metadata associated with this transmit loan.
@@ -311,6 +273,8 @@ pub trait UTxBuffer {
     fn payload_mut(&mut self) -> &mut [u8];
 }
 
+/// *Role: an uninitialized transmit loan; filled safely via the typed init API — see the [trait map](crate::guide::trait_map).*
+///
 /// Mutable transmit storage whose application payload bytes are not yet initialized.
 pub trait UUninitTxBuffer {
     /// Initialized transmit loan type produced after payload initialization.
@@ -340,6 +304,13 @@ pub struct LoanedPayloadUninitMut<'a> {
     provenance: PayloadLoanProvenance,
 }
 
+impl<'a> core::fmt::Debug for LoanedPayloadUninitMut<'a> {
+    fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
+        f.debug_struct("LoanedPayloadUninitMut")
+            .finish_non_exhaustive()
+    }
+}
+
 impl<'a> LoanedPayloadUninitMut<'a> {
     /// Creates a mutable uninitialized loaned payload view from transport-owned storage.
     ///
@@ -357,26 +328,29 @@ impl<'a> LoanedPayloadUninitMut<'a> {
     }
 
     #[must_use]
+    /// Returns where this loan's storage came from.
     pub fn provenance(&self) -> PayloadLoanProvenance {
         self.provenance
     }
 
     #[must_use]
+    /// Returns the payload capacity of this loan in bytes.
     pub fn len(&self) -> usize {
         self.bytes.len()
     }
 
     #[must_use]
+    /// Returns `true` if the loan has zero payload capacity.
     pub fn is_empty(&self) -> bool {
         self.bytes.is_empty()
     }
 
-    #[cfg(feature = "zero-copy-uninit")]
+    #[cfg(feature = "zero-copy-transport")]
     pub(crate) fn as_uninit_bytes_mut_internal(&mut self) -> &mut [MaybeUninit<u8>] {
         self.bytes
     }
 
-    #[cfg(feature = "zero-copy-uninit")]
+    #[cfg(feature = "zero-copy-transport")]
     pub(crate) fn into_uninit_bytes_mut_internal(self) -> &'a mut [MaybeUninit<u8>] {
         self.bytes
     }

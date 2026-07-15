@@ -20,6 +20,8 @@
 //! Spec: `up-spec/basics/uframe.adoc` and
 //! `up-spec/up-l1/transport_families.adoc`.
 
+pub mod view;
+pub use view::{validate_frame_view_for_transport, UFrameView};
 pub mod abi;
 pub mod codec;
 #[cfg(feature = "owned-frame-transport")]

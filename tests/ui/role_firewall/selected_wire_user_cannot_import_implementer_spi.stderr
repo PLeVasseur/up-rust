@@ -8,10 +8,8 @@ error[E0432]: unresolved imports `up_rust::transport_implementer_api`, `up_rust:
   |     |                                no `wire_implementer_api` in the root
   |     no `transport_implementer_api` in the root
 9 |     UWirePayload, UWireTransport,
-  |     ^^^^^^^^^^^^  ^^^^^^^^^^^^^^
-  |     |             |
-  |     |             no `UWireTransport` in the root
-  |     |             help: a similar name exists in the module: `wire_transport`
+  |     ^^^^^^^^^^^^  ^^^^^^^^^^^^^^ no `UWireTransport` in the root
+  |     |
   |     no `UWirePayload` in the root
   |
 note: found an item that was configured out
@@ -33,9 +31,8 @@ note: found an item that was configured out
   |
   | #[cfg(feature = "transport-implementer-api")]
   |       ------------------------------------- the item is gated behind the `transport-implementer-api` feature
-  | pub use wire_transport::{
-  |     PreparedTxLoanSpec, UEncodedLoanedRxFrame, UEncodedRxFrame, UEncodedZeroCopyListener,
-  |                                                ^^^^^^^^^^^^^^^
+  | pub use wire_transport::UEncodedRxFrame;
+  |                         ^^^^^^^^^^^^^^^
 note: found an item that was configured out
  --> src/lib.rs
   |
@@ -62,6 +59,11 @@ note: found an item that was configured out
   |   ))]
   |   pub use wire_transport::UWireTransport;
   |                           ^^^^^^^^^^^^^^
+help: a similar name exists in the module
+  |
+9 -     UWirePayload, UWireTransport,
+9 +     UWirePayload, wire_transport,
+  |
 
 error[E0603]: module `wire` is private
  --> tests/ui/role_firewall/selected_wire_user_cannot_import_implementer_spi.rs:8:32

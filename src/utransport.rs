@@ -22,12 +22,10 @@ use std::collections::HashMap;
 use std::sync::{LazyLock, Mutex as StdMutex};
 
 use async_trait::async_trait;
-#[cfg(feature = "owned-frame-transport")]
-use tracing::warn;
 
-use crate::{UCode, UMessage, UStatus, UUri, UUriError};
 #[cfg(feature = "owned-frame-transport")]
-use crate::{UFrameMetadataError, UOwnedFrame};
+use crate::UOwnedFrame;
+use crate::{UCode, UMessage, UStatus, UUri, UUriError};
 
 #[cfg(feature = "owned-frame-transport")]
 mod owned_transport_sealed {
@@ -80,6 +78,8 @@ pub fn verify_filter_criteria(
 /// Implementations may use arbitrary mechanisms to determine the information that
 /// is necessary for creating URIs, e.g. environment variables, configuration files etc.
 // [impl->dsn~localuriprovider-declaration~1]
+/// *Role: standalone utility answering "what is my address?"; implemented per uEntity, consumed by the roles — see the [trait map](crate::guide::trait_map).*
+///
 #[cfg_attr(any(test, feature = "test-util"), mockall::automock)]
 pub trait LocalUriProvider: Send + Sync {
     /// Gets the _authority_ used for URIs representing this uEntity's resources.
@@ -92,6 +92,7 @@ pub trait LocalUriProvider: Send + Sync {
 }
 
 /// A URI provider that is statically configured with the uEntity's authority, entity ID and version.
+#[derive(Debug)]
 pub struct StaticUriProvider {
     local_uri: UUri,
 }
@@ -175,6 +176,8 @@ impl From<&UUri> for StaticUriProvider {
 /// Please refer to the [uProtocol Transport Layer specification](https://github.com/eclipse-uprotocol/up-spec/blob/v1.6.0-alpha.7/up-l1/README.adoc)
 /// for details.
 // [impl->dsn~ulistener-declaration~1]
+/// *Role: implemented by applications to receive `UTransport`-family [`UMessage`](crate::UMessage)s; registered on a [`UTransport`](crate::UTransport) — see the [trait map](crate::guide::trait_map).*
+///
 #[cfg_attr(any(test, feature = "test-util"), mockall::automock)]
 #[async_trait]
 pub trait UListener: Send + Sync {
@@ -201,6 +204,8 @@ pub trait UListener: Send + Sync {
 /// Please refer to the [uProtocol Transport Layer specification](https://github.com/eclipse-uprotocol/up-spec/blob/v1.6.0-alpha.7/up-l1/README.adoc)
 /// for details.
 // [impl->dsn~utransport-declaration~1]
+/// *Role: implemented by transports; called by applications (usually via the [`communication`](crate::communication) roles) — see the [trait map](crate::guide::trait_map).*
+///
 #[async_trait]
 pub trait UTransport: Send + Sync {
     /// Sends a message using this transport's message exchange mechanism.
@@ -300,19 +305,6 @@ pub trait UTransport: Send + Sync {
 }
 
 #[cfg(feature = "owned-frame-transport")]
-fn owned_frame_validation_error(error: UFrameMetadataError) -> UStatus {
-    UStatus::fail_with_code(
-        UCode::InvalidArgument,
-        format!("invalid owned frame: {error}"),
-    )
-}
-
-#[cfg(feature = "owned-frame-transport")]
-fn validate_owned_frame_for_transport(frame: &UOwnedFrame) -> Result<(), UStatus> {
-    frame.validate().map_err(owned_frame_validation_error)
-}
-
-#[cfg(feature = "owned-frame-transport")]
 fn verify_owned_filter_criteria(
     source_filter: &UUri,
     sink_filter: Option<&UUri>,
@@ -363,21 +355,8 @@ fn owned_listener_registration_key<T: ?Sized>(
     }
 }
 
-#[cfg(feature = "owned-frame-transport")]
-struct ValidatingOwnedListener {
-    listener: Arc<dyn UOwnedListener>,
-}
-
-#[cfg(feature = "owned-frame-transport")]
-#[async_trait]
-impl UOwnedListener for ValidatingOwnedListener {
-    async fn on_receive_owned(&self, frame: UOwnedFrame) {
-        match validate_owned_frame_for_transport(&frame) {
-            Ok(()) => self.listener.on_receive_owned(frame).await,
-            Err(error) => warn!(%error, "dropping invalid owned frame before listener delivery"),
-        }
-    }
-}
+// Delivered frames are `UOwnedFrame<Validated>` by type; no re-validation
+// wrapper is needed here.
 
 #[cfg(feature = "owned-frame-transport")]
 fn registered_owned_listener(
@@ -391,10 +370,8 @@ fn registered_owned_listener(
         return (existing.clone(), false);
     }
 
-    let validating_listener: Arc<dyn UOwnedListener> =
-        Arc::new(ValidatingOwnedListener { listener });
-    registry.insert(key.clone(), validating_listener.clone());
-    (validating_listener, true)
+    registry.insert(key.clone(), listener.clone());
+    (listener, true)
 }
 
 #[cfg(feature = "owned-frame-transport")]
@@ -410,45 +387,8 @@ fn owned_listener_for_unregister(
         .unwrap_or(fallback)
 }
 
-/// Owned frame that has passed transport-boundary validation.
-#[cfg(feature = "owned-frame-transport")]
-#[derive(Clone, Debug, PartialEq)]
-pub struct ValidatedOwnedFrame(UOwnedFrame);
-
-#[cfg(feature = "owned-frame-transport")]
-impl ValidatedOwnedFrame {
-    /// Returns the validated owned frame.
-    #[must_use]
-    pub fn as_frame(&self) -> &UOwnedFrame {
-        &self.0
-    }
-
-    /// Consumes the wrapper and returns the validated owned frame.
-    #[must_use]
-    pub fn into_inner(self) -> UOwnedFrame {
-        self.0
-    }
-}
-
-#[cfg(feature = "owned-frame-transport")]
-impl TryFrom<UOwnedFrame> for ValidatedOwnedFrame {
-    type Error = UStatus;
-
-    fn try_from(value: UOwnedFrame) -> Result<Self, Self::Error> {
-        validate_owned_frame_for_transport(&value)?;
-        Ok(Self(value))
-    }
-}
-
-#[cfg(feature = "owned-frame-transport")]
-impl Deref for ValidatedOwnedFrame {
-    type Target = UOwnedFrame;
-
-    fn deref(&self) -> &Self::Target {
-        &self.0
-    }
-}
-
+/// *Role: implemented by applications to receive owned frames — see the [trait map](crate::guide::trait_map).*
+///
 /// Listener for experimental owned native-frame transports.
 #[cfg(feature = "owned-frame-transport")]
 #[cfg_attr(any(test, feature = "test-util"), mockall::automock)]
@@ -458,13 +398,19 @@ pub trait UOwnedListener: Send + Sync {
     async fn on_receive_owned(&self, frame: UOwnedFrame);
 }
 
+/// *Role: implemented by transports offering the owned-frame family; users call [`UOwnedTransport`](crate::UOwnedTransport) — see the [trait map](crate::guide::trait_map).*
+///
+/// *Role: called by users of the owned-frame family; transports implement [`UOwnedTransportImpl`](crate::UOwnedTransportImpl) instead — see the [trait map](crate::guide::trait_map).*
+///
 /// Implementation boundary for experimental owned native-frame transports.
 ///
 /// Implementing this trait buys the public [`UOwnedTransport`] API, frame and
 /// filter validation, listener validation, and compatibility projections above
-/// the transport. Only [`ValidatedOwnedFrame`] reaches the required send method;
-/// its constructor is not public, so
-/// `req~owned-frame-validate-before-send~1` is enforced before delegation.
+/// the transport. Only the [`Validated`](crate::Validated) frame state reaches
+/// the required send method — constructors validate, and the only path from
+/// [`Unvalidated`](crate::Unvalidated) is [`UOwnedFrame::validate`] — so
+/// `req~owned-frame-validate-before-send~1` is enforced by the type system
+/// before delegation.
 ///
 /// Send is required. Pull receive and listener registration have default
 /// unsupported implementations and are overridden only for carriage patterns
@@ -474,7 +420,7 @@ pub trait UOwnedListener: Send + Sync {
 #[async_trait]
 pub trait UOwnedTransportImpl: Send + Sync {
     /// Sends an already validated owned frame.
-    async fn send_validated_owned(&self, frame: ValidatedOwnedFrame) -> Result<(), UStatus>;
+    async fn send_validated_owned(&self, frame: UOwnedFrame) -> Result<(), UStatus>;
 
     /// Receives one matching owned frame from transports that support pull receive.
     async fn receive_validated_owned(
@@ -560,8 +506,7 @@ where
     T: UOwnedTransportImpl + ?Sized,
 {
     async fn send_owned(&self, frame: UOwnedFrame) -> Result<(), UStatus> {
-        self.send_validated_owned(ValidatedOwnedFrame::try_from(frame)?)
-            .await
+        self.send_validated_owned(frame).await
     }
 
     async fn receive_owned(
@@ -572,7 +517,7 @@ where
         verify_owned_filter_criteria(source_filter, sink_filter)?;
         let frame =
             UOwnedTransportImpl::receive_validated_owned(self, source_filter, sink_filter).await?;
-        Ok(ValidatedOwnedFrame::try_from(frame)?.into_inner())
+        Ok(frame)
     }
 
     async fn register_owned_listener(
@@ -639,10 +584,31 @@ where
 #[cfg(not(tarpaulin_include))]
 #[cfg(all(feature = "owned-frame-transport", any(test, feature = "test-util")))]
 mockall::mock! {
+    /// Mockall-generated mock for test-util consumers.
     pub UOwnedTransport {
-        pub async fn do_send_validated_owned(&self, frame: ValidatedOwnedFrame) -> Result<(), UStatus>;
+        /// Mock hook; configure with mockall expectations.
+    ///
+    /// # Errors
+    ///
+    /// Returns whatever the test's expectations are configured to return.
+        pub async fn do_send_validated_owned(&self, frame: UOwnedFrame) -> Result<(), UStatus>;
+        /// Mock hook; configure with mockall expectations.
+    ///
+    /// # Errors
+    ///
+    /// Returns whatever the test's expectations are configured to return.
         pub async fn do_receive_validated_owned<'a>(&'a self, source_filter: &'a UUri, sink_filter: Option<&'a UUri>) -> Result<UOwnedFrame, UStatus>;
+        /// Mock hook; configure with mockall expectations.
+    ///
+    /// # Errors
+    ///
+    /// Returns whatever the test's expectations are configured to return.
         pub async fn do_register_validated_owned_listener<'a>(&'a self, source_filter: &'a UUri, sink_filter: Option<&'a UUri>, listener: Arc<dyn UOwnedListener>) -> Result<(), UStatus>;
+        /// Mock hook; configure with mockall expectations.
+    ///
+    /// # Errors
+    ///
+    /// Returns whatever the test's expectations are configured to return.
         pub async fn do_unregister_validated_owned_listener<'a>(&'a self, source_filter: &'a UUri, sink_filter: Option<&'a UUri>, listener: Arc<dyn UOwnedListener>) -> Result<(), UStatus>;
     }
 }
@@ -651,7 +617,7 @@ mockall::mock! {
 #[cfg(all(feature = "owned-frame-transport", any(test, feature = "test-util")))]
 #[async_trait]
 impl UOwnedTransportImpl for MockUOwnedTransport {
-    async fn send_validated_owned(&self, frame: ValidatedOwnedFrame) -> Result<(), UStatus> {
+    async fn send_validated_owned(&self, frame: UOwnedFrame) -> Result<(), UStatus> {
         self.do_send_validated_owned(frame).await
     }
 
@@ -691,8 +657,23 @@ mockall::mock! {
     /// This extra struct is necessary in order to comply with mockall's requirements regarding the parameter lifetimes
     /// see <https://github.com/asomers/mockall/issues/571>
     pub Transport {
+        /// Mock hook; configure with mockall expectations.
+    ///
+    /// # Errors
+    ///
+    /// Returns whatever the test's expectations are configured to return.
         pub async fn do_send(&self, message: UMessage) -> Result<(), UStatus>;
+        /// Mock hook; configure with mockall expectations.
+    ///
+    /// # Errors
+    ///
+    /// Returns whatever the test's expectations are configured to return.
         pub async fn do_register_listener<'a>(&'a self, source_filter: &'a UUri, sink_filter: Option<&'a UUri>, listener: Arc<dyn UListener>) -> Result<(), UStatus>;
+        /// Mock hook; configure with mockall expectations.
+    ///
+    /// # Errors
+    ///
+    /// Returns whatever the test's expectations are configured to return.
         pub async fn do_unregister_listener<'a>(&'a self, source_filter: &'a UUri, sink_filter: Option<&'a UUri>, listener: Arc<dyn UListener>) -> Result<(), UStatus>;
     }
 }
@@ -746,6 +727,7 @@ pub struct ComparableListener {
 }
 
 impl ComparableListener {
+    /// Creates a comparable wrapper around a listener for registry equality.
     pub fn new(listener: Arc<dyn UListener>) -> Self {
         Self { listener }
     }
@@ -953,15 +935,15 @@ mod tests {
         assert!(transport
             .receive(&UUri::any(), None)
             .await
-            .is_err_and(|e| e.get_code() == UCode::Unimplemented));
+            .is_err_and(|e| e.code() == UCode::Unimplemented));
         assert!(transport
             .register_listener(&UUri::any(), None, listener.clone())
             .await
-            .is_err_and(|e| e.get_code() == UCode::Unimplemented));
+            .is_err_and(|e| e.code() == UCode::Unimplemented));
         assert!(transport
             .unregister_listener(&UUri::any(), None, listener)
             .await
-            .is_err_and(|e| e.get_code() == UCode::Unimplemented));
+            .is_err_and(|e| e.code() == UCode::Unimplemented));
     }
 
     #[test]
@@ -1037,7 +1019,7 @@ mod tests {
         "sink is empty but source has non-topic resource ID")]
     fn test_verify_filter_criteria_fails_for(source_filter: UUri, sink_filter: Option<UUri>) {
         assert!(verify_filter_criteria(&source_filter, sink_filter.as_ref())
-            .is_err_and(|err| matches!(err.get_code(), UCode::InvalidArgument)));
+            .is_err_and(|err| matches!(err.code(), UCode::InvalidArgument)));
     }
 }
 
@@ -1060,26 +1042,13 @@ mod owned_transport_tests {
         UUri::from_str("//vehicle/4210/1/10").expect("invalid test URI")
     }
 
-    fn metadata_without_encoding() -> UFrameMetadata {
-        let message = UMessageBuilder::publish(topic()).build().expect("message");
-        crate::try_project_attributes_to_frame_metadata(message.attributes(), None)
-            .expect("metadata")
-    }
-
     fn metadata_with_encoding() -> UFrameMetadata {
         let message = UMessageBuilder::publish(topic()).build().expect("message");
-        crate::try_project_attributes_to_frame_metadata(
+        crate::frame::metadata::try_project_attributes_to_frame_metadata(
             message.attributes(),
             Some(PayloadEncoding::RAW),
         )
         .expect("metadata")
-    }
-
-    fn invalid_frame() -> UOwnedFrame {
-        UOwnedFrame::with_payload_unchecked(
-            metadata_without_encoding(),
-            Bytes::from_static(b"missing encoding"),
-        )
     }
 
     fn valid_frame() -> UOwnedFrame {
@@ -1092,10 +1061,7 @@ mod owned_transport_tests {
 
         #[async_trait]
         impl UOwnedTransportImpl for EmptyTransport {
-            async fn send_validated_owned(
-                &self,
-                _frame: ValidatedOwnedFrame,
-            ) -> Result<(), UStatus> {
+            async fn send_validated_owned(&self, _frame: UOwnedFrame) -> Result<(), UStatus> {
                 Ok(())
             }
         }
@@ -1107,58 +1073,30 @@ mod owned_transport_tests {
         assert!(transport
             .receive_owned(&source, None)
             .await
-            .is_err_and(|status| status.get_code() == UCode::Unimplemented));
+            .is_err_and(|status| status.code() == UCode::Unimplemented));
         assert!(transport
             .register_owned_listener(&source, None, listener.clone())
             .await
-            .is_err_and(|status| status.get_code() == UCode::Unimplemented));
+            .is_err_and(|status| status.code() == UCode::Unimplemented));
         assert!(transport
             .unregister_owned_listener(&source, None, listener)
             .await
-            .is_err_and(|status| status.get_code() == UCode::Unimplemented));
+            .is_err_and(|status| status.code() == UCode::Unimplemented));
     }
 
-    #[tokio::test]
-    async fn owned_transport_rejects_invalid_frame_before_impl_observes_it() {
-        #[derive(Default)]
-        struct SpyOwnedTransport {
-            send_count: Mutex<usize>,
-        }
-
-        #[async_trait]
-        impl UOwnedTransportImpl for SpyOwnedTransport {
-            async fn send_validated_owned(
-                &self,
-                _frame: ValidatedOwnedFrame,
-            ) -> Result<(), UStatus> {
-                *self.send_count.lock().expect("send count lock poisoned") += 1;
-                Ok(())
-            }
-        }
-
-        let transport = SpyOwnedTransport::default();
-        let status = transport
-            .send_owned(invalid_frame())
-            .await
-            .expect_err("invalid frame must be rejected");
-
-        assert_eq!(status.get_code(), UCode::InvalidArgument);
-        assert_eq!(*transport.send_count.lock().unwrap(), 0);
-    }
+    // Sending an unvalidated frame is a compile error (`send_owned` takes
+    // `UOwnedFrame<Validated>`); the pin for that lives in the trybuild battery.
 
     #[tokio::test]
     async fn owned_transport_validates_filters_before_receive_impl() {
         #[derive(Default)]
-        struct SpyOwnedTransport {
+        struct ReceiveCountingTransport {
             receive_count: Mutex<usize>,
         }
 
         #[async_trait]
-        impl UOwnedTransportImpl for SpyOwnedTransport {
-            async fn send_validated_owned(
-                &self,
-                _frame: ValidatedOwnedFrame,
-            ) -> Result<(), UStatus> {
+        impl UOwnedTransportImpl for ReceiveCountingTransport {
+            async fn send_validated_owned(&self, _frame: UOwnedFrame) -> Result<(), UStatus> {
                 Ok(())
             }
 
@@ -1175,29 +1113,26 @@ mod owned_transport_tests {
             }
         }
 
-        let transport = SpyOwnedTransport::default();
+        let transport = ReceiveCountingTransport::default();
         let status = transport
             .receive_owned(&invalid_source_filter(), None)
             .await
             .expect_err("invalid filters must be rejected");
 
-        assert_eq!(status.get_code(), UCode::InvalidArgument);
+        assert_eq!(status.code(), UCode::InvalidArgument);
         assert_eq!(*transport.receive_count.lock().unwrap(), 0);
     }
 
     #[tokio::test]
     async fn owned_transport_validates_filters_before_register_impl() {
         #[derive(Default)]
-        struct SpyOwnedTransport {
+        struct RegisterCountingTransport {
             register_count: Mutex<usize>,
         }
 
         #[async_trait]
-        impl UOwnedTransportImpl for SpyOwnedTransport {
-            async fn send_validated_owned(
-                &self,
-                _frame: ValidatedOwnedFrame,
-            ) -> Result<(), UStatus> {
+        impl UOwnedTransportImpl for RegisterCountingTransport {
+            async fn send_validated_owned(&self, _frame: UOwnedFrame) -> Result<(), UStatus> {
                 Ok(())
             }
 
@@ -1215,14 +1150,14 @@ mod owned_transport_tests {
             }
         }
 
-        let transport = SpyOwnedTransport::default();
+        let transport = RegisterCountingTransport::default();
         let listener = Arc::new(MockUOwnedListener::new());
         let status = transport
             .register_owned_listener(&invalid_source_filter(), None, listener)
             .await
             .expect_err("invalid filters must be rejected");
 
-        assert_eq!(status.get_code(), UCode::InvalidArgument);
+        assert_eq!(status.code(), UCode::InvalidArgument);
         assert_eq!(*transport.register_count.lock().unwrap(), 0);
     }
 
@@ -1257,7 +1192,7 @@ mod owned_transport_tests {
 
     #[async_trait]
     impl UOwnedTransportImpl for ListenerSpyOwnedTransport {
-        async fn send_validated_owned(&self, _frame: ValidatedOwnedFrame) -> Result<(), UStatus> {
+        async fn send_validated_owned(&self, _frame: UOwnedFrame) -> Result<(), UStatus> {
             Ok(())
         }
 
@@ -1287,9 +1222,8 @@ mod owned_transport_tests {
             .clone()
             .expect("implementation should receive validating listener");
 
-        registered_listener.on_receive_owned(invalid_frame()).await;
-        assert_eq!(listener.count(), 0);
-
+        // Invalid-frame delivery is unrepresentable now: `on_receive_owned`
+        // takes `UOwnedFrame<Validated>` by type.
         registered_listener.on_receive_owned(valid_frame()).await;
         assert_eq!(listener.count(), 1);
     }
@@ -1302,7 +1236,7 @@ mod owned_transport_tests {
         transport
             .expect_do_send_validated_owned()
             .once()
-            .withf(move |actual| actual.as_frame() == &expected)
+            .withf(move |actual| actual == &expected)
             .return_const(Ok(()));
 
         transport.send_owned(frame).await.unwrap();

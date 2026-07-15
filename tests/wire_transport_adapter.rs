@@ -553,7 +553,9 @@ fn metadata_with_payload() -> UFrameMetadata {
 
 fn metadata_with_payload_encoding(payload_encoding: PayloadEncoding) -> UFrameMetadata {
     let message = UMessageBuilder::publish(topic()).build().expect("message");
-    up_rust::try_project_attributes_to_frame_metadata(message.attributes(), Some(payload_encoding))
+    message
+        .attributes()
+        .to_frame_metadata(payload_encoding)
         .expect("metadata")
 }
 
@@ -561,22 +563,20 @@ fn notification_metadata_with_payload(destination: UUri) -> UFrameMetadata {
     let message = UMessageBuilder::notification(topic(), destination)
         .build()
         .expect("notification message");
-    up_rust::try_project_attributes_to_frame_metadata(
-        message.attributes(),
-        Some(PayloadEncoding::RAW),
-    )
-    .expect("notification metadata")
+    message
+        .attributes()
+        .to_frame_metadata(PayloadEncoding::RAW)
+        .expect("notification metadata")
 }
 
 #[cfg(feature = "owned-frame-transport")]
 fn nonmatching_metadata_with_payload() -> UFrameMetadata {
     let source = UUri::try_from_parts("other", 0x4210, 0x01, 0x9000).expect("other URI");
     let message = UMessageBuilder::publish(source).build().expect("message");
-    up_rust::try_project_attributes_to_frame_metadata(
-        message.attributes(),
-        Some(PayloadEncoding::RAW),
-    )
-    .expect("metadata")
+    message
+        .attributes()
+        .to_frame_metadata(PayloadEncoding::RAW)
+        .expect("metadata")
 }
 
 fn metadata_with_protobuf_payload() -> UFrameMetadata {
@@ -683,9 +683,9 @@ async fn zero_copy_pull_receive_rejects_wrong_wire_before_public_exposure() {
         Err(status) => status,
     };
 
-    assert_eq!(status.get_code(), UCode::InvalidArgument);
+    assert_eq!(status.code(), UCode::InvalidArgument);
     assert!(status
-        .get_message()
+        .message()
         .is_some_and(|message| message.contains("wrong selected wire")));
 }
 
@@ -706,9 +706,9 @@ async fn zero_copy_pull_receive_rejects_payload_family_mismatch_before_public_ex
         Err(status) => status,
     };
 
-    assert_eq!(status.get_code(), UCode::InvalidArgument);
+    assert_eq!(status.code(), UCode::InvalidArgument);
     assert!(status
-        .get_message()
+        .message()
         .is_some_and(|message| message.contains("payload family mismatch")));
 }
 
@@ -728,7 +728,7 @@ async fn zero_copy_pull_receive_rejects_malformed_metadata_before_public_exposur
         Err(status) => status,
     };
 
-    assert_eq!(status.get_code(), UCode::InvalidArgument);
+    assert_eq!(status.code(), UCode::InvalidArgument);
 }
 
 #[tokio::test]
@@ -822,7 +822,7 @@ async fn zero_copy_filter_validation_runs_before_core_registration() {
         .await
         .expect_err("invalid filter must be rejected");
 
-    assert_eq!(status.get_code(), UCode::InvalidArgument);
+    assert_eq!(status.code(), UCode::InvalidArgument);
     assert_eq!(core.zero_copy_register_calls(), 0);
 }
 
@@ -873,9 +873,9 @@ async fn owned_receive_rejects_wrong_wire_before_public_exposure() {
         .await
         .expect_err("wrong selected wire must be rejected");
 
-    assert_eq!(status.get_code(), UCode::InvalidArgument);
+    assert_eq!(status.code(), UCode::InvalidArgument);
     assert!(status
-        .get_message()
+        .message()
         .is_some_and(|message| message.contains("wrong selected wire")));
 }
 
@@ -1011,5 +1011,5 @@ fn prepared_tx_spec_from_encoded_parts_rejects_invalid_payload_layout() {
         PreparedTxLoanSpec::from_encoded_parts(metadata_with_payload(), b"encoded".to_vec(), 4, 3)
             .expect_err("invalid alignment must fail");
 
-    assert_eq!(error.get_code(), UCode::InvalidArgument);
+    assert_eq!(error.code(), UCode::InvalidArgument);
 }

@@ -15,13 +15,21 @@ use crate::uattributes::UAttributesError;
 
 #[derive(Debug, Clone, Copy, PartialEq, PartialOrd)]
 #[repr(C)]
+/// QoS priority classes defined by the uProtocol specification.
 pub enum UPriority {
+    /// Best effort (lowest priority).
     CS0,
+    /// Priority class CS1.
     CS1,
+    /// Priority class CS2.
     CS2,
+    /// Priority class CS3.
     CS3,
+    /// Priority class CS4 (streaming).
     CS4,
+    /// Priority class CS5 (RPC default).
     CS5,
+    /// Priority class CS6 (highest; network control).
     CS6,
 }
 

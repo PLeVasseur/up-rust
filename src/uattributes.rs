@@ -31,12 +31,17 @@ pub(crate) type TokenString = String;
 pub(crate) type TraceparentString = String;
 
 #[derive(Debug)]
+/// Errors produced when building or validating [`UAttributes`].
+#[non_exhaustive]
 pub enum UAttributesError {
+    /// The attributes violate a validation rule for their message type.
     ValidationError(String),
+    /// The attributes could not be parsed from their serialized form.
     ParsingError(String),
 }
 
 impl UAttributesError {
+    /// Creates a validation error with the given message.
     pub fn validation_error<T>(message: T) -> UAttributesError
     where
         T: Into<String>,
@@ -44,6 +49,7 @@ impl UAttributesError {
         Self::ValidationError(message.into())
     }
 
+    /// Creates a parsing error with the given message.
     pub fn parsing_error<T>(message: T) -> UAttributesError
     where
         T: Into<String>,
@@ -83,6 +89,7 @@ impl From<UPayloadError> for UAttributesError {
 
 #[derive(Debug, Clone, PartialEq)]
 #[repr(C)]
+/// Message metadata: addressing, identity, type, and delivery options for one [`UMessage`](crate::UMessage).
 pub struct UAttributes {
     pub(crate) type_: UMessageType,
     pub(crate) id: UUID,
@@ -673,7 +680,7 @@ impl UAttributes {
             _ => return Ok(()),
         };
 
-        if (self.id.get_time() as u128).saturating_add(ttl) <= reference_time {
+        if (self.id.time() as u128).saturating_add(ttl) <= reference_time {
             return Err(UAttributesError::validation_error("Message has expired"));
         }
         Ok(())

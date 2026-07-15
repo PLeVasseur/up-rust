@@ -17,7 +17,7 @@ mod zero_copy_transport_sealed {
     pub trait Sealed {}
 }
 
-#[cfg(feature = "zero-copy-uninit")]
+#[cfg(feature = "zero-copy-transport")]
 mod zero_copy_uninit_transport_sealed {
     pub trait Sealed {}
 }
@@ -59,7 +59,7 @@ impl UninitStableSendPhases {
     }
 }
 
-#[cfg(feature = "zero-copy-uninit")]
+#[cfg(feature = "zero-copy-transport")]
 fn initialize_stable_tx_payload<B, T>(
     buffer: &mut B,
     init: impl for<'payload> FnOnce(
@@ -82,6 +82,8 @@ where
     Ok(())
 }
 
+/// *Role: implemented by transports whose API speaks the library's frame types; users call [`UZeroCopyTransport`](crate::UZeroCopyTransport) — see the [trait map](crate::guide::trait_map).*
+///
 /// Semantic native-frame implementation boundary for zero-copy transports.
 ///
 /// Implementing this trait buys the validated public [`UZeroCopyTransport`]
@@ -111,7 +113,7 @@ pub trait UZeroCopyTransportImpl: Send + Sync {
     type Rx: UZeroCopyRxLease + Send + 'static;
 
     /// Reserves transmit storage for a validated frame loan spec.
-    async fn loan_validated_tx(&self, spec: ValidatedTxLoanSpec) -> Result<Self::Tx, UStatus>;
+    async fn loan_validated_tx(&self, spec: UTxLoanSpec) -> Result<Self::Tx, UStatus>;
 
     /// Commits a validated transmit loan.
     async fn send_validated_zero_copy(&self, buffer: Self::Tx) -> Result<(), UStatus>;
@@ -157,6 +159,8 @@ pub trait UZeroCopyTransportImpl: Send + Sync {
 
 impl<T> zero_copy_transport_sealed::Sealed for T where T: UZeroCopyTransportImpl + ?Sized {}
 
+/// *Role: called by users of the zero-copy family; transports implement [`UZeroCopyTransportImpl`](crate::UZeroCopyTransportImpl) or the encoded core instead — see the [trait map](crate::guide::trait_map).*
+///
 /// The zero-copy transport capability API.
 #[async_trait]
 pub trait UZeroCopyTransport: zero_copy_transport_sealed::Sealed + Send + Sync {
@@ -205,7 +209,7 @@ where
     type Rx = T::Rx;
 
     async fn loan_tx(&self, spec: UTxLoanSpec) -> Result<Self::Tx, UStatus> {
-        UZeroCopyTransportImpl::loan_validated_tx(self, ValidatedTxLoanSpec::try_from(spec)?).await
+        UZeroCopyTransportImpl::loan_validated_tx(self, spec).await
     }
 
     async fn send_zero_copy(&self, mut buffer: Self::Tx) -> Result<(), UStatus> {
@@ -287,6 +291,8 @@ where
     }
 }
 
+/// *Role: free blanket methods on every zero-copy transport; never implemented by hand — see the [trait map](crate::guide::trait_map).*
+///
 /// Convenience methods for zero-copy transports with initialized TX storage.
 #[async_trait]
 pub trait UZeroCopyTransportExt: UZeroCopyTransport {
@@ -356,8 +362,10 @@ pub trait UZeroCopyTransportExt: UZeroCopyTransport {
 
 impl<T> UZeroCopyTransportExt for T where T: UZeroCopyTransport + ?Sized {}
 
+/// *Role: free blanket methods for typed initialization into uninitialized loans; never implemented by hand — see the [trait map](crate::guide::trait_map).*
+///
 /// Convenience methods for zero-copy transports with uninitialized TX storage.
-#[cfg(feature = "zero-copy-uninit")]
+#[cfg(feature = "zero-copy-transport")]
 #[async_trait]
 pub trait UZeroCopyUninitTransportExt: UZeroCopyUninitTransport {
     /// Constructs a typed payload using the adapter's selected wire and sends it.
@@ -614,9 +622,11 @@ pub trait UZeroCopyUninitTransportExt: UZeroCopyUninitTransport {
     }
 }
 
-#[cfg(feature = "zero-copy-uninit")]
+#[cfg(feature = "zero-copy-transport")]
 impl<T> UZeroCopyUninitTransportExt for T where T: UZeroCopyUninitTransport + ?Sized {}
 
+/// *Role: implemented by transports that can lend uninitialized storage — see the [trait map](crate::guide::trait_map).*
+///
 /// Implementation boundary for transports that can expose uninitialized TX payload storage.
 #[async_trait]
 pub trait UZeroCopyUninitTransportImpl: UZeroCopyTransportImpl {
@@ -624,20 +634,19 @@ pub trait UZeroCopyUninitTransportImpl: UZeroCopyTransportImpl {
     type UninitTx: UUninitTxBuffer<Initialized = Self::Tx> + Send;
 
     /// Reserves uninitialized transmit storage for a validated frame loan spec.
-    async fn loan_validated_uninit_tx(
-        &self,
-        spec: ValidatedTxLoanSpec,
-    ) -> Result<Self::UninitTx, UStatus>;
+    async fn loan_validated_uninit_tx(&self, spec: UTxLoanSpec) -> Result<Self::UninitTx, UStatus>;
 }
 
-#[cfg(feature = "zero-copy-uninit")]
+#[cfg(feature = "zero-copy-transport")]
 impl<T> zero_copy_uninit_transport_sealed::Sealed for T where
     T: UZeroCopyUninitTransportImpl + ?Sized
 {
 }
 
+/// *Role: called by users to obtain uninitialized loans; transports implement [`UZeroCopyUninitTransportImpl`](crate::UZeroCopyUninitTransportImpl) — see the [trait map](crate::guide::trait_map).*
+///
 /// Optional zero-copy capability for transports that can expose uninitialized TX payload storage.
-#[cfg(feature = "zero-copy-uninit")]
+#[cfg(feature = "zero-copy-transport")]
 #[async_trait]
 pub trait UZeroCopyUninitTransport:
     UZeroCopyTransport + zero_copy_uninit_transport_sealed::Sealed
@@ -649,7 +658,7 @@ pub trait UZeroCopyUninitTransport:
     async fn loan_uninit_tx(&self, spec: UTxLoanSpec) -> Result<Self::UninitTx, UStatus>;
 }
 
-#[cfg(feature = "zero-copy-uninit")]
+#[cfg(feature = "zero-copy-transport")]
 #[async_trait]
 impl<T> UZeroCopyUninitTransport for T
 where
@@ -658,11 +667,7 @@ where
     type UninitTx = T::UninitTx;
 
     async fn loan_uninit_tx(&self, spec: UTxLoanSpec) -> Result<Self::UninitTx, UStatus> {
-        UZeroCopyUninitTransportImpl::loan_validated_uninit_tx(
-            self,
-            ValidatedTxLoanSpec::try_from(spec)?,
-        )
-        .await
+        UZeroCopyUninitTransportImpl::loan_validated_uninit_tx(self, spec).await
     }
 }
 

@@ -11,10 +11,10 @@
  * SPDX-License-Identifier: Apache-2.0
  ********************************************************************************/
 
-#[cfg(feature = "zero-copy-uninit")]
+#[cfg(feature = "zero-copy-transport")]
 use std::{mem, ptr::NonNull};
 
-#[cfg(feature = "zero-copy-uninit")]
+#[cfg(feature = "zero-copy-transport")]
 use crate::zero_copy::LoanedPayloadUninitMut;
 
 use super::{codec::PayloadCodec, codec::PayloadLayout, UWireError};
@@ -72,7 +72,7 @@ pub unsafe trait LoanPayload<T>: PayloadCodec {
 /// uniquely borrowed allocation, has the exact layout returned by
 /// [`LoanUninitPayload::loan_uninit_layout`], and is valid for writes of one
 /// `MaybeUninit<T>`.
-#[cfg(feature = "zero-copy-uninit")]
+#[cfg(feature = "zero-copy-transport")]
 pub unsafe trait LoanUninitPayload<T>: PayloadCodec {
     /// Returns the exact layout required for a typed uninitialized transmit loan.
     ///
@@ -92,13 +92,21 @@ pub unsafe trait LoanUninitPayload<T>: PayloadCodec {
 }
 
 /// Uninitialized typed payload slot borrowed from a transmit loan.
-#[cfg(feature = "zero-copy-uninit")]
+#[cfg(feature = "zero-copy-transport")]
 pub struct LoanedUninitPayload<'a, T> {
     // Safe-by-construction: an exclusive borrow of the uninitialized target.
     slot: &'a mut mem::MaybeUninit<T>,
 }
 
-#[cfg(feature = "zero-copy-uninit")]
+#[cfg(feature = "zero-copy-transport")]
+impl<'a, T> core::fmt::Debug for LoanedUninitPayload<'a, T> {
+    fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
+        f.debug_struct("LoanedUninitPayload")
+            .finish_non_exhaustive()
+    }
+}
+
+#[cfg(feature = "zero-copy-transport")]
 impl<'a, T> LoanedUninitPayload<'a, T> {
     /// Wraps an exclusive borrow of the uninitialized target value.
     #[must_use]
@@ -123,26 +131,33 @@ impl<'a, T> LoanedUninitPayload<'a, T> {
 }
 
 /// An initialized, exclusively borrowed payload value inside loaned storage.
-#[cfg(feature = "zero-copy-uninit")]
+#[cfg(feature = "zero-copy-transport")]
 pub struct LoanedInitPayload<'a, T> {
     value: &'a mut T,
 }
 
-#[cfg(feature = "zero-copy-uninit")]
+#[cfg(feature = "zero-copy-transport")]
+impl<'a, T> core::fmt::Debug for LoanedInitPayload<'a, T> {
+    fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
+        f.debug_struct("LoanedInitPayload").finish_non_exhaustive()
+    }
+}
+
+#[cfg(feature = "zero-copy-transport")]
 impl<'a, T> LoanedInitPayload<'a, T> {
     pub(crate) fn initialized_ptr(&self) -> NonNull<T> {
         NonNull::from(&*self.value)
     }
 }
 
-#[cfg(feature = "zero-copy-uninit")]
+#[cfg(feature = "zero-copy-transport")]
 impl<T> AsMut<T> for LoanedInitPayload<'_, T> {
     fn as_mut(&mut self) -> &mut T {
         self.value
     }
 }
 
-#[cfg(feature = "zero-copy-uninit")]
+#[cfg(feature = "zero-copy-transport")]
 impl<T> AsRef<T> for LoanedInitPayload<'_, T> {
     fn as_ref(&self) -> &T {
         self.value

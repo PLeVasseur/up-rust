@@ -206,6 +206,7 @@ pub trait ReadDecodePayload<T>: PayloadCodec {
 pub trait BytePayloadCodec: PayloadCodec {}
 
 /// Built-in raw byte payload codec.
+#[derive(Debug)]
 pub struct RawBytes;
 
 impl RawBytes {
@@ -284,6 +285,7 @@ impl ReadDecodePayload<Bytes> for RawBytes {
 /// `ProtobufPayload` serializes and deserializes only application payload bytes.
 /// It does not wrap a complete uProtocol frame and does not serialize frame
 /// metadata.
+#[derive(Debug)]
 pub struct ProtobufPayload;
 
 impl ProtobufPayload {
@@ -349,6 +351,7 @@ where
 }
 
 /// Protocol Buffers `google.protobuf.Any` application payload codec.
+#[derive(Debug)]
 pub struct ProtobufAnyPayload;
 
 impl ProtobufAnyPayload {
@@ -444,7 +447,9 @@ mod tests {
     #[cfg(feature = "protobuf-support")]
     use protobuf::well_known_types::wrappers::StringValue;
 
-    use crate::{UFrameMetadata, UFrameView, UMessageBuilder, UUri};
+    #[cfg(feature = "zero-copy-transport")]
+    use crate::{UFrameMetadata, UFrameView};
+    use crate::{UMessageBuilder, UUri};
 
     use super::*;
 
@@ -529,10 +534,11 @@ mod tests {
         assert_eq!(decoded.value, input.value);
     }
 
+    #[cfg(feature = "zero-copy-transport")]
     #[test]
     fn segmented_frame_view_decodes_from_reader_without_contiguous_payload() {
         let message = UMessageBuilder::publish(topic()).build().expect("message");
-        let metadata = crate::try_project_attributes_to_frame_metadata(
+        let metadata = crate::frame::metadata::try_project_attributes_to_frame_metadata(
             message.attributes(),
             Some(PayloadEncoding::RAW),
         )
@@ -551,12 +557,14 @@ mod tests {
         assert!(frame.try_contiguous_payload().is_none());
     }
 
+    #[cfg(feature = "zero-copy-transport")]
     struct SegmentedFrame {
         metadata: UFrameMetadata,
         first: Vec<u8>,
         second: Vec<u8>,
     }
 
+    #[cfg(feature = "zero-copy-transport")]
     impl UFrameView for SegmentedFrame {
         type PayloadReader<'a>
             = Chain<Cursor<&'a [u8]>, Cursor<&'a [u8]>>

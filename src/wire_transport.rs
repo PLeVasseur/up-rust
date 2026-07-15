@@ -14,7 +14,7 @@
 #![cfg_attr(
     not(any(
         feature = "transport-implementer-api",
-        feature = "wire-implementer-api"
+        feature = "selected-wire-user-api"
     )),
     allow(dead_code)
 )]
@@ -48,33 +48,38 @@
 //! `up-spec/up-l1/transport_families.adoc`: a core must not branch on concrete
 //! wire types, and a wire must not contain transport-specific carriage code.
 
+#[cfg(any(feature = "zero-copy-transport", feature = "owned-frame-transport"))]
 use std::{
     any::Any,
     collections::HashMap,
-    io::Read,
-    marker::PhantomData,
     sync::{Arc, Mutex},
 };
+use std::{io::Read, marker::PhantomData};
 
+#[cfg(any(feature = "zero-copy-transport", feature = "owned-frame-transport"))]
 use async_trait::async_trait;
 #[cfg(feature = "owned-frame-transport")]
 use bytes::Bytes;
+#[cfg(any(feature = "zero-copy-transport", feature = "owned-frame-transport"))]
 use tracing::warn;
 
-use crate::payload::{codec::ReadDecodePayload, loan::BorrowPayload, UWireError};
+#[cfg(feature = "zero-copy-transport")]
+use crate::payload::loan::BorrowPayload;
+use crate::payload::{codec::ReadDecodePayload, UWireError};
 use crate::wire::NativePrefixFrameMetadataCodec;
-#[cfg(feature = "selected-wire-protobuf-metadata")]
-use crate::wire::NativePrefixProtobufMetadataCodec;
 use crate::wire::{ProtobufWire, StableContainerWireFormat};
 use crate::wire::{UWire, UWireMetadataCodecFor, UWirePayload};
+use crate::{validate_frame_view_for_transport, UFrameMetadata, UFrameView, UStatus};
+#[cfg(feature = "zero-copy-transport")]
 use crate::{
-    validate_frame_view_for_transport, LoanedPayload, PayloadAlignment, UCode, UFrameMetadata,
-    UFrameView, ULoanedContiguousZeroCopyRxFrame, UStatus, UTxBuffer, UTxLoanSpec, UUninitTxBuffer,
-    UUri, UZeroCopyListener, UZeroCopyRxLease, UZeroCopyTransport, UZeroCopyTransportImpl,
-    UZeroCopyUninitTransportImpl, ValidatedTxLoanSpec,
+    LoanedPayload, PayloadAlignment, ULoanedContiguousZeroCopyRxFrame, UTxBuffer, UTxLoanSpec,
+    UUninitTxBuffer, UZeroCopyListener, UZeroCopyRxLease, UZeroCopyTransport,
+    UZeroCopyTransportImpl, UZeroCopyUninitTransportImpl,
 };
+#[cfg(any(feature = "zero-copy-transport", feature = "owned-frame-transport"))]
+use crate::{UCode, UUri};
 #[cfg(feature = "owned-frame-transport")]
-use crate::{UOwnedFrame, UOwnedListener, UOwnedTransportImpl, ValidatedOwnedFrame};
+use crate::{UOwnedFrame, UOwnedListener, UOwnedTransportImpl};
 
 /// Generic selected-wire transport adapter.
 pub struct UWireTransport<TCore, W, C>
@@ -85,9 +90,20 @@ where
     core: TCore,
     wire: W,
     metadata_codec: C,
+    #[cfg(feature = "zero-copy-transport")]
     zero_copy_listeners: Mutex<HashMap<WireListenerKey, Arc<dyn Any + Send + Sync>>>,
     #[cfg(feature = "owned-frame-transport")]
     owned_listeners: Mutex<HashMap<WireListenerKey, Arc<dyn Any + Send + Sync>>>,
+}
+
+impl<TCore, W, C> core::fmt::Debug for UWireTransport<TCore, W, C>
+where
+    W: UWire,
+    C: UWireMetadataCodecFor<W>,
+{
+    fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
+        f.debug_struct("UWireTransport").finish_non_exhaustive()
+    }
 }
 
 impl<TCore, W, C> UWireTransport<TCore, W, C>
@@ -102,6 +118,7 @@ where
             core,
             wire,
             metadata_codec,
+            #[cfg(feature = "zero-copy-transport")]
             zero_copy_listeners: Mutex::new(HashMap::new()),
             #[cfg(feature = "owned-frame-transport")]
             owned_listeners: Mutex::new(HashMap::new()),
@@ -139,32 +156,6 @@ where
     }
 }
 
-/// Construction helper for choosing a selected wire and metadata codec on a physical core.
-pub trait UWithWireAndMetadataCodec<W, C>: Sized
-where
-    W: UWire,
-    C: UWireMetadataCodecFor<W>,
-{
-    /// Wraps this core in a selected-wire transport adapter with an explicit metadata codec.
-    #[must_use]
-    fn with_wire_and_metadata_codec(self, wire: W, metadata_codec: C)
-        -> UWireTransport<Self, W, C>;
-}
-
-impl<TCore, W, C> UWithWireAndMetadataCodec<W, C> for TCore
-where
-    W: UWire,
-    C: UWireMetadataCodecFor<W>,
-{
-    fn with_wire_and_metadata_codec(
-        self,
-        wire: W,
-        metadata_codec: C,
-    ) -> UWireTransport<Self, W, C> {
-        UWireTransport::new(self, wire, metadata_codec)
-    }
-}
-
 /// Selected-wire transport using the canonical UFrame metadata field block.
 ///
 /// Ordinary selected-wire construction is canonical-by-default per R2W. The
@@ -179,12 +170,6 @@ pub type ProtobufWireTransport<TCore> = UNativePrefixWireTransport<TCore, Protob
 /// Stable-container selected-wire transport with canonical metadata.
 pub type StableContainerWireTransport<TCore> =
     UNativePrefixWireTransport<TCore, StableContainerWireFormat>;
-
-/// **Legacy compatibility** selected-wire transport using the
-/// protobuf-`UAttributes` metadata profile.
-#[cfg(feature = "selected-wire-protobuf-metadata")]
-pub type UNativePrefixLegacyProtobufMetadataWireTransport<TCore, W> =
-    UWireTransport<TCore, W, NativePrefixProtobufMetadataCodec>;
 
 /// Convenience constructors for canonical native-prefix selected-wire transports.
 pub trait UWithNativePrefixWire: Sized {
@@ -220,34 +205,6 @@ impl<TCore> UWithNativePrefixWire for TCore {
     }
 }
 
-/// **Legacy compatibility** constructors for the protobuf-`UAttributes`
-/// metadata profile. Use only for wire compatibility with peers that still
-/// speak the legacy metadata block; ordinary construction is canonical.
-#[cfg(feature = "selected-wire-protobuf-metadata")]
-pub trait UWithNativePrefixLegacyProtobufMetadataWire: Sized {
-    /// Wraps this core with a selected wire using the legacy protobuf metadata profile.
-    #[must_use]
-    fn into_native_prefix_wire_transport_legacy_protobuf_metadata<W>(
-        self,
-        wire: W,
-    ) -> UNativePrefixLegacyProtobufMetadataWireTransport<Self, W>
-    where
-        W: UWire;
-}
-
-#[cfg(feature = "selected-wire-protobuf-metadata")]
-impl<TCore> UWithNativePrefixLegacyProtobufMetadataWire for TCore {
-    fn into_native_prefix_wire_transport_legacy_protobuf_metadata<W>(
-        self,
-        wire: W,
-    ) -> UNativePrefixLegacyProtobufMetadataWireTransport<Self, W>
-    where
-        W: UWire,
-    {
-        UWireTransport::new(self, wire, NativePrefixProtobufMetadataCodec)
-    }
-}
-
 /// Exposes the concrete selected wire of an adapter value.
 pub trait UHasWire {
     /// Concrete selected wire type.
@@ -270,12 +227,14 @@ where
     }
 }
 
+#[cfg(feature = "zero-copy-transport")]
 /// Marker trait for zero-copy transports with a statically selected wire.
 pub trait USelectedWireZeroCopyTransport: UZeroCopyTransport + UHasWire {
     /// Metadata codec used with the selected wire.
     type MetadataCodec: UWireMetadataCodecFor<Self::Wire>;
 }
 
+#[cfg(feature = "zero-copy-transport")]
 impl<TCore, W, C> USelectedWireZeroCopyTransport for UWireTransport<TCore, W, C>
 where
     TCore: UZeroCopyTransportCore,
@@ -285,6 +244,7 @@ where
     type MetadataCodec = C;
 }
 
+#[cfg(feature = "zero-copy-transport")]
 /// Prepared zero-copy transmit request passed from the adapter to a core.
 #[derive(Clone, Debug, PartialEq)]
 pub struct PreparedTxLoanSpec {
@@ -294,13 +254,14 @@ pub struct PreparedTxLoanSpec {
     payload_alignment: PayloadAlignment,
 }
 
+#[cfg(feature = "zero-copy-transport")]
 impl PreparedTxLoanSpec {
     /// Encodes validated metadata for a selected wire.
     ///
     /// # Errors
     ///
     /// Returns an error if selected-wire metadata encoding fails.
-    pub fn from_validated<W, C>(spec: ValidatedTxLoanSpec, codec: &C) -> Result<Self, UStatus>
+    pub fn from_validated<W, C>(spec: UTxLoanSpec, codec: &C) -> Result<Self, UStatus>
     where
         W: UWire,
         C: UWireMetadataCodecFor<W>,
@@ -351,7 +312,6 @@ impl PreparedTxLoanSpec {
             }
             UTxLoanSpec::no_payload(metadata)?
         };
-        let spec = ValidatedTxLoanSpec::try_from(spec)?;
         Ok(Self {
             metadata: spec.metadata().clone(),
             encoded_metadata: encoded_metadata.into(),
@@ -441,6 +401,7 @@ pub trait UEncodedRxFrame {
     }
 }
 
+#[cfg(feature = "zero-copy-transport")]
 /// Raw encoded receive object that can prove its contiguous payload is loan-backed.
 pub trait UEncodedLoanedRxFrame: UEncodedRxFrame {
     /// Returns one contiguous loan-backed application payload view.
@@ -459,6 +420,15 @@ where
     raw: Rx,
     _wire: PhantomData<W>,
     _metadata_codec: PhantomData<C>,
+}
+
+impl<Rx, W, C> core::fmt::Debug for UWireRx<Rx, W, C>
+where
+    W: UWire,
+{
+    fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
+        f.debug_struct("UWireRx").finish_non_exhaustive()
+    }
 }
 
 impl<Rx, W, C> UWireRx<Rx, W, C>
@@ -527,6 +497,7 @@ where
     }
 }
 
+#[cfg(feature = "zero-copy-transport")]
 impl<Rx, W, C> UWireRx<Rx, W, C>
 where
     Rx: UEncodedLoanedRxFrame,
@@ -593,6 +564,7 @@ where
     }
 }
 
+#[cfg(feature = "zero-copy-transport")]
 impl<Rx, W, C> UZeroCopyRxLease for UWireRx<Rx, W, C>
 where
     Rx: UEncodedRxFrame,
@@ -601,6 +573,7 @@ where
 {
 }
 
+#[cfg(feature = "zero-copy-transport")]
 impl<Rx, W, C> ULoanedContiguousZeroCopyRxFrame for UWireRx<Rx, W, C>
 where
     Rx: UEncodedLoanedRxFrame,
@@ -612,6 +585,7 @@ where
     }
 }
 
+#[cfg(feature = "zero-copy-transport")]
 /// Listener used by cores to deliver raw encoded zero-copy receive objects.
 #[async_trait]
 pub trait UEncodedZeroCopyListener<Rx>: Send + Sync
@@ -622,6 +596,9 @@ where
     async fn on_receive_encoded_zero_copy(&self, frame: Rx);
 }
 
+/// *Role: implemented by transports that stay a dumb byte pipe; [`UWireTransport`](crate::UWireTransport) composes wires and codecs above it (recommended default) — see the [trait map](crate::guide::trait_map).*
+///
+#[cfg(feature = "zero-copy-transport")]
 /// Encoded physical zero-copy mechanics implemented by product transports.
 ///
 /// Implementing this core buys [`UWireTransport`] composition with every
@@ -677,6 +654,7 @@ pub trait UZeroCopyTransportCore: Send + Sync {
     }
 }
 
+#[cfg(feature = "zero-copy-transport")]
 /// Optional encoded-core capability for uninitialized transmit loans.
 ///
 /// This one additional operation enables the adapter's checked two-phase stable
@@ -694,6 +672,7 @@ pub trait UZeroCopyUninitTransportCore: UZeroCopyTransportCore {
     ) -> Result<Self::UninitTx, UStatus>;
 }
 
+#[cfg(feature = "zero-copy-transport")]
 #[async_trait]
 impl<TCore, W, C> UZeroCopyTransportImpl for UWireTransport<TCore, W, C>
 where
@@ -704,7 +683,7 @@ where
     type Tx = TCore::Tx;
     type Rx = UWireRx<TCore::Rx, W, C>;
 
-    async fn loan_validated_tx(&self, spec: ValidatedTxLoanSpec) -> Result<Self::Tx, UStatus> {
+    async fn loan_validated_tx(&self, spec: UTxLoanSpec) -> Result<Self::Tx, UStatus> {
         self.core
             .loan_prepared_tx(PreparedTxLoanSpec::from_validated::<W, C>(
                 spec,
@@ -789,6 +768,7 @@ where
     }
 }
 
+#[cfg(feature = "zero-copy-transport")]
 #[async_trait]
 impl<TCore, W, C> UZeroCopyUninitTransportImpl for UWireTransport<TCore, W, C>
 where
@@ -798,10 +778,7 @@ where
 {
     type UninitTx = TCore::UninitTx;
 
-    async fn loan_validated_uninit_tx(
-        &self,
-        spec: ValidatedTxLoanSpec,
-    ) -> Result<Self::UninitTx, UStatus> {
+    async fn loan_validated_uninit_tx(&self, spec: UTxLoanSpec) -> Result<Self::UninitTx, UStatus> {
         self.core
             .loan_prepared_uninit_tx(PreparedTxLoanSpec::from_validated::<W, C>(
                 spec,
@@ -811,6 +788,7 @@ where
     }
 }
 
+#[cfg(feature = "zero-copy-transport")]
 impl<TCore, W, C> UWireTransport<TCore, W, C>
 where
     TCore: UZeroCopyTransportCore,
@@ -875,6 +853,7 @@ where
     }
 }
 
+#[cfg(feature = "zero-copy-transport")]
 struct WireZeroCopyListener<Rx, W, C>
 where
     Rx: UEncodedRxFrame + Send + 'static,
@@ -888,6 +867,7 @@ where
     _wire: PhantomData<W>,
 }
 
+#[cfg(feature = "zero-copy-transport")]
 #[async_trait]
 impl<Rx, W, C> UEncodedZeroCopyListener<Rx> for WireZeroCopyListener<Rx, W, C>
 where
@@ -908,6 +888,7 @@ where
     }
 }
 
+#[cfg(feature = "zero-copy-transport")]
 fn wire_frame_matches<Rx, W, C>(
     frame: &UWireRx<Rx, W, C>,
     source_filter: &UUri,
@@ -927,11 +908,13 @@ where
         })
 }
 
+#[cfg(any(feature = "zero-copy-transport", feature = "owned-frame-transport"))]
 fn selected_wire_core_source_filter() -> UUri {
     UUri::try_from_parts("*", u32::MAX, u8::MAX, u16::MAX)
         .expect("valid selected-wire core wildcard source filter")
 }
 
+#[cfg(any(feature = "zero-copy-transport", feature = "owned-frame-transport"))]
 fn selected_wire_core_source_filter_for(source_filter: &UUri) -> UUri {
     if source_filter.verify_no_wildcards().is_ok() {
         source_filter.clone()
@@ -956,12 +939,12 @@ impl PreparedOwnedFrame {
     /// # Errors
     ///
     /// Returns an error if selected-wire metadata encoding fails.
-    pub fn from_validated<W, C>(frame: ValidatedOwnedFrame, codec: &C) -> Result<Self, UStatus>
+    pub fn from_validated<W, C>(frame: UOwnedFrame, codec: &C) -> Result<Self, UStatus>
     where
         W: UWire,
         C: UWireMetadataCodecFor<W>,
     {
-        let (metadata, payload) = frame.into_inner().into_parts();
+        let (metadata, payload) = frame.into_parts();
         let encoded_metadata = codec.encode_frame_metadata(W::metadata_context(), &metadata)?;
         Ok(Self {
             metadata,
@@ -1056,6 +1039,8 @@ pub trait UEncodedOwnedListener: Send + Sync {
     async fn on_receive_encoded_owned(&self, frame: EncodedOwnedFrame);
 }
 
+/// *Role: implemented by transports carrying already-encoded owned frames; the wire adapter composes above it — see the [trait map](crate::guide::trait_map).*
+///
 #[cfg(feature = "owned-frame-transport")]
 /// Encoded physical owned-frame mechanics implemented by product transports.
 ///
@@ -1107,7 +1092,7 @@ where
     W: UWire + Send + Sync + 'static,
     C: UWireMetadataCodecFor<W> + Clone + Send + Sync + 'static,
 {
-    async fn send_validated_owned(&self, frame: ValidatedOwnedFrame) -> Result<(), UStatus> {
+    async fn send_validated_owned(&self, frame: UOwnedFrame) -> Result<(), UStatus> {
         self.core
             .send_prepared_owned(PreparedOwnedFrame::from_validated::<W, C>(
                 frame,
@@ -1293,6 +1278,7 @@ fn owned_frame_matches(
         })
 }
 
+#[cfg(any(feature = "zero-copy-transport", feature = "owned-frame-transport"))]
 #[derive(Clone, Debug, Eq, Hash, PartialEq)]
 struct WireListenerKey {
     source_filter: UUri,
@@ -1300,6 +1286,7 @@ struct WireListenerKey {
     listener: usize,
 }
 
+#[cfg(any(feature = "zero-copy-transport", feature = "owned-frame-transport"))]
 fn listener_key(
     source_filter: &UUri,
     sink_filter: Option<&UUri>,
@@ -1312,6 +1299,7 @@ fn listener_key(
     }
 }
 
+#[cfg(feature = "zero-copy-transport")]
 fn zero_copy_listener_pointer<Rx, W, C>(
     listener: &Arc<dyn UZeroCopyListener<UWireRx<Rx, W, C>>>,
 ) -> usize
@@ -1332,6 +1320,7 @@ fn owned_listener_pointer(listener: &Arc<dyn UOwnedListener>) -> usize {
     thin_ptr as usize
 }
 
+#[cfg(any(feature = "zero-copy-transport", feature = "owned-frame-transport"))]
 fn unimplemented() -> UStatus {
     UStatus::fail_with_code(UCode::Unimplemented, "not implemented")
 }
@@ -1550,7 +1539,7 @@ mod tests {
     ) -> UFrameMetadata {
         let topic = UUri::try_from_parts("vehicle", 0x4210, 0x01, resource_id).expect("topic URI");
         let message = UMessageBuilder::publish(topic).build().expect("message");
-        crate::try_project_attributes_to_frame_metadata(
+        crate::frame::metadata::try_project_attributes_to_frame_metadata(
             message.attributes(),
             Some(payload_encoding),
         )
@@ -1560,7 +1549,7 @@ mod tests {
     fn stable_metadata<T: StablePayload>() -> UFrameMetadata {
         let topic = UUri::try_from_parts("vehicle", 0x4210, 0x01, 0x9000).expect("topic URI");
         let message = UMessageBuilder::publish(topic).build().expect("message");
-        crate::try_project_attributes_to_frame_metadata(
+        crate::frame::metadata::try_project_attributes_to_frame_metadata(
             message.attributes(),
             Some(StableContainerPayload::<T>::encoding()),
         )
@@ -1746,9 +1735,9 @@ mod tests {
             Ok(_) => panic!("invalid selected-wire metadata must be rejected"),
             Err(status) => status,
         };
-        assert_eq!(status.get_code(), UCode::InvalidArgument);
+        assert_eq!(status.code(), UCode::InvalidArgument);
         assert!(status
-            .get_message()
+            .message()
             .is_some_and(|message| message.contains("wrong native-prefix metadata magic")));
         assert_eq!(transport.core().received.lock().unwrap().len(), 1);
 
@@ -1889,15 +1878,12 @@ mod tests {
     #[test]
     fn prepared_tx_spec_carries_metadata_bytes_and_layout() {
         let metadata = metadata_with_payload();
-        let spec = ValidatedTxLoanSpec::try_from(
-            crate::UTxLoanSpec::new(
-                metadata.clone(),
-                UTxPayloadSpec::Present {
-                    len: 4,
-                    alignment: crate::PayloadAlignment::new(2).unwrap(),
-                },
-            )
-            .unwrap(),
+        let spec = crate::UTxLoanSpec::new(
+            metadata.clone(),
+            UTxPayloadSpec::Present {
+                len: 4,
+                alignment: crate::PayloadAlignment::new(2).unwrap(),
+            },
         )
         .unwrap();
 

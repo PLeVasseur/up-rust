@@ -12,10 +12,11 @@
  ********************************************************************************/
 
 use bytes::Bytes;
+use pretty_assertions::assert_eq;
 use up_rust::{
-    try_project_umessage_to_frame_metadata, NativePrefixFrameMetadataCodec, PayloadEncoding,
-    UFrameMetadata, UMessageBuilder, UPayloadFormat, UProtocolNativeWire, UUri, UWire,
-    UWireMetadataCodec, UWireMetadataError, WireIdentity,
+    NativePrefixFrameMetadataCodec, PayloadEncoding, UFrameMetadata, UMessageBuilder,
+    UPayloadFormat, UProtocolNativeWire, UUri, UWire, UWireMetadataCodec, UWireMetadataError,
+    WireIdentity,
 };
 
 const LAYOUT_COMPACT_LO: usize = 5;
@@ -54,30 +55,26 @@ fn topic() -> UUri {
 
 fn metadata_without_payload() -> UFrameMetadata {
     let message = UMessageBuilder::publish(topic()).build().expect("message");
-    up_rust::try_project_attributes_to_frame_metadata(message.attributes(), None).expect("metadata")
+    message.to_frame_metadata_unencoded().expect("metadata")
 }
 
 fn metadata_with_standard_payload() -> UFrameMetadata {
     let message = UMessageBuilder::publish(topic())
         .build_with_payload(Bytes::from_static(b"payload"), UPayloadFormat::Raw)
         .expect("message");
-    up_rust::try_project_attributes_to_frame_metadata(
-        message.attributes(),
-        Some(PayloadEncoding::RAW),
-    )
-    .expect("metadata")
+    message
+        .to_frame_metadata(PayloadEncoding::RAW)
+        .expect("metadata")
 }
 
 fn metadata_with_custom_payload() -> UFrameMetadata {
     let message = UMessageBuilder::publish(topic()).build().expect("message");
-    up_rust::try_project_attributes_to_frame_metadata(
-        message.attributes(),
-        Some(
-            PayloadEncoding::custom("com.example.native", "application/vnd.example.native")
-                .expect("custom encoding"),
-        ),
-    )
-    .expect("metadata")
+    let encoding = PayloadEncoding::custom("com.example.native", "application/vnd.example.native")
+        .expect("custom encoding");
+    message
+        .attributes()
+        .to_frame_metadata(encoding)
+        .expect("metadata")
 }
 
 fn encode<W>(metadata: &UFrameMetadata) -> Vec<u8>
@@ -330,50 +327,6 @@ fn metadata_size_budget_cases_are_recordable() {
     assert_eq!(full_attributes.len(), standard.len());
 }
 
-// ---- R2W cross-profile rejection vectors: canonical field-block vs legacy
-// protobuf-`UAttributes` metadata are distinct, selectable, rejectable
-// profiles identified by their metadata layout ids. Decoding bytes of one
-// profile with the other codec MUST fail as `UnknownMetadataLayoutId`, never
-// as generic malformed metadata.
-
-#[test]
-#[cfg(feature = "selected-wire-protobuf-metadata")]
-fn canonical_bytes_rejected_by_legacy_codec_as_unknown_layout() {
-    use up_rust::NativePrefixProtobufMetadataCodec;
-    let metadata = metadata_with_standard_payload();
-    let canonical = NativePrefixFrameMetadataCodec
-        .encode_frame_metadata(UProtocolNativeWire::metadata_context(), &metadata)
-        .expect("canonical encode");
-
-    let error = NativePrefixProtobufMetadataCodec
-        .decode_frame_metadata(UProtocolNativeWire::metadata_context(), &canonical)
-        .unwrap_err();
-
-    assert!(
-        matches!(error, UWireMetadataError::UnknownMetadataLayoutId { .. }),
-        "expected UnknownMetadataLayoutId, got: {error:?}"
-    );
-}
-
-#[test]
-#[cfg(feature = "selected-wire-protobuf-metadata")]
-fn legacy_bytes_rejected_by_canonical_codec_as_unknown_layout() {
-    use up_rust::NativePrefixProtobufMetadataCodec;
-    let metadata = metadata_with_standard_payload();
-    let legacy = NativePrefixProtobufMetadataCodec
-        .encode_frame_metadata(UProtocolNativeWire::metadata_context(), &metadata)
-        .expect("legacy encode");
-
-    let error = NativePrefixFrameMetadataCodec
-        .decode_frame_metadata(UProtocolNativeWire::metadata_context(), &legacy)
-        .unwrap_err();
-
-    assert!(
-        matches!(error, UWireMetadataError::UnknownMetadataLayoutId { .. }),
-        "expected UnknownMetadataLayoutId, got: {error:?}"
-    );
-}
-
 #[test]
 fn canonical_profile_identity_is_distinct_and_round_trips() {
     use up_rust::UFRAME_FIELDS_METADATA_LAYOUT_ID;
@@ -429,7 +382,9 @@ fn open_encoding_rides_classic_surface_losslessly() {
         attributes.open_payload_encoding_parts()
     );
 
-    let metadata = try_project_umessage_to_frame_metadata(&message).expect("projection");
+    let metadata = message
+        .to_frame_metadata(encoding.clone())
+        .expect("projection");
     assert_eq!(metadata.payload_encoding(), Some(&encoding));
     let back = metadata.try_project_to_attributes().expect("projection");
     assert_eq!(

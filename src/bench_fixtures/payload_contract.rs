@@ -1430,7 +1430,10 @@ fn init_radar_detection<'a>(
         .finish()
 }
 
-#[cfg(feature = "payload-contract-large-fixtures")]
+#[cfg(all(
+    feature = "perf-diagnostics",
+    feature = "payload-contract-large-fixtures"
+))]
 fn init_lidar_point<'a>(
     context: StablePayloadInitContext<'a, LidarPointXyzircaedtV1>,
     sequence: u32,

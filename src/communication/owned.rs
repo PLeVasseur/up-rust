@@ -26,9 +26,14 @@ use std::sync::Arc;
 
 use async_trait::async_trait;
 
+#[cfg(feature = "selected-wire-transport-adapter")]
 use crate::payload::codec::{DecodePayload, EncodePayload, PayloadCodec};
 #[cfg(feature = "selected-wire-transport-adapter")]
 use crate::wire::UWireDecodeOwned;
+#[cfg(feature = "selected-wire-transport-adapter")]
+use crate::wire::UWireEncode;
+#[cfg(feature = "selected-wire-transport-adapter")]
+use crate::wire_transport::UHasWire;
 use crate::{
     communication::{
         CallOptions, NotificationError, PubSubError, RegistrationError, ServiceInvocationError,
@@ -37,11 +42,15 @@ use crate::{
     LocalUriProvider, UCode, UListener, UMessage, UMessageBuilder, UOwnedFrame, UOwnedListener,
     UOwnedTransport, UStatus, UUri, UUID,
 };
-use crate::{wire::UWireEncode, UHasWire};
 
 pub use crate::communication::RequestHandler;
 
 /// Front door for owned native-frame communication-layer clients.
+///
+/// *Role: the up-L2 role set over the **owned-frame family** — same
+/// role semantics as the `UTransport`-family layer, carrying validated frames
+/// instead of messages. See the
+/// [guide](crate::guide::applications::communication).*
 pub struct Endpoint<T, P>
 where
     T: UOwnedTransport + ?Sized,
@@ -49,6 +58,16 @@ where
 {
     transport: Arc<T>,
     uri_provider: Arc<P>,
+}
+
+impl<T, P> core::fmt::Debug for Endpoint<T, P>
+where
+    T: UOwnedTransport + ?Sized,
+    P: LocalUriProvider + ?Sized,
+{
+    fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
+        f.debug_struct("Endpoint").finish_non_exhaustive()
+    }
 }
 
 impl<T, P> Endpoint<T, P>
@@ -72,9 +91,15 @@ where
     }
 
     /// Creates a subscriber for owned native-frame topic listeners.
+    ///
+    /// Subscription is a service interaction: the subscriber needs a
+    /// uSubscription client in addition to this endpoint's transport.
     #[must_use]
-    pub fn subscriber(&self) -> Subscriber<T> {
-        Subscriber::new(self.transport.clone())
+    pub fn subscriber(
+        &self,
+        usubscription: Arc<dyn crate::core::usubscription::USubscription>,
+    ) -> Subscriber<T> {
+        Subscriber::new(self.transport.clone(), usubscription)
     }
 
     /// Creates a notifier for owned native-frame notification send/listen roles.
@@ -115,12 +140,15 @@ fn build_message_with_payload(
 }
 
 fn frame_from_message(message: &UMessage) -> Result<UOwnedFrame, crate::UFrameMetadataError> {
-    let metadata = crate::try_project_umessage_to_frame_metadata(message)?;
+    let metadata = crate::frame::metadata::try_project_umessage_to_frame_metadata(message)?;
     UOwnedFrame::new(metadata, message.payload())
 }
 
 fn message_from_frame(frame: UOwnedFrame) -> Result<UMessage, crate::UFrameMetadataError> {
-    crate::try_project_frame_to_umessage(frame.metadata().clone(), frame.payload().cloned())
+    crate::frame::metadata::try_project_frame_to_umessage(
+        frame.metadata().clone(),
+        frame.payload().cloned(),
+    )
 }
 
 fn listener_pointer(listener: &Arc<dyn UListener>) -> usize {
@@ -232,31 +260,48 @@ fn validate_listener_topic(topic: &UUri) -> Result<(), RegistrationError> {
 
 /// Subscriber implemented over an owned native-frame transport.
 ///
-/// This is a direct listener-registration facade. It does not contact a
-/// USubscription service; callers that need subscription-service state machines
-/// should keep using the existing `InMemorySubscriber` path.
+/// *Role: the up-L2 `Subscriber` for the owned family. Like its `UTransport`-family
+/// sibling, subscription is a **service interaction**: it requires a
+/// [`USubscription`](crate::core::usubscription::USubscription) client and
+/// informs the uSubscription service before registering the local listener,
+/// per the uProtocol specification.*
 pub struct Subscriber<T>
 where
     T: UOwnedTransport + ?Sized,
 {
     transport: Arc<T>,
+    usubscription: Arc<dyn crate::core::usubscription::USubscription>,
     listeners: MessageListenerMap,
+}
+
+impl<T> core::fmt::Debug for Subscriber<T>
+where
+    T: UOwnedTransport + ?Sized,
+{
+    fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
+        f.debug_struct("Subscriber").finish_non_exhaustive()
+    }
 }
 
 impl<T> Subscriber<T>
 where
     T: UOwnedTransport + ?Sized,
 {
-    /// Creates a subscriber over an owned native-frame transport.
-    #[must_use]
-    pub fn new(transport: Arc<T>) -> Self {
+    /// Creates a subscriber over an owned-frame transport and a uSubscription
+    /// service client.
+    pub fn new(
+        transport: Arc<T>,
+        usubscription: Arc<dyn crate::core::usubscription::USubscription>,
+    ) -> Self {
         Self {
             transport,
-            listeners: tokio::sync::Mutex::new(HashMap::new()),
+            usubscription,
+            listeners: MessageListenerMap::default(),
         }
     }
 
-    /// Registers a listener for owned native-frame publish messages.
+    /// Subscribes to a topic: informs the uSubscription service first, then
+    /// registers the owned-frame listener on success.
     pub async fn subscribe(
         &self,
         topic: &UUri,
@@ -264,20 +309,39 @@ where
         subscription_change_handler: Option<Arc<dyn SubscriptionChangeHandler>>,
     ) -> Result<(), RegistrationError> {
         validate_listener_topic(topic)?;
+        let state = self
+            .usubscription
+            .subscribe(topic, None, None)
+            .await
+            .map_err(|status| RegistrationError::Unknown(Box::new(status)))?;
+        if state != SubscriptionStatus::Subscribed && state != SubscriptionStatus::SubscribePending
+        {
+            return Err(RegistrationError::Unknown(Box::new(
+                crate::UStatus::fail_with_code(
+                    crate::UCode::FailedPrecondition,
+                    format!("uSubscription service returned {state:?}"),
+                ),
+            )));
+        }
         register_message_listener(&*self.transport, &self.listeners, topic, None, handler).await?;
         if let Some(handler) = subscription_change_handler {
-            handler.on_subscription_change(topic.clone(), SubscriptionStatus::Subscribed);
+            handler.on_subscription_change(topic.clone(), state);
         }
         Ok(())
     }
 
-    /// Unregisters a listener for owned native-frame publish messages.
+    /// Unsubscribes from a topic: informs the uSubscription service, then
+    /// unregisters the owned-frame listener.
     pub async fn unsubscribe(
         &self,
         topic: &UUri,
         handler: Arc<dyn UListener>,
     ) -> Result<(), RegistrationError> {
         validate_listener_topic(topic)?;
+        self.usubscription
+            .unsubscribe(topic)
+            .await
+            .map_err(|status| RegistrationError::Unknown(Box::new(status)))?;
         unregister_message_listener(&*self.transport, &self.listeners, topic, None, handler).await
     }
 }
@@ -314,6 +378,16 @@ where
     transport: Arc<T>,
     uri_provider: Arc<P>,
     listeners: MessageListenerMap,
+}
+
+impl<T, P> core::fmt::Debug for Notifier<T, P>
+where
+    T: UOwnedTransport + ?Sized,
+    P: LocalUriProvider + ?Sized,
+{
+    fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
+        f.debug_struct("Notifier").finish_non_exhaustive()
+    }
 }
 
 impl<T, P> Notifier<T, P>
@@ -449,6 +523,16 @@ where
     uri_provider: Arc<P>,
 }
 
+impl<T, P> core::fmt::Debug for RpcClient<T, P>
+where
+    T: UOwnedTransport + ?Sized,
+    P: LocalUriProvider + ?Sized,
+{
+    fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
+        f.debug_struct("RpcClient").finish_non_exhaustive()
+    }
+}
+
 impl<T, P> RpcClient<T, P>
 where
     T: UOwnedTransport + ?Sized,
@@ -524,7 +608,7 @@ where
             .transport
             .receive_owned(&method, Some(&self.uri_provider.get_source_uri()))
             .await?;
-        let response = crate::try_project_frame_to_umessage(
+        let response = crate::frame::metadata::try_project_frame_to_umessage(
             response_frame.metadata().clone(),
             response_frame.payload().cloned(),
         )
@@ -606,7 +690,7 @@ where
     T: UOwnedTransport + ?Sized + 'static,
 {
     async fn process_request(&self, request_frame: UOwnedFrame) {
-        let Ok(request_message) = crate::try_project_frame_to_umessage(
+        let Ok(request_message) = crate::frame::metadata::try_project_frame_to_umessage(
             request_frame.metadata().clone(),
             request_frame.payload().cloned(),
         ) else {
@@ -635,7 +719,7 @@ where
             Err(error) => {
                 let status = UStatus::from(error);
                 response_builder
-                    .with_comm_status(status.get_code())
+                    .with_comm_status(status.code())
                     .build_with_protobuf_payload(&status)
             }
         };
@@ -666,6 +750,16 @@ where
     transport: Arc<T>,
     uri_provider: Arc<P>,
     request_listeners: tokio::sync::Mutex<std::collections::HashMap<u16, Arc<dyn UOwnedListener>>>,
+}
+
+impl<T, P> core::fmt::Debug for RpcServer<T, P>
+where
+    T: UOwnedTransport + ?Sized,
+    P: LocalUriProvider + ?Sized,
+{
+    fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
+        f.debug_struct("RpcServer").finish_non_exhaustive()
+    }
 }
 
 impl<T, P> RpcServer<T, P>
@@ -797,6 +891,16 @@ where
     uri_provider: Arc<P>,
 }
 
+impl<T, P> core::fmt::Debug for Publisher<T, P>
+where
+    T: UOwnedTransport + ?Sized,
+    P: LocalUriProvider + ?Sized,
+{
+    fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
+        f.debug_struct("Publisher").finish_non_exhaustive()
+    }
+}
+
 impl<T, P> Publisher<T, P>
 where
     T: UOwnedTransport + ?Sized,
@@ -836,8 +940,8 @@ where
                 "failed to create Publish message from parameters: {error}"
             ))
         })?;
-        let metadata =
-            crate::try_project_umessage_to_frame_metadata(&message).map_err(|error| {
+        let metadata = crate::frame::metadata::try_project_umessage_to_frame_metadata(&message)
+            .map_err(|error| {
                 PubSubError::InvalidArgument(format!(
                     "failed to create owned Publish frame metadata from parameters: {error}"
                 ))
@@ -923,8 +1027,8 @@ mod tests {
 
     use super::*;
     use crate::{
-        StaticUriProvider, UAttributes, UCode, UOwnedTransportImpl, UPayloadFormat, UStatus,
-        ValidatedOwnedFrame,
+        StaticUriProvider, UAttributes, UCode, UOwnedFrame, UOwnedTransportImpl, UPayloadFormat,
+        UStatus,
     };
 
     struct RecordingOwnedTransport {
@@ -965,11 +1069,8 @@ mod tests {
 
     #[async_trait]
     impl UOwnedTransportImpl for RecordingOwnedTransport {
-        async fn send_validated_owned(&self, frame: ValidatedOwnedFrame) -> Result<(), UStatus> {
-            self.sent
-                .lock()
-                .expect("sent lock poisoned")
-                .push(frame.into_inner());
+        async fn send_validated_owned(&self, frame: UOwnedFrame) -> Result<(), UStatus> {
+            self.sent.lock().expect("sent lock poisoned").push(frame);
             Ok(())
         }
 
@@ -1086,7 +1187,7 @@ mod tests {
 
     #[async_trait]
     impl UOwnedTransportImpl for FailingOwnedTransport {
-        async fn send_validated_owned(&self, _frame: ValidatedOwnedFrame) -> Result<(), UStatus> {
+        async fn send_validated_owned(&self, _frame: UOwnedFrame) -> Result<(), UStatus> {
             Err(UStatus::fail_with_code(
                 UCode::Unavailable,
                 "transport unavailable",
@@ -1105,10 +1206,56 @@ mod tests {
         assert!(matches!(result, Err(PubSubError::PublishError(_))));
     }
 
+    struct StubUSubscription;
+
+    #[async_trait]
+    impl crate::core::usubscription::USubscription for StubUSubscription {
+        async fn subscribe(
+            &self,
+            _topic: &UUri,
+            _expiration: Option<u64>,
+            _min_sample_period: Option<u32>,
+        ) -> Result<SubscriptionStatus, crate::UStatus> {
+            Ok(SubscriptionStatus::Subscribed)
+        }
+        async fn unsubscribe(&self, _topic: &UUri) -> Result<(), crate::UStatus> {
+            Ok(())
+        }
+        async fn fetch_subscriptions_by_topic(
+            &self,
+            _topic: &UUri,
+        ) -> Result<Vec<crate::core::usubscription::SubscriptionInfo>, crate::UStatus> {
+            Ok(Vec::new())
+        }
+        async fn fetch_subscriptions_by_subscriber(
+            &self,
+            _subscriber: &UUri,
+        ) -> Result<Vec<crate::core::usubscription::SubscriptionInfo>, crate::UStatus> {
+            Ok(Vec::new())
+        }
+        async fn register_for_notifications(&self, _topic: &UUri) -> Result<(), crate::UStatus> {
+            Ok(())
+        }
+        async fn unregister_for_notifications(&self, _topic: &UUri) -> Result<(), crate::UStatus> {
+            Ok(())
+        }
+        async fn fetch_subscribers(&self, _topic: &UUri) -> Result<Vec<UUri>, crate::UStatus> {
+            Ok(Vec::new())
+        }
+        async fn reset(
+            &self,
+            _reason: crate::core::usubscription::ResetReason,
+            _message: Option<String>,
+        ) -> Result<(), crate::UStatus> {
+            Ok(())
+        }
+    }
+
     #[tokio::test]
     async fn subscriber_registers_owned_listener_and_delivers_messages() {
         let transport = Arc::new(RecordingOwnedTransport::new());
-        let subscriber = Endpoint::new(transport.clone(), uri_provider()).subscriber();
+        let subscriber = Endpoint::new(transport.clone(), uri_provider())
+            .subscriber(Arc::new(StubUSubscription));
         let topic = uri_provider().get_resource_uri(0x9A00);
         let listener = Arc::new(RecordingMessageListener::default());
 
@@ -1216,7 +1363,7 @@ mod tests {
         let frames = transport.sent_frames();
         assert_eq!(frames.len(), 1);
         let frame = frames.first().expect("one sent frame");
-        let sent = crate::try_project_frame_to_umessage(
+        let sent = crate::frame::metadata::try_project_frame_to_umessage(
             frame.metadata().clone(),
             frame.payload().cloned(),
         )
@@ -1262,7 +1409,7 @@ mod tests {
         let frames = transport.sent_frames();
         assert_eq!(frames.len(), 1);
         let frame = frames.first().expect("one sent frame");
-        let response = crate::try_project_frame_to_umessage(
+        let response = crate::frame::metadata::try_project_frame_to_umessage(
             frame.metadata().clone(),
             frame.payload().cloned(),
         )
@@ -1285,8 +1432,8 @@ mod selected_wire_tests {
 
     use super::*;
     use crate::{
-        NativePrefixFrameMetadataCodec, ProtobufWire, UHasWire, UOwnedTransportCore,
-        UOwnedTransportImpl, UStatus, UWithNativePrefixWire, ValidatedOwnedFrame,
+        NativePrefixFrameMetadataCodec, ProtobufWire, UHasWire, UOwnedFrame, UOwnedTransportCore,
+        UOwnedTransportImpl, UStatus, UWithNativePrefixWire,
     };
 
     #[derive(Clone, Default)]
@@ -1383,11 +1530,8 @@ mod selected_wire_tests {
 
     #[async_trait]
     impl UOwnedTransportImpl for DirectSelectedOwnedTransport {
-        async fn send_validated_owned(&self, frame: ValidatedOwnedFrame) -> Result<(), UStatus> {
-            self.sent
-                .lock()
-                .expect("sent lock poisoned")
-                .push(frame.into_inner());
+        async fn send_validated_owned(&self, frame: UOwnedFrame) -> Result<(), UStatus> {
+            self.sent.lock().expect("sent lock poisoned").push(frame);
             Ok(())
         }
 

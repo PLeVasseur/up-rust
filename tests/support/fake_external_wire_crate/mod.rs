@@ -133,11 +133,10 @@ impl UWirePayload<ExternalFixture> for FakeExternalWire {
 pub fn metadata() -> UFrameMetadata {
     let topic = UUri::try_from_parts("vehicle", 0x4210, 0x01, 0x9000).expect("topic URI");
     let message = UMessageBuilder::publish(topic).build().expect("message");
-    up_rust::try_project_attributes_to_frame_metadata(
-        message.attributes(),
-        Some(FakeExternalWire::encoding()),
-    )
-    .expect("metadata")
+    message
+        .attributes()
+        .to_frame_metadata(FakeExternalWire::encoding())
+        .expect("metadata")
 }
 
 #[derive(Default)]
