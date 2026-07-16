@@ -4,6 +4,8 @@
  * SPDX-License-Identifier: Apache-2.0
  ********************************************************************************/
 
+//! Feature-surface pins: the uninit API appears exactly when its features are enabled.
+
 #[test]
 fn zero_copy_uninit_feature_surface() {
     // The uninitialized-loan surface (implementer and user side) ships

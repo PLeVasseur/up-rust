@@ -295,6 +295,8 @@ unexpected_cfgs = { level = "warn", check-cfg = ['cfg(tarpaulin_include)'] }
 # every public item is documented; every public type is inspectable.
 # missing_copy_implementations is deliberately not enforced: implementing
 # Copy is a semver commitment we make per-type, not a hygiene default.
+missing_docs = "deny"
+missing_debug_implementations = "deny"
 
 [lints.clippy]
 # see https://corrode.dev/blog/defensive-programming/#clippy-lints-for-defensive-programming

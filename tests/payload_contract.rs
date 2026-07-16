@@ -1,3 +1,5 @@
+//! Cross-family payload tri-state contract suite (absent / empty / nonempty).
+
 #![cfg(feature = "payload-contract-fixtures")]
 
 /********************************************************************************

@@ -11,6 +11,8 @@
  * SPDX-License-Identifier: Apache-2.0
  ********************************************************************************/
 
+//! Selected-wire adapter behavior over a scripted encoded core.
+
 use std::{
     collections::VecDeque,
     io::Cursor,

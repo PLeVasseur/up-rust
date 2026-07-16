@@ -4,6 +4,8 @@
  * SPDX-License-Identifier: Apache-2.0
  ********************************************************************************/
 
+//! Compile-fail pins for stable-payload derive layout rules.
+
 #[test]
 fn stable_payload_layout_compile_tests() {
     let cases = trybuild::TestCases::new();

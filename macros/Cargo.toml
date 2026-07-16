@@ -22,5 +22,8 @@ quote = "1"
 syn = { version = "2", features = ["full"] }
 
 [lints.rust]
+# every public item is documented; every public type is inspectable.
+# missing_copy_implementations is deliberately not enforced: implementing
+# Copy is a semver commitment we make per-type, not a hygiene default.
 missing_docs = "deny"
 missing_debug_implementations = "deny"

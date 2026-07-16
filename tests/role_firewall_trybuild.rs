@@ -11,6 +11,8 @@
  * SPDX-License-Identifier: Apache-2.0
  ********************************************************************************/
 
+//! Compile-fail pins: the selected-wire user door does not expose implementer SPI.
+
 #[cfg(all(
     feature = "selected-wire-user-api",
     not(feature = "transport-implementer-api"),

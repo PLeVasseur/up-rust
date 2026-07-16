@@ -4,6 +4,10 @@
  * SPDX-License-Identifier: Apache-2.0
  ********************************************************************************/
 
+//! Criterion bench: native-prefix metadata encode/decode.
+// criterion harness macros generate pub items that cannot carry docs.
+#![allow(missing_docs)]
+
 mod support;
 
 use criterion::{black_box, criterion_group, criterion_main, Criterion};

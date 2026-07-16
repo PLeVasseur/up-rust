@@ -11,6 +11,8 @@
  * SPDX-License-Identifier: Apache-2.0
  ********************************************************************************/
 
+//! Example: publish to a topic through the communication layer.
+
 use std::sync::Arc;
 
 use protobuf::well_known_types::wrappers::StringValue;
@@ -31,6 +33,7 @@ impl UListener for ConsolePrinter {
     }
 }
 
+/// Runs the publish-and-receive example.
 #[tokio::main]
 pub async fn main() -> Result<(), Box<dyn std::error::Error>> {
     const ORIGIN_RESOURCE_ID: u16 = 0xb4c1;

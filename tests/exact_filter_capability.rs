@@ -4,6 +4,8 @@
  * SPDX-License-Identifier: Apache-2.0
  ********************************************************************************/
 
+//! Runtime coverage for the exact-URI filter capability types.
+
 use up_rust::{ExactUUri, UUri};
 
 fn accepts_exact_source(source: &ExactUUri) -> &UUri {

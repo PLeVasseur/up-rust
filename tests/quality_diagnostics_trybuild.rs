@@ -4,6 +4,8 @@
  * SPDX-License-Identifier: Apache-2.0
  ********************************************************************************/
 
+//! Compile-fail pins for diagnostic quality of common API misuse.
+
 #[cfg(not(feature = "payload-contract-fixtures"))]
 #[test]
 fn quality_diagnostics_are_stable() {

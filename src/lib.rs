@@ -12,7 +12,6 @@
  ********************************************************************************/
 
 #![deny(unsafe_op_in_unsafe_fn)]
-#![deny(missing_docs, missing_debug_implementations)]
 #![cfg_attr(docsrs, feature(doc_auto_cfg))]
 
 /*!

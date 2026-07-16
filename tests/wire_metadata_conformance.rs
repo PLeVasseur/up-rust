@@ -11,6 +11,8 @@
  * SPDX-License-Identifier: Apache-2.0
  ********************************************************************************/
 
+//! Native-prefix wire metadata conformance suite over the projection methods.
+
 use bytes::Bytes;
 use pretty_assertions::assert_eq;
 use up_rust::{

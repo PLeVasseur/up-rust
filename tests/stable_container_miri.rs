@@ -11,6 +11,8 @@
  * SPDX-License-Identifier: Apache-2.0
  ********************************************************************************/
 
+//! Miri-run round-trips for stable-container payloads over the in-memory transport.
+
 use std::mem::{self, MaybeUninit};
 
 use up_rust::test_support::StableTestBytes as StableBytes;

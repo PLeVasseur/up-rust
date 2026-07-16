@@ -11,6 +11,8 @@
  * SPDX-License-Identifier: Apache-2.0
  ********************************************************************************/
 
+//! Compile-fail pins for selected-wire transport misuse.
+
 #[cfg(not(feature = "owned-frame-transport"))]
 #[test]
 fn wire_transport_compile_failures() {

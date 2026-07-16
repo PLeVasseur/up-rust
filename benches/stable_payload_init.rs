@@ -11,6 +11,10 @@
  * SPDX-License-Identifier: Apache-2.0
  ********************************************************************************/
 
+//! Criterion bench: stable-payload typed initialization into uninit storage.
+// criterion harness macros generate pub items that cannot carry docs.
+#![allow(missing_docs)]
+
 use std::mem::{self, offset_of, size_of, MaybeUninit};
 use std::ptr;
 
