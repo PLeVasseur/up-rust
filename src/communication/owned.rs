@@ -252,12 +252,6 @@ where
     Ok(())
 }
 
-fn validate_listener_topic(topic: &UUri) -> Result<(), RegistrationError> {
-    topic
-        .verify_no_wildcards()
-        .map_err(|error| RegistrationError::InvalidFilter(error.to_string()))
-}
-
 /// Subscriber implemented over an owned native-frame transport.
 ///
 /// *Role: the up-L2 `Subscriber` for the owned family. Like its `UTransport`-family
@@ -308,7 +302,7 @@ where
         handler: Arc<dyn UListener>,
         subscription_change_handler: Option<Arc<dyn SubscriptionChangeHandler>>,
     ) -> Result<(), RegistrationError> {
-        validate_listener_topic(topic)?;
+        super::validate_listener_topic(topic)?;
         let state = self
             .usubscription
             .subscribe(topic, None, None)
@@ -337,7 +331,7 @@ where
         topic: &UUri,
         handler: Arc<dyn UListener>,
     ) -> Result<(), RegistrationError> {
-        validate_listener_topic(topic)?;
+        super::validate_listener_topic(topic)?;
         self.usubscription
             .unsubscribe(topic)
             .await
@@ -451,7 +445,7 @@ where
         topic: &UUri,
         listener: Arc<dyn UListener>,
     ) -> Result<(), RegistrationError> {
-        validate_listener_topic(topic)?;
+        super::validate_listener_topic(topic)?;
         register_message_listener(
             &*self.transport,
             &self.listeners,
@@ -468,7 +462,7 @@ where
         topic: &UUri,
         listener: Arc<dyn UListener>,
     ) -> Result<(), RegistrationError> {
-        validate_listener_topic(topic)?;
+        super::validate_listener_topic(topic)?;
         unregister_message_listener(
             &*self.transport,
             &self.listeners,

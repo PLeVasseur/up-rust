@@ -431,7 +431,7 @@ pub(crate) fn deserialize_protobuf_bytes<T: ProtobufMappable>(
     }
 }
 
-#[cfg(feature = "up-core-types")]
+#[cfg(feature = "up-core-api")]
 mod core_types_support {
     use protobuf::{well_known_types::any::Any, Message};
 

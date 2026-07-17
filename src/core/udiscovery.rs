@@ -17,9 +17,9 @@ use mockall::automock;
 
 use crate::{UStatus, UUri};
 
-#[cfg(feature = "up-l2-api")]
+#[cfg(feature = "communication-api")]
 mod udiscovery_client;
-#[cfg(feature = "up-l2-api")]
+#[cfg(feature = "communication-api")]
 pub use udiscovery_client::RpcClientUDiscovery;
 
 /// The uEntity (type) identifier of the uDiscovery service.

@@ -1688,3 +1688,49 @@ mod tests {
         assert_eq!(UPayloadFormat::SomeipTlv.as_i32(), 5);
     }
 }
+
+#[cfg(test)]
+mod projection_round_trip_properties {
+    use proptest::prelude::*;
+
+    use crate::{PayloadEncoding, UMessageBuilder, UPayloadFormat, UUri};
+
+    proptest! {
+        /// Metadata projection round-trip: a publish message built from any
+        /// valid parts projects to frame metadata whose canonical field-block
+        /// encoding decodes back to equal metadata. Hand-written cases pin the
+        /// known edges; this pins the space between them.
+        #[test]
+        fn projected_metadata_survives_field_block_round_trip(
+            authority in "[a-z][a-z0-9]{0,11}",
+            ue_id in 1u32..0xFFFF,
+            version in 1u8..=0xFE,
+            resource in 0x8000u16..0xFFFE,
+            payload in proptest::collection::vec(any::<u8>(), 0..64),
+        ) {
+            let topic = UUri::try_from_parts(&authority, ue_id, version, resource)
+                .expect("parts chosen from the valid range");
+            let message = if payload.is_empty() {
+                UMessageBuilder::publish(topic).build().expect("valid publish message")
+            } else {
+                UMessageBuilder::publish(topic)
+                    .build_with_payload(payload, UPayloadFormat::Raw)
+                    .expect("valid publish message with payload")
+            };
+
+            let metadata = if message.payload().is_some() {
+                message.to_frame_metadata(PayloadEncoding::RAW)
+            } else {
+                message.to_frame_metadata_unencoded()
+            }
+            .expect("valid message must project");
+
+            let encoded = crate::frame::codec::encode_frame_metadata_fields(&metadata)
+                .expect("projected metadata must encode");
+            let decoded = crate::frame::codec::decode_frame_metadata_fields(&encoded)
+                .expect("encoded metadata must decode");
+
+            prop_assert_eq!(metadata, decoded);
+        }
+    }
+}

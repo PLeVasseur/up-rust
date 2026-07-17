@@ -13,17 +13,16 @@
 
 //! Zero-copy communication-layer facade.
 //!
-//! SCOPE FREEZE: this facade intentionally stays transmit-only. Additions
-//! (in particular any receive-side convenience) require a design that does
-//! not hide lease lifetimes, per the rules below — bring the design first.
+//! This module exposes the L2 operations that preserve zero-copy semantics:
+//! stable/no-zero publish and subscription with the transport's receive lease
+//! type delivered directly to the listener. The facade does not adapt or copy
+//! received payloads, so selected-wire transports retain their typed
+//! [`UWireRx`](crate::UWireRx) decode surface.
 //!
-//! This module exposes the simple L2 operations that can be expressed without
-//! hiding zero-copy lifetimes. Stable/no-zero publish is provided as an ordinary
-//! front-door API. Receive, listener, RPC server, and request handling remain at
-//! the [`UZeroCopyTransport`] layer for now because their non-copying shape is
-//! tied to the transport receive lease type. Any future L2 convenience that
-//! copies out of a receive lease must use a `copying` name and must not claim
-//! no-copy behavior.
+//! RPC server and request handling remain at the [`UZeroCopyTransport`] layer
+//! because their non-copying shape is tied to the transport receive lease type.
+//! Any future convenience that copies out of a receive lease must use a
+//! `copying` name and must not claim no-copy behavior.
 
 use std::sync::Arc;
 
@@ -45,9 +44,116 @@ use crate::{
 };
 use crate::{wire::UWirePayload, wire_transport::UHasWire};
 
-/// *Role: the up-L2 publish surface over a **selected-wire zero-copy
-/// transport** — typed payloads written directly into transport loans,
-/// with role ergonomics. See the
+/// *Role: the up-L2 subscribe surface over a **selected-wire zero-copy
+/// transport** (experimental) — see the [trait map](crate::guide::trait_map).*
+///
+/// Mirrors the owned-frame [`Subscriber`](crate::communication::owned::Subscriber):
+/// the uSubscription service is informed first, and the zero-copy listener is
+/// registered only when the service reports the subscription active or
+/// pending. Received payloads are delivered as the transport's lease type —
+/// for a selected-wire transport that is [`UWireRx`](crate::UWireRx), whose
+/// [`decode_payload`](crate::UWireRx::decode_payload) reads the typed value in
+/// place.
+#[cfg(feature = "usubscription")]
+pub struct Subscriber<T>
+where
+    T: UZeroCopyTransport + ?Sized,
+{
+    transport: Arc<T>,
+    usubscription: Arc<dyn crate::core::usubscription::USubscription>,
+}
+
+#[cfg(feature = "usubscription")]
+impl<T> core::fmt::Debug for Subscriber<T>
+where
+    T: UZeroCopyTransport + ?Sized,
+{
+    fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
+        f.debug_struct("Subscriber").finish_non_exhaustive()
+    }
+}
+
+#[cfg(feature = "usubscription")]
+impl<T> Subscriber<T>
+where
+    T: UZeroCopyTransport + ?Sized,
+{
+    /// Creates a subscriber over a zero-copy transport and a uSubscription
+    /// service client.
+    #[must_use]
+    pub fn new(
+        transport: Arc<T>,
+        usubscription: Arc<dyn crate::core::usubscription::USubscription>,
+    ) -> Self {
+        Self {
+            transport,
+            usubscription,
+        }
+    }
+
+    /// Subscribes to a topic: informs the uSubscription service first, then
+    /// registers the zero-copy listener on success.
+    ///
+    /// # Errors
+    ///
+    /// Returns an error if the topic is not a valid subscription filter, if
+    /// the uSubscription service rejects the subscription or reports a state
+    /// other than active/pending, or if listener registration fails.
+    pub async fn subscribe(
+        &self,
+        topic: &crate::UUri,
+        listener: Arc<dyn crate::UZeroCopyListener<T::Rx>>,
+    ) -> Result<(), crate::communication::RegistrationError> {
+        use crate::communication::{RegistrationError, SubscriptionStatus};
+        crate::communication::validate_listener_topic(topic)?;
+        let state = self
+            .usubscription
+            .subscribe(topic, None, None)
+            .await
+            .map_err(|status| RegistrationError::Unknown(Box::new(status)))?;
+        if state != SubscriptionStatus::Subscribed && state != SubscriptionStatus::SubscribePending
+        {
+            return Err(RegistrationError::Unknown(Box::new(
+                crate::UStatus::fail_with_code(
+                    crate::UCode::FailedPrecondition,
+                    format!("uSubscription service returned {state:?}"),
+                ),
+            )));
+        }
+        self.transport
+            .register_zero_copy_listener(topic, None, listener)
+            .await
+            .map_err(|status| RegistrationError::Unknown(Box::new(status)))
+    }
+
+    /// Unsubscribes from a topic: informs the uSubscription service, then
+    /// unregisters the zero-copy listener.
+    ///
+    /// # Errors
+    ///
+    /// Returns an error if the topic is not a valid subscription filter, or if
+    /// the service call or listener unregistration fails.
+    pub async fn unsubscribe(
+        &self,
+        topic: &crate::UUri,
+        listener: Arc<dyn crate::UZeroCopyListener<T::Rx>>,
+    ) -> Result<(), crate::communication::RegistrationError> {
+        use crate::communication::RegistrationError;
+        crate::communication::validate_listener_topic(topic)?;
+        self.usubscription
+            .unsubscribe(topic)
+            .await
+            .map_err(|status| RegistrationError::Unknown(Box::new(status)))?;
+        self.transport
+            .unregister_zero_copy_listener(topic, None, listener)
+            .await
+            .map_err(|status| RegistrationError::Unknown(Box::new(status)))
+    }
+}
+
+/// *Role: the up-L2 publish and subscribe surface over a **selected-wire
+/// zero-copy transport** — typed payloads use transport loans and receive
+/// leases directly, with role ergonomics. See the
 /// [guide](crate::guide::applications::communication).*
 ///
 /// Front door for zero-copy communication-layer clients.
@@ -84,7 +190,18 @@ where
         }
     }
 
-    /// Creates a publisher for zero-copy stable payload messages.
+    /// Creates the subscribe role over this endpoint's transport, using the
+    /// given uSubscription service client.
+    #[cfg(feature = "usubscription")]
+    #[must_use]
+    pub fn subscriber(
+        &self,
+        usubscription: Arc<dyn crate::core::usubscription::USubscription>,
+    ) -> Subscriber<T> {
+        Subscriber::new(self.transport.clone(), usubscription)
+    }
+
+    /// Creates the publish role over this endpoint's transport and identity.
     #[must_use]
     pub fn publisher(&self) -> Publisher<T, P> {
         Publisher::new(self.transport.clone(), self.uri_provider.clone())
@@ -386,5 +503,256 @@ mod tests {
             .await;
 
         assert!(matches!(result, Err(PubSubError::PublishError(_))));
+    }
+}
+
+#[cfg(all(test, feature = "usubscription"))]
+mod subscriber_tests {
+    use std::sync::{Arc, Mutex};
+
+    use async_trait::async_trait;
+
+    use super::Subscriber;
+    use crate::communication::{RegistrationError, SubscriptionStatus};
+    use crate::core::usubscription::USubscription;
+    use crate::{
+        InMemoryZeroCopyTransport, UStatus, UTxLoanSpec, UUri, UVecRxLease, UVecTxBuffer,
+        UZeroCopyListener, UZeroCopyTransportImpl,
+    };
+
+    struct RecordingZeroCopyTransport {
+        inner: InMemoryZeroCopyTransport,
+        lifecycle: Arc<Mutex<Vec<&'static str>>>,
+    }
+
+    impl RecordingZeroCopyTransport {
+        fn new(lifecycle: Arc<Mutex<Vec<&'static str>>>) -> Self {
+            Self {
+                inner: InMemoryZeroCopyTransport::default(),
+                lifecycle,
+            }
+        }
+
+        fn record(&self, event: &'static str) {
+            self.lifecycle
+                .lock()
+                .expect("lifecycle lock poisoned")
+                .push(event);
+        }
+    }
+
+    #[async_trait]
+    impl UZeroCopyTransportImpl for RecordingZeroCopyTransport {
+        type Tx = UVecTxBuffer;
+        type Rx = UVecRxLease;
+
+        async fn loan_validated_tx(&self, spec: UTxLoanSpec) -> Result<Self::Tx, UStatus> {
+            UZeroCopyTransportImpl::loan_validated_tx(&self.inner, spec).await
+        }
+
+        async fn send_validated_zero_copy(&self, buffer: Self::Tx) -> Result<(), UStatus> {
+            UZeroCopyTransportImpl::send_validated_zero_copy(&self.inner, buffer).await
+        }
+
+        async fn register_validated_zero_copy_listener(
+            &self,
+            source_filter: &UUri,
+            sink_filter: Option<&UUri>,
+            listener: Arc<dyn UZeroCopyListener<Self::Rx>>,
+        ) -> Result<(), UStatus> {
+            self.record("register");
+            UZeroCopyTransportImpl::register_validated_zero_copy_listener(
+                &self.inner,
+                source_filter,
+                sink_filter,
+                listener,
+            )
+            .await
+        }
+
+        async fn unregister_validated_zero_copy_listener(
+            &self,
+            source_filter: &UUri,
+            sink_filter: Option<&UUri>,
+            listener: Arc<dyn UZeroCopyListener<Self::Rx>>,
+        ) -> Result<(), UStatus> {
+            self.record("unregister");
+            UZeroCopyTransportImpl::unregister_validated_zero_copy_listener(
+                &self.inner,
+                source_filter,
+                sink_filter,
+                listener,
+            )
+            .await
+        }
+    }
+
+    #[derive(Default)]
+    struct StubUSubscription {
+        lifecycle: Arc<Mutex<Vec<&'static str>>>,
+        decline: bool,
+    }
+
+    #[async_trait]
+    impl USubscription for StubUSubscription {
+        async fn subscribe(
+            &self,
+            _topic: &UUri,
+            _expiration: Option<u64>,
+            _min_sample_period: Option<u32>,
+        ) -> Result<SubscriptionStatus, UStatus> {
+            self.lifecycle
+                .lock()
+                .expect("lifecycle lock poisoned")
+                .push("subscribe");
+            if self.decline {
+                Ok(SubscriptionStatus::Unsubscribed)
+            } else {
+                Ok(SubscriptionStatus::Subscribed)
+            }
+        }
+        async fn unsubscribe(&self, _topic: &UUri) -> Result<(), UStatus> {
+            self.lifecycle
+                .lock()
+                .expect("lifecycle lock poisoned")
+                .push("unsubscribe");
+            Ok(())
+        }
+        async fn fetch_subscriptions_by_topic(
+            &self,
+            _topic: &UUri,
+        ) -> Result<Vec<crate::core::usubscription::SubscriptionInfo>, UStatus> {
+            Ok(Vec::new())
+        }
+        async fn fetch_subscriptions_by_subscriber(
+            &self,
+            _subscriber: &UUri,
+        ) -> Result<Vec<crate::core::usubscription::SubscriptionInfo>, UStatus> {
+            Ok(Vec::new())
+        }
+        async fn register_for_notifications(&self, _topic: &UUri) -> Result<(), UStatus> {
+            Ok(())
+        }
+        async fn unregister_for_notifications(&self, _topic: &UUri) -> Result<(), UStatus> {
+            Ok(())
+        }
+        async fn fetch_subscribers(&self, _topic: &UUri) -> Result<Vec<UUri>, UStatus> {
+            Ok(Vec::new())
+        }
+        async fn reset(
+            &self,
+            _reason: crate::core::usubscription::ResetReason,
+            _message: Option<String>,
+        ) -> Result<(), UStatus> {
+            Ok(())
+        }
+    }
+
+    struct CountingListener(Mutex<usize>);
+
+    #[async_trait]
+    impl<Rx: crate::UZeroCopyRxLease + Send + 'static> UZeroCopyListener<Rx> for CountingListener {
+        async fn on_receive_zero_copy(&self, _frame: Rx) {
+            *self.0.lock().expect("count lock poisoned") += 1;
+        }
+    }
+
+    fn topic() -> UUri {
+        UUri::try_from_parts("demo", 0x1_0001, 1, 0x8001).expect("valid topic URI")
+    }
+
+    #[tokio::test]
+    async fn subscribe_consults_the_service_before_registering() {
+        let lifecycle = Arc::new(Mutex::new(Vec::new()));
+        let subscriber = Subscriber::new(
+            Arc::new(RecordingZeroCopyTransport::new(lifecycle.clone())),
+            Arc::new(StubUSubscription {
+                lifecycle: lifecycle.clone(),
+                decline: false,
+            }),
+        );
+
+        subscriber
+            .subscribe(&topic(), Arc::new(CountingListener(Mutex::new(0))))
+            .await
+            .expect("subscribe succeeds when the service reports Subscribed");
+
+        assert_eq!(
+            *lifecycle.lock().expect("lifecycle lock poisoned"),
+            ["subscribe", "register"]
+        );
+    }
+
+    #[tokio::test]
+    async fn subscribe_fails_and_registers_nothing_when_the_service_declines() {
+        let lifecycle = Arc::new(Mutex::new(Vec::new()));
+        let subscriber = Subscriber::new(
+            Arc::new(RecordingZeroCopyTransport::new(lifecycle.clone())),
+            Arc::new(StubUSubscription {
+                lifecycle: lifecycle.clone(),
+                decline: true,
+            }),
+        );
+
+        subscriber
+            .subscribe(&topic(), Arc::new(CountingListener(Mutex::new(0))))
+            .await
+            .expect_err("a declined subscription must not register a listener");
+
+        assert_eq!(
+            *lifecycle.lock().expect("lifecycle lock poisoned"),
+            ["subscribe"]
+        );
+    }
+
+    #[tokio::test]
+    async fn unsubscribe_informs_the_service_and_unregisters() {
+        let lifecycle = Arc::new(Mutex::new(Vec::new()));
+        let listener = Arc::new(CountingListener(Mutex::new(0)));
+        let subscriber = Subscriber::new(
+            Arc::new(RecordingZeroCopyTransport::new(lifecycle.clone())),
+            Arc::new(StubUSubscription {
+                lifecycle: lifecycle.clone(),
+                decline: false,
+            }),
+        );
+
+        subscriber
+            .subscribe(&topic(), listener.clone())
+            .await
+            .expect("subscribed");
+        subscriber
+            .unsubscribe(&topic(), listener)
+            .await
+            .expect("unsubscribe succeeds after subscribe");
+
+        assert_eq!(
+            *lifecycle.lock().expect("lifecycle lock poisoned"),
+            ["subscribe", "register", "unsubscribe", "unregister"]
+        );
+    }
+
+    #[tokio::test]
+    async fn unsubscribe_rejects_wildcards_before_contacting_the_service() {
+        let lifecycle = Arc::new(Mutex::new(Vec::new()));
+        let subscriber = Subscriber::new(
+            Arc::new(RecordingZeroCopyTransport::new(lifecycle.clone())),
+            Arc::new(StubUSubscription {
+                lifecycle: lifecycle.clone(),
+                decline: false,
+            }),
+        );
+        let invalid_topic =
+            UUri::try_from("up://my-vin/A15B/1/FFFF").expect("valid wildcard subscription filter");
+
+        let result = subscriber
+            .unsubscribe(&invalid_topic, Arc::new(CountingListener(Mutex::new(0))))
+            .await;
+
+        assert!(matches!(result, Err(RegistrationError::InvalidFilter(_))));
+        assert!(lifecycle
+            .lock()
+            .expect("lifecycle lock poisoned")
+            .is_empty());
     }
 }

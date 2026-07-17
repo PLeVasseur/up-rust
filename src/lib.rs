@@ -104,7 +104,7 @@ mod cloudevents;
 pub use cloudevents::{CloudEvent, CONTENT_TYPE_CLOUDEVENTS_PROTOBUF};
 
 // [impl->dsn~communication-layer-api-namespace~1]
-#[cfg(feature = "up-l2-api")]
+#[cfg(feature = "communication-api")]
 pub mod communication;
 
 #[cfg(any(feature = "udiscovery", feature = "usubscription"))]
@@ -112,6 +112,8 @@ pub mod core;
 
 #[cfg(feature = "util")]
 pub mod local_transport;
+#[cfg(feature = "util")]
+pub use local_transport::LocalTransport;
 
 #[cfg(feature = "symphony")]
 pub mod symphony;
@@ -283,15 +285,15 @@ pub use payload::UWireError;
 /// # }
 /// ```
 pub mod prelude {
-    #[cfg(feature = "up-l2-api")]
+    #[cfg(feature = "communication-api")]
     pub use crate::communication::Notifier;
-    #[cfg(feature = "up-l2-api")]
+    #[cfg(feature = "communication-api")]
     pub use crate::communication::Publisher;
-    #[cfg(feature = "up-l2-api")]
+    #[cfg(feature = "communication-api")]
     pub use crate::communication::RpcClient;
-    #[cfg(feature = "up-l2-api")]
+    #[cfg(feature = "communication-api")]
     pub use crate::communication::RpcServer;
-    #[cfg(feature = "up-l2-api")]
+    #[cfg(feature = "communication-api")]
     pub use crate::communication::Subscriber;
     pub use crate::{
         UAttributes, UAttributesValidators, UCode, UListener, UMessage, UMessageBuilder,
@@ -484,7 +486,7 @@ pub mod test_support;
 mod uuid;
 pub use uuid::UUID;
 
-#[cfg(feature = "up-core-types")]
+#[cfg(feature = "up-core-api")]
 // protoc-generated types, see build.rs
 pub(crate) mod up_core_api {
     include!(concat!(env!("OUT_DIR"), "/uprotocol/mod.rs"));

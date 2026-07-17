@@ -27,7 +27,7 @@
 //! under `tests/wire_metadata_*` plus external `up-wire-xcdrv2-rust` are the
 //! implementation references.
 
-#[cfg(any(feature = "protobuf-support", feature = "up-core-types"))]
+#[cfg(any(feature = "protobuf-support", feature = "up-core-api"))]
 use std::io::Read;
 #[cfg(feature = "selected-wire-codec-core")]
 use std::{error::Error, fmt::Display};
@@ -40,7 +40,7 @@ use crate::payload::{
     codec::{DecodePayload, EncodePayload, PayloadCodec, ReadDecodePayload},
     stable::{StableContainerPayload, StablePayload},
 };
-#[cfg(any(feature = "protobuf-support", feature = "up-core-types"))]
+#[cfg(any(feature = "protobuf-support", feature = "up-core-api"))]
 use crate::PayloadEncoding;
 #[cfg(feature = "protobuf-support")]
 use crate::ProtobufMappable;
@@ -806,6 +806,72 @@ impl<'a> MetadataReader<'a> {
         })?;
         self.take(len)
     }
+}
+
+/// Binds payload types to a wire whose marker is its own codec
+/// (`Codec = Self`), removing the most repetitive line of an all-in-one
+/// wire implementation.
+///
+/// ```rust,no_run
+/// # use up_rust::{bind_wire_self_codec, DecodePayload, EncodePayload,
+/// #     PayloadCodec, PayloadEncoding, PayloadLayout, UWire, UWireError,
+/// #     WireIdentity};
+/// # struct MyWire;
+/// # struct A(u32); struct B(u32);
+/// # impl UWire for MyWire {
+/// #     const WIRE_ID: WireIdentity = WireIdentity::new("demo.self-codec", 0x8043);
+/// #     const PAYLOAD_FAMILY_ID: WireIdentity = WireIdentity::new("demo.self", 0x8043);
+/// #     const METADATA_LAYOUT_ID: WireIdentity =
+/// #         WireIdentity::new("uprotocol.native-prefix.v1", 0x0001);
+/// #     const FORMAT_VERSION: u16 = 1;
+/// # }
+/// # impl PayloadCodec for MyWire {
+/// #     fn codec_name() -> &'static str { "demo-self-codec" }
+/// #     fn payload_encoding() -> PayloadEncoding { PayloadEncoding::RAW }
+/// # }
+/// # impl EncodePayload<A> for MyWire {
+/// #     fn payload_layout(_: &A) -> Result<PayloadLayout, UWireError> { PayloadLayout::new(4, 4) }
+/// #     fn encode_payload(v: &A, dst: &mut [u8]) -> Result<(), UWireError> {
+/// #         dst.copy_from_slice(&v.0.to_le_bytes());
+/// #         Ok(())
+/// #     }
+/// # }
+/// # impl<'a> DecodePayload<'a, A> for MyWire {
+/// #     fn decode_payload(src: &'a [u8]) -> Result<A, UWireError> {
+/// #         Ok(A(u32::from_le_bytes(src.try_into().map_err(|_| UWireError::invalid_payload("demo payload must be 4 bytes"))?)))
+/// #     }
+/// # }
+/// # impl EncodePayload<B> for MyWire {
+/// #     fn payload_layout(_: &B) -> Result<PayloadLayout, UWireError> { PayloadLayout::new(4, 4) }
+/// #     fn encode_payload(v: &B, dst: &mut [u8]) -> Result<(), UWireError> {
+/// #         dst.copy_from_slice(&v.0.to_le_bytes());
+/// #         Ok(())
+/// #     }
+/// # }
+/// # impl<'a> DecodePayload<'a, B> for MyWire {
+/// #     fn decode_payload(src: &'a [u8]) -> Result<B, UWireError> {
+/// #         Ok(B(u32::from_le_bytes(src.try_into().map_err(|_| UWireError::invalid_payload("demo payload must be 4 bytes"))?)))
+/// #     }
+/// # }
+/// // One wire identity, two payload types, marker as codec for both:
+/// bind_wire_self_codec!(MyWire: A, B);
+/// ```
+///
+/// Why not a trait default or a blanket impl? `type Codec = Self;` as an
+/// associated-type default is unstable Rust, and a blanket
+/// `impl<W, T> UWirePayload<T> for W` would forbid, by coherence, exactly the
+/// wire that binds a *different* codec for some payload type — the case the
+/// three-trait split exists to support. The macro adds the convenience without
+/// closing that door.
+#[macro_export]
+macro_rules! bind_wire_self_codec {
+    ($wire:ty : $($payload:ty),+ $(,)?) => {
+        $(
+            impl $crate::UWirePayload<$payload> for $wire {
+                type Codec = $wire;
+            }
+        )+
+    };
 }
 
 #[cfg(test)]

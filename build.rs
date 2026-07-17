@@ -12,12 +12,12 @@
                          * SPDX-License-Identifier: Apache-2.0
                          ********************************************************************************/
 
-#[cfg(feature = "up-core-types")]
+#[cfg(feature = "up-core-api")]
 const UPROTOCOL_BASE_URI: &str = "up-spec/up-core-api/";
 #[cfg(feature = "payload-contract-fixtures")]
 const PAYLOAD_CONTRACT_PROTO_BASE_URI: &str = "test-fixtures/proto/";
 
-#[cfg(feature = "up-core-types")]
+#[cfg(feature = "up-core-api")]
 fn proto_api() -> Result<(), Box<dyn std::error::Error>> {
     let files = vec![
         // uProtocol-project proto definitions
@@ -112,7 +112,7 @@ fn generate_payload_contract_fixtures() -> Result<(), Box<dyn std::error::Error>
 }
 
 fn main() -> Result<(), Box<dyn std::error::Error>> {
-    #[cfg(feature = "up-core-types")]
+    #[cfg(feature = "up-core-api")]
     proto_api()?;
 
     #[cfg(feature = "cloudevents")]

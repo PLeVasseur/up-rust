@@ -29,7 +29,12 @@ keep:
   when the codec is a type, not a method set folded into the marker.
 
 For the common all-in-one case the marker implements everything and
-binds `Codec = Self`, as the demo does.
+binds `Codec = Self`, as the demo does —
+[`bind_wire_self_codec!`](crate::bind_wire_self_codec) writes those
+binding lines for you. (A trait-level default or blanket impl was
+considered and rejected: the default form is unstable Rust, and a
+blanket impl would forbid, by coherence, a wire binding a different
+codec for some payload type — the case this split exists to support.)
 
 Before the checklist, a demo wire **running end to end** — identity and
 codec — carrying a `u32` little-endian:

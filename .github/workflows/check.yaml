@@ -164,7 +164,7 @@ jobs:
             --no-dev-deps \
             --feature-powerset \
             --group-features communication,usubscription,udiscovery,symphony \
-            --group-features owned-frame-transport,selected-wire-user-api,up-l2-api \
+            --group-features owned-frame-transport,selected-wire-user-api,communication-api \
             --depth 2
 
   # [impl->req~up-language-ci-test~1]
@@ -178,7 +178,7 @@ jobs:
         feature-flags:
           [
             "",
-            "--features protobuf-support,up-l2-api",
+            "--features protobuf-support,communication-api",
             "--all-features",
           ]
     steps:

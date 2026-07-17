@@ -64,10 +64,12 @@ only when its technology honestly supports them — the
 
 Applications mostly never touch the tables above directly — they use the
 role traits. The ready-made implementations below drive a `UTransport`-family
-transport; the same roles also exist over the experimental families
-(`communication::owned::Endpoint`, `communication::zero_copy::Endpoint` —
-see [the application guide](applications)) (feature
-`up-l2-api` for the traits, `communication` for ready-made
+transport. The owned-frame endpoint provides the corresponding owned role
+facades; the zero-copy endpoint currently provides publish and lease-preserving
+subscribe without pretending its receive lease is a classic `UMessage`
+(`communication::owned::Endpoint`, `communication::zero_copy::Endpoint` — see
+[the application guide](applications)) (feature
+`communication-api` for the traits, `communication` for ready-made
 implementations):
 
 | You want to… | Role trait | Ready-made implementation |

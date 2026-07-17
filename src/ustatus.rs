@@ -333,7 +333,7 @@ impl std::fmt::Display for UStatus {
 
 impl Error for UStatus {}
 
-#[cfg(feature = "up-core-types")]
+#[cfg(feature = "up-core-api")]
 mod core_types_support {
     use protobuf::{well_known_types::any::Any, Message};
 
@@ -506,7 +506,7 @@ mod tests {
 
     #[test]
     // [utest->req~ustatus-data-model-proto~1]
-    #[cfg(feature = "up-core-types")]
+    #[cfg(feature = "up-core-api")]
     fn test_proto_serialization() {
         use crate::ProtobufMappable;
 

@@ -271,6 +271,14 @@ endpoint
 # }
 ```
 
+The receive direction mirrors the owned subscriber:
+`endpoint.subscriber(usubscription)` consults the uSubscription service
+first and, on an active or pending subscription, registers a
+zero-copy listener — received payloads arrive as typed
+[`UWireRx`](crate::UWireRx) leases whose
+[`decode_payload`](crate::UWireRx::decode_payload) reads the value in
+place.
+
 The mechanics of loans and stable payloads live in the
 [Transport Layer page](crate::guide::applications::transport) and the
 [zero-copy transport tutorial](crate::guide::transports::zero_copy).

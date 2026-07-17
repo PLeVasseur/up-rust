@@ -67,7 +67,7 @@ pub mod owned;
 
 #[cfg(all(
     feature = "selected-wire-transport-adapter",
-    feature = "up-l2-api",
+    feature = "communication-api",
     feature = "zero-copy-transport"
 ))]
 pub mod zero_copy;
@@ -143,7 +143,7 @@ pub enum SubscriptionStatus {
     UnsubscribePending,
 }
 
-#[cfg(all(feature = "up-core-types", feature = "usubscription"))]
+#[cfg(all(feature = "up-core-api", feature = "usubscription"))]
 mod core_types_support {
     use super::{SubscriptionStatus, UCode, UStatus};
     use crate::up_core_api::usubscription::subscription_status::State;
@@ -192,6 +192,25 @@ pub enum RegistrationError {
     /// Indicates a generic error.
     #[error("error un-/registering listener: {0}")]
     Unknown(Box<UStatus>),
+}
+
+#[cfg(any(
+    all(
+        feature = "owned-frame-transport",
+        feature = "usubscription",
+        feature = "selected-wire-transport-core"
+    ),
+    all(
+        feature = "selected-wire-transport-adapter",
+        feature = "communication-api",
+        feature = "zero-copy-transport",
+        feature = "usubscription"
+    )
+))]
+pub(crate) fn validate_listener_topic(topic: &crate::UUri) -> Result<(), RegistrationError> {
+    topic
+        .verify_no_wildcards()
+        .map_err(|error| RegistrationError::InvalidFilter(error.to_string()))
 }
 
 impl From<UStatus> for RegistrationError {

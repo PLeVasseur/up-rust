@@ -42,18 +42,18 @@ default = []
 #! ## Features for applications
 ## Ready-made implementations of every Communication Layer role. The
 ## default choice for applications. Silently enables everything it
-## requires (the role traits, `up-core-types`, `usubscription`, tokio).
-communication = ["up-l2-api", "up-core-types", "usubscription", "tokio/sync", "tokio/time"]
+## requires (the role traits, `up-core-api`, `usubscription`, tokio).
+communication = ["communication-api", "up-core-api", "usubscription", "tokio/sync", "tokio/time"]
 ## Just the role *traits* (`Publisher`, `Subscriber`, `Notifier`,
 ## `RpcClient`, `RpcServer`), for libraries that accept any
 ## implementation.
-up-l2-api = ["dep:thiserror"]
+communication-api = ["dep:thiserror"]
 ## Client types for the [uDiscovery service](https://github.com/eclipse-uprotocol/up-spec/blob/v1.6.0-alpha.7/up-l3/udiscovery/v3/README.adoc),
-## generic over any `RpcClient`. Requires `up-l2-api` and `up-core-types`.
-udiscovery = ["up-l2-api", "up-core-types"]
+## generic over any `RpcClient`. Requires `communication-api` and `up-core-api`.
+udiscovery = ["communication-api", "up-core-api"]
 ## Client types for the [uSubscription service](https://github.com/eclipse-uprotocol/up-spec/blob/v1.6.0-alpha.7/up-l3/usubscription/v3/README.adoc),
-## generic over any `RpcClient`. Requires `up-l2-api` and `up-core-types`.
-usubscription = ["up-l2-api", "up-core-types"]
+## generic over any `RpcClient`. Requires `communication-api` and `up-core-api`.
+usubscription = ["communication-api", "up-core-api"]
 
 #! ## Features for transport implementers
 ## The contracts a transport implements. The `UTransport` contracts come
@@ -63,8 +63,8 @@ usubscription = ["up-l2-api", "up-core-types"]
 transport-implementer-api = ["selected-wire-transport-core"]
 ## The *owned-frame* family: transports that exchange whole validated
 ## frames as owned values (experimental; additive to `UTransport`).
-## Requires `up-core-types`.
-owned-frame-transport = ["selected-wire-transport-core", "up-core-types"]
+## Requires `up-core-api`.
+owned-frame-transport = ["selected-wire-transport-core", "up-core-api"]
 ## The zero-copy transport family: loans, leases, the
 ## `UZeroCopyTransport`/`UZeroCopyTransportCore` traits, and the typed
 ## API for initializing payloads directly inside uninitialized transmit
@@ -79,8 +79,8 @@ wire-implementer-api = ["selected-wire-codec-core"]
 # R2W split: ordinary selected-wire surfaces provide canonical field-block
 # metadata via selected-wire-codec-core and no longer pull protobuf metadata.
 ## Using a chosen wire's typed payload API over a capable transport.
-## Requires `up-core-types`.
-selected-wire-user-api = ["selected-wire-transport-adapter", "up-core-types"]
+## Requires `up-core-api`.
+selected-wire-user-api = ["selected-wire-transport-adapter", "up-core-api"]
 ## Implicit protobuf payload mapping
 ## (`UMessageBuilder::build_with_protobuf_payload`,
 ## `UPayload::try_from_protobuf`) for any `protobuf`-generated type.
@@ -88,7 +88,7 @@ protobuf-support = ["dep:protobuf"]
 ## uProtocol's standard protobuf message definitions (e.g. `UStatus` as
 ## a wire type) — the name mirrors up-spec's `up-core-api` module.
 ## Requires `protobuf-support`.
-up-core-types = ["protobuf-support"]
+up-core-api = ["protobuf-support"]
 ## Mapping `UMessage`s to and from [CloudEvents](https://cloudevents.io/)
 ## per the [uProtocol CloudEvents mapping](https://github.com/eclipse-uprotocol/up-spec/blob/v1.6.0-alpha.7/up-l1/cloudevents.adoc).
 ## Requires `protobuf-support`.
@@ -97,8 +97,8 @@ cloudevents = ["protobuf-support"]
 #! ## Supporting features
 ## Implementing an [Eclipse Symphony](https://github.com/eclipse-symphony)
 ## Target Provider as a uService (generic over any `RpcServer`). Requires
-## `up-l2-api` and `up-core-types`.
-symphony = ["up-l2-api", "up-core-types", "dep:serde", "dep:serde_json", "dep:symphony"]
+## `communication-api` and `up-core-api`.
+symphony = ["communication-api", "up-core-api", "dep:serde", "dep:serde_json", "dep:symphony"]
 ## Mock transports and role mocks for unit tests, plus the in-memory
 ## `InMemoryZeroCopyTransport` and `InMemoryOwnedTransport` loopbacks
 ## the guide's family tutorials run on.
@@ -113,7 +113,7 @@ payload-contract-fixtures = ["protobuf-wire", "zero-copy-transport", "dep:serde"
 payload-contract-large-fixtures = ["payload-contract-fixtures"]
 payload-contract-simulator-fixtures = ["payload-contract-large-fixtures"]
 perf-diagnostics = ["zero-copy-transport"]
-protobuf-wire = ["up-core-types"]
+protobuf-wire = ["up-core-api"]
 selected-wire-codec-core = []
 selected-wire-transport-adapter = ["selected-wire-transport-core"]
 selected-wire-transport-core = ["selected-wire-codec-core"]
@@ -177,21 +177,21 @@ denylist = ["test-util"]
 skip_feature_sets = [
     # the features on the left side include the features on the right side,
     # so there is no need to test them together
-    ["up-core-types", "protobuf-support"],
+    ["up-core-api", "protobuf-support"],
     ["cloudevents", "protobuf-support"],
-    ["symphony", "up-l2-api"],
-    ["symphony", "up-core-types"],
-    ["communication", "up-l2-api"],
-    ["communication", "up-core-types"],
+    ["symphony", "communication-api"],
+    ["symphony", "up-core-api"],
+    ["communication", "communication-api"],
+    ["communication", "up-core-api"],
     ["communication", "protobuf-support"],
     ["communication", "usubscription"],
-    ["usubscription", "up-l2-api"],
-    ["usubscription", "up-core-types"],
+    ["usubscription", "communication-api"],
+    ["usubscription", "up-core-api"],
     ["usubscription", "protobuf-support"],
-    ["udiscovery", "up-l2-api"],
-    ["udiscovery", "up-core-types"],
+    ["udiscovery", "communication-api"],
+    ["udiscovery", "up-core-api"],
     ["udiscovery", "protobuf-support"],
-    ["owned-frame-transport", "up-core-types"],
+    ["owned-frame-transport", "up-core-api"],
     ["owned-frame-transport", "selected-wire-transport-core"],
     ["transport-implementer-api", "selected-wire-transport-core"],
     ["wire-implementer-api", "selected-wire-codec-core"],
@@ -220,12 +220,12 @@ required-features = ["symphony", "util"]
 [[test]]
 name = "tck_uuri"
 harness = false   # allows Cucumber to print output instead of libtest
-required-features = ["up-core-types"]
+required-features = ["up-core-api"]
 
 [[test]]
 name = "tck_uuid"
 harness = false   # allows Cucumber to print output instead of libtest
-required-features = ["up-core-types"]
+required-features = ["up-core-api"]
 
 [[test]]
 name = "payload_contract"
@@ -257,7 +257,7 @@ required-features = ["selected-wire-user-api"]
 
 [[test]]
 name = "zero_copy_uninit_surface_trybuild"
-required-features = ["selected-wire-user-api", "transport-implementer-api", "up-l2-api", "zero-copy-transport"]
+required-features = ["selected-wire-user-api", "transport-implementer-api", "communication-api", "zero-copy-transport"]
 
 [[test]]
 name = "validation_typestate_trybuild"
