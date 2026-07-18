@@ -1,5 +1,3 @@
-//! Shared fixtures for the TCK conformance suites.
-
 /********************************************************************************
  * Copyright (c) 2025 Contributors to the Eclipse Foundation
  *

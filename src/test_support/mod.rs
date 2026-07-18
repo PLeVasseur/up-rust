@@ -13,6 +13,8 @@
 
 //! Test, fake, proof, and fixture support. These are not production transport evidence.
 
+#[cfg(feature = "payload-contract-fixtures")]
+pub use crate::bench_fixtures;
 #[cfg(feature = "test-util")]
 pub use crate::utransport::MockLocalUriProvider;
 #[cfg(all(feature = "test-util", feature = "zero-copy-transport"))]

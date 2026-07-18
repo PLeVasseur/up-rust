@@ -131,7 +131,7 @@ pub use umessage::{
 };
 
 mod uri;
-pub use uri::{UUri, UUriError};
+pub use uri::{ExactUUri, UUri, UUriError};
 
 mod ustatus;
 pub use ustatus::{UAny, UCode, UStatus};
@@ -212,6 +212,9 @@ pub use payload::stable::{
 mod zero_copy;
 #[cfg(all(feature = "test-util", feature = "zero-copy-transport"))]
 pub use zero_copy::InMemoryZeroCopyTransport;
+#[cfg(feature = "perf-diagnostics")]
+#[doc(hidden)]
+pub use zero_copy::UninitStableSendPhases;
 #[cfg(feature = "zero-copy-transport")]
 pub use zero_copy::{
     validate_tx_buffer_for_transport, verify_tx_buffer_payload_layout,
@@ -224,7 +227,7 @@ pub use zero_copy::{
 #[cfg(feature = "zero-copy-transport")]
 pub use zero_copy::{UZeroCopyUninitTransport, UZeroCopyUninitTransportExt};
 
-#[cfg(any(test, feature = "test-util"))]
+#[cfg(any(test, feature = "test-util", feature = "payload-contract-fixtures"))]
 pub mod test_support;
 
 /// Derives for stable payload types.
@@ -436,3 +439,6 @@ pub mod guide {
     #[doc = include_str!("guide/trait_map.md")]
     pub mod trait_map {}
 }
+
+#[cfg(feature = "payload-contract-fixtures")]
+pub mod bench_fixtures;

@@ -42,6 +42,7 @@ communication = [
     "up-l2-rpc-client",
     "up-l2-rpc-server",
 ]
+payload-contract-fixtures = ["protobuf-wire", "zero-copy-transport", "dep:serde", "dep:serde_json", "dep:sha2"]
 protobuf-support = ["dep:protobuf"]
 symphony = ["up-l2-rpc-server", "dep:serde", "dep:serde_json", "dep:symphony"]
 test-util = ["dep:mockall"]
@@ -55,6 +56,10 @@ selected-wire-transport-adapter = ["selected-wire-transport-core"]
 selected-wire-codec-core = []
 wire-implementer-api = ["selected-wire-codec-core"]
 selected-wire-user-api = ["selected-wire-transport-adapter", "up-core-api"]
+payload-contract-large-fixtures = ["payload-contract-fixtures"]
+payload-contract-simulator-fixtures = ["payload-contract-large-fixtures"]
+perf-diagnostics = ["zero-copy-transport"]
+protobuf-wire = ["up-core-api"]
 zero-copy-transport = []
 owned-frame-transport = ["selected-wire-transport-core", "up-core-api"]
 communication-api = ["dep:thiserror"]
@@ -78,7 +83,7 @@ mockall = { version = "0.13", optional = true }
 protobuf = { version = "3.7.2", features = ["with-bytes"], optional = true }
 rand = { version = "0.10.1" }
 regex = { version = "1.11" }
-serde = { version = "1.0.228", optional = true }
+serde = { version = "1.0.228", features = ["derive"], optional = true }
 serde_json = { version = "1.0.150", optional = true }
 symphony = { version = "0.1.5", optional = true }
 thiserror = { version = "1.0.69", optional = true }
@@ -88,6 +93,7 @@ uriparse = { version = "0.6" }
 uuid-simd = { version = "0.8", default-features = false, features = ["std", "detect"] }
 
 document-features = { version = "0.2", optional = true }
+sha2 = { version = "0.11", optional = true }
 up-rust-macros = { path = "macros", version = "0.10.0-SNAPSHOT" }
 
 [build-dependencies]
@@ -95,6 +101,8 @@ protobuf-codegen = { version = "3.7.2" }
 protoc-bin-vendored = { version = "3.2" }
 
 [dev-dependencies]
+trybuild = { version = "1.0.114" }
+criterion = { version = "0.5.1", features = ["csv_output"] }
 clap = { version = "4.6.1" }
 cucumber = { version = "0.23.0", features = ["output-junit"] }
 hex = { version = "0.4.3" }
@@ -206,3 +214,70 @@ wildcard_enum_match_arm = "deny"
 unneeded_field_pattern = "deny"
 fn_params_excessive_bools = "deny"
 must_use_candidate = "allow"
+
+
+
+[[test]]
+name = "payload_contract"
+required-features = ["payload-contract-fixtures", "wire-implementer-api"]
+
+[[test]]
+name = "wire_metadata_conformance"
+required-features = ["wire-implementer-api", "up-core-api"]
+
+[[test]]
+name = "wire_metadata_golden"
+required-features = ["wire-implementer-api", "up-core-api"]
+
+[[test]]
+name = "wire_transport_adapter"
+required-features = ["selected-wire-user-api", "wire-implementer-api", "transport-implementer-api", "protobuf-wire", "zero-copy-transport"]
+
+[[test]]
+name = "wire_transport_trybuild"
+required-features = ["selected-wire-user-api", "wire-implementer-api", "transport-implementer-api", "protobuf-wire", "zero-copy-transport"]
+
+[[test]]
+name = "stable_container_miri"
+required-features = ["test-util", "zero-copy-transport"]
+
+[[test]]
+name = "role_firewall_trybuild"
+required-features = ["selected-wire-user-api"]
+
+[[test]]
+name = "role_module_compatibility"
+required-features = ["selected-wire-user-api", "wire-implementer-api", "transport-implementer-api", "owned-frame-transport", "zero-copy-transport"]
+
+[[test]]
+name = "zero_copy_uninit_surface_trybuild"
+required-features = ["selected-wire-user-api", "transport-implementer-api", "communication-api", "zero-copy-transport"]
+
+[[test]]
+name = "validation_typestate_trybuild"
+required-features = ["owned-frame-transport", "zero-copy-transport"]
+
+[[bench]]
+name = "selected_wire_metadata"
+harness = false
+required-features = ["selected-wire-user-api", "wire-implementer-api", "transport-implementer-api", "protobuf-wire", "zero-copy-transport"]
+
+[[bench]]
+name = "selected_wire_rx"
+harness = false
+required-features = ["selected-wire-user-api", "wire-implementer-api", "transport-implementer-api", "protobuf-wire", "zero-copy-transport"]
+
+[[bench]]
+name = "selected_wire_filter"
+harness = false
+required-features = ["selected-wire-user-api", "wire-implementer-api", "transport-implementer-api", "protobuf-wire", "zero-copy-transport"]
+
+[[bench]]
+name = "selected_wire_adapter_receive"
+harness = false
+required-features = ["selected-wire-user-api", "wire-implementer-api", "transport-implementer-api", "protobuf-wire", "zero-copy-transport"]
+
+[[bench]]
+name = "stable_payload_init"
+harness = false
+required-features = ["zero-copy-transport"]

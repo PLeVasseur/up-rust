@@ -57,6 +57,9 @@ pub use rx::*;
 pub use tests::InMemoryZeroCopyTransport;
 pub use tests::{UVecRxLease, UVecTxBuffer, UVecUninitTxBuffer};
 pub use transport::UZeroCopyUninitTransportImpl;
+#[cfg(feature = "perf-diagnostics")]
+#[doc(hidden)]
+pub use transport::UninitStableSendPhases;
 pub use transport::{UZeroCopyTransport, UZeroCopyTransportExt, UZeroCopyTransportImpl};
 #[cfg(feature = "zero-copy-transport")]
 pub use transport::{UZeroCopyUninitTransport, UZeroCopyUninitTransportExt};

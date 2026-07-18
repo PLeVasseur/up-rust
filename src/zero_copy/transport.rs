@@ -22,6 +22,43 @@ mod zero_copy_uninit_transport_sealed {
     pub trait Sealed {}
 }
 
+/// Send-side timings emitted by the hidden stable-payload diagnostic API.
+#[cfg(feature = "perf-diagnostics")]
+#[doc(hidden)]
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub struct UninitStableSendPhases {
+    pub prepare: std::time::Duration,
+    pub loan: std::time::Duration,
+    pub verify: std::time::Duration,
+    pub initialize: std::time::Duration,
+    pub witness: std::time::Duration,
+    pub commit: std::time::Duration,
+    pub total: std::time::Duration,
+    pub residual: std::time::Duration,
+}
+
+#[cfg(feature = "perf-diagnostics")]
+impl UninitStableSendPhases {
+    #[must_use]
+    pub fn accounted(self) -> std::time::Duration {
+        self.prepare + self.loan + self.verify + self.initialize + self.witness + self.commit
+    }
+
+    /// Measures the median back-to-back `Instant` acquisition cost.
+    #[must_use]
+    pub fn calibrate_clock_overhead(iterations: usize) -> std::time::Duration {
+        let mut samples = Vec::with_capacity(iterations.max(1));
+        for _ in 0..iterations.max(1) {
+            let start = std::time::Instant::now();
+            samples.push(start.elapsed());
+        }
+        samples.sort_unstable();
+        *samples
+            .get(samples.len() / 2)
+            .expect("clock calibration always records at least one sample")
+    }
+}
+
 #[cfg(feature = "zero-copy-transport")]
 fn initialize_stable_tx_payload<B, T>(
     buffer: &mut B,
@@ -496,6 +533,92 @@ pub trait UZeroCopyUninitTransportExt: UZeroCopyUninitTransport {
         // for the same loan slot after all fields and padding were initialized.
         let buffer = unsafe { buffer.assume_payload_init() };
         self.send_zero_copy(buffer).await
+    }
+
+    /// Diagnostic variant of [`Self::send_uninit_stable_payload_as`].
+    #[cfg(feature = "perf-diagnostics")]
+    #[doc(hidden)]
+    async fn send_uninit_stable_payload_as_phased<T>(
+        &self,
+        metadata: UFrameMetadata,
+        init: impl for<'payload> FnOnce(
+                StablePayloadInitContext<'payload, T>,
+            )
+                -> Result<InitializedStablePayload<'payload, T>, UWireError>
+            + Send,
+    ) -> Result<UninitStableSendPhases, UStatus>
+    where
+        T: StablePayloadInit + Send,
+    {
+        let total_start = std::time::Instant::now();
+
+        let phase_start = std::time::Instant::now();
+        let metadata = metadata
+            .with_payload_encoding(StableContainerPayload::<T>::encoding())
+            .map_err(frame_metadata_error)?;
+        let layout_len = std::mem::size_of::<T>();
+        let layout_align = std::mem::align_of::<T>();
+        let spec = UTxLoanSpec::payload(metadata, layout_len, layout_align)?;
+        let prepare = phase_start.elapsed();
+
+        let phase_start = std::time::Instant::now();
+        let mut buffer = self.loan_uninit_tx(spec).await?;
+        let loan = phase_start.elapsed();
+
+        let phase_start = std::time::Instant::now();
+        verify_uninit_tx_buffer_payload_layout(&mut buffer, layout_len, layout_align)?;
+        let verify = phase_start.elapsed();
+
+        let phase_start = std::time::Instant::now();
+        initialize_stable_tx_payload(&mut buffer, init)?;
+        let initialize = phase_start.elapsed();
+
+        let phase_start = std::time::Instant::now();
+        // SAFETY: the shared initializer kernel returned a completion proof for
+        // this same verified loan after initializing all fields and padding.
+        let buffer = unsafe { buffer.assume_payload_init() };
+        let witness = phase_start.elapsed();
+
+        let phase_start = std::time::Instant::now();
+        self.send_zero_copy(buffer).await?;
+        let commit = phase_start.elapsed();
+        let total = total_start.elapsed();
+        let accounted = prepare + loan + verify + initialize + witness + commit;
+
+        Ok(UninitStableSendPhases {
+            prepare,
+            loan,
+            verify,
+            initialize,
+            witness,
+            commit,
+            total,
+            residual: total.saturating_sub(accounted),
+        })
+    }
+
+    /// Selected-wire diagnostic variant of [`Self::send_uninit_stable_payload`].
+    #[cfg(all(
+        feature = "perf-diagnostics",
+        feature = "selected-wire-transport-adapter"
+    ))]
+    #[doc(hidden)]
+    async fn send_uninit_stable_payload_phased<T>(
+        &self,
+        metadata: UFrameMetadata,
+        init: impl for<'payload> FnOnce(
+                StablePayloadInitContext<'payload, T>,
+            )
+                -> Result<InitializedStablePayload<'payload, T>, UWireError>
+            + Send,
+    ) -> Result<UninitStableSendPhases, UStatus>
+    where
+        Self: UHasWire,
+        Self::Wire: UWirePayload<T, Codec = StableContainerPayload<T>>,
+        T: StablePayloadInit + Send,
+    {
+        self.send_uninit_stable_payload_as_phased::<T>(metadata, init)
+            .await
     }
 }
 
