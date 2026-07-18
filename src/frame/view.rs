@@ -19,11 +19,15 @@
 //! it, and [`validate_frame_view_for_transport`] is the shared boundary check
 //! a transport runs before handing a frame to the caller.
 
+#[cfg(feature = "owned-frame-transport")]
+use std::io::Cursor;
 use std::io::Read;
 
 use crate::frame::metadata::{UFrameMetadata, UFrameMetadataError};
 use crate::payload::codec::{PayloadCodec, ReadDecodePayload};
 use crate::payload::UWireError;
+#[cfg(feature = "owned-frame-transport")]
+use crate::UOwnedFrame;
 use crate::{UCode, UStatus};
 
 fn invalid_argument(message: impl Into<String>) -> UStatus {
@@ -111,6 +115,42 @@ pub trait UFrameView {
             return Err(UWireError::MissingPayload);
         }
         C::decode_payload_from_reader(self.payload_reader(), self.payload_len())
+    }
+}
+
+#[cfg(feature = "owned-frame-transport")]
+impl UFrameView for UOwnedFrame {
+    type PayloadReader<'a>
+        = Cursor<&'a [u8]>
+    where
+        Self: 'a;
+    type PayloadSlices<'a>
+        = std::option::IntoIter<&'a [u8]>
+    where
+        Self: 'a;
+
+    fn metadata(&self) -> &UFrameMetadata {
+        self.metadata()
+    }
+
+    fn payload_len(&self) -> usize {
+        self.payload_bytes().len()
+    }
+
+    fn has_payload(&self) -> bool {
+        UOwnedFrame::has_payload(self)
+    }
+
+    fn payload_reader(&self) -> Self::PayloadReader<'_> {
+        Cursor::new(self.payload_bytes())
+    }
+
+    fn payload_slices(&self) -> Self::PayloadSlices<'_> {
+        self.payload().map(bytes::Bytes::as_ref).into_iter()
+    }
+
+    fn try_contiguous_payload(&self) -> Option<&[u8]> {
+        self.payload().map(bytes::Bytes::as_ref)
     }
 }
 
