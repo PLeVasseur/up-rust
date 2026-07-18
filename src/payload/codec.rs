@@ -442,10 +442,23 @@ fn read_exact_payload<R: Read>(mut reader: R, payload_len: usize) -> Result<Vec<
 
 #[cfg(test)]
 mod tests {
+    #[cfg(feature = "zero-copy-transport")]
+    use std::io::Chain;
+    #[cfg(any(feature = "protobuf-support", feature = "zero-copy-transport"))]
+    use std::io::Cursor;
+
     #[cfg(feature = "protobuf-support")]
     use protobuf::well_known_types::wrappers::StringValue;
 
+    #[cfg(feature = "zero-copy-transport")]
+    use crate::{UFrameMetadata, UFrameView, UMessageBuilder, UUri};
+
     use super::*;
+
+    #[cfg(feature = "zero-copy-transport")]
+    fn topic() -> UUri {
+        UUri::try_from_parts("vehicle", 0x4210, 0x01, 0x9000).expect("topic")
+    }
 
     #[cfg(feature = "protobuf-support")]
     fn message(value: &str) -> StringValue {
@@ -507,5 +520,82 @@ mod tests {
             ProtobufAnyPayload::encoding(),
             PayloadEncoding::PROTOBUF_WRAPPED_IN_ANY
         );
+    }
+
+    #[cfg(feature = "protobuf-support")]
+    #[test]
+    fn protobuf_payload_reader_decode_round_trips() {
+        let input = message("protobuf reader payload");
+        let encoded = ProtobufPayload::encode_payload_owned(&input).expect("encode protobuf");
+
+        let decoded: StringValue = ProtobufPayload::decode_payload_from_reader(
+            Cursor::new(encoded.as_ref()),
+            encoded.len(),
+        )
+        .expect("decode protobuf from reader");
+
+        assert_eq!(decoded.value, input.value);
+    }
+
+    #[cfg(feature = "zero-copy-transport")]
+    #[test]
+    fn segmented_frame_view_decodes_from_reader_without_contiguous_payload() {
+        let message = UMessageBuilder::publish(topic()).build().expect("message");
+        let metadata = crate::frame::metadata::try_project_attributes_to_frame_metadata(
+            message.attributes(),
+            Some(PayloadEncoding::RAW),
+        )
+        .expect("metadata");
+        let frame = SegmentedFrame {
+            metadata,
+            first: b"seg".to_vec(),
+            second: b"mented".to_vec(),
+        };
+
+        let decoded: Vec<u8> = frame
+            .decode_payload_from_reader_as::<RawBytes, _>()
+            .expect("decode segmented payload");
+
+        assert_eq!(decoded, b"segmented".as_slice());
+        assert!(frame.try_contiguous_payload().is_none());
+    }
+
+    #[cfg(feature = "zero-copy-transport")]
+    struct SegmentedFrame {
+        metadata: UFrameMetadata,
+        first: Vec<u8>,
+        second: Vec<u8>,
+    }
+
+    #[cfg(feature = "zero-copy-transport")]
+    impl UFrameView for SegmentedFrame {
+        type PayloadReader<'a>
+            = Chain<Cursor<&'a [u8]>, Cursor<&'a [u8]>>
+        where
+            Self: 'a;
+        type PayloadSlices<'a>
+            = std::array::IntoIter<&'a [u8], 2>
+        where
+            Self: 'a;
+
+        fn metadata(&self) -> &UFrameMetadata {
+            &self.metadata
+        }
+
+        fn payload_len(&self) -> usize {
+            self.first.len() + self.second.len()
+        }
+
+        fn has_payload(&self) -> bool {
+            true
+        }
+
+        fn payload_reader(&self) -> Self::PayloadReader<'_> {
+            Cursor::new(self.first.as_slice()).chain(Cursor::new(self.second.as_slice()))
+        }
+
+        fn payload_slices(&self) -> Self::PayloadSlices<'_> {
+            [self.first.as_slice(), self.second.as_slice()].into_iter()
+        }
     }
 }

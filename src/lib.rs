@@ -50,6 +50,10 @@ None of the following features are enabled by default, so you can pick and choos
 
 */
 
+// The stable-payload derives expand absolute ::up_rust paths; alias the
+// crate to its external name so they resolve in-crate too.
+extern crate self as up_rust;
+
 #[cfg(feature = "cloudevents")]
 mod cloudevents;
 #[cfg(feature = "cloudevents")]
@@ -127,7 +131,6 @@ pub use frame::{validate_frame_view_for_transport, UFrameView};
 
 /// Payload codec contracts shared by the frame families.
 pub mod payload;
-pub use payload::codec::{PayloadCodec, PayloadLayout, ReadDecodePayload};
 pub use payload::UWireError;
 
 // ---- owned-frame transport family ----
@@ -144,3 +147,48 @@ pub use owned_frame::UOwnedFrame;
 
 #[cfg(feature = "owned-frame-transport")]
 pub use utransport::{UOwnedListener, UOwnedTransport, UOwnedTransportImpl};
+
+// ---- zero-copy transport family ----
+
+pub use payload::codec::{
+    DecodePayload, EncodePayload, PayloadCodec, PayloadFormat, PayloadLayout, ProtobufPayload,
+    ReadDecodePayload,
+};
+pub use payload::loan::LoanPayload;
+#[cfg(feature = "zero-copy-transport")]
+pub use payload::loan::{LoanUninitPayload, LoanedInitPayload, LoanedUninitPayload};
+pub use payload::stable::{
+    assert_stable_payload_byte_backed_uninit, stable_payload_supports_byte_backed_uninit,
+    ByteBackedStablePayload, InitializedStablePayload, StableContainerPayload,
+    StableContainerPayloadInfo, StablePayload, StablePayloadInit, StablePayloadInitContext,
+};
+
+#[cfg(feature = "zero-copy-transport")]
+mod zero_copy;
+#[cfg(all(feature = "test-util", feature = "zero-copy-transport"))]
+pub use zero_copy::InMemoryZeroCopyTransport;
+#[cfg(feature = "zero-copy-transport")]
+pub use zero_copy::{
+    validate_tx_buffer_for_transport, verify_tx_buffer_payload_layout,
+    verify_uninit_tx_buffer_payload_layout, LoanedPayload, LoanedPayloadUninitMut,
+    PayloadAlignment, PayloadLoanProvenance, ULoanedContiguousZeroCopyRxFrame, UTxBuffer,
+    UTxLoanSpec, UTxPayloadSpec, UUninitTxBuffer, UVecRxLease, UVecTxBuffer, UVecUninitTxBuffer,
+    UZeroCopyListener, UZeroCopyRxLease, UZeroCopyTransport, UZeroCopyTransportExt,
+    UZeroCopyTransportImpl, UZeroCopyUninitTransportImpl,
+};
+#[cfg(feature = "zero-copy-transport")]
+pub use zero_copy::{UZeroCopyUninitTransport, UZeroCopyUninitTransportExt};
+
+#[cfg(any(test, feature = "test-util"))]
+pub mod test_support;
+
+/// Derives for stable payload types.
+pub use up_rust_macros::{ByteBackedStablePayload, StablePayload, StablePayloadInit};
+
+#[doc(hidden)]
+pub mod __derive_support {
+    pub use crate::payload::stable::{
+        ByteBackedStablePayloadField, StablePayloadInitSet, StablePayloadInitSlot,
+        StablePayloadInitUnset,
+    };
+}

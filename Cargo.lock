@@ -1901,8 +1901,18 @@ dependencies = [
  "time",
  "tokio",
  "tracing",
+ "up-rust-macros",
  "uriparse",
  "uuid-simd",
+]
+
+[[package]]
+name = "up-rust-macros"
+version = "0.10.0-SNAPSHOT"
+dependencies = [
+ "proc-macro2",
+ "quote",
+ "syn",
 ]
 
 [[package]]
