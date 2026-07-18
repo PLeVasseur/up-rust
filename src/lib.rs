@@ -56,7 +56,7 @@ mod cloudevents;
 pub use cloudevents::{CloudEvent, CONTENT_TYPE_CLOUDEVENTS_PROTOBUF};
 
 // [impl->dsn~communication-layer-api-namespace~1]
-#[cfg(feature = "up-l2-api")]
+#[cfg(feature = "communication-api")]
 pub mod communication;
 
 #[cfg(any(feature = "udiscovery", feature = "usubscription"))]
@@ -98,7 +98,7 @@ pub use utransport::{MockLocalUriProvider, MockTransport, MockUListener};
 mod uuid;
 pub use uuid::UUID;
 
-#[cfg(feature = "up-core-types")]
+#[cfg(feature = "up-core-api")]
 // protoc-generated types, see build.rs
 pub(crate) mod up_core_api {
     include!(concat!(env!("OUT_DIR"), "/uprotocol/mod.rs"));

@@ -45,10 +45,16 @@ communication = [
 protobuf-support = ["dep:protobuf"]
 symphony = ["up-l2-rpc-server", "dep:serde", "dep:serde_json", "dep:symphony"]
 test-util = ["dep:mockall"]
-up-core-types = ["protobuf-support"]
-up-l2-api = ["dep:thiserror"]
-up-l2-notifier = ["up-l2-api"]
-up-l2-publisher = ["up-l2-api"]
+up-core-api = ["protobuf-support"]
+# Renamed from up-core-types: the feature gates the generated up_core_api
+# module, not the unconditional core types. The old name forwards.
+up-core-types = ["up-core-api"]
+communication-api = ["dep:thiserror"]
+# Renamed from up-l2-api to match the communication layer's name in the
+# guide. The old name forwards.
+up-l2-api = ["communication-api"]
+up-l2-notifier = ["communication-api"]
+up-l2-publisher = ["communication-api"]
 up-l2-subscriber = ["up-l2-api", "usubscription"]
 up-l2-rpc-client = ["up-l2-api", "up-core-types", "tokio/sync", "tokio/time"]
 up-l2-rpc-server = ["up-l2-api", "up-core-types", "tokio/sync", "tokio/time"]
@@ -83,6 +89,8 @@ cucumber = { version = "0.23.0", features = ["output-junit"] }
 hex = { version = "0.4.3" }
 mockall = { version = "0.13.1" }
 test-case = { version = "3.3.1" }
+pretty_assertions = { version = "1.4" }
+proptest = { version = "1.5" }
 time = { version = "0.3.47" }
 tokio = { version = "1.45.1", default-features = false, features = [
     "macros",
@@ -108,34 +116,34 @@ skip_feature_sets = [
     ["up-core-types", "protobuf-support"],
     ["cloudevents", "protobuf-support"],
     ["symphony", "up-l2-rpc-server"],
-    ["symphony", "up-l2-api"],
+    ["symphony", "communication-api"],
     ["communication", "up-l2-notifier"],
     ["communication", "up-l2-publisher"],
     ["communication", "up-l2-subscriber"],
     ["communication", "up-l2-rpc-client"],
     ["communication", "up-l2-rpc-server"],
-    ["communication", "up-l2-api"],
+    ["communication", "communication-api"],
     ["communication", "up-core-types"],
     ["communication", "protobuf-support"],
     ["communication", "usubscription"],
-    ["up-l2-notifier", "up-l2-api"],
-    ["up-l2-publisher", "up-l2-api"],
-    ["up-l2-subscriber", "up-l2-api"],
+    ["up-l2-notifier", "communication-api"],
+    ["up-l2-publisher", "communication-api"],
+    ["up-l2-subscriber", "communication-api"],
     ["up-l2-subscriber", "usubscription"],
     ["up-l2-subscriber", "up-l2-rpc-client"],
     ["up-l2-subscriber", "up-core-types"],
-    ["up-l2-rpc-client", "up-l2-api"],
+    ["up-l2-rpc-client", "communication-api"],
     ["up-l2-rpc-client", "up-core-types"],
     ["up-l2-rpc-client", "protobuf-support"],
-    ["up-l2-rpc-server", "up-l2-api"],
+    ["up-l2-rpc-server", "communication-api"],
     ["up-l2-rpc-server", "up-core-types"],
     ["up-l2-rpc-server", "protobuf-support"],
     ["usubscription", "up-l2-rpc-client"],
-    ["usubscription", "up-l2-api"],
+    ["usubscription", "communication-api"],
     ["usubscription", "up-core-types"],
     ["usubscription", "protobuf-support"],
     ["udiscovery", "up-l2-rpc-client"],
-    ["udiscovery", "up-l2-api"],
+    ["udiscovery", "communication-api"],
     ["udiscovery", "up-core-types"],
     ["udiscovery", "protobuf-support"],
 ]
@@ -170,6 +178,11 @@ harness = false                       # allows Cucumber to print output instead 
 required-features = ["up-core-types"]
 
 [lints.rust]
+# every public item is documented; every public type is inspectable.
+# missing_copy_implementations is deliberately not enforced: implementing
+# Copy is a semver commitment we make per-type, not a hygiene default.
+missing_docs = "deny"
+missing_debug_implementations = "deny"
 # this prevents cargo from complaining about code blocks
 # excluded from tarpaulin coverage checks
 unexpected_cfgs = { level = "warn", check-cfg = ['cfg(tarpaulin_include)'] }
