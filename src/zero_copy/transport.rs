@@ -45,7 +45,7 @@ where
     Ok(())
 }
 
-/// *Role: implemented by transports whose API speaks the library's frame types; users call [`UZeroCopyTransport`](crate::UZeroCopyTransport) — see the trait map.*
+/// *Role: implemented by transports whose API speaks the library's frame types; users call [`UZeroCopyTransport`](crate::UZeroCopyTransport) — see the [trait map](crate::guide::trait_map).*
 ///
 /// Semantic native-frame implementation boundary for zero-copy transports.
 ///
@@ -122,7 +122,7 @@ pub trait UZeroCopyTransportImpl: Send + Sync {
 
 impl<T> zero_copy_transport_sealed::Sealed for T where T: UZeroCopyTransportImpl + ?Sized {}
 
-/// *Role: called by users of the zero-copy family; transports implement [`UZeroCopyTransportImpl`](crate::UZeroCopyTransportImpl) or the encoded core instead — see the trait map.*
+/// *Role: called by users of the zero-copy family; transports implement [`UZeroCopyTransportImpl`](crate::UZeroCopyTransportImpl) or the encoded core instead — see the [trait map](crate::guide::trait_map).*
 ///
 /// The zero-copy transport capability API.
 #[async_trait]
@@ -254,7 +254,7 @@ where
     }
 }
 
-/// *Role: free blanket methods on every zero-copy transport; never implemented by hand — see the trait map.*
+/// *Role: free blanket methods on every zero-copy transport; never implemented by hand — see the [trait map](crate::guide::trait_map).*
 ///
 /// Convenience methods for zero-copy transports with initialized TX storage.
 #[async_trait]
@@ -325,7 +325,7 @@ pub trait UZeroCopyTransportExt: UZeroCopyTransport {
 
 impl<T> UZeroCopyTransportExt for T where T: UZeroCopyTransport + ?Sized {}
 
-/// *Role: free blanket methods for typed initialization into uninitialized loans; never implemented by hand — see the trait map.*
+/// *Role: free blanket methods for typed initialization into uninitialized loans; never implemented by hand — see the [trait map](crate::guide::trait_map).*
 ///
 /// Convenience methods for zero-copy transports with uninitialized TX storage.
 #[cfg(feature = "zero-copy-transport")]
@@ -502,7 +502,7 @@ pub trait UZeroCopyUninitTransportExt: UZeroCopyUninitTransport {
 #[cfg(feature = "zero-copy-transport")]
 impl<T> UZeroCopyUninitTransportExt for T where T: UZeroCopyUninitTransport + ?Sized {}
 
-/// *Role: implemented by transports that can lend uninitialized storage — see the trait map.*
+/// *Role: implemented by transports that can lend uninitialized storage — see the [trait map](crate::guide::trait_map).*
 ///
 /// Implementation boundary for transports that can expose uninitialized TX payload storage.
 #[async_trait]
@@ -520,7 +520,7 @@ impl<T> zero_copy_uninit_transport_sealed::Sealed for T where
 {
 }
 
-/// *Role: called by users to obtain uninitialized loans; transports implement [`UZeroCopyUninitTransportImpl`](crate::UZeroCopyUninitTransportImpl) — see the trait map.*
+/// *Role: called by users to obtain uninitialized loans; transports implement [`UZeroCopyUninitTransportImpl`](crate::UZeroCopyUninitTransportImpl) — see the [trait map](crate::guide::trait_map).*
 ///
 /// Optional zero-copy capability for transports that can expose uninitialized TX payload storage.
 #[cfg(feature = "zero-copy-transport")]

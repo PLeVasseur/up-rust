@@ -12,43 +12,86 @@
  ********************************************************************************/
 
 /*!
-up-rust is the [Eclipse uProtocol&trade; Language Library](https://github.com/eclipse-uprotocol/up-spec/blob/v1.6.0-alpha.7/languages.adoc) for the
-Rust programming language.
+up-rust is the Rust language library for [Eclipse uProtocol&trade;](https://github.com/eclipse-uprotocol/up-spec/blob/v1.6.0-alpha.7/README.adoc) —
+a protocol that lets software components (in vehicles and beyond) publish
+data, subscribe to it, and call each other's services over whatever
+messaging technology a deployment happens to use: MQTT, Zenoh, DDS,
+shared memory, and more.
 
-This crate can be used to
+The idea in one sentence: **you write against one small messaging API, and
+the technology underneath stays swappable.**
 
-* implement uEntities that communicate with each other using the uProtocol [Communication Layer API](https://github.com/eclipse-uprotocol/up-spec/blob/v1.6.0-alpha.7/up-l2/api.adoc)
-  over one of the supported transport protocols.
-* implement support for an additional transport protocol by means of implementing the [Transport & Session Layer API](https://github.com/eclipse-uprotocol/up-spec/blob/v1.6.0-alpha.7/up-l1/README.adoc).
+## Your first message
+
+```rust,no_run
+use up_rust::{UMessageBuilder, UPayloadFormat, UTransport, UUri};
+
+async fn publish_engine_temp(transport: &dyn UTransport) -> Result<(), Box<dyn std::error::Error>> {
+    // Every message has a source address: authority / entity / version / resource.
+    let topic = UUri::try_from_parts("my-vehicle", 0x1_0001, 1, 0x8001)?;
+
+    let message = UMessageBuilder::publish(topic)
+        .build_with_payload("92.5", UPayloadFormat::Text)?;
+
+    transport.send(message).await?;
+    Ok(())
+}
+```
+
+That is the whole application-side model: build a [`UMessage`], hand it to
+a [`UTransport`] someone has configured, done. Receiving is the mirror
+image — register a [`UListener`] for the addresses you care about.
+
+## Which reader are you?
+
+| You want to… | Start at | Cargo features |
+| --- | --- | --- |
+| **Write an application** — publish, subscribe, or call/serve RPC | The role traits in [`communication`]: `Publisher`, `Subscriber`, `Notifier`, `RpcClient`, `RpcServer` — ready-made on top of any transport | `communication` |
+| **Connect a messaging technology** — make uProtocol run over your broker/bus | [`UTransport`] (start here), then the [`guide`]'s transport chapter for the richer frame-based options | `transport-implementer-api` |
+| **Add a payload encoding** — carry a new serialization format efficiently | The [`guide`]'s wire chapter and [`wire_implementer_api`] | `wire-implementer-api` |
+| **Move large payloads without copies** — camera frames, LiDAR scans, big tables | The typed path in the [transport chapter](crate::guide::applications::transport) (apps) or the [zero-copy tutorial](crate::guide::transports::zero_copy) (transports) | `zero-copy-transport` (+ your side's feature above) |
+
+The [`guide`] walks each path end to end with code.
+
+## Five words you'll meet everywhere
+
+* **uEntity** — any software component that talks uProtocol (an app, a
+  service, a sensor feed).
+* **Transport Layer ("up-L1")** — the layer that physically moves message
+  bytes; a *transport* is one implementation of it (Zenoh, MQTT, DDS, …).
+* **Communication Layer ("up-L2")** — the friendly role API
+  (publish/subscribe/RPC) built on top of any transport.
+* **Wire format** — how a payload is encoded into bytes (protobuf, CDR,
+  Arrow, …). Wires and transports are independent: any wire can ride any
+  capable transport.
+* **Zero-copy loan** — for large payloads, a transport can *lend* you its
+  own transmit buffer so you write data exactly once, directly where it
+  will be sent from. The receive side hands payloads out the same way, as
+  read-only *leases*.
+
+## Module map
+
+* [`communication`] — the up-L2 roles most applications use.
+* [`umessage`](UMessage), [`uri`](UUri), [`uattributes`](UAttributes) — the
+  core message model.
+* [`utransport`](UTransport) — the up-L1 contract transports implement.
+* [`wire`] and [`payload`] — wire identities and payload codecs.
+* [`frame`] — the validated frame model advanced transports exchange.
+* [`guide`] — tutorials for every audience above.
 
 ## Features
 
-None of the following features are enabled by default, so you can pick and choose which parts of the library you want to use by enabling the corresponding features. Note that some features depend on each other, so enabling one feature might automatically enable other features as well. For example, enabling `up-core-types` will also enable `protobuf-support` since the generated types require that.
-
-* `cloudevents` Enables support for mapping [crate::UMessage]s to/from [crate::CloudEvent]s using Protobuf Format according to the
-  [uProtocol specification](https://github.com/eclipse-uprotocol/up-spec/blob/v1.6.0-alpha.7/up-l1/cloudevents.adoc).
-* `communication` Enables default implementations for all [Communication Layer API](https://github.com/eclipse-uprotocol/up-spec/blob/v1.6.0-alpha.7/up-l2/api.adoc) traits on top of the [Transport & Session Layer API](https://github.com/eclipse-uprotocol/up-spec/blob/v1.6.0-alpha.7/up-l1/README.adoc).
-* `protobuf-support` Enables convenience functions on the Transport & Session as well as the Communcation Layer APIs for implicitly mapping objects to protobuf payloads on the fly. This is particularly useful for using protoc-generated types as payloads using the [message builder](crate::UMessageBuilder::build_with_protobuf_payload) or [payload constructor](crate::communication::UPayload::try_from_protobuf). The only requirement for the object types is that they implement the [crate::ProtobufMappable] trait. A blanket implementation for types generated by the `protobuf` crate is also provided. Note that it is still possible to use protobufs as payloads even without enabling this feature. The payload of a [crate::UMessage] can be set to an arbitrary byte array, so protobuf messages can be serialized to bytes and set as payload without any support from the library. Enabling this feature just adds some convenient helper functions for automatically handling the mapping to protobuf payloads. The examples also illustrate the usage of these helper functions.
-* `symphony` Enables support for implementing an [Eclipse Symphony](https://github.com/eclipse-symphony) Target Provider as a uService exposed via the Communication Layer API's [RPC Server](crate::communication::RpcServer).
-* `test-util` provides some useful mock implementations for testing. In particular, provides mock implementations of [UTransport] and Communication Layer API traits which make implementing unit tests a lot easier.
-* `up-core-types` Enables support for mapping the crate's public API types to protobufs as defined in the uProtocol specification. This includes, for example, the `UStatus` type which is used in the Communication Layer API for conveying errors. Enabling this feature also enables `protobuf-support` since the generated types require that.
-* `up-l2-api` Enables support for the [Communication Layer API](https://github.com/eclipse-uprotocol/up-spec/blob/v1.6.0-alpha.7/up-l2/api.adoc). This includes the trait definitions for the various roles defined by the API, such as [Notifier](crate::communication::Notifier), [Publisher](crate::communication::Publisher), [Subscriber](crate::communication::Subscriber), [RpcClient](crate::communication::RpcClient) and [RpcServer](crate::communication::RpcServer).
-* `up-l2-notifier` Enables a default implementation of the [Notifier](crate::communication::Notifier) trait on top of the Transport Layer API.
-* `up-l2-publisher` Enables a default implementation of the [Publisher](crate::communication::Publisher) trait on top of the Transport Layer API.
-* `up-l2-subscriber` Enables a default implementation of the [Subscriber](crate::communication::Subscriber) trait on top of the Transport Layer API.
-* `up-l2-rpc-client` Enables a default implementation of the [RpcClient](crate::communication::RpcClient) trait on top of the Transport Layer API.
-* `up-l2-rpc-server` Enables a default implementation of the [RpcServer](crate::communication::RpcServer) trait on top of the Transport Layer API.
-* `udiscovery` Enables support for types required to interact with [uDiscovery service](https://github.com/eclipse-uprotocol/up-spec/blob/v1.6.0-alpha.7/up-l3/udiscovery/v3/README.adoc)
-  implementations.
-* `usubscription` Enables support for types required to interact with [uSubscription service](https://github.com/eclipse-uprotocol/up-spec/blob/v1.6.0-alpha.7/up-l3/usubscription/v3/README.adoc)
-  implementations.
-* `util` provides some useful helper structs. In particular, provides a [local, in-memory UTransport](crate::local_transport::LocalTransport) for exchanging messages within a single process. This transport is also used by the examples illustrating usage of the Communication Layer API.
-
-## References
-
-* [uProtocol Specification](https://github.com/eclipse-uprotocol/up-spec/tree/v1.6.0-alpha.7)
+No feature is enabled by default; enable what your role needs. Each
+feature below silently enables everything it requires. Constrained
+publish-only builds need **no feature at all**: use the Transport Layer
+directly — it's the first example above, and it carries no protobuf and
+no tokio.
 
 */
+#![cfg_attr(feature = "document-features", doc = document_features::document_features!())]
+#![doc = "## References"]
+#![doc = ""]
+#![doc = "* [uProtocol Specification](https://github.com/eclipse-uprotocol/up-spec/tree/v1.6.0-alpha.7)"]
 
 // The stable-payload derives expand absolute ::up_rust paths; alias the
 // crate to its external name so they resolve in-crate too.
@@ -68,6 +111,8 @@ pub mod core;
 
 #[cfg(feature = "util")]
 pub mod local_transport;
+#[cfg(feature = "util")]
+pub use local_transport::LocalTransport;
 
 #[cfg(feature = "symphony")]
 pub mod symphony;
@@ -312,4 +357,82 @@ pub mod transport_implementer_api {
         UZeroCopyTransportCore, UZeroCopyUninitTransportCore,
     };
     pub use crate::{UEncodedRxFrame, UWireTransport};
+}
+
+// ---- the guide ----
+
+#[doc = include_str!("guide/README.md")]
+pub mod guide {
+    #[cfg_attr(
+        all(feature = "communication", feature = "util"),
+        doc = include_str!("guide/applications.md")
+    )]
+    #[cfg_attr(
+        not(all(feature = "communication", feature = "util")),
+        doc = "Enable `communication` and `util` for the runnable application guide."
+    )]
+    pub mod applications {
+        #[cfg_attr(
+            all(
+                feature = "communication",
+                feature = "util",
+                feature = "test-util",
+                feature = "selected-wire-user-api",
+                feature = "owned-frame-transport",
+                feature = "zero-copy-transport"
+            ),
+            doc = include_str!("guide/communication.md")
+        )]
+        #[cfg_attr(
+            not(all(
+                feature = "communication",
+                feature = "util",
+                feature = "test-util",
+                feature = "selected-wire-user-api",
+                feature = "owned-frame-transport",
+                feature = "zero-copy-transport"
+            )),
+            doc = "Enable the documented communication, transport-family and test features for the runnable communication guide."
+        )]
+        pub mod communication {}
+        #[doc = include_str!("guide/transport.md")]
+        pub mod transport {}
+    }
+    #[doc = include_str!("guide/transports.md")]
+    pub mod transports {
+        #[doc = include_str!("guide/utransport.md")]
+        pub mod utransport {}
+        #[cfg_attr(
+            feature = "owned-frame-transport",
+            doc = include_str!("guide/owned.md")
+        )]
+        #[cfg_attr(
+            not(feature = "owned-frame-transport"),
+            doc = "Enable `owned-frame-transport` for the runnable owned-frame guide."
+        )]
+        pub mod owned {}
+        #[cfg_attr(
+            all(
+                feature = "zero-copy-transport",
+                feature = "test-util",
+                feature = "transport-implementer-api",
+                feature = "selected-wire-user-api"
+            ),
+            doc = include_str!("guide/zero_copy.md")
+        )]
+        #[cfg_attr(
+            not(all(
+                feature = "zero-copy-transport",
+                feature = "test-util",
+                feature = "transport-implementer-api",
+                feature = "selected-wire-user-api"
+            )),
+            doc = "Enable the documented zero-copy, selected-wire, transport-implementer and test features for the runnable zero-copy guide."
+        )]
+        pub mod zero_copy {}
+    }
+    #[doc = include_str!("guide/wires.md")]
+    pub mod wires {}
+    #[doc = include_str!("guide/trait_map.md")]
+    pub mod trait_map {}
 }

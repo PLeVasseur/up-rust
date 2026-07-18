@@ -15,12 +15,12 @@ use super::*;
 
 pub use crate::frame::view::{validate_frame_view_for_transport, UFrameView};
 
-/// *Role: a received payload read in place; dropping it returns the storage — see the trait map.*
+/// *Role: a received payload read in place; dropping it returns the storage — see the [trait map](crate::guide::trait_map).*
 ///
 /// Receive-side zero-copy frame lease returned by a transport.
 pub trait UZeroCopyRxLease: UFrameView {}
 
-/// *Role: a receive lease over contiguous loan-backed storage; lets typed payloads be borrowed without copying — see the trait map.*
+/// *Role: a receive lease over contiguous loan-backed storage; lets typed payloads be borrowed without copying — see the [trait map](crate::guide::trait_map).*
 ///
 /// Receive lease that can expose a contiguous payload from loan-backed storage.
 pub trait ULoanedContiguousZeroCopyRxFrame: UZeroCopyRxLease {
@@ -66,7 +66,7 @@ pub trait ULoanedContiguousZeroCopyRxFrame: UZeroCopyRxLease {
     }
 }
 
-/// *Role: implemented by applications to receive zero-copy leases — see the trait map.*
+/// *Role: implemented by applications to receive zero-copy leases — see the [trait map](crate::guide::trait_map).*
 ///
 /// A handler for processing zero-copy receive leases.
 #[async_trait]

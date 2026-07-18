@@ -446,3 +446,35 @@ impl UPayload {
         crate::umessage::deserialize_protobuf_bytes(&self.payload, &self.payload_format)
     }
 }
+
+#[cfg(any(
+    all(
+        feature = "owned-frame-transport",
+        feature = "usubscription",
+        feature = "selected-wire-transport-core"
+    ),
+    all(
+        feature = "selected-wire-transport-adapter",
+        feature = "communication-api",
+        feature = "zero-copy-transport",
+        feature = "usubscription"
+    )
+))]
+pub(crate) fn validate_listener_topic(topic: &crate::UUri) -> Result<(), RegistrationError> {
+    topic
+        .verify_no_wildcards()
+        .map_err(|error| RegistrationError::InvalidFilter(error.to_string()))
+}
+
+#[cfg(all(
+    feature = "owned-frame-transport",
+    feature = "usubscription",
+    feature = "selected-wire-transport-core"
+))]
+pub mod owned;
+#[cfg(all(
+    feature = "selected-wire-transport-adapter",
+    feature = "communication-api",
+    feature = "zero-copy-transport"
+))]
+pub mod zero_copy;

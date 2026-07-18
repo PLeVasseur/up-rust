@@ -259,7 +259,7 @@ impl<S> UTxLoanSpec<S> {
     }
 }
 
-/// *Role: transmit storage a zero-copy transport lends; write the payload in place, then commit — see the trait map.*
+/// *Role: transmit storage a zero-copy transport lends; write the payload in place, then commit — see the [trait map](crate::guide::trait_map).*
 ///
 /// Mutable transmit storage reserved from a zero-copy transport.
 pub trait UTxBuffer {
@@ -273,7 +273,7 @@ pub trait UTxBuffer {
     fn payload_mut(&mut self) -> &mut [u8];
 }
 
-/// *Role: an uninitialized transmit loan; filled safely via the typed init API — see the trait map.*
+/// *Role: an uninitialized transmit loan; filled safely via the typed init API — see the [trait map](crate::guide::trait_map).*
 ///
 /// Mutable transmit storage whose application payload bytes are not yet initialized.
 pub trait UUninitTxBuffer {

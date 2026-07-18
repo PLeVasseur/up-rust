@@ -596,7 +596,7 @@ where
     async fn on_receive_encoded_zero_copy(&self, frame: Rx);
 }
 
-/// *Role: implemented by transports that stay a dumb byte pipe; [`UWireTransport`](crate::UWireTransport) composes wires and codecs above it (recommended default) — see the trait map.*
+/// *Role: implemented by transports that stay a dumb byte pipe; [`UWireTransport`](crate::UWireTransport) composes wires and codecs above it (recommended default) — see the [trait map](crate::guide::trait_map).*
 ///
 #[cfg(feature = "zero-copy-transport")]
 /// Encoded physical zero-copy mechanics implemented by product transports.
@@ -1039,7 +1039,7 @@ pub trait UEncodedOwnedListener: Send + Sync {
     async fn on_receive_encoded_owned(&self, frame: EncodedOwnedFrame);
 }
 
-/// *Role: implemented by transports carrying already-encoded owned frames; the wire adapter composes above it — see the trait map.*
+/// *Role: implemented by transports carrying already-encoded owned frames; the wire adapter composes above it — see the [trait map](crate::guide::trait_map).*
 ///
 #[cfg(feature = "owned-frame-transport")]
 /// Encoded physical owned-frame mechanics implemented by product transports.

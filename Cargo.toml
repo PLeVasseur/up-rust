@@ -87,6 +87,7 @@ tracing = { version = "0.1", default-features = false, features = ["log", "std"]
 uriparse = { version = "0.6" }
 uuid-simd = { version = "0.8", default-features = false, features = ["std", "detect"] }
 
+document-features = { version = "0.2", optional = true }
 up-rust-macros = { path = "macros", version = "0.10.0-SNAPSHOT" }
 
 [build-dependencies]

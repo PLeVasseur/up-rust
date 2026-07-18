@@ -78,7 +78,7 @@ pub fn verify_filter_criteria(
 /// Implementations may use arbitrary mechanisms to determine the information that
 /// is necessary for creating URIs, e.g. environment variables, configuration files etc.
 // [impl->dsn~localuriprovider-declaration~1]
-/// *Role: standalone utility answering "what is my address?"; implemented per uEntity, consumed by the roles — see the trait map.*
+/// *Role: standalone utility answering "what is my address?"; implemented per uEntity, consumed by the roles — see the [trait map](crate::guide::trait_map).*
 ///
 #[cfg_attr(any(test, feature = "test-util"), mockall::automock)]
 pub trait LocalUriProvider: Send + Sync {
@@ -176,7 +176,7 @@ impl From<&UUri> for StaticUriProvider {
 /// Please refer to the [uProtocol Transport Layer specification](https://github.com/eclipse-uprotocol/up-spec/blob/v1.6.0-alpha.7/up-l1/README.adoc)
 /// for details.
 // [impl->dsn~ulistener-declaration~1]
-/// *Role: implemented by applications to receive `UTransport`-family [`UMessage`](crate::UMessage)s; registered on a [`UTransport`](crate::UTransport) — see the trait map.*
+/// *Role: implemented by applications to receive `UTransport`-family [`UMessage`](crate::UMessage)s; registered on a [`UTransport`](crate::UTransport) — see the [trait map](crate::guide::trait_map).*
 ///
 #[cfg_attr(any(test, feature = "test-util"), mockall::automock)]
 #[async_trait]
@@ -204,7 +204,7 @@ pub trait UListener: Send + Sync {
 /// Please refer to the [uProtocol Transport Layer specification](https://github.com/eclipse-uprotocol/up-spec/blob/v1.6.0-alpha.7/up-l1/README.adoc)
 /// for details.
 // [impl->dsn~utransport-declaration~1]
-/// *Role: implemented by transports; called by applications (usually via the [`communication`](crate::communication) roles) — see the trait map.*
+/// *Role: implemented by transports; called by applications (usually via the [`communication`](crate::communication) roles) — see the [trait map](crate::guide::trait_map).*
 ///
 #[async_trait]
 pub trait UTransport: Send + Sync {
@@ -387,7 +387,7 @@ fn owned_listener_for_unregister(
         .unwrap_or(fallback)
 }
 
-/// *Role: implemented by applications to receive owned frames — see the trait map.*
+/// *Role: implemented by applications to receive owned frames — see the [trait map](crate::guide::trait_map).*
 ///
 /// Listener for experimental owned native-frame transports.
 #[cfg(feature = "owned-frame-transport")]
@@ -398,9 +398,9 @@ pub trait UOwnedListener: Send + Sync {
     async fn on_receive_owned(&self, frame: UOwnedFrame);
 }
 
-/// *Role: implemented by transports offering the owned-frame family; users call [`UOwnedTransport`](crate::UOwnedTransport) — see the trait map.*
+/// *Role: implemented by transports offering the owned-frame family; users call [`UOwnedTransport`](crate::UOwnedTransport) — see the [trait map](crate::guide::trait_map).*
 ///
-/// *Role: called by users of the owned-frame family; transports implement [`UOwnedTransportImpl`](crate::UOwnedTransportImpl) instead — see the trait map.*
+/// *Role: called by users of the owned-frame family; transports implement [`UOwnedTransportImpl`](crate::UOwnedTransportImpl) instead — see the [trait map](crate::guide::trait_map).*
 ///
 /// Implementation boundary for experimental owned native-frame transports.
 ///

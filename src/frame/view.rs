@@ -62,7 +62,7 @@ pub(crate) fn validate_payload_presence(
     }
 }
 
-/// *Role: the neutral read vocabulary every received frame speaks, whatever the family; implemented by frames and leases, consumed by decoding code — see the trait map.*
+/// *Role: the neutral read vocabulary every received frame speaks, whatever the family; implemented by frames and leases, consumed by decoding code — see the [trait map](crate::guide::trait_map).*
 ///
 /// Neutral view of frame metadata plus ordered payload bytes.
 pub trait UFrameView {

@@ -21,7 +21,7 @@ use crate::SerializationError;
 ///
 /// These mirror the gRPC canonical codes, as required by the uProtocol
 /// specification; every transport and role reports failures through
-/// them. The application guide shows how
+/// them. The [application guide](crate::guide::applications) shows how
 /// callers act on the common ones.
 #[derive(Copy, Debug, Clone, PartialEq)]
 #[repr(C)]

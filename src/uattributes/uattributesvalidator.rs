@@ -15,7 +15,7 @@ use crate::{PayloadEncoding, UAttributes, UMessageType, UPayloadFormat, UPriorit
 
 use crate::UAttributesError;
 
-/// *Role: standalone utility validating message attributes per message kind; used by transports at boundaries — see the trait map.*
+/// *Role: standalone utility validating message attributes per message kind; used by transports at boundaries — see the [trait map](crate::guide::trait_map).*
 ///
 /// `UAttributes` is the struct that defines the Payload. It serves as the configuration for various aspects
 /// like time to live, priority, security tokens, and more. Each variant of `UAttributes` defines a different
