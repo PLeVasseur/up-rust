@@ -433,6 +433,9 @@ mod tests {
             traceparent: None,
             token: None,
             reqid: None,
+            payload_encoding_registry_id: None,
+            payload_encoding: None,
+            payload_content_type: None,
         }
     }
 
