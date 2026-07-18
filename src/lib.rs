@@ -192,3 +192,44 @@ pub mod __derive_support {
         StablePayloadInitUnset,
     };
 }
+
+// ---- wire formats ----
+
+#[cfg(feature = "wire-implementer-api")]
+pub mod wire;
+#[cfg(not(feature = "wire-implementer-api"))]
+mod wire;
+#[cfg(any(feature = "selected-wire-user-api", feature = "wire-implementer-api"))]
+pub use wire::NativePrefixFrameMetadataCodec;
+#[cfg(any(feature = "selected-wire-user-api", feature = "wire-implementer-api"))]
+pub use wire::{
+    ProtobufWire, StableContainerWireFormat, UProtocolNativeWire, WireCompatibility, WireIdentity,
+    WireIdentityRef, NATIVE_EXPLICIT_PAYLOAD_FAMILY_ID, NATIVE_PREFIX_METADATA_LAYOUT_ID,
+    PROTOBUF_PAYLOAD_FAMILY_ID, PROTOBUF_WIRE_ID, STABLE_CONTAINER_PAYLOAD_FAMILY_ID,
+    STABLE_CONTAINER_WIRE_ID, UFRAME_FIELDS_METADATA_LAYOUT_ID, UPROTOCOL_NATIVE_WIRE_ID,
+    XCDR_V2_PAYLOAD_FAMILY_ID, XCDR_V2_WIRE_ID,
+};
+#[cfg(feature = "wire-implementer-api")]
+pub use wire::{UWire, UWireDecode, UWireEncode, UWirePayload, UWireReadDecode};
+#[cfg(feature = "wire-implementer-api")]
+pub use wire::{
+    UWireMetadataCodec, UWireMetadataCodecFor, UWireMetadataContext, UWireMetadataError,
+};
+
+/// Compatibility import surface for wire-format implementers.
+///
+/// The crate root remains canonical; this role-oriented module groups the same
+/// public contracts for existing wire crates and focused imports.
+#[cfg(feature = "wire-implementer-api")]
+pub mod wire_implementer_api {
+    pub use crate::{
+        NativePrefixFrameMetadataCodec, ProtobufWire, StableContainerWireFormat,
+        UProtocolNativeWire, UWire, UWireDecode, UWireEncode, UWireMetadataCodec,
+        UWireMetadataCodecFor, UWireMetadataContext, UWireMetadataError, UWirePayload,
+        UWireReadDecode, WireCompatibility, WireIdentity, WireIdentityRef,
+        NATIVE_EXPLICIT_PAYLOAD_FAMILY_ID, NATIVE_PREFIX_METADATA_LAYOUT_ID,
+        PROTOBUF_PAYLOAD_FAMILY_ID, PROTOBUF_WIRE_ID, STABLE_CONTAINER_PAYLOAD_FAMILY_ID,
+        STABLE_CONTAINER_WIRE_ID, UFRAME_FIELDS_METADATA_LAYOUT_ID, UPROTOCOL_NATIVE_WIRE_ID,
+        XCDR_V2_PAYLOAD_FAMILY_ID, XCDR_V2_WIRE_ID,
+    };
+}

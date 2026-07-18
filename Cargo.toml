@@ -49,6 +49,9 @@ up-core-api = ["protobuf-support"]
 # Renamed from up-core-types: the feature gates the generated up_core_api
 # module, not the unconditional core types. The old name forwards.
 up-core-types = ["up-core-api"]
+selected-wire-codec-core = []
+wire-implementer-api = ["selected-wire-codec-core"]
+selected-wire-user-api = ["up-core-api"]
 zero-copy-transport = []
 owned-frame-transport = ["up-core-api"]
 communication-api = ["dep:thiserror"]
