@@ -49,11 +49,14 @@ up-core-api = ["protobuf-support"]
 # Renamed from up-core-types: the feature gates the generated up_core_api
 # module, not the unconditional core types. The old name forwards.
 up-core-types = ["up-core-api"]
+transport-implementer-api = ["selected-wire-transport-core"]
+selected-wire-transport-core = ["selected-wire-codec-core"]
+selected-wire-transport-adapter = ["selected-wire-transport-core"]
 selected-wire-codec-core = []
 wire-implementer-api = ["selected-wire-codec-core"]
-selected-wire-user-api = ["up-core-api"]
+selected-wire-user-api = ["selected-wire-transport-adapter", "up-core-api"]
 zero-copy-transport = []
-owned-frame-transport = ["up-core-api"]
+owned-frame-transport = ["selected-wire-transport-core", "up-core-api"]
 communication-api = ["dep:thiserror"]
 # Renamed from up-l2-api to match the communication layer's name in the
 # guide. The old name forwards.

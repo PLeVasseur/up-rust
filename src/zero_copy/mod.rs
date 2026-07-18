@@ -32,6 +32,10 @@ use crate::payload::{
     loan::{LoanUninitPayload, LoanedInitPayload, LoanedUninitPayload},
     stable::{InitializedStablePayload, StablePayloadInit, StablePayloadInitContext},
 };
+#[cfg(feature = "selected-wire-transport-adapter")]
+use crate::wire::UWirePayload;
+#[cfg(feature = "selected-wire-transport-adapter")]
+use crate::wire_transport::UHasWire;
 use crate::{
     payload::{
         codec::PayloadCodec,

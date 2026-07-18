@@ -259,6 +259,30 @@ where
 /// Convenience methods for zero-copy transports with initialized TX storage.
 #[async_trait]
 pub trait UZeroCopyTransportExt: UZeroCopyTransport {
+    /// Initializes a typed payload using the adapter's selected wire and sends it.
+    ///
+    /// Prefer this selected-wire helper on values produced by explicit selected-wire adapter construction.
+    /// Use [`Self::send_loaned_payload_as`] only for low-level codec escape hatches.
+    ///
+    /// # Errors
+    ///
+    /// Returns an error if the selected wire does not successfully loan, encode,
+    /// or send the payload through the underlying transport.
+    #[cfg(feature = "selected-wire-transport-adapter")]
+    async fn send_loaned_payload<T>(
+        &self,
+        metadata: UFrameMetadata,
+        init: impl for<'payload> FnOnce(&'payload mut T) + Send,
+    ) -> Result<(), UStatus>
+    where
+        Self: UHasWire,
+        Self::Wire: UWirePayload<T>,
+        <Self::Wire as UWirePayload<T>>::Codec: LoanPayload<T> + Send + Sync,
+    {
+        self.send_loaned_payload_as::<<Self::Wire as UWirePayload<T>>::Codec, T>(metadata, init)
+            .await
+    }
+
     /// Initializes a typed payload directly in a transmit loan and sends it.
     ///
     /// This is the low-level codec-selected form. Product code that already uses
@@ -307,6 +331,37 @@ impl<T> UZeroCopyTransportExt for T where T: UZeroCopyTransport + ?Sized {}
 #[cfg(feature = "zero-copy-transport")]
 #[async_trait]
 pub trait UZeroCopyUninitTransportExt: UZeroCopyUninitTransport {
+    /// Constructs a typed payload using the adapter's selected wire and sends it.
+    ///
+    /// Prefer this selected-wire helper on values produced by explicit selected-wire adapter construction.
+    /// Use [`Self::send_uninit_loaned_payload_as`] only for low-level codec
+    /// escape hatches.
+    ///
+    /// # Errors
+    ///
+    /// Returns an error if metadata validation, loaning, initialization, or send
+    /// fails.
+    #[cfg(feature = "selected-wire-transport-adapter")]
+    async fn send_uninit_loaned_payload<T>(
+        &self,
+        metadata: UFrameMetadata,
+        init: impl for<'payload> FnOnce(
+                LoanedUninitPayload<'payload, T>,
+            ) -> Result<LoanedInitPayload<'payload, T>, UWireError>
+            + Send,
+    ) -> Result<(), UStatus>
+    where
+        Self: UHasWire,
+        Self::Wire: UWirePayload<T>,
+        <Self::Wire as UWirePayload<T>>::Codec: LoanUninitPayload<T> + Send + Sync,
+        T: Send,
+    {
+        self.send_uninit_loaned_payload_as::<<Self::Wire as UWirePayload<T>>::Codec, T>(
+            metadata, init,
+        )
+        .await
+    }
+
     /// Constructs a typed payload directly in uninitialized transmit storage and sends it.
     ///
     /// This is the low-level codec-selected form. Product code that already uses
@@ -367,6 +422,36 @@ pub trait UZeroCopyUninitTransportExt: UZeroCopyUninitTransport {
         // loan slot, proving the visible payload bytes have been initialized.
         let buffer = unsafe { buffer.assume_payload_init() };
         self.send_zero_copy(buffer).await
+    }
+
+    /// Initializes a stable-container payload through the adapter's selected wire.
+    ///
+    /// Prefer this selected-wire helper on values produced by explicit selected-wire adapter construction.
+    /// It is available only for selected wires whose uninitialized-loan codec is
+    /// `StableContainerPayload<T>`.
+    ///
+    /// # Errors
+    ///
+    /// Returns an error if metadata validation, stable initialization, loaning, or
+    /// send fails.
+    ///
+    #[cfg(feature = "selected-wire-transport-adapter")]
+    async fn send_uninit_stable_payload<T>(
+        &self,
+        metadata: UFrameMetadata,
+        init: impl for<'payload> FnOnce(
+                StablePayloadInitContext<'payload, T>,
+            )
+                -> Result<InitializedStablePayload<'payload, T>, UWireError>
+            + Send,
+    ) -> Result<(), UStatus>
+    where
+        Self: UHasWire,
+        Self::Wire: UWirePayload<T, Codec = StableContainerPayload<T>>,
+        T: StablePayloadInit + Send,
+    {
+        self.send_uninit_stable_payload_as::<T>(metadata, init)
+            .await
     }
 
     /// Initializes a stable-container payload directly in uninitialized transmit storage.
