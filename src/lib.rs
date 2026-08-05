@@ -65,6 +65,45 @@ pub mod core;
 #[cfg(feature = "util")]
 pub mod local_transport;
 
+/// A guided tour of the crate: start here if the reference docs feel
+/// like a parts list. Chapter by chapter, with runnable examples.
+pub mod guide {
+    #![doc = include_str!("guide/README.md")]
+
+    #[cfg_attr(
+        all(feature = "communication", feature = "util"),
+        doc = include_str!("guide/applications.md")
+    )]
+    #[cfg_attr(
+        not(all(feature = "communication", feature = "util")),
+        doc = "Enable `communication` and `util` for the runnable application guide."
+    )]
+    pub mod applications {
+        #[cfg_attr(
+            all(feature = "communication", feature = "util"),
+            doc = include_str!("guide/communication.md")
+        )]
+        #[cfg_attr(
+            not(all(feature = "communication", feature = "util")),
+            doc = "Enable `communication` and `util` for the runnable Communication Layer guide."
+        )]
+        pub mod communication {}
+    }
+
+    #[cfg_attr(
+        all(feature = "communication", feature = "util", feature = "test-util"),
+        doc = include_str!("guide/utransport.md")
+    )]
+    #[cfg_attr(
+        not(all(feature = "communication", feature = "util", feature = "test-util")),
+        doc = "Enable `communication`, `util`, and `test-util` for the runnable transport guide."
+    )]
+    pub mod utransport {}
+
+    #[doc = include_str!("guide/trait_map.md")]
+    pub mod trait_map {}
+}
+
 #[cfg(feature = "symphony")]
 pub mod symphony;
 
