@@ -12,14 +12,64 @@
  ********************************************************************************/
 
 /*!
-up-rust is the [Eclipse uProtocol&trade; Language Library](https://github.com/eclipse-uprotocol/up-spec/blob/v1.6.0-alpha.7/languages.adoc) for the
-Rust programming language.
+up-rust is the Rust language library for
+[Eclipse uProtocol&trade;](https://github.com/eclipse-uprotocol/up-spec/blob/v1.6.0-alpha.7/README.adoc) —
+a protocol that lets software components (in vehicles and beyond) publish data,
+subscribe to it, and call each other's services over whatever messaging
+technology a deployment happens to use: MQTT, Zenoh, DDS, shared memory, and
+more.
 
-This crate can be used to
+The idea in one sentence: **you write against one small messaging API, and the
+technology underneath stays swappable.**
 
-* implement uEntities that communicate with each other using the uProtocol [Communication Layer API](https://github.com/eclipse-uprotocol/up-spec/blob/v1.6.0-alpha.7/up-l2/api.adoc)
-  over one of the supported transport protocols.
-* implement support for an additional transport protocol by means of implementing the [Transport & Session Layer API](https://github.com/eclipse-uprotocol/up-spec/blob/v1.6.0-alpha.7/up-l1/README.adoc).
+## Your first message
+
+```rust
+use up_rust::{UMessageBuilder, UPayloadFormat, UTransport, UUri};
+
+async fn publish_engine_temp(
+    transport: &dyn UTransport,
+) -> Result<(), Box<dyn std::error::Error>> {
+    // Every message has a source address: authority / entity / version / resource.
+    let topic = UUri::try_from_parts("my-vehicle", 0x1_0001, 1, 0x8001)?;
+
+    let message = UMessageBuilder::publish(topic)
+        .build_with_payload("92.5", UPayloadFormat::Text)?;
+
+    transport.send(message).await?;
+    Ok(())
+}
+```
+
+That is the whole application-side model: build a [`UMessage`], hand it to a
+[`UTransport`] someone has configured, done. Receiving is the mirror image —
+register a [`UListener`] for the addresses you care about.
+
+## Which reader are you?
+
+| You want to... | Start at | Cargo features |
+| --- | --- | --- |
+| Write an application using publish, subscribe, notifications, or RPC | The role traits in [`communication`], then the [Communication Layer guide](crate::guide::applications::communication) | `communication`, `util` |
+| Build and receive messages directly with the smallest API surface | The [Transport Layer application guide](crate::guide::applications::transport) | none |
+| Connect a messaging technology to uProtocol | [`UTransport`], then the [transport implementation guide](crate::guide::utransport) | `util` for the runnable guide |
+
+The [`guide`] walks each path end to end with code.
+
+## Three terms you'll meet everywhere
+
+* **uEntity** — any software component that talks uProtocol (an app, a service,
+  or a sensor feed).
+* **Transport Layer (up-L1)** — the layer that moves messages; a *transport* is
+  one implementation of it (Zenoh, MQTT, DDS, and so on).
+* **Communication Layer (up-L2)** — the application-facing publish, subscribe,
+  notification, and RPC roles built on top of any transport.
+
+## Module map
+
+* [`communication`] contains the up-L2 roles most applications use.
+* [`UMessage`], [`UUri`], and [`UAttributes`] form the core message model.
+* [`UTransport`] is the up-L1 contract implemented by transport providers.
+* [`guide`] contains the audience-oriented tutorials above.
 
 ## Features
 
@@ -64,6 +114,45 @@ pub mod core;
 
 #[cfg(feature = "util")]
 pub mod local_transport;
+
+/// A guided tour of the crate: start here if the reference docs feel
+/// like a parts list. Chapter by chapter, with runnable examples.
+pub mod guide {
+    #![doc = include_str!("guide/README.md")]
+
+    #[cfg_attr(
+        all(feature = "communication", feature = "util"),
+        doc = include_str!("guide/applications.md")
+    )]
+    #[cfg_attr(
+        not(all(feature = "communication", feature = "util")),
+        doc = "Enable `communication` and `util` for the runnable application guide."
+    )]
+    pub mod applications {
+        #[cfg_attr(
+            all(feature = "communication", feature = "util"),
+            doc = include_str!("guide/communication.md")
+        )]
+        #[cfg_attr(
+            not(all(feature = "communication", feature = "util")),
+            doc = "Enable `communication` and `util` for the runnable Communication Layer guide."
+        )]
+        pub mod communication {}
+
+        #[doc = include_str!("guide/transport.md")]
+        pub mod transport {}
+    }
+
+    #[cfg_attr(feature = "util", doc = include_str!("guide/utransport.md"))]
+    #[cfg_attr(
+        not(feature = "util"),
+        doc = "Enable `util` for the runnable transport implementation guide."
+    )]
+    pub mod utransport {}
+
+    #[doc = include_str!("guide/trait_map.md")]
+    pub mod trait_map {}
+}
 
 #[cfg(feature = "symphony")]
 pub mod symphony;
