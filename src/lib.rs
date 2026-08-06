@@ -25,7 +25,7 @@ technology underneath stays swappable.**
 ## Your first message
 
 ```rust
-use up_rust::{UMessageBuilder, UPayloadFormat, UTransport, UUri};
+use up_rust::{PayloadEncoding, UMessageBuilder, UTransport, UUri};
 
 async fn publish_engine_temp(
     transport: &dyn UTransport,
@@ -34,7 +34,7 @@ async fn publish_engine_temp(
     let topic = UUri::try_from_parts("my-vehicle", 0x1_0001, 1, 0x8001)?;
 
     let message = UMessageBuilder::publish(topic)
-        .build_with_payload("92.5", UPayloadFormat::Text)?;
+        .build_with_payload("92.5", PayloadEncoding::TEXT)?;
 
     transport.send(message).await?;
     Ok(())
@@ -159,9 +159,9 @@ pub mod symphony;
 
 mod uattributes;
 pub use uattributes::{
-    NotificationValidator, PublishValidator, RequestValidator, ResponseValidator, UAttributes,
-    UAttributesError, UAttributesValidator, UAttributesValidators, UMessageType, UPayloadFormat,
-    UPriority,
+    NotificationValidator, PayloadEncoding, PublishValidator, RequestValidator, ResponseValidator,
+    UAttributes, UAttributesError, UAttributesValidator, UAttributesValidators, UMessageType,
+    UPriority, PAYLOAD_ENCODING_PRIVATE_USE_MIN,
 };
 
 mod umessage;

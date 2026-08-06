@@ -18,7 +18,7 @@ pub(crate) use protobuf_support::deserialize_protobuf_bytes;
 pub use umessagebuilder::*;
 
 use crate::{
-    SerializationError, UAttributes, UAttributesError, UCode, UMessageType, UPayloadFormat,
+    PayloadEncoding, SerializationError, UAttributes, UAttributesError, UCode, UMessageType,
     UPriority, UUri, UUID,
 };
 
@@ -100,10 +100,48 @@ impl UMessage {
         attributes: UAttributes,
         payload: Option<Bytes>,
     ) -> Result<Self, UMessageError> {
+        match (payload.is_some(), attributes.payload_encoding_id.is_some()) {
+            (true, false) => {
+                return Err(UMessageError::PayloadError(
+                    "message payload has no declared encoding".to_string(),
+                ));
+            }
+            (false, true) => {
+                return Err(UMessageError::PayloadError(
+                    "message declares an encoding without payload bytes".to_string(),
+                ));
+            }
+            _ => {}
+        }
         Ok(UMessage {
             attributes,
             payload,
         })
+    }
+
+    /// Returns this message with its payload encoding set to the given
+    /// registry identity, replacing any previously declared encoding.
+    ///
+    /// This supports transport decorators that apply a "fixed per topic"
+    /// encoding convention on behalf of wires that cannot carry the
+    /// identifier (see the SOME/IP binding); such decorators stamp received
+    /// messages so downstream consumers see a total declaration.
+    ///
+    /// # Errors
+    ///
+    /// Returns [`UMessageError::PayloadError`] when the message has no payload
+    /// bytes to describe.
+    pub fn with_declared_payload_encoding(
+        mut self,
+        encoding: PayloadEncoding,
+    ) -> Result<Self, UMessageError> {
+        if self.payload.is_none() {
+            return Err(UMessageError::PayloadError(
+                "cannot declare a payload encoding on a message without payload bytes".to_string(),
+            ));
+        }
+        self.attributes.payload_encoding_id = Some(encoding);
+        Ok(self)
     }
 
     /// Get this message's attributes.
@@ -506,31 +544,32 @@ impl UMessage {
         self.attributes().request_id_unchecked()
     }
 
-    /// Gets this message's payload format.
+    /// Gets this message's payload encoding.
     ///
-    /// This function simply delegates to [`UAttributes::payload_format`].
+    /// This function delegates to [`UAttributes::payload_encoding`].
     ///
     /// # Example
     ///
     /// ```rust
-    /// use up_rust::{UMessageBuilder, UPayloadFormat, UUri};
+    /// use up_rust::{UMessageBuilder, PayloadEncoding, UUri};
     ///
     /// # fn main() -> Result<(), Box<dyn std::error::Error>> {
     /// let topic = UUri::try_from("//my-vehicle/D45/23/A001")?;
     /// let msg = UMessageBuilder::publish(topic)
-    ///   .build_with_payload("hello".as_bytes(), UPayloadFormat::Text)?;
-    /// assert!(msg.payload_format().is_some_and(|format| format == UPayloadFormat::Text));
+    ///   .build_with_payload("hello".as_bytes(), PayloadEncoding::TEXT)?;
+    /// assert!(msg.payload_encoding().is_some_and(|format| format == PayloadEncoding::TEXT));
     /// # Ok(())
     /// # }
     /// ```
     #[must_use]
-    pub fn payload_format(&self) -> Option<UPayloadFormat> {
-        self.attributes().payload_format()
+    pub fn payload_encoding(&self) -> Option<PayloadEncoding> {
+        self.attributes().payload_encoding()
     }
 
-    /// Gets this message's payload format.
+    /// Gets this message's payload encoding.
     ///
-    /// This function simply delegates to [`UAttributes::payload_format_unchecked`].
+    /// This function delegates to [`UAttributes::payload_encoding`] and
+    /// unwraps the value.
     ///
     /// # Panics
     ///
@@ -539,19 +578,19 @@ impl UMessage {
     /// # Example
     ///
     /// ```rust
-    /// use up_rust::{UMessageBuilder, UPayloadFormat, UUri};
+    /// use up_rust::{UMessageBuilder, PayloadEncoding, UUri};
     ///
     /// # fn main() -> Result<(), Box<dyn std::error::Error>> {
     /// let topic = UUri::try_from("//my-vehicle/D45/23/A001")?;
     /// let msg = UMessageBuilder::publish(topic)
-    ///   .build_with_payload("hello".as_bytes(), UPayloadFormat::Text)?;
-    /// assert_eq!(msg.payload_format_unchecked(), UPayloadFormat::Text);
+    ///   .build_with_payload("hello".as_bytes(), PayloadEncoding::TEXT)?;
+    /// assert_eq!(msg.payload_encoding().unwrap(), PayloadEncoding::TEXT);
     /// # Ok(())
     /// # }
     /// ```
     #[must_use]
-    pub fn payload_format_unchecked(&self) -> UPayloadFormat {
-        self.attributes().payload_format_unchecked()
+    pub fn payload_encoding_unchecked(&self) -> PayloadEncoding {
+        self.attributes().payload_encoding().unwrap()
     }
 
     #[must_use]
@@ -687,14 +726,18 @@ mod protobuf_support {
         ///
         /// # Errors
         ///
-        /// Returns an error if the message payload format is neither [UPayloadFormat::Protobuf] nor
-        /// [UPayloadFormat::ProtobufWrappedInAny] or if the bytes in the
+        /// Returns an error if the message payload encoding is neither [PayloadEncoding::PROTOBUF] nor
+        /// [PayloadEncoding::PROTOBUF_WRAPPED_IN_ANY] or if the bytes in the
         /// payload cannot be deserialized into the target type.
         #[cfg(feature = "protobuf-support")]
         pub fn extract_protobuf<T: ProtobufMappable>(&self) -> Result<T, UMessageError> {
             if let Some(payload) = self.payload.as_ref() {
-                let payload_format = self.payload_format().unwrap_or(UPayloadFormat::Unspecified);
-                deserialize_protobuf_bytes(payload, &payload_format)
+                let Some(payload_encoding) = self.payload_encoding() else {
+                    return Err(UMessageError::PayloadError(
+                        "Message payload has no declared encoding".to_string(),
+                    ));
+                };
+                deserialize_protobuf_bytes(payload, payload_encoding)
             } else {
                 Err(UMessageError::PayloadError(
                     "Message has no payload".to_string(),
@@ -712,35 +755,31 @@ mod protobuf_support {
     /// # Arguments
     ///
     /// * `payload` - The payload data.
-    /// * `payload_format` - The format/encoding of the data. Must be one of
-    ///    - `UPayloadFormat::UPAYLOAD_FORMAT_PROTOBUF`
-    ///    - `UPayloadFormat::UPAYLOAD_FORMAT_PROTOBUF_WRAPPED_IN_ANY`
+    /// * `payload_encoding` - The encoding of the data. Must be one of
+    ///    - `PayloadEncoding::PROTOBUF`
+    ///    - `PayloadEncoding::PROTOBUF_WRAPPED_IN_ANY`
     ///
     /// # Errors
     ///
-    /// Returns an error if the payload format is unsupported or if the data can not be deserialized
-    /// into the target type based on the given format.
+    /// Returns an error if the payload encoding is unsupported or if the data can not be
+    /// deserialized into the target type based on the declared encoding.
     #[cfg(feature = "protobuf-support")]
     pub(crate) fn deserialize_protobuf_bytes<T: ProtobufMappable>(
         payload: &[u8],
-        payload_format: &UPayloadFormat,
+        payload_encoding: PayloadEncoding,
     ) -> Result<T, UMessageError> {
-        match payload_format {
-            UPayloadFormat::Protobuf => {
+        match payload_encoding {
+            PayloadEncoding::PROTOBUF => {
                 T::parse_from_protobuf_bytes(payload).map_err(UMessageError::DataSerializationError)
             }
-            UPayloadFormat::ProtobufWrappedInAny => T::parse_from_packed_protobuf_bytes(payload)
-                .map_err(UMessageError::DataSerializationError),
-            UPayloadFormat::Unspecified
-            | UPayloadFormat::Json
-            | UPayloadFormat::Raw
-            | UPayloadFormat::Shm
-            | UPayloadFormat::Someip
-            | UPayloadFormat::SomeipTlv
-            | UPayloadFormat::Text => {
-                let detail_msg = payload_format.to_media_type().map_or_else(
-                    || format!("Unknown payload format: {}", *payload_format as i32),
-                    |mt| format!("Invalid/unsupported payload format: {mt}"),
+            PayloadEncoding::PROTOBUF_WRAPPED_IN_ANY => {
+                T::parse_from_packed_protobuf_bytes(payload)
+                    .map_err(UMessageError::DataSerializationError)
+            }
+            _ => {
+                let detail_msg = payload_encoding.media_type().map_or_else(
+                    || format!("Unsupported payload encoding: {payload_encoding}"),
+                    |mt| format!("Invalid/unsupported payload encoding: {mt}"),
                 );
                 Err(UMessageError::from(detail_msg))
             }
@@ -779,7 +818,7 @@ mod protobuf_support {
                 &data
                     .write_to_bytes()
                     .expect("Failed to write protobuf bytes"),
-                &UPayloadFormat::Protobuf,
+                PayloadEncoding::PROTOBUF,
             );
             assert!(result.is_ok_and(|v| v.value == *"hello world"));
 
@@ -791,7 +830,7 @@ mod protobuf_support {
 
             let result = deserialize_protobuf_bytes::<StringValue>(
                 &buf,
-                &UPayloadFormat::ProtobufWrappedInAny,
+                PayloadEncoding::PROTOBUF_WRAPPED_IN_ANY,
             );
             assert!(result.is_ok_and(|v| v.value == *"hello world"));
         }
@@ -804,20 +843,20 @@ mod protobuf_support {
             let buf: Bytes = any.write_to_bytes().unwrap().into();
             let result = deserialize_protobuf_bytes::<DoubleValue>(
                 &buf,
-                &UPayloadFormat::ProtobufWrappedInAny,
+                PayloadEncoding::PROTOBUF_WRAPPED_IN_ANY,
             );
             assert!(result.is_err_and(|e| matches!(e, UMessageError::DataSerializationError(_))));
         }
 
-        #[test_case(UPayloadFormat::Json; "JSON format")]
-        #[test_case(UPayloadFormat::Raw; "RAW format")]
-        #[test_case(UPayloadFormat::Shm; "SHM format")]
-        #[test_case(UPayloadFormat::Someip; "SOMEIP format")]
-        #[test_case(UPayloadFormat::SomeipTlv; "SOMEIP TLV format")]
-        #[test_case(UPayloadFormat::Text; "TEXT format")]
-        #[test_case(UPayloadFormat::Unspecified; "UNSPECIFIED format")]
-        fn test_deserialize_protobuf_bytes_fails_for_(format: UPayloadFormat) {
-            let result = deserialize_protobuf_bytes::<StringValue>("hello".as_bytes(), &format);
+        #[test_case(PayloadEncoding::JSON; "JSON format")]
+        #[test_case(PayloadEncoding::RAW; "RAW format")]
+        #[test_case(PayloadEncoding::SHM; "SHM format")]
+        #[test_case(PayloadEncoding::SOMEIP; "SOMEIP format")]
+        #[test_case(PayloadEncoding::SOMEIP_TLV; "SOMEIP TLV format")]
+        #[test_case(PayloadEncoding::TEXT; "TEXT format")]
+        #[test_case(PayloadEncoding::from_id(0x1000_0BEE).unwrap(); "private-use id")]
+        fn test_deserialize_protobuf_bytes_fails_for_(format: PayloadEncoding) {
+            let result = deserialize_protobuf_bytes::<StringValue>("hello".as_bytes(), format);
             assert!(result.is_err_and(|e| matches!(e, UMessageError::PayloadError(_))));
         }
 
@@ -835,7 +874,7 @@ mod protobuf_support {
             // WHEN deserializing the bytes into a Duration message using the ProtobufWrappedInAny format
             let result = deserialize_protobuf_bytes::<Duration>(
                 buf.as_slice(),
-                &UPayloadFormat::ProtobufWrappedInAny,
+                PayloadEncoding::PROTOBUF_WRAPPED_IN_ANY,
             );
             // THEN the deserialization fails with a DataSerializationError
             assert!(result.is_err_and(|e| matches!(e, UMessageError::DataSerializationError(_))))
@@ -894,7 +933,7 @@ mod core_types_support {
     impl TryFrom<&UMessageProto> for UMessage {
         type Error = UMessageError;
         fn try_from(value: &UMessageProto) -> Result<Self, Self::Error> {
-            let mut attributes = value.attributes.as_ref().map_or_else(
+            let attributes = value.attributes.as_ref().map_or_else(
                 || {
                     Err(UAttributesError::validation_error(
                         "UMessageProto has no attributes",
@@ -902,22 +941,6 @@ mod core_types_support {
                 },
                 UAttributes::try_from,
             )?;
-            // The uattributes.proto file in up-spec v1.6.0.alpha.7 does not declare the payload_format field
-            // as optional. Consequently, a UMessage protobuf that does not have a payload still ALWAYS has
-            // the UNSPECIFIED payload_format when being deserialized.
-            // When mapping such a message to the (internal) UMessage struct, we therefore need to also consider
-            // whether the message actually has payload or not, in order to set the payload_format field to the
-            // proper value, i.e. Some(Unspecified), if the message has payload, or None otherwise.
-            // This is relevant, because the presence of a payload_format value in the UMessage struct is used to
-            // determine whether the message has payload or not, e.g. when serializing the message back to
-            // protobuf or when extracting the payload as a protobuf message.
-            //
-            // This should no longer be necessary once the payload_format field in uattributes.proto is declared as
-            // optional in the UP specification and the protobuf definitions are updated accordingly.
-            //
-            if value.payload.is_none() {
-                attributes.payload_format = None;
-            }
             UMessage::new(attributes, value.payload.clone())
         }
     }
@@ -974,10 +997,8 @@ mod core_types_support {
             assert!(result.is_err_and(|e| matches!(e, UMessageError::AttributesValidationError(_))));
         }
 
-        #[test_case::test_case(None => None; "for no payload")]
-        #[test_case::test_case(Some("payload") => Some(UPayloadFormat::Unspecified); "for some payload")]
-        fn test_try_from_handles_payload_format(payload: Option<&str>) -> Option<UPayloadFormat> {
-            let valid_attribs_proto = UAttributesProto {
+        fn valid_attributes(encoding_id: Option<u32>) -> UAttributesProto {
+            UAttributesProto {
                 type_: EnumOrUnknown::from_i32(
                     crate::up_core_api::uattributes::UMessageType::UMESSAGE_TYPE_PUBLISH.value(),
                 ),
@@ -998,22 +1019,49 @@ mod core_types_support {
                 priority: EnumOrUnknown::from_i32(
                     crate::up_core_api::uattributes::UPriority::UPRIORITY_UNSPECIFIED.value(),
                 ),
-                payload_format: EnumOrUnknown::from_i32(
-                    crate::up_core_api::uattributes::UPayloadFormat::UPAYLOAD_FORMAT_UNSPECIFIED
-                        .value(),
-                ),
+                payload_encoding_id: encoding_id,
                 ..Default::default()
-            };
-            // GIVEN a UMessageProto with valid attributes (including the UNSPECIFIED payload format) but no payload
-            let proto = UMessageProto {
-                attributes: Some(valid_attribs_proto).into(),
-                payload: payload.map(|p| p.as_bytes().to_vec().into()),
+            }
+        }
+
+        fn message_proto(payload: Option<&str>, encoding_id: Option<u32>) -> UMessageProto {
+            UMessageProto {
+                attributes: Some(valid_attributes(encoding_id)).into(),
+                payload: payload.map(|value| value.as_bytes().to_vec().into()),
                 ..Default::default()
-            };
-            // WHEN converting the UMessageProto to a UMessage
-            UMessage::try_from(&proto)
-                .expect("failed to convert UMessageProto to UMessage")
-                .payload_format()
+            }
+        }
+
+        #[test]
+        fn test_try_from_accepts_absent_payload_and_encoding() {
+            let message = UMessage::try_from(&message_proto(None, None)).unwrap();
+            assert!(message.payload().is_none());
+            assert_eq!(message.payload_encoding(), None);
+        }
+
+        #[test]
+        fn test_try_from_accepts_payload_with_encoding() {
+            let message = UMessage::try_from(&message_proto(Some("payload"), Some(3))).unwrap();
+            assert!(message.payload().is_some());
+            assert_eq!(message.payload_encoding(), Some(PayloadEncoding::JSON));
+        }
+
+        #[test]
+        fn test_try_from_rejects_payload_without_encoding() {
+            assert!(matches!(
+                UMessage::try_from(&message_proto(Some("payload"), None)),
+                Err(UMessageError::PayloadError(error))
+                    if error.contains("payload has no declared encoding")
+            ));
+        }
+
+        #[test]
+        fn test_try_from_rejects_encoding_without_payload() {
+            assert!(matches!(
+                UMessage::try_from(&message_proto(None, Some(3))),
+                Err(UMessageError::PayloadError(error))
+                    if error.contains("encoding without payload")
+            ));
         }
     }
 }
@@ -1037,5 +1085,17 @@ mod test {
     fn test_from_error_msg() {
         let message_error = UMessageError::from("an error occurred");
         assert!(matches!(message_error, UMessageError::PayloadError(_)));
+    }
+
+    #[test]
+    fn declared_payload_encoding_requires_payload_bytes() {
+        let topic = UUri::try_from_parts("vehicle", 0x1000, 1, 0x8001).unwrap();
+        let message = UMessageBuilder::publish(topic).build().unwrap();
+
+        assert!(matches!(
+            message.with_declared_payload_encoding(PayloadEncoding::RAW),
+            Err(UMessageError::PayloadError(error))
+                if error.contains("without payload bytes")
+        ));
     }
 }

@@ -18,7 +18,7 @@ Thirty seconds to first message, on the communication layer:
 ```rust
 use std::sync::Arc;
 use up_rust::local_transport::LocalTransport;
-use up_rust::{StaticUriProvider, UPayloadFormat};
+use up_rust::{StaticUriProvider, PayloadEncoding};
 use up_rust::communication::{CallOptions, Publisher, SimplePublisher, UPayload};
 
 #[tokio::main]
@@ -28,7 +28,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
 
     SimplePublisher::new(transport, me)
         .publish(0x8001, CallOptions::for_publish(None, None, None),
-                 Some(UPayload::new("92.5", UPayloadFormat::Text)))
+                 Some(UPayload::new("92.5", PayloadEncoding::TEXT)))
         .await?;
     // Delivered to every subscriber of my-vehicle/0x1_0001/1/0x8001.
     Ok(())

@@ -15,7 +15,7 @@ use std::sync::Arc;
 use up_rust::local_transport::LocalTransport;
 use up_rust::StaticUriProvider;
 use up_rust::communication::{CallOptions, Publisher, SimplePublisher, UPayload};
-use up_rust::UPayloadFormat;
+use up_rust::PayloadEncoding;
 
 #[tokio::main]
 async fn main() -> Result<(), Box<dyn std::error::Error>> {
@@ -23,7 +23,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     let identity = Arc::new(StaticUriProvider::new("my-vehicle", 0x1_0001, 1)?);
 
     let publisher = SimplePublisher::new(transport, identity);
-    let payload = UPayload::new("92.5", UPayloadFormat::Text);
+    let payload = UPayload::new("92.5", PayloadEncoding::TEXT);
     publisher
         .publish(0x8001, CallOptions::for_publish(None, None, None), Some(payload))
         .await?;
@@ -83,7 +83,7 @@ Same shape, one extra argument:
 ```rust
 use std::sync::Arc;
 use up_rust::local_transport::LocalTransport;
-use up_rust::{StaticUriProvider, UPayloadFormat, UUri};
+use up_rust::{StaticUriProvider, PayloadEncoding, UUri};
 use up_rust::communication::{CallOptions, Notifier, SimpleNotifier, UPayload};
 
 #[tokio::main]
@@ -98,7 +98,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
             0x8002,
             &destination,
             CallOptions::for_notification(None, None, None),
-            Some(UPayload::new("door open", UPayloadFormat::Text)),
+            Some(UPayload::new("door open", PayloadEncoding::TEXT)),
         )
         .await?;
     // Exactly one receiver: the uEntity at `destination` — not a topic fan-out.
@@ -158,7 +158,7 @@ and assert; in a deployment it's someone else's uEntity.)
 ```rust
 use std::sync::Arc;
 use up_rust::local_transport::LocalTransport;
-use up_rust::{LocalUriProvider, StaticUriProvider, UAttributes, UPayloadFormat};
+use up_rust::{LocalUriProvider, StaticUriProvider, UAttributes, PayloadEncoding};
 use up_rust::communication::{
     CallOptions, InMemoryRpcClient, InMemoryRpcServer, RequestHandler, RpcClient, RpcServer,
     ServiceInvocationError, UPayload,
@@ -184,7 +184,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         .invoke_method(
             service.get_resource_uri(0x00A1),
             CallOptions::for_rpc_request(5_000, None, None, None), // 5s deadline
-            Some(UPayload::new("ping", UPayloadFormat::Text)),
+            Some(UPayload::new("ping", PayloadEncoding::TEXT)),
         )
         .await?;
 

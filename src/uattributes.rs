@@ -11,16 +11,16 @@
  * SPDX-License-Identifier: Apache-2.0
  ********************************************************************************/
 
+mod payloadencoding;
 mod uattributesvalidator;
 mod umessagetype;
-mod upayloadformat;
 mod upriority;
 
 use std::time::SystemTime;
 
+pub use payloadencoding::{PayloadEncoding, PAYLOAD_ENCODING_PRIVATE_USE_MIN};
 pub use uattributesvalidator::*;
 pub use umessagetype::UMessageType;
-pub use upayloadformat::*;
 pub use upriority::*;
 
 use crate::uuid::UuidConversionError;
@@ -32,6 +32,7 @@ pub(crate) type TraceparentString = String;
 
 #[derive(Debug)]
 /// Errors produced when building or validating [`UAttributes`].
+#[non_exhaustive]
 pub enum UAttributesError {
     /// The attributes violate a validation rule for their message type.
     ValidationError(String),
@@ -80,25 +81,9 @@ impl From<UuidConversionError> for UAttributesError {
     }
 }
 
-impl From<UPayloadError> for UAttributesError {
-    fn from(value: UPayloadError) -> Self {
-        UAttributesError::parsing_error(value.to_string())
-    }
-}
-
-/// The attributes of a uProtocol message.
-///
-/// These attributes provide metadata about the message, such as its type, identifier, source and destination addresses, priority, time-to-live, etc. They are used by the uProtocol library to manage the message and its
-/// lifecycle, and can also be accessed by applications to make informed decisions about how to handle the message.
-///
-/// Attributes are immutable and are set when the message is created using [crate::UMessageBuilder]. They cannot be
-/// changed afterwards.
-///
-/// The attributes of a message can be accessed via the [`crate::UMessage::attributes`] function. For convenience,
-/// [`crate::UMessage`] also has functions for directly accessing the attribute values, mimicking the functions
-/// provided by this struct.
 #[derive(Debug, Clone, PartialEq)]
 #[repr(C)]
+/// Message metadata: addressing, identity, type, and delivery options for one [`UMessage`](crate::UMessage).
 pub struct UAttributes {
     pub(crate) type_: UMessageType,
     pub(crate) id: UUID,
@@ -111,29 +96,87 @@ pub struct UAttributes {
     pub(crate) token: Option<TokenString>,
     pub(crate) traceparent: Option<TraceparentString>,
     pub(crate) reqid: Option<UUID>,
-    pub(crate) payload_format: Option<UPayloadFormat>,
+    pub(crate) payload_encoding_id: Option<PayloadEncoding>,
 }
 
 impl UAttributes {
     /// Gets the type of message these are the attributes of.
+    ///
+    /// # Example
+    ///
+    /// ```rust
+    /// use up_rust::{UMessageBuilder, UMessageType, UUri};
+    ///
+    /// # fn main() -> Result<(), Box<dyn std::error::Error>> {
+    /// let topic = UUri::try_from("//my-vehicle/D45/23/A001")?;
+    /// let msg = UMessageBuilder::publish(topic).build()?;
+    /// let attribs = msg.attributes();
+    /// assert_eq!(attribs.type_(), UMessageType::Publish);
+    /// # Ok(())
+    /// # }
+    /// ```
     #[must_use]
     pub fn type_(&self) -> UMessageType {
         self.type_
     }
 
     /// Gets the identifier of the message these attributes belong to.
+    ///
+    /// # Example
+    ///
+    /// ```rust
+    /// use up_rust::{UMessageBuilder, UMessageType, UUri, UUID};
+    ///
+    /// # fn main() -> Result<(), Box<dyn std::error::Error>> {
+    /// let topic = UUri::try_from("//my-vehicle/D45/23/A001")?;
+    /// let msg_id = UUID::build();
+    /// let msg = UMessageBuilder::publish(topic).with_message_id(msg_id.clone()).build()?;
+    /// let attribs = msg.attributes();
+    /// assert_eq!(attribs.id(), &msg_id);
+    /// # Ok(())
+    /// # }
+    /// ```
     #[must_use]
     pub fn id(&self) -> &UUID {
         &self.id
     }
 
     /// Gets the source address of the message these attributes belong to.
+    ///
+    /// # Example
+    ///
+    /// ```rust
+    /// use up_rust::{UMessageBuilder, UMessageType, UUri};
+    ///
+    /// # fn main() -> Result<(), Box<dyn std::error::Error>> {
+    /// let topic = UUri::try_from("//my-vehicle/D45/23/A001")?;
+    /// let msg = UMessageBuilder::publish(topic.clone()).build()?;
+    /// let attribs = msg.attributes();
+    /// assert_eq!(attribs.source(), &topic);
+    /// # Ok(())
+    /// # }
+    /// ```
     #[must_use]
     pub fn source(&self) -> &UUri {
         &self.source
     }
 
     /// Gets the sink address of the message these attributes belong to.
+    ///
+    /// # Example
+    ///
+    /// ```rust
+    /// use up_rust::{UMessageBuilder, UMessageType, UUri};
+    ///
+    /// # fn main() -> Result<(), Box<dyn std::error::Error>> {
+    /// let origin = UUri::try_from("//my-vehicle/D45/23/A001")?;
+    /// let dest = UUri::try_from("//other-vehicle/D10/3/0")?;
+    /// let msg = UMessageBuilder::notification(origin, dest.clone()).build()?;
+    /// let attribs = msg.attributes();
+    /// assert_eq!(attribs.sink(), Some(&dest));
+    /// # Ok(())
+    /// # }
+    /// ```
     #[must_use]
     pub fn sink(&self) -> Option<&UUri> {
         self.sink.as_ref()
@@ -144,12 +187,41 @@ impl UAttributes {
     /// # Panics
     ///
     /// if the property has no value.
+    ///
+    /// # Example
+    ///
+    /// ```rust
+    /// use up_rust::{UMessageBuilder, UMessageType, UUri};
+    ///
+    /// # fn main() -> Result<(), Box<dyn std::error::Error>> {
+    /// let origin = UUri::try_from("//my-vehicle/D45/23/A001")?;
+    /// let dest = UUri::try_from("//other-vehicle/D10/3/0")?;
+    /// let msg = UMessageBuilder::notification(origin, dest.clone()).build()?;
+    /// let attribs = msg.attributes();
+    /// assert_eq!(attribs.sink_unchecked(), &dest);
+    /// # Ok(())
+    /// # }
+    /// ```
     #[must_use]
     pub fn sink_unchecked(&self) -> &UUri {
         self.sink().expect("message has no sink")
     }
 
     /// Gets the priority of the message these attributes belong to.
+    ///
+    /// # Example
+    ///
+    /// ```rust
+    /// use up_rust::{UMessageBuilder, UMessageType, UPriority, UUri};
+    ///
+    /// # fn main() -> Result<(), Box<dyn std::error::Error>> {
+    /// let topic = UUri::try_from("//my-vehicle/D45/23/A001")?;
+    /// let msg = UMessageBuilder::publish(topic).with_priority(UPriority::CS3).build()?;
+    /// let attribs = msg.attributes();
+    /// assert_eq!(attribs.priority(), Some(UPriority::CS3));
+    /// # Ok(())
+    /// # }
+    /// ```
     #[must_use]
     pub fn priority(&self) -> Option<UPriority> {
         self.priority
@@ -160,12 +232,43 @@ impl UAttributes {
     /// # Panics
     ///
     /// if the property has no value.
+    ///
+    /// # Example
+    ///
+    /// ```rust
+    /// use up_rust::{UMessageBuilder, UMessageType, UPriority, UUri};
+    ///
+    /// # fn main() -> Result<(), Box<dyn std::error::Error>> {
+    /// let topic = UUri::try_from("//my-vehicle/D45/23/A001")?;
+    /// let msg = UMessageBuilder::publish(topic).with_priority(UPriority::CS3).build()?;
+    /// let attribs = msg.attributes();
+    /// assert_eq!(attribs.priority_unchecked(), UPriority::CS3);
+    /// # Ok(())
+    /// # }
+    /// ```
     #[must_use]
     pub fn priority_unchecked(&self) -> UPriority {
         self.priority().expect("message has no priority")
     }
 
     /// Gets the commstatus of the message these attributes belong to.
+    ///
+    /// # Example
+    ///
+    /// ```rust
+    /// use up_rust::{UCode, UMessageBuilder, UMessageType, UUID, UUri};
+    ///
+    /// # fn main() -> Result<(), Box<dyn std::error::Error>> {
+    /// let invoked_method = UUri::try_from("//my-vehicle/D45/2/101")?;
+    /// let reply_to = UUri::try_from("//other-vehicle/D10/3/0")?;
+    /// let msg = UMessageBuilder::response(reply_to, UUID::build(), invoked_method)
+    ///   .with_comm_status(UCode::Ok)
+    ///   .build()?;
+    /// let attribs = msg.attributes();
+    /// assert_eq!(attribs.commstatus(), Some(UCode::Ok));
+    /// # Ok(())
+    /// # }
+    /// ```
     #[must_use]
     pub fn commstatus(&self) -> Option<UCode> {
         self.commstatus
@@ -176,6 +279,23 @@ impl UAttributes {
     /// # Panics
     ///
     /// if the property has no value.
+    ///
+    /// # Example
+    ///
+    /// ```rust
+    /// use up_rust::{UCode, UMessageBuilder, UMessageType, UUID, UUri};
+    ///
+    /// # fn main() -> Result<(), Box<dyn std::error::Error>> {
+    /// let invoked_method = UUri::try_from("//my-vehicle/D45/2/101")?;
+    /// let reply_to = UUri::try_from("//other-vehicle/D10/3/0")?;
+    /// let msg = UMessageBuilder::response(reply_to, UUID::build(), invoked_method)
+    ///   .with_comm_status(UCode::Internal)
+    ///   .build()?;
+    /// let attribs = msg.attributes();
+    /// assert_eq!(attribs.commstatus_unchecked(), UCode::Internal);
+    /// # Ok(())
+    /// # }
+    /// ```
     #[must_use]
     pub fn commstatus_unchecked(&self) -> UCode {
         self.commstatus().expect("message has no commstatus")
@@ -186,6 +306,22 @@ impl UAttributes {
     /// # Returns
     ///
     /// the time-to-live in milliseconds.
+    ///
+    /// # Example
+    ///
+    /// ```rust
+    /// use up_rust::{UMessageBuilder, UUri};
+    ///
+    /// # fn main() -> Result<(), Box<dyn std::error::Error>> {
+    /// let invoked_method = UUri::try_from("//my-vehicle/D45/2/101")?;
+    /// let reply_to = UUri::try_from("//other-vehicle/D10/3/0")?;
+    /// let msg = UMessageBuilder::request(invoked_method, reply_to, 5000)
+    ///   .build()?;
+    /// let attribs = msg.attributes();
+    /// assert_eq!(attribs.ttl(), Some(5000));
+    /// # Ok(())
+    /// # }
+    /// ```
     #[must_use]
     pub fn ttl(&self) -> Option<u32> {
         self.ttl
@@ -200,30 +336,116 @@ impl UAttributes {
     /// # Panics
     ///
     /// if the property has no value.
+    ///
+    /// # Example
+    ///
+    /// ```rust
+    /// use up_rust::{UMessageBuilder, UUri};
+    ///
+    /// # fn main() -> Result<(), Box<dyn std::error::Error>> {
+    /// let invoked_method = UUri::try_from("//my-vehicle/D45/2/101")?;
+    /// let reply_to = UUri::try_from("//other-vehicle/D10/3/0")?;
+    /// let msg = UMessageBuilder::request(invoked_method, reply_to, 5000)
+    ///   .build()?;
+    /// let attribs = msg.attributes();
+    /// assert_eq!(attribs.ttl_unchecked(), 5000);
+    /// # Ok(())
+    /// # }
+    /// ```
     #[must_use]
     pub fn ttl_unchecked(&self) -> u32 {
         self.ttl().expect("message has no time-to-live")
     }
 
     /// Gets the permission level of the message these attributes belong to.
+    ///
+    /// # Example
+    ///
+    /// ```rust
+    /// use up_rust::{UMessageBuilder, UUri};
+    ///
+    /// # fn main() -> Result<(), Box<dyn std::error::Error>> {
+    /// let invoked_method = UUri::try_from("//my-vehicle/D45/2/101")?;
+    /// let reply_to = UUri::try_from("//other-vehicle/D10/3/0")?;
+    /// let msg = UMessageBuilder::request(invoked_method, reply_to, 5000)
+    ///   .with_permission_level(3)
+    ///   .build()?;
+    /// let attribs = msg.attributes();
+    /// assert_eq!(attribs.permission_level(), Some(3));
+    /// # Ok(())
+    /// # }
+    /// ```
     #[must_use]
     pub fn permission_level(&self) -> Option<u32> {
         self.permission_level
     }
 
     /// Gets the token of the message these attributes belong to.
+    ///
+    /// # Example
+    ///
+    /// ```rust
+    /// use up_rust::{UMessageBuilder, UUri};
+    ///
+    /// # fn main() -> Result<(), Box<dyn std::error::Error>> {
+    /// let token = "my_token";
+    /// let invoked_method = UUri::try_from("//my-vehicle/D45/2/101")?;
+    /// let reply_to = UUri::try_from("//other-vehicle/D10/3/0")?;
+    /// let msg = UMessageBuilder::request(invoked_method, reply_to, 5000)
+    ///   .with_token(token)
+    ///   .build()?;
+    /// let attribs = msg.attributes();
+    /// assert_eq!(attribs.token(), Some(token));
+    /// # Ok(())
+    /// # }
+    /// ```
     #[must_use]
     pub fn token(&self) -> Option<&str> {
         self.token.as_deref()
     }
 
     /// Gets the traceparent of the message these attributes belong to.
+    ///
+    /// # Example
+    ///
+    /// ```rust
+    /// use up_rust::{UMessageBuilder, UUri};
+    ///
+    /// # fn main() -> Result<(), Box<dyn std::error::Error>> {
+    /// let traceparent = "my_traceparent";
+    /// let invoked_method = UUri::try_from("//my-vehicle/D45/2/101")?;
+    /// let reply_to = UUri::try_from("//other-vehicle/D10/3/0")?;
+    /// let msg = UMessageBuilder::request(invoked_method, reply_to, 5000)
+    ///   .with_traceparent(traceparent)
+    ///   .build()?;
+    /// let attribs = msg.attributes();
+    /// assert_eq!(attribs.traceparent(), Some(traceparent));
+    /// # Ok(())
+    /// # }
+    /// ```
     #[must_use]
     pub fn traceparent(&self) -> Option<&str> {
         self.traceparent.as_deref()
     }
 
     /// Gets the request identifier of the message these attributes belong to.
+    ///
+    /// # Example
+    ///
+    /// ```rust
+    /// use up_rust::{UCode, UMessageBuilder, UUID, UUri};
+    ///
+    /// # fn main() -> Result<(), Box<dyn std::error::Error>> {
+    /// let request_id = UUID::build();
+    /// let invoked_method = UUri::try_from("//my-vehicle/D45/2/101")?;
+    /// let reply_to = UUri::try_from("//other-vehicle/D10/3/0")?;
+    /// let msg = UMessageBuilder::response(reply_to, request_id.clone(), invoked_method)
+    ///   .build()?;
+    /// let attribs = msg.attributes();
+    /// assert_eq!(attribs.request_id(), Some(&request_id));
+    /// # Ok(())
+    /// # }
+    /// ```
     #[must_use]
     pub fn request_id(&self) -> Option<&UUID> {
         self.reqid.as_ref()
@@ -234,26 +456,48 @@ impl UAttributes {
     /// # Panics
     ///
     /// if the property has no value.
+    ///
+    /// # Example
+    ///
+    /// ```rust
+    /// use up_rust::{UCode, UMessageBuilder, UUID, UUri};
+    ///
+    /// # fn main() -> Result<(), Box<dyn std::error::Error>> {
+    /// let request_id = UUID::build();
+    /// let invoked_method = UUri::try_from("//my-vehicle/D45/2/101")?;
+    /// let reply_to = UUri::try_from("//other-vehicle/D10/3/0")?;
+    /// let msg = UMessageBuilder::response(reply_to, request_id.clone(), invoked_method)
+    ///   .build()?;
+    /// let attribs = msg.attributes();
+    /// assert_eq!(attribs.request_id_unchecked(), &request_id);
+    /// # Ok(())
+    /// # }
+    /// ```
     #[must_use]
     pub fn request_id_unchecked(&self) -> &UUID {
         self.request_id().expect("message has no request ID")
     }
 
-    /// Gets the payload format of the message these attributes belong to.
-    #[must_use]
-    pub fn payload_format(&self) -> Option<UPayloadFormat> {
-        self.payload_format
-    }
-
-    /// Gets the payload format of the message these attributes belong to.
+    /// Gets the payload's encoding, as a payload-encoding registry entry
+    /// identifier. Absent when the message has no payload.
     ///
-    /// # Panics
+    /// # Example
     ///
-    /// if the property has no value.
+    /// ```rust
+    /// use up_rust::{PayloadEncoding, UMessageBuilder, UUri};
+    ///
+    /// # fn main() -> Result<(), Box<dyn std::error::Error>> {
+    /// let topic = UUri::try_from("//my-vehicle/D45/23/A001")?;
+    /// let msg = UMessageBuilder::publish(topic)
+    ///   .build_with_payload("hello".as_bytes(), PayloadEncoding::TEXT)?;
+    /// let attribs = msg.attributes();
+    /// assert_eq!(attribs.payload_encoding(), Some(PayloadEncoding::TEXT));
+    /// # Ok(())
+    /// # }
+    /// ```
     #[must_use]
-    pub fn payload_format_unchecked(&self) -> UPayloadFormat {
-        self.payload_format()
-            .expect("message has no payload format")
+    pub fn payload_encoding(&self) -> Option<PayloadEncoding> {
+        self.payload_encoding_id
     }
 
     /// Checks if a given priority class is the default priority class.
@@ -265,24 +509,85 @@ impl UAttributes {
     }
 
     /// Checks if these are the attributes for a Publish message.
+    ///
+    /// # Examples
+    ///
+    /// ```rust
+    /// use up_rust::{UMessageBuilder, UUri};
+    ///
+    /// # fn main() -> Result<(), Box<dyn std::error::Error>> {
+    /// let topic = UUri::try_from("//my-vehicle/D45/23/A001")?;
+    /// let msg = UMessageBuilder::publish(topic).build()?;
+    /// let attribs = msg.attributes();
+    /// assert!(attribs.is_publish());
+    /// # Ok(())
+    /// # }
+    /// ```
     #[must_use]
     pub fn is_publish(&self) -> bool {
         self.type_ == UMessageType::Publish
     }
 
     /// Checks if these are the attributes for an RPC Request message.
+    ///
+    /// # Examples
+    ///
+    /// ```rust
+    /// use up_rust::{UMessageBuilder, UUri};
+    ///
+    /// # fn main() -> Result<(), Box<dyn std::error::Error>> {
+    /// let invoked_method = UUri::try_from("//my-vehicle/D45/2/101")?;
+    /// let reply_to = UUri::try_from("//other-vehicle/D10/3/0")?;
+    /// let msg = UMessageBuilder::request(invoked_method, reply_to, 5000)
+    ///   .build()?;
+    /// let attribs = msg.attributes();
+    /// assert!(attribs.is_request());
+    /// # Ok(())
+    /// # }
+    /// ```
     #[must_use]
     pub fn is_request(&self) -> bool {
         self.type_ == UMessageType::Request
     }
 
     /// Checks if these are the attributes for an RPC Response message.
+    ///
+    /// # Examples
+    ///
+    /// ```rust
+    /// use up_rust::{UCode, UMessageBuilder, UUID, UUri};
+    ///
+    /// # fn main() -> Result<(), Box<dyn std::error::Error>> {
+    /// let invoked_method = UUri::try_from("//my-vehicle/D45/2/101")?;
+    /// let reply_to = UUri::try_from("//other-vehicle/D10/3/0")?;
+    /// let msg = UMessageBuilder::response(reply_to, UUID::build(), invoked_method)
+    ///   .build()?;
+    /// let attribs = msg.attributes();
+    /// assert!(attribs.is_response());
+    /// # Ok(())
+    /// # }
+    /// ```
     #[must_use]
     pub fn is_response(&self) -> bool {
         self.type_ == UMessageType::Response
     }
 
     /// Checks if these are the attributes for a Notification message.
+    ///
+    /// # Examples
+    ///
+    /// ```rust
+    /// use up_rust::{UMessageBuilder, UUri};
+    ///
+    /// # fn main() -> Result<(), Box<dyn std::error::Error>> {
+    /// let origin = UUri::try_from("//my-vehicle/D45/23/A001")?;
+    /// let dest = UUri::try_from("//other-vehicle/D10/3/0")?;
+    /// let msg = UMessageBuilder::notification(origin, dest).build()?;
+    /// let attribs = msg.attributes();
+    /// assert!(attribs.is_notification());
+    /// # Ok(())
+    /// # }
+    /// ```
     #[must_use]
     pub fn is_notification(&self) -> bool {
         self.type_ == UMessageType::Notification
@@ -314,9 +619,7 @@ impl UAttributes {
     /// Checks if the message that is described by these attributes should be considered expired.
     ///
     /// # Arguments
-    ///
-    /// * `reference_time` - The reference time as milliseconds since UNIX epoch. The check will
-    ///   be performed in relation to this point in time.
+    /// * `reference_time` - The reference time as a `Duration` since UNIX epoch. The check will be performed in relation to this point in time.
     ///
     /// # Errors
     ///
@@ -346,7 +649,7 @@ mod core_types_support {
     use super::*;
     use crate::up_core_api::uattributes::{
         UAttributes as UAttributesProto, UMessageType as UMessageTypeProto,
-        UPayloadFormat as UPayloadFormatProto, UPriority as UPriorityProto,
+        UPriority as UPriorityProto,
     };
     use crate::up_core_api::{
         ucode::UCode as UCodeProto, uri::UUri as UUriProto, uuid::UUID as UUIDProto,
@@ -372,12 +675,7 @@ mod core_types_support {
                 commstatus: attribs.commstatus.map(|cs| UCodeProto::from(cs).into()),
                 token: attribs.token().map(|t| t.to_string()),
                 traceparent: attribs.traceparent().map(|t| t.to_string()),
-                payload_format: attribs
-                    .payload_format
-                    .map_or(UPayloadFormatProto::UPAYLOAD_FORMAT_UNSPECIFIED, |pf| {
-                        UPayloadFormatProto::from(&pf)
-                    })
-                    .into(),
+                payload_encoding_id: attribs.payload_encoding_id.map(PayloadEncoding::id),
                 ..Default::default()
             }
         }
@@ -440,13 +738,11 @@ mod core_types_support {
                     Some(r) => Some(UUID::try_from(r)?),
                     None => None,
                 },
-                payload_format: match attribs_proto.payload_format.enum_value() {
-                    Ok(pf) => Some(UPayloadFormat::from(pf)),
-                    Err(e) => {
-                        return Err(UAttributesError::parsing_error(format!(
-                            "unknown payload format value: {e}"
-                        )))
-                    }
+                payload_encoding_id: match attribs_proto.payload_encoding_id {
+                    None => None,
+                    Some(id) => Some(PayloadEncoding::from_id(id).map_err(|_| {
+                        UAttributesError::parsing_error("payload-encoding identifier 0 is reserved")
+                    })?),
                 },
             })
         }
@@ -502,7 +798,7 @@ mod core_types_support {
         #[test_case::test_case(|mut attribs| { attribs.priority = EnumOrUnknown::from_i32(-1); attribs } => matches Err(UAttributesError::ParsingError(_)); "fails for invalid priority")]
         #[test_case::test_case(|mut attribs| { attribs.commstatus = Some(EnumOrUnknown::from_i32(-1)); attribs } => matches Err(UAttributesError::ParsingError(_)); "fails for invalid commstatus")]
         #[test_case::test_case(|mut attribs| { attribs.reqid.as_mut().unwrap().msb = 0x0000000000018000_u64; attribs } => matches Err(UAttributesError::ParsingError(_)); "fails for invalid request id")]
-        #[test_case::test_case(|mut attribs| { attribs.payload_format = EnumOrUnknown::from_i32(-1); attribs } => matches Err(UAttributesError::ParsingError(_)); "fails for invalid payload format")]
+        #[test_case::test_case(|mut attribs| { attribs.payload_encoding_id = Some(0); attribs } => matches Err(UAttributesError::ParsingError(_)); "fails for reserved payload-encoding id 0")]
         fn test_try_from_attributes<F: FnOnce(UAttributesProto) -> UAttributesProto>(
             mutator: F,
         ) -> Result<(), UAttributesError> {
@@ -541,7 +837,7 @@ mod core_types_support {
                     ..Default::default()
                 })
                 .into(),
-                payload_format: EnumOrUnknown::from_i32(3), // JSON
+                payload_encoding_id: Some(3), // JSON
                 ..Default::default()
             };
             let attribs_proto = mutator(valid_attribs_proto);
@@ -593,7 +889,7 @@ mod tests {
             token: None,
             traceparent: None,
             reqid: None,
-            payload_format: None,
+            payload_encoding_id: None,
         };
 
         assert!(attributes.check_expired().is_err() == should_be_expired);

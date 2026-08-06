@@ -20,8 +20,8 @@
 // [impl->dsn~cloudevents-umessage-mapping~2]
 
 use crate::{
-    UAttributes, UAttributesError, UAttributesValidators, UCode, UMessage, UMessageError,
-    UMessageType, UPayloadFormat, UPriority, UUri, UUID,
+    PayloadEncoding, UAttributes, UAttributesError, UAttributesValidators, UCode, UMessage,
+    UMessageError, UMessageType, UPriority, UUri, UUID,
 };
 use bytes::Bytes;
 use protobuf::well_known_types::any::Any;
@@ -268,13 +268,18 @@ impl CloudEvent {
             .insert(EXTENSION_NAME_TRACEPARENT.to_string(), val);
     }
 
-    fn get_payload_format(&self) -> Result<UPayloadFormat, UAttributesError> {
+    fn get_payload_encoding(&self) -> Result<Option<PayloadEncoding>, UAttributesError> {
         if let Some(extension_value) = self.attributes.get(EXTENSION_NAME_PFORMAT) {
             if extension_value.has_ce_integer() {
-                return UPayloadFormat::try_from_i32(extension_value.ce_integer()).map_err(|_e| {
+                let id = u32::try_from(extension_value.ce_integer()).map_err(|_| {
                     UAttributesError::parsing_error(format!(
-                        "unsupported payload format {:?} in {} extension attribute",
-                        extension_value.ce_integer(),
+                        "negative payload-encoding identifier in {} extension attribute",
+                        EXTENSION_NAME_PFORMAT
+                    ))
+                })?;
+                return PayloadEncoding::from_id(id).map(Some).map_err(|_| {
+                    UAttributesError::parsing_error(format!(
+                        "reserved payload-encoding identifier in {} extension attribute",
                         EXTENSION_NAME_PFORMAT
                     ))
                 });
@@ -285,16 +290,21 @@ impl CloudEvent {
                 )));
             }
         }
-        Ok(UPayloadFormat::Unspecified)
+        Ok(None)
     }
 
-    fn set_payload_format(&mut self, format: UPayloadFormat) {
-        if format != UPayloadFormat::Unspecified {
-            let mut val = CloudEventAttributeValue::new();
-            val.set_ce_integer(format.as_i32());
-            self.attributes
-                .insert(EXTENSION_NAME_PFORMAT.to_string(), val);
-        }
+    fn set_payload_encoding(&mut self, encoding: PayloadEncoding) -> Result<(), UMessageError> {
+        let id = i32::try_from(encoding.id()).map_err(|_| {
+            UMessageError::PayloadError(format!(
+                "payload-encoding identifier {} exceeds the CloudEvents integer range",
+                encoding.id()
+            ))
+        })?;
+        let mut val = CloudEventAttributeValue::new();
+        val.set_ce_integer(id);
+        self.attributes
+            .insert(EXTENSION_NAME_PFORMAT.to_string(), val);
+        Ok(())
     }
 }
 
@@ -347,20 +357,22 @@ impl TryFrom<UMessage> for CloudEvent {
         if let Some(traceparent) = message.traceparent() {
             event.set_traceparent(traceparent);
         }
-        let payload_format = message
-            .payload_format()
-            .unwrap_or(UPayloadFormat::Unspecified);
         if let Some(payload) = message.payload() {
-            event.set_payload_format(payload_format);
-            match payload_format {
-                UPayloadFormat::Protobuf | UPayloadFormat::ProtobufWrappedInAny => {
+            let Some(payload_encoding) = message.payload_encoding() else {
+                return Err(UMessageError::PayloadError(
+                    "message payload has no declared encoding".to_string(),
+                ));
+            };
+            event.set_payload_encoding(payload_encoding)?;
+            match payload_encoding {
+                PayloadEncoding::PROTOBUF | PayloadEncoding::PROTOBUF_WRAPPED_IN_ANY => {
                     let data = Any {
                         value: payload.to_vec(),
                         ..Default::default()
                     };
                     event.set_proto_data(data);
                 }
-                UPayloadFormat::Text | UPayloadFormat::Json => {
+                PayloadEncoding::TEXT | PayloadEncoding::JSON => {
                     let data = String::from_utf8(payload.to_vec())
                         .map(|v| v.to_string())
                         .map_err(|_e| {
@@ -370,11 +382,7 @@ impl TryFrom<UMessage> for CloudEvent {
                         })?;
                     event.set_text_data(data);
                 }
-                UPayloadFormat::Unspecified
-                | UPayloadFormat::Raw
-                | UPayloadFormat::Shm
-                | UPayloadFormat::Someip
-                | UPayloadFormat::SomeipTlv => {
+                _ => {
                     event.set_binary_data(payload.to_vec());
                 }
             }
@@ -416,9 +424,9 @@ impl TryFrom<CloudEvent> for UMessage {
             reqid: event.get_request_id()?,
             token: event.get_token()?,
             traceparent: event.get_traceparent()?,
-            payload_format: Some(event.get_payload_format()?),
+            payload_encoding_id: event.get_payload_encoding()?,
         };
-        UAttributesValidators::get_validator_for_attributes(&attributes).validate(&attributes)?;
+        UAttributesValidators::validator_for_attributes(&attributes).validate(&attributes)?;
 
         let payload = if event.has_binary_data() {
             Some(Bytes::copy_from_slice(event.binary_data()))
@@ -513,7 +521,7 @@ mod tests {
                 .with_priority(PRIORITY)
                 .with_ttl(TTL)
                 .with_traceparent(TRACEPARENT)
-                .build_with_payload("test".as_bytes(), UPayloadFormat::Text)
+                .build_with_payload("test".as_bytes(), PayloadEncoding::TEXT)
                 .expect("failed to create message");
 
         let event =
@@ -524,7 +532,7 @@ mod tests {
                 .attributes
                 .get(EXTENSION_NAME_PFORMAT)
                 .map(|v| v.ce_integer()),
-            Some(UPayloadFormat::Text.as_i32())
+            Some(PayloadEncoding::TEXT.id() as i32)
         );
         assert_eq!(event.text_data(), "test");
     }
@@ -542,7 +550,7 @@ mod tests {
         .with_priority(PRIORITY)
         .with_ttl(TTL)
         .with_traceparent(TRACEPARENT)
-        .build_with_payload("{\"count\": 5}".as_bytes(), UPayloadFormat::Json)
+        .build_with_payload("{\"count\": 5}".as_bytes(), PayloadEncoding::JSON)
         .expect("failed to create message");
 
         let event =
@@ -558,7 +566,7 @@ mod tests {
                 .attributes
                 .get(EXTENSION_NAME_PFORMAT)
                 .map(|v| v.ce_integer()),
-            Some(UPayloadFormat::Json.as_i32())
+            Some(PayloadEncoding::JSON.id() as i32)
         );
         assert_eq!(event.text_data(), "{\"count\": 5}");
     }
@@ -580,7 +588,7 @@ mod tests {
         .with_permission_level(PERMISSION_LEVEL)
         .with_traceparent(TRACEPARENT)
         .with_token(token)
-        .build_with_payload(payload.as_slice(), UPayloadFormat::Raw)
+        .build_with_payload(payload.as_slice(), PayloadEncoding::RAW)
         .expect("failed to create message");
         let event =
             CloudEvent::try_from(message).expect("failed to create CloudEvent from UMessage");
@@ -609,7 +617,7 @@ mod tests {
                 .attributes
                 .get(EXTENSION_NAME_PFORMAT)
                 .map(|v| v.ce_integer()),
-            Some(UPayloadFormat::Raw.as_i32())
+            Some(PayloadEncoding::RAW.id() as i32)
         );
         assert!(!event.has_proto_data());
         assert!(!event.has_text_data());
@@ -659,7 +667,7 @@ mod tests {
                 .attributes
                 .get(EXTENSION_NAME_PFORMAT)
                 .map(|v| v.ce_integer()),
-            Some(UPayloadFormat::Protobuf.as_i32())
+            Some(PayloadEncoding::PROTOBUF.id() as i32)
         );
         assert!(!event.has_binary_data());
         assert!(!event.has_text_data());
@@ -669,6 +677,21 @@ mod tests {
                 .expect("failed to pack payload into Any")
                 .value
         );
+    }
+
+    #[test]
+    fn test_try_from_message_rejects_encoding_outside_cloudevents_integer_range() {
+        let encoding = PayloadEncoding::from_id(i32::MAX as u32 + 1).unwrap();
+        let message =
+            UMessageBuilder::publish(UUri::from_str(TOPIC).expect("failed to create topic URI"))
+                .build_with_payload(vec![0_u8], encoding)
+                .expect("failed to create message");
+
+        assert!(matches!(
+            CloudEvent::try_from(message),
+            Err(UMessageError::PayloadError(error))
+                if error.contains("exceeds the CloudEvents integer range")
+        ));
     }
 
     //
@@ -712,14 +735,16 @@ mod tests {
         event.set_priority(UPriority::CS4);
         event.set_ttl(TTL).expect("failed to set TTL on message");
         event.set_traceparent(TRACEPARENT);
-        event.set_payload_format(UPayloadFormat::Text);
+        event
+            .set_payload_encoding(PayloadEncoding::TEXT)
+            .expect("valid payload encoding");
         event.set_text_data("test".to_string());
 
         let umessage =
             UMessage::try_from(event).expect("failed to create UMessage from CloudEvent");
         let attribs = umessage.attributes();
         assert_standard_umessage_attributes(attribs, UMessageType::Publish, TOPIC, None);
-        assert_eq!(attribs.payload_format_unchecked(), UPayloadFormat::Text);
+        assert_eq!(attribs.payload_encoding().unwrap(), PayloadEncoding::TEXT);
         assert_eq!(umessage.payload(), Some("test".as_bytes().into()))
     }
 
@@ -734,7 +759,9 @@ mod tests {
         event.set_priority(UPriority::CS4);
         event.set_ttl(TTL).expect("failed to set TTL on message");
         event.set_traceparent(TRACEPARENT);
-        event.set_payload_format(UPayloadFormat::Json);
+        event
+            .set_payload_encoding(PayloadEncoding::JSON)
+            .expect("valid payload encoding");
         event.set_text_data("{\"count\": 5}".to_string());
 
         let umessage =
@@ -746,7 +773,7 @@ mod tests {
             TOPIC,
             Some(DESTINATION.to_string()),
         );
-        assert_eq!(attribs.payload_format_unchecked(), UPayloadFormat::Json);
+        assert_eq!(attribs.payload_encoding().unwrap(), PayloadEncoding::JSON);
         assert_eq!(umessage.payload(), Some("{\"count\": 5}".as_bytes().into()))
     }
 
@@ -761,6 +788,9 @@ mod tests {
         event.set_priority(UPriority::CS4);
         event.set_ttl(TTL).expect("failed to set TTL on message");
         event.set_traceparent(TRACEPARENT);
+        event
+            .set_payload_encoding(PayloadEncoding::PROTOBUF_WRAPPED_IN_ANY)
+            .expect("valid payload encoding");
         event
             .set_permission_level(PERMISSION_LEVEL)
             .expect("failed to set permission level on message");
@@ -789,8 +819,8 @@ mod tests {
         assert_eq!(attribs.permission_level, Some(PERMISSION_LEVEL));
         assert_eq!(attribs.token(), Some("my-token"));
         assert_eq!(
-            attribs.payload_format_unchecked(),
-            UPayloadFormat::Unspecified
+            attribs.payload_encoding(),
+            Some(PayloadEncoding::PROTOBUF_WRAPPED_IN_ANY)
         );
         assert_eq!(
             umessage.payload(),
@@ -812,7 +842,9 @@ mod tests {
         event.set_traceparent(TRACEPARENT);
         event.set_request_id(&request_id);
         event.set_commstatus(UCode::Ok);
-        event.set_payload_format(UPayloadFormat::Protobuf);
+        event
+            .set_payload_encoding(PayloadEncoding::PROTOBUF)
+            .expect("valid payload encoding");
         event.set_proto_data(Any {
             value: DATA.to_vec(),
             ..Default::default()
@@ -829,7 +861,10 @@ mod tests {
         );
         assert_eq!(attribs.commstatus, None);
         assert_eq!(attribs.reqid, Some(request_id));
-        assert_eq!(attribs.payload_format_unchecked(), UPayloadFormat::Protobuf);
+        assert_eq!(
+            attribs.payload_encoding().unwrap(),
+            PayloadEncoding::PROTOBUF
+        );
         assert_eq!(umessage.payload(), Some(DATA.as_slice().into()));
     }
 }

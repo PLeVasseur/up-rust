@@ -17,8 +17,8 @@ use crate::uattributes::NotificationValidator;
 #[cfg(feature = "protobuf-support")]
 use crate::ProtobufMappable;
 use crate::{
-    PublishValidator, RequestValidator, ResponseValidator, UAttributes, UAttributesValidator,
-    UCode, UMessage, UMessageError, UMessageType, UPayloadFormat, UPriority, UUri, UUID,
+    PayloadEncoding, PublishValidator, RequestValidator, ResponseValidator, UAttributes,
+    UAttributesValidator, UCode, UMessage, UMessageError, UMessageType, UPriority, UUri, UUID,
 };
 
 mod sealed {
@@ -97,7 +97,7 @@ struct CommonAttributes {
     ttl: Option<u32>,
     priority: Option<UPriority>,
     traceparent: Option<String>,
-    payload_format: Option<UPayloadFormat>,
+    payload_encoding: Option<PayloadEncoding>,
     payload: Option<Bytes>,
     validator: Box<dyn UAttributesValidator>,
 }
@@ -133,12 +133,12 @@ impl UMessageBuilder<InitialBuilderState> {
     /// # Examples
     ///
     /// ```rust
-    /// use up_rust::{UMessageBuilder, UMessageType, UPayloadFormat, UPriority, UUri};
+    /// use up_rust::{UMessageBuilder, UMessageType, PayloadEncoding, UPriority, UUri};
     ///
     /// # fn main() -> Result<(), Box<dyn std::error::Error>> {
     /// let topic = UUri::try_from("//my-vehicle/4210/1/B24D")?;
     /// let message = UMessageBuilder::publish(topic.clone())
-    ///                    .build_with_payload("closed", UPayloadFormat::Text)?;
+    ///                    .build_with_payload("closed", PayloadEncoding::TEXT)?;
     /// assert_eq!(message.type_(), UMessageType::Publish);
     /// assert!(message.priority().is_none());
     /// assert_eq!(message.source(), &topic);
@@ -156,7 +156,7 @@ impl UMessageBuilder<InitialBuilderState> {
             ttl: None,
             priority: None,
             traceparent: None,
-            payload_format: None,
+            payload_encoding: None,
             payload: None,
             validator: Box::new(PublishValidator),
         };
@@ -178,13 +178,13 @@ impl UMessageBuilder<InitialBuilderState> {
     /// # Examples
     ///
     /// ```rust
-    /// use up_rust::{UMessageBuilder, UMessageType, UPayloadFormat, UPriority, UUri};
+    /// use up_rust::{UMessageBuilder, UMessageType, PayloadEncoding, UPriority, UUri};
     ///
     /// # fn main() -> Result<(), Box<dyn std::error::Error>> {
     /// let origin = UUri::try_from("//my-vehicle/4210/5/F20B")?;
     /// let destination = UUri::try_from("//my-cloud/CCDD/2/0")?;
     /// let message = UMessageBuilder::notification(origin.clone(), destination.clone())
-    ///                    .build_with_payload("unexpected movement", UPayloadFormat::Text)?;
+    ///                    .build_with_payload("unexpected movement", PayloadEncoding::TEXT)?;
     /// assert_eq!(message.type_(), UMessageType::Notification);
     /// assert!(message.priority().is_none());
     /// assert_eq!(message.source(), &origin);
@@ -206,7 +206,7 @@ impl UMessageBuilder<InitialBuilderState> {
             ttl: None,
             priority: None,
             traceparent: None,
-            payload_format: None,
+            payload_encoding: None,
             payload: None,
             validator: Box::new(NotificationValidator),
         };
@@ -233,13 +233,13 @@ impl UMessageBuilder<InitialBuilderState> {
     /// # Examples
     ///
     /// ```rust
-    /// use up_rust::{UMessageBuilder, UMessageType, UPayloadFormat, UPriority, UUri};
+    /// use up_rust::{UMessageBuilder, UMessageType, PayloadEncoding, UPriority, UUri};
     ///
     /// # fn main() -> Result<(), Box<dyn std::error::Error>> {
     /// let method_to_invoke = UUri::try_from("//my-vehicle/4210/5/64AB")?;
     /// let reply_to_address = UUri::try_from("//my-cloud/BA4C/1/0")?;
     /// let message = UMessageBuilder::request(method_to_invoke.clone(), reply_to_address.clone(), 5000)
-    ///                    .build_with_payload("lock", UPayloadFormat::Text)?;
+    ///                    .build_with_payload("lock", PayloadEncoding::TEXT)?;
     /// assert_eq!(message.type_(), UMessageType::Request);
     /// assert_eq!(message.priority_unchecked(), UPriority::CS4);
     /// assert_eq!(message.source(), &reply_to_address);
@@ -263,7 +263,7 @@ impl UMessageBuilder<InitialBuilderState> {
             ttl: Some(ttl),
             priority: Some(UPriority::CS4),
             traceparent: None,
-            payload_format: None,
+            payload_encoding: None,
             payload: None,
             validator: Box::new(RequestValidator),
         };
@@ -293,7 +293,7 @@ impl UMessageBuilder<InitialBuilderState> {
     /// # Examples
     ///
     /// ```rust
-    /// use up_rust::{UMessageBuilder, UMessageType, UPayloadFormat, UPriority, UUID, UUri};
+    /// use up_rust::{UMessageBuilder, UMessageType, PayloadEncoding, UPriority, UUID, UUri};
     ///
     /// # fn main() -> Result<(), Box<dyn std::error::Error>> {
     /// let invoked_method = UUri::try_from("//my-vehicle/4210/5/64AB")?;
@@ -326,7 +326,7 @@ impl UMessageBuilder<InitialBuilderState> {
             ttl: None,
             priority: Some(UPriority::CS4),
             traceparent: None,
-            payload_format: None,
+            payload_encoding: None,
             payload: None,
             validator: Box::new(ResponseValidator),
         };
@@ -358,7 +358,7 @@ impl UMessageBuilder<InitialBuilderState> {
     /// # Examples
     ///
     /// ```rust
-    /// use up_rust::{UMessageBuilder, UMessageType, UPayloadFormat, UPriority, UUID, UUri};
+    /// use up_rust::{UMessageBuilder, UMessageType, PayloadEncoding, UPriority, UUID, UUri};
     ///
     /// # fn main() -> Result<(), Box<dyn std::error::Error>> {
     /// let method_to_invoke = UUri::try_from("//my-vehicle/4210/5/64AB")?;
@@ -366,7 +366,7 @@ impl UMessageBuilder<InitialBuilderState> {
     /// let request_message_id = UUID::build();
     /// let request_message = UMessageBuilder::request(method_to_invoke.clone(), reply_to_address.clone(), 5000)
     ///                           .with_message_id(request_message_id.clone()) // normally not needed, used only for asserts below
-    ///                           .build_with_payload("lock", UPayloadFormat::Text)?;
+    ///                           .build_with_payload("lock", PayloadEncoding::TEXT)?;
     ///
     /// let response_message = UMessageBuilder::response_for_request(request_message.attributes())
     ///                           .with_priority(UPriority::CS5)
@@ -400,7 +400,7 @@ impl UMessageBuilder<InitialBuilderState> {
             ttl: request_attributes.ttl(),
             priority: request_attributes.priority(),
             traceparent: None,
-            payload_format: None,
+            payload_encoding: None,
             payload: None,
             validator: Box::new(ResponseValidator),
         };
@@ -433,21 +433,21 @@ impl<S: BuilderState> UMessageBuilder<S> {
     /// # Examples
     ///
     /// ```rust
-    /// use up_rust::{UMessageBuilder, UMessageType, UPayloadFormat, UPriority, UUID, UUri};
+    /// use up_rust::{UMessageBuilder, UMessageType, PayloadEncoding, UPriority, UUID, UUri};
     ///
     /// # fn main() -> Result<(), Box<dyn std::error::Error>> {
     /// let topic = UUri::try_from("//my-vehicle/4210/1/B24D")?;
     /// let mut builder = UMessageBuilder::publish(topic);
     /// let message_one = builder
     ///                     .with_message_id(UUID::build())
-    ///                     .build_with_payload("closed", UPayloadFormat::Text)?;
+    ///                     .build_with_payload("closed", PayloadEncoding::TEXT)?;
     /// let message_two = builder
     ///                     // use new message ID but retain all other attributes
     ///                     .with_message_id(UUID::build())
-    ///                     .build_with_payload("open", UPayloadFormat::Text)?;
+    ///                     .build_with_payload("open", PayloadEncoding::TEXT)?;
     /// assert_ne!(message_one.id(), message_two.id());
     /// assert_eq!(message_one.source(), message_two.source());
-    /// assert_eq!(message_one.payload_format_unchecked(), message_two.payload_format_unchecked());
+    /// assert_eq!(message_one.payload_encoding().unwrap(), message_two.payload_encoding().unwrap());
     /// # Ok(())
     /// # }
     /// ```
@@ -473,13 +473,13 @@ impl<S: BuilderState> UMessageBuilder<S> {
     /// # Examples
     ///
     /// ```rust
-    /// use up_rust::{UMessageBuilder, UMessageType, UPayloadFormat, UPriority, UUri};
+    /// use up_rust::{UMessageBuilder, UMessageType, PayloadEncoding, UPriority, UUri};
     ///
     /// # fn main() -> Result<(), Box<dyn std::error::Error>> {
     /// let topic = UUri::try_from("//my-vehicle/4210/1/B24D")?;
     /// let message = UMessageBuilder::publish(topic)
     ///                   .with_priority(UPriority::CS5)
-    ///                   .build_with_payload("closed", UPayloadFormat::Text)?;
+    ///                   .build_with_payload("closed", PayloadEncoding::TEXT)?;
     /// assert_eq!(message.priority_unchecked(), UPriority::CS5);
     /// # Ok(())
     /// # }
@@ -508,7 +508,7 @@ impl<S: BuilderState> UMessageBuilder<S> {
     /// # Examples
     ///
     /// ```rust
-    /// use up_rust::{UMessageBuilder, UMessageType, UPayloadFormat, UPriority, UUID, UUri};
+    /// use up_rust::{UMessageBuilder, UMessageType, PayloadEncoding, UPriority, UUID, UUri};
     ///
     /// # fn main() -> Result<(), Box<dyn std::error::Error>> {
     /// let invoked_method = UUri::try_from("//my-vehicle/4210/5/64AB")?;
@@ -541,14 +541,14 @@ impl<S: BuilderState> UMessageBuilder<S> {
     /// # Examples
     ///
     /// ```rust
-    /// use up_rust::{UMessageBuilder, UMessageType, UPayloadFormat, UPriority, UUri};
+    /// use up_rust::{UMessageBuilder, UMessageType, PayloadEncoding, UPriority, UUri};
     ///
     /// # fn main() -> Result<(), Box<dyn std::error::Error>> {
     /// let topic = UUri::try_from("//my-vehicle/4210/1/B24D")?;
     /// let traceparent = "00-4bf92f3577b34da6a3ce929d0e0e4736-00f067aa0ba902b7-01";
     /// let message = UMessageBuilder::publish(topic.clone())
     ///                    .with_traceparent(traceparent)
-    ///                    .build_with_payload("closed", UPayloadFormat::Text)?;
+    ///                    .build_with_payload("closed", PayloadEncoding::TEXT)?;
     /// assert_eq!(message.traceparent(), Some(traceparent));
     /// # Ok(())
     /// # }
@@ -626,8 +626,9 @@ impl<S: BuilderState> UMessageBuilder<S> {
             ttl: self.common.ttl,
             priority: self.common.priority,
             traceparent: self.common.traceparent.to_owned(),
-            payload_format: self.common.payload_format,
+            payload_encoding_id: self.common.payload_encoding,
             token: None, // token is only relevant for request messages and is set via the RequestBuilderState
+
             permission_level: None, // permission_level is only relevant for request messages and is set via the RequestBuilderState
             commstatus: None, // commstatus is only relevant for response messages and is set via the ResponseBuilderState
             reqid: None, // reqid is only relevant for response messages and is set via the ResponseBuilderState
@@ -647,7 +648,7 @@ impl<S: BuilderState> UMessageBuilder<S> {
     /// # Arguments
     ///
     /// * `payload` - The data to set as payload.
-    /// * `format` - The payload format.
+    /// * `encoding` - The payload encoding.
     ///
     /// # Returns
     ///
@@ -661,12 +662,12 @@ impl<S: BuilderState> UMessageBuilder<S> {
     /// # Examples
     ///
     /// ```rust
-    /// use up_rust::{UMessageBuilder, UMessageType, UPayloadFormat, UPriority, UUri};
+    /// use up_rust::{UMessageBuilder, UMessageType, PayloadEncoding, UPriority, UUri};
     ///
     /// # fn main() -> Result<(), Box<dyn std::error::Error>> {
     /// let topic = UUri::try_from("//my-vehicle/4210/1/B24D")?;
     /// let message = UMessageBuilder::publish(topic)
-    ///                    .build_with_payload("locked", UPayloadFormat::Text)?;
+    ///                    .build_with_payload("locked", PayloadEncoding::TEXT)?;
     /// assert!(message.payload().is_some());
     /// # Ok(())
     /// # }
@@ -674,11 +675,11 @@ impl<S: BuilderState> UMessageBuilder<S> {
     pub fn build_with_payload<T: Into<Bytes>>(
         &mut self,
         payload: T,
-        format: UPayloadFormat,
+        encoding: PayloadEncoding,
     ) -> Result<UMessage, UMessageError> {
         self.common.payload = Some(payload.into());
-        // [impl->dsn~up-attributes-payload-format~1]
-        self.common.payload_format = Some(format);
+        // [impl->dsn~up-attributes-payload-encoding-id~1]
+        self.common.payload_encoding = Some(encoding);
 
         self.build()
     }
@@ -692,7 +693,7 @@ impl<S: BuilderState> UMessageBuilder<S> {
     /// # Returns
     ///
     /// A message ready to be sent using [`crate::UTransport::send`]. The message will have
-    /// [`UPayloadFormat::Protobuf`] set as its payload format.
+    /// [`PayloadEncoding::PROTOBUF`] set as its payload encoding.
     ///
     /// # Errors
     ///
@@ -704,7 +705,7 @@ impl<S: BuilderState> UMessageBuilder<S> {
     ///
     /// ```rust
     /// use protobuf::well_known_types::wrappers::StringValue;
-    /// use up_rust::{UCode, UMessageBuilder, UMessageType, UPayloadFormat, UPriority, UStatus, UUID, UUri};
+    /// use up_rust::{UCode, UMessageBuilder, UMessageType, PayloadEncoding, UPriority, UStatus, UUID, UUri};
     ///
     /// # fn main() -> Result<(), Box<dyn std::error::Error>> {
     /// let invoked_method = UUri::try_from("//my-vehicle/4210/5/64AB")?;
@@ -717,7 +718,7 @@ impl<S: BuilderState> UMessageBuilder<S> {
     ///                    .with_comm_status(UCode::InvalidArgument)
     ///                    .build_with_protobuf_payload(&payload)?;
     /// assert!(message.payload().is_some());
-    /// assert_eq!(message.payload_format_unchecked(), UPayloadFormat::Protobuf);
+    /// assert_eq!(message.payload_encoding().unwrap(), PayloadEncoding::PROTOBUF);
     /// # Ok(())
     /// # }
     /// ```
@@ -730,7 +731,7 @@ impl<S: BuilderState> UMessageBuilder<S> {
             .write_to_protobuf_bytes()
             .map_err(UMessageError::from)
             .and_then(|serialized_payload| {
-                self.build_with_payload(serialized_payload, UPayloadFormat::Protobuf)
+                self.build_with_payload(serialized_payload, PayloadEncoding::PROTOBUF)
             })
     }
 
@@ -743,7 +744,7 @@ impl<S: BuilderState> UMessageBuilder<S> {
     /// # Returns
     ///
     /// A message ready to be sent using [`crate::UTransport::send`]. The message will have
-    /// [`UPayloadFormat::ProtobufWrappedInAny`] set as its payload format.
+    /// [`PayloadEncoding::PROTOBUF_WRAPPED_IN_ANY`] set as its payload encoding.
     ///
     /// # Errors
     ///
@@ -755,7 +756,7 @@ impl<S: BuilderState> UMessageBuilder<S> {
     ///
     /// ```rust
     /// use protobuf::well_known_types::wrappers::StringValue;
-    /// use up_rust::{UCode, UMessageBuilder, UMessageType, UPayloadFormat, UPriority, UStatus, UUID, UUri};
+    /// use up_rust::{UCode, UMessageBuilder, UMessageType, PayloadEncoding, UPriority, UStatus, UUID, UUri};
     ///
     /// # fn main() -> Result<(), Box<dyn std::error::Error>> {
     /// let invoked_method = UUri::try_from("//my-vehicle/4210/5/64AB")?;
@@ -768,7 +769,7 @@ impl<S: BuilderState> UMessageBuilder<S> {
     ///                    .with_comm_status(UCode::InvalidArgument)
     ///                    .build_with_wrapped_protobuf_payload(&payload)?;
     /// assert!(message.payload().is_some());
-    /// assert_eq!(message.payload_format_unchecked(), UPayloadFormat::ProtobufWrappedInAny);
+    /// assert_eq!(message.payload_encoding().unwrap(), PayloadEncoding::PROTOBUF_WRAPPED_IN_ANY);
     /// # Ok(())
     /// # }
     /// ```
@@ -781,7 +782,10 @@ impl<S: BuilderState> UMessageBuilder<S> {
             .write_to_packed_protobuf_bytes()
             .map_err(UMessageError::from)
             .and_then(|serialized_payload| {
-                self.build_with_payload(serialized_payload, UPayloadFormat::ProtobufWrappedInAny)
+                self.build_with_payload(
+                    serialized_payload,
+                    PayloadEncoding::PROTOBUF_WRAPPED_IN_ANY,
+                )
             })
     }
 }
@@ -800,7 +804,7 @@ impl UMessageBuilder<RequestBuilderState> {
     /// # Examples
     ///
     /// ```rust
-    /// use up_rust::{UMessageBuilder, UMessageType, UPayloadFormat, UPriority, UUri};
+    /// use up_rust::{UMessageBuilder, UMessageType, PayloadEncoding, UPriority, UUri};
     ///
     /// # fn main() -> Result<(), Box<dyn std::error::Error>> {
     /// let method_to_invoke = UUri::try_from("//my-vehicle/4210/5/64AB")?;
@@ -808,7 +812,7 @@ impl UMessageBuilder<RequestBuilderState> {
     /// let token = "this-is-my-token";
     /// let message = UMessageBuilder::request(method_to_invoke, reply_to_address, 5000)
     ///                     .with_token(token)
-    ///                     .build_with_payload("lock", UPayloadFormat::Text)?;
+    ///                     .build_with_payload("lock", PayloadEncoding::TEXT)?;
     /// assert_eq!(message.token(), Some(token));
     /// # Ok(())
     /// # }
@@ -832,14 +836,14 @@ impl UMessageBuilder<RequestBuilderState> {
     /// # Examples
     ///
     /// ```rust
-    /// use up_rust::{UCode, UMessageBuilder, UPayloadFormat, UPriority, UUri};
+    /// use up_rust::{UCode, UMessageBuilder, PayloadEncoding, UPriority, UUri};
     ///
     /// # fn main() -> Result<(), Box<dyn std::error::Error>> {
     /// let method_to_invoke = UUri::try_from("//my-vehicle/4210/5/64AB")?;
     /// let reply_to_address = UUri::try_from("//my-cloud/BA4C/1/0")?;
     /// let message = UMessageBuilder::request(method_to_invoke, reply_to_address, 5000)
     ///                     .with_permission_level(12)
-    ///                     .build_with_payload("lock", UPayloadFormat::Text)?;
+    ///                     .build_with_payload("lock", PayloadEncoding::TEXT)?;
     /// assert_eq!(message.permission_level(), Some(12));
     /// # Ok(())
     /// # }
@@ -929,11 +933,11 @@ mod tests {
         let mut builder = UMessageBuilder::publish(topic);
         let message_one = builder
             .with_message_id(UUID::build())
-            .build_with_payload("locked", UPayloadFormat::Text)
+            .build_with_payload("locked", PayloadEncoding::TEXT)
             .expect("should have been able to create message");
         let message_two = builder
             .with_message_id(UUID::build())
-            .build_with_payload("unlocked", UPayloadFormat::Text)
+            .build_with_payload("unlocked", PayloadEncoding::TEXT)
             .expect("should have been able to create message");
         assert_eq!(message_one.attributes.type_, message_two.attributes.type_);
         assert_ne!(message_one.attributes.id, message_two.attributes.id);
@@ -952,7 +956,7 @@ mod tests {
             .with_message_id(message_id.clone())
             .with_ttl(5000)
             .with_traceparent(traceparent)
-            .build_with_payload("locked", UPayloadFormat::Text)
+            .build_with_payload("locked", PayloadEncoding::TEXT)
             .expect("should have been able to create message");
 
         // [utest->dsn~up-attributes-id~1]
@@ -966,8 +970,8 @@ mod tests {
         assert_eq!(message.traceparent(), Some(traceparent));
         // [utest->dsn~up-attributes-publish-type~1]
         assert_eq!(message.type_(), UMessageType::Publish);
-        // [utest->dsn~up-attributes-payload-format~1]
-        assert_eq!(message.payload_format_unchecked(), UPayloadFormat::Text);
+        // [utest->dsn~up-attributes-payload-encoding-id~1]
+        assert_eq!(message.payload_encoding().unwrap(), PayloadEncoding::TEXT);
 
         assert!(message.commstatus().is_none());
         assert!(message.permission_level().is_none());
@@ -1000,7 +1004,7 @@ mod tests {
             .with_priority(UPriority::CS2)
             .with_ttl(5000)
             .with_traceparent(traceparent)
-            .build_with_payload("locked", UPayloadFormat::Text)
+            .build_with_payload("locked", PayloadEncoding::TEXT)
             .expect("should have been able to create message");
 
         // [utest->dsn~up-attributes-id~1]
@@ -1013,8 +1017,8 @@ mod tests {
         assert_eq!(message.traceparent(), Some(traceparent));
         // [utest->dsn~up-attributes-notification-type~1]
         assert!(message.is_notification());
-        // [utest->dsn~up-attributes-payload-format~1]
-        assert_eq!(message.payload_format_unchecked(), UPayloadFormat::Text);
+        // [utest->dsn~up-attributes-payload-encoding-id~1]
+        assert_eq!(message.payload_encoding().unwrap(), PayloadEncoding::TEXT);
 
         assert!(message.commstatus().is_none());
         assert!(message.permission_level().is_none());
@@ -1051,7 +1055,7 @@ mod tests {
                 .with_priority(UPriority::CS4)
                 .with_token(token)
                 .with_traceparent(traceparent)
-                .build_with_payload("unlock", UPayloadFormat::Text)
+                .build_with_payload("unlock", PayloadEncoding::TEXT)
                 .expect("should have been able to create message");
 
         // [utest->dsn~up-attributes-id~1]
@@ -1068,8 +1072,8 @@ mod tests {
         assert_eq!(message.traceparent(), Some(traceparent));
         // [utest->dsn~up-attributes-request-type~1]
         assert!(message.is_request());
-        // [utest->dsn~up-attributes-payload-format~1]
-        assert_eq!(message.payload_format_unchecked(), UPayloadFormat::Text);
+        // [utest->dsn~up-attributes-payload-encoding-id~1]
+        assert_eq!(message.payload_encoding().unwrap(), PayloadEncoding::TEXT);
 
         assert!(message.commstatus().is_none());
         assert!(message.request_id().is_none());
@@ -1132,7 +1136,7 @@ mod tests {
         assert_eq!(message.ttl_unchecked(), 5000);
         // [utest->dsn~up-attributes-response-type~1]
         assert!(message.is_response());
-        assert!(message.payload_format().is_none());
+        assert!(message.payload_encoding().is_none());
         assert!(message.payload.is_none());
 
         assert!(message.permission_level().is_none());
@@ -1175,7 +1179,7 @@ mod tests {
         assert_eq!(message.traceparent(), Some(traceparent));
         // [utest->dsn~up-attributes-response-type~1]
         assert!(message.is_response());
-        assert!(message.payload_format().is_none());
+        assert!(message.payload_encoding().is_none());
         assert!(message.payload.is_none());
 
         assert!(message.permission_level().is_none());

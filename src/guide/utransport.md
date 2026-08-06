@@ -122,7 +122,7 @@ impl UListener for Capture {
 
 #[tokio::main]
 async fn main() -> Result<(), Box<dyn std::error::Error>> {
-    use up_rust::{UMessageBuilder, UPayloadFormat};
+    use up_rust::{UMessageBuilder, PayloadEncoding};
     let transport = MiniTransport::default();
     let topic = UUri::try_from_parts("demo", 0x1_0001, 1, 0x8001)?;
     let (tx, mut rx) = tokio::sync::mpsc::unbounded_channel();
@@ -130,9 +130,9 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     let listener: Arc<dyn UListener> = Arc::new(Capture(tx));
     transport.register_listener(&topic, None, listener.clone()).await?;
     let duplicate = transport.register_listener(&topic, None, listener).await.unwrap_err();
-    assert_eq!(duplicate.get_code(), UCode::AlreadyExists);
+    assert_eq!(duplicate.code(), UCode::AlreadyExists);
     transport
-        .send(UMessageBuilder::publish(topic).build_with_payload("42", UPayloadFormat::Text)?)
+        .send(UMessageBuilder::publish(topic).build_with_payload("42", PayloadEncoding::TEXT)?)
         .await?;
 
     let received = rx.recv().await.expect("message delivered");

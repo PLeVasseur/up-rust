@@ -7,12 +7,12 @@ beyond your own — just build a [`UMessage`](crate::UMessage) and hand it to th
 ## Publish
 
 ```rust
-use up_rust::{UMessageBuilder, UPayloadFormat, UTransport, UUri};
+use up_rust::{PayloadEncoding, UMessageBuilder, UTransport, UUri};
 
 async fn publish(transport: &dyn UTransport) -> Result<(), Box<dyn std::error::Error>> {
     let topic = UUri::try_from_parts("my-vehicle", 0x1_0001, 1, 0x8001)?;
     let message = UMessageBuilder::publish(topic)
-        .build_with_payload("92.5", UPayloadFormat::Text)?;
+        .build_with_payload("92.5", PayloadEncoding::TEXT)?;
     transport.send(message).await?;
     Ok(())
 }
