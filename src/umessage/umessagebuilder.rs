@@ -40,21 +40,29 @@ mod sealed {
 /// which might produce invalid [UMessage] instances by means of the [Self::merge_into_attributes]
 /// function.
 pub trait BuilderState: sealed::Sealed {
+    /// The merge into attributes.
     fn merge_into_attributes(&self, _attributes: &mut UAttributes) {}
 }
 
+#[derive(Debug)]
 pub struct InitialBuilderState;
 impl sealed::Sealed for InitialBuilderState {}
 impl BuilderState for InitialBuilderState {}
 
+/// The item.
+#[derive(Debug)]
 pub struct PublishBuilderState;
 impl sealed::Sealed for PublishBuilderState {}
 impl BuilderState for PublishBuilderState {}
 
+/// The item.
+#[derive(Debug)]
 pub struct NotificationBuilderState;
 impl sealed::Sealed for NotificationBuilderState {}
 impl BuilderState for NotificationBuilderState {}
 
+/// The item.
+#[derive(Debug)]
 pub struct RequestBuilderState {
     permission_level: Option<u32>,
     token: Option<String>,
@@ -67,6 +75,8 @@ impl BuilderState for RequestBuilderState {
     }
 }
 
+/// The item.
+#[derive(Debug)]
 pub struct ResponseBuilderState {
     comm_status: Option<UCode>,
     request_id: UUID,
@@ -102,6 +112,12 @@ struct CommonAttributes {
 pub struct UMessageBuilder<S: BuilderState> {
     common: CommonAttributes,
     extra: S,
+}
+
+impl<S: BuilderState> core::fmt::Debug for UMessageBuilder<S> {
+    fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
+        f.debug_struct("UMessageBuilder").finish_non_exhaustive()
+    }
 }
 
 impl UMessageBuilder<InitialBuilderState> {
@@ -873,7 +889,7 @@ impl UMessageBuilder<ResponseBuilderState> {
 #[cfg(test)]
 mod tests {
     use super::*;
-    #[cfg(feature = "up-core-types")]
+    #[cfg(feature = "up-core-api")]
     use crate::ProtobufMappable;
 
     use test_case::test_case;
@@ -957,7 +973,7 @@ mod tests {
         assert!(message.permission_level().is_none());
         assert!(message.token().is_none());
 
-        #[cfg(feature = "up-core-types")]
+        #[cfg(feature = "up-core-api")]
         {
             // [utest->req~uattributes-data-model-proto~1]
             // [utest->req~umessage-data-model-proto~1]
@@ -1004,7 +1020,7 @@ mod tests {
         assert!(message.permission_level().is_none());
         assert!(message.token().is_none());
 
-        #[cfg(feature = "up-core-types")]
+        #[cfg(feature = "up-core-api")]
         {
             // [utest->req~uattributes-data-model-proto~1]
             // [utest->req~umessage-data-model-proto~1]
@@ -1060,7 +1076,7 @@ mod tests {
 
         // [utest->req~uattributes-data-model-proto~1]
         // [utest->req~umessage-data-model-proto~1]
-        #[cfg(feature = "up-core-types")]
+        #[cfg(feature = "up-core-api")]
         {
             let proto = message
                 .write_to_protobuf_bytes()
@@ -1167,7 +1183,7 @@ mod tests {
 
         // [utest->req~uattributes-data-model-proto~1]
         // [utest->req~umessage-data-model-proto~1]
-        #[cfg(feature = "up-core-types")]
+        #[cfg(feature = "up-core-api")]
         {
             let proto = message
                 .write_to_protobuf_bytes()
