@@ -222,6 +222,21 @@ pub use payload::codec::{
 };
 pub use payload::UWireError;
 
+// ---- owned-frame transport family ----
+
+#[cfg(feature = "owned-frame-transport")]
+pub use frame::envelope::{UFrameWireError, UFrameWireFormat};
+
+#[cfg(feature = "owned-frame-transport")]
+mod owned_frame;
+#[cfg(all(feature = "owned-frame-transport", any(test, feature = "test-util")))]
+pub use owned_frame::InMemoryOwnedTransport;
+#[cfg(feature = "owned-frame-transport")]
+pub use owned_frame::UOwnedFrame;
+
+#[cfg(feature = "owned-frame-transport")]
+pub use utransport::{UOwnedListener, UOwnedTransport, UOwnedTransportImpl};
+
 // ---- wire formats ----
 
 #[cfg(feature = "wire-implementer-api")]
