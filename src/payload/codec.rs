@@ -28,6 +28,27 @@ pub struct PayloadLayout {
     align: usize,
 }
 
+/// Explicit maximum number of encoded payload bytes accepted from a reader.
+///
+/// This limit bounds encoded input only. It does not bound allocations made by
+/// a decoder while constructing its output value.
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub struct PayloadDecodeLimit(usize);
+
+impl PayloadDecodeLimit {
+    /// Creates an encoded-input limit.
+    #[must_use]
+    pub const fn new(max_payload_bytes: usize) -> Self {
+        Self(max_payload_bytes)
+    }
+
+    /// Returns the maximum accepted encoded payload length.
+    #[must_use]
+    pub const fn max_payload_bytes(self) -> usize {
+        self.0
+    }
+}
+
 impl PayloadLayout {
     /// Creates a payload layout.
     ///
@@ -199,7 +220,11 @@ pub trait ReadDecodePayload<T>: PayloadCodec {
     ///
     /// Returns an error if the reader fails, yields an unexpected byte count, or
     /// contains malformed payload bytes for this codec.
-    fn decode_payload_from_reader<R: Read>(reader: R, payload_len: usize) -> Result<T, UWireError>;
+    fn decode_payload_from_reader<R: Read>(
+        reader: R,
+        payload_len: usize,
+        limit: PayloadDecodeLimit,
+    ) -> Result<T, UWireError>;
 }
 
 /// Marker trait for byte-oriented payload codecs.
@@ -266,8 +291,9 @@ impl ReadDecodePayload<Vec<u8>> for RawBytes {
     fn decode_payload_from_reader<R: Read>(
         reader: R,
         payload_len: usize,
+        limit: PayloadDecodeLimit,
     ) -> Result<Vec<u8>, UWireError> {
-        read_exact_payload(reader, payload_len)
+        read_exact_payload(reader, payload_len, limit)
     }
 }
 
@@ -275,8 +301,9 @@ impl ReadDecodePayload<Bytes> for RawBytes {
     fn decode_payload_from_reader<R: Read>(
         reader: R,
         payload_len: usize,
+        limit: PayloadDecodeLimit,
     ) -> Result<Bytes, UWireError> {
-        read_exact_payload(reader, payload_len).map(Bytes::from)
+        read_exact_payload(reader, payload_len, limit).map(Bytes::from)
     }
 }
 
@@ -343,8 +370,12 @@ impl<T> ReadDecodePayload<T> for ProtobufPayload
 where
     T: ProtobufMappable,
 {
-    fn decode_payload_from_reader<R: Read>(reader: R, payload_len: usize) -> Result<T, UWireError> {
-        let bytes = read_exact_payload(reader, payload_len)?;
+    fn decode_payload_from_reader<R: Read>(
+        reader: R,
+        payload_len: usize,
+        limit: PayloadDecodeLimit,
+    ) -> Result<T, UWireError> {
+        let bytes = read_exact_payload(reader, payload_len, limit)?;
         T::parse_from_protobuf_bytes(&bytes)
             .map_err(|error| UWireError::invalid_payload(error.to_string()))
     }
@@ -409,8 +440,12 @@ impl<T> ReadDecodePayload<T> for ProtobufAnyPayload
 where
     T: ProtobufMappable,
 {
-    fn decode_payload_from_reader<R: Read>(reader: R, payload_len: usize) -> Result<T, UWireError> {
-        let bytes = read_exact_payload(reader, payload_len)?;
+    fn decode_payload_from_reader<R: Read>(
+        reader: R,
+        payload_len: usize,
+        limit: PayloadDecodeLimit,
+    ) -> Result<T, UWireError> {
+        let bytes = read_exact_payload(reader, payload_len, limit)?;
         T::parse_from_packed_protobuf_bytes(&bytes)
             .map_err(|error| UWireError::invalid_payload(error.to_string()))
     }
@@ -426,22 +461,46 @@ fn copy_encoded_payload(bytes: Bytes, dst: &mut [u8]) -> Result<(), UWireError> 
     Ok(())
 }
 
-fn read_exact_payload<R: Read>(mut reader: R, payload_len: usize) -> Result<Vec<u8>, UWireError> {
-    let mut bytes = Vec::with_capacity(payload_len);
-    reader
-        .read_to_end(&mut bytes)
-        .map_err(|error| UWireError::invalid_payload(error.to_string()))?;
-    if bytes.len() != payload_len {
+fn read_exact_payload<R: Read>(
+    reader: R,
+    payload_len: usize,
+    limit: PayloadDecodeLimit,
+) -> Result<Vec<u8>, UWireError> {
+    if payload_len > limit.max_payload_bytes() {
         return Err(UWireError::invalid_payload(format!(
-            "payload reader yielded {} bytes but payload_len returned {payload_len} bytes",
-            bytes.len()
+            "advertised payload length {payload_len} exceeds configured input limit {}",
+            limit.max_payload_bytes()
         )));
     }
-    Ok(bytes)
+    let probe_len = payload_len.checked_add(1).ok_or_else(|| {
+        UWireError::invalid_payload("payload length cannot reserve an overrun sentinel")
+    })?;
+    let reader_limit = u64::try_from(probe_len)
+        .map_err(|_| UWireError::invalid_payload("payload probe length exceeds reader capacity"))?;
+    let mut bytes = Vec::new();
+    bytes.try_reserve_exact(probe_len).map_err(|error| {
+        UWireError::serialization_error(format!("failed to reserve payload probe: {error}"))
+    })?;
+    reader
+        .take(reader_limit)
+        .read_to_end(&mut bytes)
+        .map_err(|error| UWireError::serialization_error(error.to_string()))?;
+    match bytes.len().cmp(&payload_len) {
+        core::cmp::Ordering::Less => Err(UWireError::invalid_payload(format!(
+            "payload reader ended early: expected {payload_len} bytes, got {}",
+            bytes.len()
+        ))),
+        core::cmp::Ordering::Equal => Ok(bytes),
+        core::cmp::Ordering::Greater => Err(UWireError::invalid_payload(format!(
+            "payload reader yielded more than advertised {payload_len} bytes"
+        ))),
+    }
 }
 
 #[cfg(test)]
 mod tests {
+    use std::io;
+
     #[cfg(feature = "protobuf-support")]
     use protobuf::well_known_types::wrappers::StringValue;
 
@@ -477,6 +536,59 @@ mod tests {
                 expected: 7,
                 actual: 3,
             }
+        );
+    }
+
+    #[test]
+    fn bounded_reader_distinguishes_limit_eof_exact_and_overrun() {
+        let policy = PayloadDecodeLimit::new(3);
+        assert!(matches!(
+            <RawBytes as ReadDecodePayload<Vec<u8>>>::decode_payload_from_reader(
+                &b"abc"[..], 4, policy
+            ),
+            Err(UWireError::InvalidPayload(message)) if message.contains("exceeds configured input limit")
+        ));
+        assert!(matches!(
+            <RawBytes as ReadDecodePayload<Vec<u8>>>::decode_payload_from_reader(
+                &b"ab"[..], 3, policy
+            ),
+            Err(UWireError::InvalidPayload(message)) if message.contains("ended early")
+        ));
+        assert_eq!(
+            <RawBytes as ReadDecodePayload<Vec<u8>>>::decode_payload_from_reader(
+                &b"abc"[..],
+                3,
+                policy
+            )
+            .unwrap(),
+            b"abc"
+        );
+        assert!(matches!(
+            <RawBytes as ReadDecodePayload<Vec<u8>>>::decode_payload_from_reader(
+                &b"abcd"[..], 3, policy
+            ),
+            Err(UWireError::InvalidPayload(message)) if message.contains("more than advertised")
+        ));
+        assert!(
+            <RawBytes as ReadDecodePayload<Vec<u8>>>::decode_payload_from_reader(
+                io::repeat(0),
+                3,
+                PayloadDecodeLimit::new(3)
+            )
+            .is_err()
+        );
+    }
+
+    #[test]
+    fn bounded_reader_accepts_explicit_zero_policy_for_empty_payload() {
+        assert_eq!(
+            <RawBytes as ReadDecodePayload<Vec<u8>>>::decode_payload_from_reader(
+                io::empty(),
+                0,
+                PayloadDecodeLimit::new(0)
+            )
+            .unwrap(),
+            Vec::<u8>::new()
         );
     }
 

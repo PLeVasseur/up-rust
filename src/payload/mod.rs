@@ -17,6 +17,12 @@ use crate::{PayloadEncoding, UCode, UStatus};
 
 /// Payload codec traits: measure, encode, and decode typed payloads.
 pub mod codec;
+#[cfg(feature = "zero-copy-transport")]
+/// Checked typed borrowing contracts for contiguous payload bytes.
+pub mod loan;
+#[cfg(feature = "zero-copy-transport")]
+/// Stable-memory payload representation and identity contracts.
+pub mod stable;
 
 /// Error type used by serialization-neutral payload helpers.
 #[derive(Clone, Debug, Eq, PartialEq)]

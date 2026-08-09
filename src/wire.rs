@@ -34,7 +34,9 @@ use std::{error::Error, fmt::Display};
 
 use crate::payload::codec::{DecodePayload, EncodePayload, PayloadCodec, ReadDecodePayload};
 #[cfg(feature = "protobuf-support")]
-use crate::payload::codec::{PayloadCodecIdentity, PayloadLayout, ProtobufPayload};
+use crate::payload::codec::{
+    PayloadCodecIdentity, PayloadDecodeLimit, PayloadLayout, ProtobufPayload,
+};
 #[cfg(feature = "protobuf-support")]
 use crate::payload::UWireError;
 #[cfg(any(feature = "protobuf-support", feature = "up-core-api"))]
@@ -361,8 +363,12 @@ impl<T> ReadDecodePayload<T> for ProtobufWire
 where
     T: ProtobufMappable,
 {
-    fn decode_payload_from_reader<R: Read>(reader: R, payload_len: usize) -> Result<T, UWireError> {
-        ProtobufPayload::decode_payload_from_reader(reader, payload_len)
+    fn decode_payload_from_reader<R: Read>(
+        reader: R,
+        payload_len: usize,
+        limit: PayloadDecodeLimit,
+    ) -> Result<T, UWireError> {
+        ProtobufPayload::decode_payload_from_reader(reader, payload_len, limit)
     }
 }
 

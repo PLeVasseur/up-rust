@@ -24,7 +24,7 @@ use std::io::Cursor;
 use std::io::Read;
 
 use crate::frame::metadata::{UFrameMetadata, UFrameMetadataError};
-use crate::payload::codec::{PayloadCodec, ReadDecodePayload};
+use crate::payload::codec::{PayloadCodec, PayloadDecodeLimit, ReadDecodePayload};
 use crate::payload::UWireError;
 #[cfg(feature = "owned-frame-transport")]
 use crate::UOwnedFrame;
@@ -106,7 +106,10 @@ pub trait UFrameView {
     ///
     /// Returns an error if the frame has no payload, has missing or incompatible
     /// encoding metadata, or if the codec cannot decode the payload bytes.
-    fn decode_payload_from_reader_as<C, T>(&self) -> Result<T, UWireError>
+    fn decode_payload_from_reader_as<C, T>(
+        &self,
+        limit: PayloadDecodeLimit,
+    ) -> Result<T, UWireError>
     where
         C: PayloadCodec + ReadDecodePayload<T>,
     {
@@ -114,7 +117,7 @@ pub trait UFrameView {
         if !self.has_payload() {
             return Err(UWireError::MissingPayload);
         }
-        C::decode_payload_from_reader(self.payload_reader(), self.payload_len())
+        C::decode_payload_from_reader(self.payload_reader(), self.payload_len(), limit)
     }
 }
 

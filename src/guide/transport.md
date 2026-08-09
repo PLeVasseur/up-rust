@@ -4,6 +4,11 @@ Sometimes you want the floor itself: no role features, no protobuf, no runtime
 beyond your own — just build a [`UMessage`](crate::UMessage) and hand it to the
 [`UTransport`](crate::UTransport) your deployment configured.
 
+The `zero-copy-transport` feature exposes family-neutral initialized and
+two-phase transmit loans plus receive-lease contracts. Product transports keep
+physical storage mechanics below these semantic contracts; stable payload
+borrowing validates size, alignment and bit patterns before creating a reference.
+
 ## Publish
 
 ```rust

@@ -33,6 +33,9 @@ repository = "https://github.com/eclipse-uprotocol/up-rust"
 rust-version = "1.88"
 version = "0.10.0-SNAPSHOT"
 
+[workspace]
+members = ["macros"]
+
 [features]
 default = []
 cloudevents = ["protobuf-support"]
@@ -57,6 +60,7 @@ wire-implementer-api = ["selected-wire-codec-core"]
 selected-wire-user-api = ["selected-wire-transport-adapter", "up-core-api"]
 protobuf-wire = ["up-core-api"]
 owned-frame-transport = ["selected-wire-transport-core", "up-core-api"]
+zero-copy-transport = ["dep:up-rust-macros", "selected-wire-transport-core"]
 communication-api = ["dep:thiserror"]
 # Hard-renamed from up-l2-api to match the communication layer's name.
 up-l2-notifier = ["communication-api"]
@@ -82,6 +86,7 @@ symphony = { version = "0.1.5", optional = true }
 thiserror = { version = "1.0.69", optional = true }
 tokio = { version = "1.53.1", default-features = false, optional = true }
 tracing = { version = "0.1", default-features = false, features = ["log", "std"] }
+up-rust-macros = { version = "0.10.0-SNAPSHOT", path = "macros", optional = true }
 uriparse = { version = "0.6" }
 uuid-simd = { version = "0.8", default-features = false, features = ["std", "detect"] }
 
@@ -100,6 +105,7 @@ mockall = { version = "0.15.0" }
 pretty_assertions = { version = "1.4" }
 proptest = { version = "1.5" }
 test-case = { version = "3.3.1" }
+trybuild = { version = "1.0.116" }
 tokio = { version = "1.53.1", default-features = false, features = [
     "macros",
     "rt",
@@ -192,7 +198,7 @@ missing_docs = "deny"
 missing_debug_implementations = "deny"
 # this prevents cargo from complaining about code blocks
 # excluded from tarpaulin coverage checks
-unexpected_cfgs = { level = "warn", check-cfg = ['cfg(tarpaulin_include)', 'cfg(feature, values("zero-copy-transport"))'] }
+unexpected_cfgs = { level = "warn", check-cfg = ['cfg(tarpaulin_include)'] }
 
 [lints.clippy]
 # see https://corrode.dev/blog/defensive-programming/#clippy-lints-for-defensive-programming
