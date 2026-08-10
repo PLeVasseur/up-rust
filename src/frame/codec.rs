@@ -139,6 +139,24 @@ impl From<UFrameMetadataError> for UFrameFieldsError {
 pub fn encode_frame_metadata_fields(
     metadata: &UFrameMetadata,
 ) -> Result<Vec<u8>, UFrameFieldsError> {
+    let mut out = Vec::with_capacity(frame_metadata_fields_len(metadata)?);
+    encode_frame_metadata_fields_into(metadata, &mut out)?;
+    Ok(out)
+}
+
+/// Appends validated frame metadata to a caller-owned canonical field block.
+///
+/// Existing bytes are preserved, allowing an outer metadata codec to reserve
+/// and write one final framing buffer without an intermediate field vector.
+///
+/// # Errors
+///
+/// Returns an error if the metadata is invalid or a value does not fit its
+/// length field. Encoding never truncates.
+pub fn encode_frame_metadata_fields_into(
+    metadata: &UFrameMetadata,
+    out: &mut Vec<u8>,
+) -> Result<(), UFrameFieldsError> {
     metadata.validate()?;
 
     let mut presence = 0_u32;
@@ -167,15 +185,14 @@ pub fn encode_frame_metadata_fields(
         presence |= FIELD_PAYLOAD_ENCODING;
     }
 
-    let mut out = Vec::with_capacity(64);
     out.push(FRAME_FIELDS_VERSION);
     out.push(metadata.kind().wire_code());
     out.push(metadata.priority().map_or(0, FramePriority::wire_code));
     out.push(0); // reserved
     out.extend_from_slice(&presence.to_le_bytes());
-    write_uuid(&mut out, metadata.id());
+    write_uuid(out, metadata.id());
     if let Some(reqid) = metadata.reqid() {
-        write_uuid(&mut out, reqid);
+        write_uuid(out, reqid);
     }
     if let Some(ttl) = metadata.ttl() {
         let nanos = u64::try_from(ttl.as_nanos())
@@ -188,9 +205,9 @@ pub fn encode_frame_metadata_fields(
     if let Some(permission_level) = metadata.permission_level() {
         out.extend_from_slice(&permission_level.to_le_bytes());
     }
-    write_uuri(&mut out, metadata.source())?;
+    write_uuri(out, metadata.source())?;
     if let Some(sink) = metadata.sink() {
-        write_uuri(&mut out, sink)?;
+        write_uuri(out, sink)?;
     }
     if let Some(token) = metadata.token() {
         let len = u16::try_from(token.len())
@@ -206,9 +223,67 @@ pub fn encode_frame_metadata_fields(
         out.extend_from_slice(traceparent.as_bytes());
     }
     if let Some(encoding) = metadata.payload_encoding() {
-        write_payload_encoding(&mut out, encoding)?;
+        write_payload_encoding(out, encoding)?;
     }
-    Ok(out)
+    Ok(())
+}
+
+pub(crate) fn frame_metadata_fields_len(
+    metadata: &UFrameMetadata,
+) -> Result<usize, UFrameFieldsError> {
+    fn add(total: &mut usize, len: usize) -> Result<(), UFrameFieldsError> {
+        *total = total
+            .checked_add(len)
+            .ok_or(UFrameFieldsError::ValueTooLong { field: "metadata" })?;
+        Ok(())
+    }
+
+    fn uri_len(uri: &UUri) -> Result<usize, UFrameFieldsError> {
+        let authority_len = uri.authority_name().len();
+        u8::try_from(authority_len).map_err(|_| UFrameFieldsError::ValueTooLong {
+            field: "authority_name",
+        })?;
+        8_usize
+            .checked_add(authority_len)
+            .ok_or(UFrameFieldsError::ValueTooLong { field: "metadata" })
+    }
+
+    let mut len = 24_usize;
+    if metadata.reqid().is_some() {
+        add(&mut len, 16)?;
+    }
+    if let Some(ttl) = metadata.ttl() {
+        u64::try_from(ttl.as_nanos())
+            .map_err(|_| UFrameFieldsError::ValueTooLong { field: "ttl" })?;
+        add(&mut len, 8)?;
+    }
+    if metadata.comm_status().is_some() {
+        add(&mut len, 4)?;
+    }
+    if metadata.permission_level().is_some() {
+        add(&mut len, 4)?;
+    }
+    add(&mut len, uri_len(metadata.source())?)?;
+    if let Some(sink) = metadata.sink() {
+        add(&mut len, uri_len(sink)?)?;
+    }
+    if let Some(token) = metadata.token() {
+        u16::try_from(token.len())
+            .map_err(|_| UFrameFieldsError::ValueTooLong { field: "token" })?;
+        add(&mut len, 2)?;
+        add(&mut len, token.len())?;
+    }
+    if let Some(traceparent) = metadata.traceparent() {
+        u8::try_from(traceparent.len()).map_err(|_| UFrameFieldsError::ValueTooLong {
+            field: "traceparent",
+        })?;
+        add(&mut len, 1)?;
+        add(&mut len, traceparent.len())?;
+    }
+    if metadata.payload_encoding().is_some() {
+        add(&mut len, 4)?;
+    }
+    Ok(len)
 }
 
 /// Decodes and validates frame metadata from its canonical field block bytes.
@@ -488,6 +563,27 @@ mod tests {
         let bytes = encode_frame_metadata_fields(&metadata).expect("encode");
         let decoded = decode_frame_metadata_fields(&bytes).expect("decode");
         assert_eq!(decoded, metadata);
+    }
+
+    #[test]
+    fn caller_owned_encoding_matches_standalone_field_block() {
+        let metadata = UFrameMetadata::request(method(), reply_to(), Duration::from_millis(250))
+            .with_priority(FramePriority::CS5)
+            .with_token("bearer-token")
+            .with_payload_encoding(PayloadEncoding::PROTOBUF)
+            .build()
+            .expect("metadata");
+        let standalone = encode_frame_metadata_fields(&metadata).expect("standalone encode");
+        assert_eq!(
+            frame_metadata_fields_len(&metadata).expect("encoded length"),
+            standalone.len()
+        );
+
+        let mut framed = b"prefix".to_vec();
+        encode_frame_metadata_fields_into(&metadata, &mut framed).expect("append encode");
+
+        assert_eq!(framed.get(..6), Some(&b"prefix"[..]));
+        assert_eq!(framed.get(6..), Some(standalone.as_slice()));
     }
 
     #[test]

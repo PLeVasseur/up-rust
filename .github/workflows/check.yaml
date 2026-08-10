@@ -25,6 +25,7 @@ on:
     paths:
       - "examples/**"
       - "src/**"
+      - "test-fixtures/**"
       - "tests/**"
       - "Cargo.*"
       - "build.rs"
@@ -177,7 +178,7 @@ jobs:
         feature-flags:
           [
             "",
-            "--features protobuf-support,up-l2-api",
+            "--features protobuf-support,communication-api",
             "--all-features",
           ]
     steps:

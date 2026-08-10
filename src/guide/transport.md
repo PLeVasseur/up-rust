@@ -9,6 +9,20 @@ two-phase transmit loans plus receive-lease contracts. Product transports keep
 physical storage mechanics below these semantic contracts; stable payload
 borrowing validates size, alignment and bit patterns before creating a reference.
 
+## Large stable payloads
+
+For stable-container payloads, initialize transport-owned storage in place. Use
+the derive-generated reference/slice setters for existing data and `*_fill` or
+`*_fill_with` setters for repeated or generated array data. These APIs initialize
+the loan directly and avoid constructing a second full payload value.
+
+The initialized/default loan path remains useful for small values and simple
+adapters, but it may zero or copy the complete payload before send. Treat it as
+a convenience path rather than the default for 64 KiB stream chunks, point
+clouds, camera frames, or similarly large payloads. The `up-l2-zero-copy` roles
+use generated uninitialized-loan typestate and accept completion only after every
+field is written.
+
 ## Publish
 
 ```rust
