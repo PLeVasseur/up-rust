@@ -1,49 +1,73 @@
-# The Communication Layer (up-L2)
+# Communication Layer roles
 
-The roles hide message building entirely: you say *what* (publish this,
-call that) and the layer builds, addresses, and correlates the messages
-over whatever transport it was given. Enable `communication`.
+Use five Communication Layer role traits across four messaging patterns:
 
-## Publishing
+* publish events;
+* subscribe to events;
+* send one-way notifications; and
+* invoke or serve RPC methods.
 
-The hub page's quickstart is the whole pattern; here it is again with
-the pieces named — `LocalTransport` is the in-process transport the
-examples use:
+Enable the Cargo features used by the examples with:
+
+```bash
+cargo add up-rust --features communication,util
+```
+
+The `communication` feature enables the role APIs. The `util` feature provides
+the in-memory transport used by the examples.
+
+## Publish events
+
+[`Publisher`](crate::communication::Publisher) creates publish messages from a
+resource ID, call options, and an optional payload. The publishing example uses
+this in-process transport:
 
 ```rust
 use std::sync::Arc;
+use up_rust::communication::{CallOptions, PubSubError, Publisher, SimplePublisher, UPayload};
 use up_rust::local_transport::LocalTransport;
-use up_rust::StaticUriProvider;
-use up_rust::communication::{CallOptions, Publisher, SimplePublisher, UPayload};
-use up_rust::UPayloadFormat;
+use up_rust::{StaticUriProvider, UPayloadFormat};
 
 #[tokio::main]
-async fn main() -> Result<(), Box<dyn std::error::Error>> {
+async fn main() -> Result<(), PubSubError> {
     let transport = Arc::new(LocalTransport::default());
-    let identity = Arc::new(StaticUriProvider::new("my-vehicle", 0x1_0001, 1)?);
+    let identity = Arc::new(
+        StaticUriProvider::new("my-vehicle", 0x1_0001, 1)
+            .expect("valid publisher identity"),
+    );
 
     let publisher = SimplePublisher::new(transport, identity);
     let payload = UPayload::new("92.5", UPayloadFormat::Text);
     publisher
-        .publish(0x8001, CallOptions::for_publish(None, None, None), Some(payload))
+        .publish(
+            0x8001,
+            CallOptions::for_publish(None, None, None),
+            Some(payload),
+        )
         .await?;
-    // Delivered to every subscriber of my-vehicle/0x1_0001/1/0x8001.
     Ok(())
 }
 ```
 
-## Subscribing (and why it needs a service)
+[`UTransport::send`](crate::UTransport::send) dispatches the message to matching
+listeners when implemented by
+[`LocalTransport`](crate::local_transport::LocalTransport). A deployed transport
+maps the same Transport Layer operation to its protocol.
 
-Publish, notify, and RPC are pure transport interactions. **Subscription
-is different by design**: uProtocol tracks who subscribes to what in a
-service — uSubscription — so subscriptions survive reconnects and can be
-observed. The [`Subscriber`](crate::communication::Subscriber) role
-therefore needs two collaborators: a transport *and* a uSubscription
-client.
+## Subscribe to events
+
+[`Subscriber`](crate::communication::Subscriber) registers listeners for a
+topic pattern. [`InMemorySubscriber`](crate::communication::InMemorySubscriber)
+implements [`Subscriber::subscribe`](crate::communication::Subscriber::subscribe)
+using the uSubscription service to create a subscription record containing a
+topic and subscriber URI. The service reports subscription state changes to the
+subscriber URI. The in-memory subscriber's local listener registrations remain
+process-local, so this example is `no_run` unless the configured transport can
+reach a uSubscription service.
 
 ```rust,no_run
 # use std::sync::Arc;
-# use up_rust::communication::Subscriber as _;
+# use up_rust::communication::{RegistrationError, Subscriber as _};
 # use up_rust::{LocalUriProvider, UListener, UMessage, UTransport, UUri};
 use up_rust::communication::InMemorySubscriber;
 # struct TempListener;
@@ -55,42 +79,45 @@ use up_rust::communication::InMemorySubscriber;
 #     transport: Arc<T>,
 #     identity: Arc<P>,
 #     topic: UUri,
-# ) -> Result<(), Box<dyn std::error::Error>>
+# ) -> Result<(), RegistrationError>
 # where
 #     T: UTransport + 'static,
 #     P: LocalUriProvider + 'static,
 # {
-
-// `new` wires the uSubscription client for you: an RPC client over your
-// transport, talking to the uSubscription service in your deployment.
 let subscriber = InMemorySubscriber::new(transport, identity).await?;
-
-subscriber.subscribe(&topic, Arc::new(TempListener), None).await?;
+subscriber
+    .subscribe(&topic, Arc::new(TempListener), None)
+    .await?;
 # Ok(())
 # }
 ```
 
-A real subscription round-trips through the uSubscription service, so
-this compiles against your deployment's transport and RPC client rather
-than running standalone; for unit tests, `test-util` provides role
-mocks.
+Both [`InMemorySubscriber::new`](crate::communication::InMemorySubscriber::new)
+and [`Subscriber::subscribe`](crate::communication::Subscriber::subscribe)
+return [`RegistrationError`](crate::communication::RegistrationError).
 
-## Notifying one receiver
+## Send a notification
 
-Publish goes to whoever subscribed; a *notification* targets one uEntity.
-Same shape, one extra argument:
+[`Notifier`](crate::communication::Notifier) sends a one-way message to one
+uEntity rather than publishing to a topic's subscribers:
 
 ```rust
 use std::sync::Arc;
+use up_rust::communication::{
+    CallOptions, NotificationError, Notifier, SimpleNotifier, UPayload,
+};
 use up_rust::local_transport::LocalTransport;
 use up_rust::{StaticUriProvider, UPayloadFormat, UUri};
-use up_rust::communication::{CallOptions, Notifier, SimpleNotifier, UPayload};
 
 #[tokio::main]
-async fn main() -> Result<(), Box<dyn std::error::Error>> {
+async fn main() -> Result<(), NotificationError> {
     let transport = Arc::new(LocalTransport::default());
-    let identity = Arc::new(StaticUriProvider::new("my-vehicle", 0x1_0001, 1)?);
-    let destination = UUri::try_from_parts("my-vehicle", 0x2_0002, 1, 0x0000)?;
+    let identity = Arc::new(
+        StaticUriProvider::new("my-vehicle", 0x1_0001, 1)
+            .expect("valid notifier identity"),
+    );
+    let destination = UUri::try_from_parts("my-vehicle", 0x2_0002, 1, 0x0000)
+        .expect("valid notification destination");
 
     let notifier = SimpleNotifier::new(transport, identity);
     notifier
@@ -101,23 +128,26 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
             Some(UPayload::new("door open", UPayloadFormat::Text)),
         )
         .await?;
-    // Exactly one receiver: the uEntity at `destination` — not a topic fan-out.
     Ok(())
 }
 ```
 
-## Serving RPC
+## Serve RPC requests
 
-You expose a resource id and a handler; the server owns listener
-registration and response addressing:
+[`RpcServer`](crate::communication::RpcServer) registers a
+[`RequestHandler`](crate::communication::RequestHandler) for a resource ID. The
+server builds and addresses each response. This `no_run` example remains alive
+after registration so the server and transport can continue receiving requests;
+a deployed service would await its shutdown signal instead:
 
-```rust
+```rust,no_run
 use std::sync::Arc;
+use up_rust::communication::{
+    InMemoryRpcServer, RegistrationError, RequestHandler, RpcServer,
+    ServiceInvocationError, UPayload,
+};
 use up_rust::local_transport::LocalTransport;
 use up_rust::{StaticUriProvider, UAttributes};
-use up_rust::communication::{
-    InMemoryRpcServer, RequestHandler, RpcServer, ServiceInvocationError, UPayload,
-};
 
 struct EchoHandler;
 
@@ -129,40 +159,47 @@ impl RequestHandler for EchoHandler {
         _attributes: &UAttributes,
         request: Option<UPayload>,
     ) -> Result<Option<UPayload>, ServiceInvocationError> {
-        Ok(request) // echo the request payload back
+        Ok(request)
     }
 }
 
 #[tokio::main]
-async fn main() -> Result<(), Box<dyn std::error::Error>> {
+async fn main() -> Result<(), RegistrationError> {
     let transport = Arc::new(LocalTransport::default());
-    let service = Arc::new(StaticUriProvider::new("my-vehicle", 0x2_0002, 1)?);
+    let service = Arc::new(
+        StaticUriProvider::new("my-vehicle", 0x2_0002, 1)
+            .expect("valid RPC service identity"),
+    );
 
     let server = InMemoryRpcServer::new(transport, service);
-    server.register_endpoint(None, 0x00A1, Arc::new(EchoHandler)).await?;
-    // The service now answers requests to my-vehicle/0x2_0002/1/0x00A1.
+    server
+        .register_endpoint(None, 0x00A1, Arc::new(EchoHandler))
+        .await?;
+
+    std::future::pending::<()>().await;
     Ok(())
 }
 ```
 
-Return `Err(ServiceInvocationError::...)` from the handler and the
-caller receives it as a `CommStatus` — an application-level failure,
-delivered, not a transport failure.
+[`RpcServer::register_endpoint`](crate::communication::RpcServer::register_endpoint)
+completes after installing the handler. Keep the server and transport alive
+until the service shuts down.
 
-## Calling RPC
+## Invoke an RPC method
 
-The client correlates responses to requests and enforces your deadline.
-(The inline echo service here is scaffolding so the round trip can run
-and assert; in a deployment it's someone else's uEntity.)
+[`RpcClient`](crate::communication::RpcClient) correlates the response with its
+request and enforces the request TTL. This example registers an echo endpoint in
+the same process; a deployed client calls the target uEntity through its
+configured transport.
 
 ```rust
 use std::sync::Arc;
-use up_rust::local_transport::LocalTransport;
-use up_rust::{LocalUriProvider, StaticUriProvider, UAttributes, UPayloadFormat};
 use up_rust::communication::{
     CallOptions, InMemoryRpcClient, InMemoryRpcServer, RequestHandler, RpcClient, RpcServer,
     ServiceInvocationError, UPayload,
 };
+use up_rust::local_transport::LocalTransport;
+use up_rust::{LocalUriProvider, StaticUriProvider, UAttributes, UPayloadFormat};
 
 # struct EchoHandler;
 # #[async_trait::async_trait]
@@ -173,26 +210,73 @@ use up_rust::communication::{
 #[tokio::main]
 async fn main() -> Result<(), Box<dyn std::error::Error>> {
     let transport = Arc::new(LocalTransport::default());
-    let service = Arc::new(StaticUriProvider::new("my-vehicle", 0x2_0002, 1)?);
-    # let server = InMemoryRpcServer::new(transport.clone(), service.clone());
-    # server.register_endpoint(None, 0x00A1, Arc::new(EchoHandler)).await?;
+    let service = Arc::new(
+        StaticUriProvider::new("my-vehicle", 0x2_0002, 1)
+            .expect("valid RPC service identity"),
+    );
+    let server = InMemoryRpcServer::new(transport.clone(), service.clone());
+    server
+        .register_endpoint(None, 0x00A1, Arc::new(EchoHandler))
+        .await?;
 
-    let me = Arc::new(StaticUriProvider::new("my-vehicle", 0x3_0003, 1)?);
-    let client = InMemoryRpcClient::new(transport, me).await?;
+    let identity = Arc::new(
+        StaticUriProvider::new("my-vehicle", 0x3_0003, 1)
+            .expect("valid RPC client identity"),
+    );
+    let client = InMemoryRpcClient::new(transport, identity).await?;
 
     let response = client
         .invoke_method(
             service.get_resource_uri(0x00A1),
-            CallOptions::for_rpc_request(5_000, None, None, None), // 5s deadline
+            CallOptions::for_rpc_request(5_000, None, None, None),
             Some(UPayload::new("ping", UPayloadFormat::Text)),
         )
         .await?;
 
-    assert_eq!(response.unwrap().payload(), "ping");
+    assert_eq!(
+        response.expect("echo response contains a payload").payload(),
+        "ping"
+    );
     Ok(())
 }
 ```
 
-If the deadline passes first, `invoke_method` returns
-`CommStatus(DeadlineExceeded)` — see
-[when things fail](crate::guide::applications) on the hub.
+This combined example uses `Box<dyn Error>` because RPC setup returns
+[`RegistrationError`](crate::communication::RegistrationError), while method
+invocation returns
+[`ServiceInvocationError`](crate::communication::ServiceInvocationError).
+
+## Handle role errors
+
+The Communication Layer reports role-specific errors:
+
+* [`RegistrationError`](crate::communication::RegistrationError) — a listener,
+  subscriber, RPC client, or RPC endpoint could not be registered or
+  unregistered;
+* [`PubSubError::InvalidArgument`](crate::communication::PubSubError::InvalidArgument),
+  [`NotificationError::InvalidArgument`](crate::communication::NotificationError::InvalidArgument),
+  and [`ServiceInvocationError::InvalidArgument`](crate::communication::ServiceInvocationError::InvalidArgument)
+  — URI, priority, TTL, or role input is invalid;
+* [`PubSubError::PublishError`](crate::communication::PubSubError::PublishError)
+  and [`NotificationError::NotifyError`](crate::communication::NotificationError::NotifyError)
+  — the publish or notification transport operation returned a
+  [`UStatus`](crate::UStatus);
+* [`ServiceInvocationError::DeadlineExceeded`](crate::communication::ServiceInvocationError::DeadlineExceeded)
+  — the RPC client did not receive a matching response before the TTL elapsed;
+* other [`ServiceInvocationError`](crate::communication::ServiceInvocationError)
+  variants — an RPC transport operation or response produced the corresponding
+  status. A status without a dedicated variant becomes
+  [`ServiceInvocationError::RpcError`](crate::communication::ServiceInvocationError::RpcError).
+
+Correct invalid input, retry failures according to the application's policy,
+and handle RPC response errors according to their
+[`ServiceInvocationError`](crate::communication::ServiceInvocationError)
+variant.
+
+## Next steps
+
+Use [the Transport Layer](crate::guide::applications::transport) directly for
+exact [`UMessage`](crate::UMessage) control, custom listener filters, or
+transport infrastructure. See
+[application error handling](crate::guide::applications) and the
+[trait map](crate::guide::trait_map) for the public API relationships.

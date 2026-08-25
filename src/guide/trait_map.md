@@ -1,61 +1,62 @@
-# The trait map: how the traits fit together
+# Public trait map
 
-The crate's behavioral traits form a small system: one transport contract, one
-delivery callback, five Communication Layer roles with one request handler, one
-subscription callback, and three supporting utilities. This page is the
-one-screen overview.
+* The **Communication Layer** provides the application roles.
+* The **Transport Layer** provides direct [`UMessage`](crate::UMessage) send,
+  push-listener, and pull-receive operations.
+* Transport bindings implement [`UTransport`](crate::UTransport).
+* [`LocalUriProvider`](crate::LocalUriProvider) separately supplies the local
+  uEntity identity used to address messages.
 
-## The stack in five lines
+## Layers
 
-```text
-application            roles (up-L2)  or  UMessage + UTransport (up-L1)
-                                  |
-transport contract     UTransport
-                                  |
-technology             broker, bus, shared memory
-```
+| Layer | Main API | Implemented by | Use |
+| --- | --- | --- | --- |
+| Application roles | [`Publisher`](crate::communication::Publisher), [`Subscriber`](crate::communication::Subscriber), [`Notifier`](crate::communication::Notifier), [`RpcClient`](crate::communication::RpcClient), [`RpcServer`](crate::communication::RpcServer) | applications or the crate's ready-made implementations | Publish, subscribe, notify, invoke, or serve |
+| Move messages | [`UTransport`](crate::UTransport) | implemented by the transport | Direct send, push-listener, or pull-receive control; transport infrastructure |
+| Consume push delivery | [`UListener`](crate::UListener) | applications and Communication Layer implementations | Receive messages selected by transport filters |
+| Identify the local uEntity | [`LocalUriProvider`](crate::LocalUriProvider) | application or deployment configuration | Supply source and response addresses |
 
-## The Transport Layer (up-L1)
+The Communication Layer depends on the Transport Layer. Its role APIs are
+generic over [`UTransport`](crate::UTransport), so they can use an in-memory or
+protocol-backed implementation.
 
-| Trait | Implemented by | Called by |
+## Communication Layer implementations
+
+The `communication` Cargo feature enables the ready-made role implementations:
+
+| Role trait | Implementation | Additional collaborator |
 | --- | --- | --- |
-| [`UTransport`](crate::UTransport) | transport providers (broker/bus bindings) | applications and the Communication Layer |
-| [`UListener`](crate::UListener) | message consumers | the transport, on delivery |
+| [`Publisher`](crate::communication::Publisher) | [`SimplePublisher`](crate::communication::SimplePublisher) | — |
+| [`Subscriber`](crate::communication::Subscriber) | [`InMemorySubscriber`](crate::communication::InMemorySubscriber) | uSubscription service |
+| [`Notifier`](crate::communication::Notifier) | [`SimpleNotifier`](crate::communication::SimpleNotifier) | — |
+| [`RpcClient`](crate::communication::RpcClient) | [`InMemoryRpcClient`](crate::communication::InMemoryRpcClient) | — |
+| [`RpcServer`](crate::communication::RpcServer) | [`InMemoryRpcServer`](crate::communication::InMemoryRpcServer) | [`RequestHandler`](crate::communication::RequestHandler) |
 
-[`UTransport`](crate::UTransport) is the floor: `send` a
-[`UMessage`](crate::UMessage), or `register_listener` for a source/sink filter
-pair. Everything above is built from those operations.
+## Operations
 
-## The Communication Layer roles (up-L2)
-
-Applications usually use the role traits rather than building messages by
-hand. The ready-made implementations below drive a [`UTransport`](crate::UTransport)
-(feature `up-l2-api` for the traits, `communication` for every implementation):
-
-| You want to... | Role trait | Ready-made implementation |
+| Task | Primary method | Collaborator |
 | --- | --- | --- |
-| Publish to whoever listens | [`Publisher`](crate::communication::Publisher) | [`SimplePublisher`](crate::communication::SimplePublisher) |
-| Target one uEntity | [`Notifier`](crate::communication::Notifier) | [`SimpleNotifier`](crate::communication::SimpleNotifier) |
-| Consume a topic | [`Subscriber`](crate::communication::Subscriber) | [`InMemorySubscriber`](crate::communication::InMemorySubscriber) (needs uSubscription; see [the application tutorial](crate::guide::applications)) |
-| Call a service | [`RpcClient`](crate::communication::RpcClient) | [`InMemoryRpcClient`](crate::communication::InMemoryRpcClient) |
-| Serve requests | [`RpcServer`](crate::communication::RpcServer) + [`RequestHandler`](crate::communication::RequestHandler) | [`InMemoryRpcServer`](crate::communication::InMemoryRpcServer) |
+| Publish an event | [`Publisher::publish`](crate::communication::Publisher::publish) | [`CallOptions`](crate::communication::CallOptions) |
+| Subscribe to a topic | [`Subscriber::subscribe`](crate::communication::Subscriber::subscribe) | [`UListener`](crate::UListener) and uSubscription |
+| Send a notification | [`Notifier::notify`](crate::communication::Notifier::notify) | [`CallOptions`](crate::communication::CallOptions) |
+| Invoke an RPC method | [`RpcClient::invoke_method`](crate::communication::RpcClient::invoke_method) | [`CallOptions`](crate::communication::CallOptions) |
+| Serve an RPC method | [`RpcServer::register_endpoint`](crate::communication::RpcServer::register_endpoint) | [`RequestHandler`](crate::communication::RequestHandler) |
+| Push a raw message | [`UTransport::send`](crate::UTransport::send) | — |
+| Receive raw messages by push | [`UTransport::register_listener`](crate::UTransport::register_listener) | [`UListener`](crate::UListener) |
+| Receive one raw message by pull | [`UTransport::receive`](crate::UTransport::receive) | — |
 
-Each role owns message construction for its message type. Use the roles and you
-do not touch [`UMessageBuilder`](crate::UMessageBuilder); use the Transport Layer
-directly and message construction is yours.
-
-## Supporting hooks and utilities
+## Supporting APIs
 
 * [`SubscriptionChangeHandler`](crate::communication::SubscriptionChangeHandler)
   receives subscription-state callbacks.
-* [`LocalUriProvider`](crate::LocalUriProvider) answers "what is *my* address?";
-  the role implementations use it to build source URIs.
-* [`ProtobufMappable`](crate::ProtobufMappable) lets protobuf-generated types
-  ride as payloads implicitly (feature `protobuf-support`).
+* [`UMessageBuilder`](crate::UMessageBuilder) builds messages for direct
+  Transport Layer use.
 * [`UAttributesValidator`](crate::UAttributesValidator) validates message
-  attributes by message kind; transports use it at their boundaries.
+  attributes by message kind.
+* [`ProtobufMappable`](crate::ProtobufMappable) integrates protobuf-generated
+  payload types when the `protobuf-support` feature is enabled.
 
-## Where to go
+## Related guides
 
 Applications: [the application tutorial](crate::guide::applications).
 Transport users: [the Transport Layer tutorial](crate::guide::applications::transport).

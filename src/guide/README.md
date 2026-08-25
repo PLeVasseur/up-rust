@@ -1,16 +1,12 @@
-# Guide: tutorials for every audience
+# Guide
 
-The pages, each self-contained, each with code:
-
-* [Writing an application](crate::guide::applications) — hub, with
-  [the Communication Layer](crate::guide::applications::communication)
-  (the default) and
+* [Writing an application](crate::guide::applications) — overview, with
+  runnable Communication Layer role examples and examples that use
   [the Transport Layer](crate::guide::applications::transport) directly.
 * [Implementing a transport](crate::guide::utransport) — the
-  [`UTransport`] contract from the provider side.
-* [The trait map](crate::guide::trait_map) — how the traits fit together
-  and which ones are yours.
+  relationship between [`UTransport`](crate::UTransport), L1 requirements, and
+  protocol bindings, with links to published transport implementations.
+* [The trait map](crate::guide::trait_map) — how the public traits fit together.
 
-Not sure where you fit? If you're *using* uProtocol, start with
-[applications](crate::guide::applications); if a trait name brought you
-here, start with [the trait map](crate::guide::trait_map).
+Start with [applications](crate::guide::applications) to use uProtocol, or the
+[trait map](crate::guide::trait_map) for an API overview.

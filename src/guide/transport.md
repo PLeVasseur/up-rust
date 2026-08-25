@@ -1,66 +1,130 @@
-# The Transport Layer (up-L1)
+# Use the Transport Layer directly
 
-Sometimes you want the floor itself: no role features, no protobuf, no runtime
-beyond your own — just build a [`UMessage`](crate::UMessage) and hand it to the
-[`UTransport`](crate::UTransport) your deployment configured.
+[`UTransport`](crate::UTransport) is the message-level interface shared by
+applications, Communication Layer roles, and transport providers. It supports
+outbound messages plus two delivery modes: registered listeners for push and
+[`UTransport::receive`](crate::UTransport::receive) for pull. A transport
+supports at least one delivery mode and may support both.
 
-## Publish
+## Send a message
 
 ```rust
-use up_rust::{UMessageBuilder, UPayloadFormat, UTransport, UUri};
+use up_rust::{UMessageBuilder, UPayloadFormat, UStatus, UTransport, UUri};
 
-async fn publish(transport: &dyn UTransport) -> Result<(), Box<dyn std::error::Error>> {
-    let topic = UUri::try_from_parts("my-vehicle", 0x1_0001, 1, 0x8001)?;
+async fn publish(transport: &dyn UTransport) -> Result<(), UStatus> {
+    let topic = UUri::try_from_parts("my-vehicle", 0x1_0001, 1, 0x8001)
+        .expect("valid topic URI");
     let message = UMessageBuilder::publish(topic)
-        .build_with_payload("92.5", UPayloadFormat::Text)?;
-    transport.send(message).await?;
-    Ok(())
+        .build_with_payload("92.5", UPayloadFormat::Text)
+        .expect("valid publish message");
+    transport.send(message).await
 }
 ```
 
-## Receive
+[`UTransport::send`](crate::UTransport::send) returns the result of that
+transport's send operation. Success means that operation reached the checkpoint
+defined by the implementation. For a protocol-backed transport, L1 describes
+this as handing the message to the underlying protocol's send path. It is not a
+portable end-to-end delivery or application-processing acknowledgement. The
+example asserts its fixed URI and message inputs so its result exposes the
+[`UStatus`](crate::UStatus) returned by `send`.
+
+## Receive by push
+
+Push transports deliver each matching message at least once to registered
+[`UListener`](crate::UListener) instances. Registration and unregistration use
+listener identity, so retain the same [`Arc`](std::sync::Arc) for both calls:
 
 ```rust
 use std::sync::Arc;
-use up_rust::{UListener, UMessage, UTransport, UUri};
+use up_rust::{UListener, UMessage, UStatus, UTransport, UUri};
 
 struct TempListener;
 
 #[async_trait::async_trait]
 impl UListener for TempListener {
     async fn on_receive(&self, message: UMessage) {
-        // Prints: engine temp update: Some(b"92.5") for the publish above.
         println!("engine temp update: {:?}", message.payload());
     }
 }
 
-async fn subscribe(transport: &dyn UTransport) -> Result<(), Box<dyn std::error::Error>> {
-    let topic = UUri::try_from_parts("my-vehicle", 0x1_0001, 1, 0x8001)?;
-    transport.register_listener(&topic, None, Arc::new(TempListener)).await?;
-    Ok(())
+struct PushRegistration {
+    topic: UUri,
+    listener: Arc<dyn UListener>,
+}
+
+async fn subscribe(transport: &dyn UTransport) -> Result<PushRegistration, UStatus> {
+    let topic = UUri::try_from_parts("my-vehicle", 0x1_0001, 1, 0x8001)
+        .expect("valid topic URI");
+    let listener: Arc<dyn UListener> = Arc::new(TempListener);
+
+    transport
+        .register_listener(&topic, None, listener.clone())
+        .await?;
+
+    Ok(PushRegistration { topic, listener })
+}
+
+async fn unsubscribe(
+    transport: &dyn UTransport,
+    registration: PushRegistration,
+) -> Result<(), UStatus> {
+    transport
+        .unregister_listener(&registration.topic, None, registration.listener)
+        .await
 }
 ```
 
-## Filters and wildcards
+[`UTransport::register_listener`](crate::UTransport::register_listener) and
+[`UTransport::unregister_listener`](crate::UTransport::unregister_listener)
+take the source filter, optional sink filter, and listener. Unregistration must
+use the same values that identify the registration, so the returned
+`PushRegistration` retains them until `unsubscribe` consumes it.
 
-`register_listener` takes a **source filter** and an optional sink filter. A
-filter component may be a wildcard: authority `"*"`, resource id `0xFFFF` (any
-resource), or the entity-instance wildcard. For example:
+## Receive by pull
+
+Pull transports return one matching message from
+[`UTransport::receive`](crate::UTransport::receive). The method returns
+[`UCode::NotFound`](crate::UCode::NotFound) when no matching message is
+available. When several messages match, L1 selects the oldest one that has not
+expired:
 
 ```rust
-# use up_rust::UUri;
-// Everything entity 0x1_0001 publishes, on any topic.
-let all_topics = UUri::try_from_parts("my-vehicle", 0x1_0001, 1, 0xFFFF)?;
+use up_rust::{UMessage, UStatus, UTransport, UUri};
 
-// One exact topic.
-let one_topic = UUri::try_from_parts("my-vehicle", 0x1_0001, 1, 0x8001)?;
-# let _ = (all_topics, one_topic);
-# Ok::<(), Box<dyn std::error::Error>>(())
+async fn receive_one(transport: &dyn UTransport) -> Result<UMessage, UStatus> {
+    let topic = UUri::try_from_parts("my-vehicle", 0x1_0001, 1, 0x8001)
+        .expect("valid topic URI");
+    transport.receive(&topic, None).await
+}
 ```
 
-Exact registrations receive one topic; wildcard registrations fan in. The
-matching rules are the same ones a transport implements. The
-[`UTransport` tutorial](crate::guide::utransport) shows them from the provider
-side.
+## Select messages with filters
 
-For which trait is which, see the [trait map](crate::guide::trait_map).
+Push registration and pull receive both take a source filter and an optional
+sink filter. [`UUri::any`](crate::UUri::any) matches any source,
+[`UUri::any_with_resource_id`](crate::UUri::any_with_resource_id) matches any
+source with one resource ID, and [`UUri::matches`](crate::UUri::matches)
+evaluates a concrete URI against a wildcard filter.
+
+```rust
+use up_rust::UUri;
+
+let any_source = UUri::any();
+let topic_at_any_source = UUri::any_with_resource_id(0x8001);
+let one_topic = UUri::try_from_parts("my-vehicle", 0x1_0001, 1, 0x8001)
+    .expect("valid topic URI");
+
+assert!(any_source.matches(&one_topic));
+assert!(topic_at_any_source.matches(&one_topic));
+```
+
+Use an exact [`UUri`](crate::UUri) to select one address. Wildcard filters can
+select several sources or resources, subject to the valid source/sink resource
+combinations in the L1 Transport Layer specification.
+
+The [transport implementation guide](crate::guide::utransport) points to the
+authoritative filter rules, delivery semantics, and protocol-binding
+requirements.
+
+See the [trait map](crate::guide::trait_map) for the public API relationships.

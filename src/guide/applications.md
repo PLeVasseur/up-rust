@@ -1,83 +1,122 @@
-# Writing an application
+# Build an application
 
-Applications talk uProtocol through one of **two layers**, and knowing
-which one you're on is the whole orientation:
+The application-facing APIs are:
 
 * **[The Communication Layer](crate::guide::applications::communication)**
-  (up-L2, feature `communication`) — role traits: `Publisher`,
-  `Subscriber`, `Notifier`, `RpcClient`, `RpcServer`. **This is the
-  recommended starting point.** Start here unless you have a reason not to.
-* **[The Transport Layer](crate::guide::applications::transport)**
-  (up-L1, no features) — build [`UMessage`](crate::UMessage)s yourself
-  and hand them to a [`UTransport`](crate::UTransport). The floor the
-  roles stand on; yours directly when you need minimal dependencies,
-  custom filtering, or direct control over message construction.
-
-Thirty seconds to first message, on the communication layer:
+  provides five role traits across four messaging patterns:
+  [`Publisher`](crate::communication::Publisher),
+  [`Subscriber`](crate::communication::Subscriber),
+  [`Notifier`](crate::communication::Notifier), and
+  [`RpcClient`](crate::communication::RpcClient) with
+  [`RpcServer`](crate::communication::RpcServer).
+* **[The Transport Layer](crate::guide::applications::transport)** provides
+  direct message-level control and is the interface implemented by transport
+  providers.
 
 ```rust
 use std::sync::Arc;
+use up_rust::communication::{CallOptions, PubSubError, Publisher, SimplePublisher, UPayload};
 use up_rust::local_transport::LocalTransport;
 use up_rust::{StaticUriProvider, UPayloadFormat};
-use up_rust::communication::{CallOptions, Publisher, SimplePublisher, UPayload};
 
 #[tokio::main]
-async fn main() -> Result<(), Box<dyn std::error::Error>> {
+async fn main() -> Result<(), PubSubError> {
     let transport = Arc::new(LocalTransport::default());
-    let me = Arc::new(StaticUriProvider::new("my-vehicle", 0x1_0001, 1)?);
+    let identity = Arc::new(
+        StaticUriProvider::new("my-vehicle", 0x1_0001, 1)
+            .expect("valid publisher identity"),
+    );
 
-    SimplePublisher::new(transport, me)
-        .publish(0x8001, CallOptions::for_publish(None, None, None),
-                 Some(UPayload::new("92.5", UPayloadFormat::Text)))
+    SimplePublisher::new(transport, identity)
+        .publish(
+            0x8001,
+            CallOptions::for_publish(None, None, None),
+            Some(UPayload::new("92.5", UPayloadFormat::Text)),
+        )
         .await?;
-    // Delivered to every subscriber of my-vehicle/0x1_0001/1/0x8001.
     Ok(())
 }
 ```
 
-Everything below applies to both layers.
+## Choose an application role
 
-## Addresses in one box
+| Requirement | API | Additional dependency |
+| --- | --- | --- |
+| One-to-many events | [`Publisher`](crate::communication::Publisher) | — |
+| Receive published events | [`Subscriber`](crate::communication::Subscriber) | [`InMemorySubscriber`](crate::communication::InMemorySubscriber) uses uSubscription for bookkeeping and status |
+| One-way delivery to one uEntity | [`Notifier`](crate::communication::Notifier) | — |
+| Request/response | [`RpcClient`](crate::communication::RpcClient) and [`RpcServer`](crate::communication::RpcServer) | — |
+| Direct message send or receive | [`UTransport`](crate::UTransport) | — |
 
-Every example below uses [`UUri`](crate::UUri) literals; here is what
-they mean, once:
+## Address messages with UUri
+
+[`UUri`](crate::UUri) addresses identify an authority, uEntity, major version,
+and resource:
 
 ```text
 UUri::try_from_parts("my-vehicle", 0x1_0001, 1, 0x8001)
                       authority    entity   ver resource
 ```
 
-* **authority** — which device/domain the uEntity lives on.
-* **entity id** — which uEntity (a u32; deployments assign these).
-* **major version** — the uEntity's API major version.
-* **resource id** — *what* within the uEntity: `0x0000` is the uEntity
-  itself (the address RPC responses return to), ids `0x0001..=0x7FFF`
-  are RPC **methods**, and ids **`0x8000..=0xFFFE` are topics** a uEntity
-  publishes. `0xFFFF` is the wildcard. That is why the publish examples
-  use `0x8001` and the RPC endpoint uses `0x00A1`.
+* **authority** identifies the device or domain.
+* **entity id** identifies the uEntity.
+* **major version** identifies the uEntity API version.
+* **resource id** identifies a resource within the uEntity. `0x0000` addresses
+  the uEntity, `0x0001..=0x7FFF` identify RPC methods,
+  `0x8000..=0xFFFE` identify topics, and `0xFFFF` is the resource wildcard.
 
-## When things fail
+## Share a transport
 
-Every operation returns a code you can act on. Transport-level errors
-arrive as [`UStatus`](crate::UStatus) carrying a [`UCode`](crate::UCode):
-`Unavailable` (link down — retry with backoff), `AlreadyExists`
-(duplicate listener registration), `InvalidArgument` (a filter or
-message the transport cannot express), `PermissionDenied`. The roles
-wrap these: publishing fails with `PubSubError`, RPC with
-`ServiceInvocationError` — whose `CommStatus` variant means *the remote
-service* answered with a failure code, distinct from the transport
-failing to deliver. Timeouts surface as `CommStatus(DeadlineExceeded)`
-when the `ttl` you passed in `CallOptions` expires.
+The examples use [`LocalTransport`](crate::local_transport::LocalTransport), the
+crate's in-process push transport. A deployment can instead construct a
+transport such as
+[`up-transport-zenoh`](https://crates.io/crates/up-transport-zenoh),
+[`up-transport-mqtt5`](https://crates.io/crates/up-transport-mqtt5), or
+[`up-transport-vsomeip`](https://crates.io/crates/up-transport-vsomeip).
 
-## Where a real transport comes from
+Publishers, notifiers, subscribers, RPC clients, and RPC servers can share one
+[`Arc`](std::sync::Arc) clone. The role implementations are generic over
+[`UTransport`](crate::UTransport), so application code does not need to name
+the concrete transport type:
 
-The examples use `LocalTransport` so they can run anywhere. In a
-deployment, you construct one of the transport crates at startup —
-`up-transport-zenoh-rust`, `up-transport-mqtt5-rust`,
-`up-transport-vsomeip-rust`, and so on — configure it, wrap it in an
-`Arc`, and hand that same `Arc` to every role. Application code stays
-transport-agnostic: the role implementations are generic over
-`UTransport`, which is the point of the protocol.
+```rust
+# use std::sync::Arc;
+# use up_rust::local_transport::LocalTransport;
+let transport = Arc::new(LocalTransport::default());
+let publisher_transport = transport.clone();
+let rpc_transport = transport.clone();
+# let _ = (publisher_transport, rpc_transport);
+```
 
+See the [trait map](crate::guide::trait_map) for the public API relationships.
 
-For which trait is which, see the [trait map](crate::guide::trait_map).
+## Handle failures by API
+
+* [`UStatus`](crate::UStatus) is returned by Transport Layer operations. For
+  example, [`UTransport::send`](crate::UTransport::send) can reject an invalid
+  message with [`UCode::InvalidArgument`](crate::UCode::InvalidArgument) or
+  report an unavailable transport with
+  [`UCode::Unavailable`](crate::UCode::Unavailable).
+* [`RegistrationError`](crate::communication::RegistrationError) is returned
+  when a Communication Layer listener, subscriber, RPC client, or RPC endpoint
+  cannot be registered or unregistered.
+* [`PubSubError`](crate::communication::PubSubError),
+  [`NotificationError`](crate::communication::NotificationError), and
+  [`ServiceInvocationError`](crate::communication::ServiceInvocationError) are
+  returned by Communication Layer role operations. The publish and notification
+  transport-failure variants wrap a [`UStatus`](crate::UStatus), while RPC
+  transport and response statuses are converted into `ServiceInvocationError`
+  variants. For example,
+  [`ServiceInvocationError::DeadlineExceeded`](crate::communication::ServiceInvocationError::DeadlineExceeded)
+  reports an RPC timeout.
+
+For RPC, both a transport `UStatus` and a response's non-OK communication status
+use the same [`ServiceInvocationError`](crate::communication::ServiceInvocationError)
+mapping. A client-side timeout returns
+[`ServiceInvocationError::DeadlineExceeded`](crate::communication::ServiceInvocationError::DeadlineExceeded).
+
+## Next steps
+
+* [Communication Layer roles](crate::guide::applications::communication)
+* [Direct Transport Layer use](crate::guide::applications::transport)
+* [Public trait relationships](crate::guide::trait_map)

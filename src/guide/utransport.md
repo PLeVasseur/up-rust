@@ -1,197 +1,187 @@
-# The UTransport family
+# Implement UTransport
 
-A transport moves messages over one technology: a broker, a bus, or shared
-memory. Every transport implements the same contract so application code does
-not depend on that technology.
+[`UTransport`](crate::UTransport) adapts [`UMessage`](crate::UMessage) values
+and [`UUri`](crate::UUri) filters to a messaging technology. Implement
+[`UTransport::send`](crate::UTransport::send) and at least one receive mode:
+push through listener registration, pull through
+[`UTransport::receive`](crate::UTransport::receive), or both. The default
+receive and listener methods return
+[`UCode::Unimplemented`](crate::UCode::Unimplemented).
 
-A `UTransport`-family transport implements one trait,
-[`UTransport`](crate::UTransport): deliver a [`UMessage`](crate::UMessage),
-and keep a registry of listeners with their source/sink filters. Here is
-a **complete, working transport** — an in-process loopback — as a
-running example:
+## Start with three contracts
+
+| Source | What it defines |
+| --- | --- |
+| [`UTransport`](crate::UTransport) | Rust method signatures and default behavior |
+| [L1 Transport Layer specification](https://github.com/eclipse-uprotocol/up-spec/blob/v1.6.0-alpha.7/up-l1/README.adoc) | Observable operation, validation, authorization, delivery, and error requirements |
+| [Zenoh](https://github.com/eclipse-uprotocol/up-spec/blob/v1.6.0-alpha.7/up-l1/zenoh.adoc), [MQTT 5](https://github.com/eclipse-uprotocol/up-spec/blob/v1.6.0-alpha.7/up-l1/mqtt_5.adoc), or [SOME/IP](https://github.com/eclipse-uprotocol/up-spec/blob/v1.6.0-alpha.7/up-l1/someip.adoc) binding | Mapping between uProtocol messages and the selected protocol |
+
+Use all three when implementing and testing a transport. This guide explains
+how they fit together; it does not replace the complete L1 specification or the
+selected binding.
+
+## See the adapter boundary
+
+A transport owns two directional paths:
+
+```text
+outbound: UMessage -> validate -> encode for binding -> native send path
+
+inbound:  native PDU -> decode for binding -> validate UMessage
+                                               |-> matching push listeners
+                                               `-> pull receive queue
+```
+
+The binding defines the native representation. L1 defines what callers can
+observe at the `UTransport` methods.
+
+## Implement outbound send
+
+[`UTransport::send`](crate::UTransport::send) takes one complete `UMessage`.
+The implementation should:
+
+1. validate the message attributes;
+2. preserve all attributes and the payload while encoding the selected
+   binding;
+3. perform the protocol-specific send operation; and
+4. convert failures into an appropriate [`UStatus`](crate::UStatus).
+
+The crate exposes the same attribute validators used by its message builders:
 
 ```rust
-use std::sync::Arc;
-use tokio::sync::RwLock;
 use up_rust::{
-    verify_filter_criteria, ComparableListener, UCode, UListener, UMessage, UStatus, UTransport,
-    UUri,
+    UAttributesValidator, UAttributesValidators, UCode, UMessage, UStatus,
 };
 
-struct Registered {
-    source: UUri,
-    sink: Option<UUri>,
-    listener: ComparableListener,
-}
-
-#[derive(Default)]
-struct MiniTransport {
-    listeners: RwLock<Vec<Registered>>,
-}
-
-#[async_trait::async_trait]
-impl UTransport for MiniTransport {
-    async fn send(&self, message: UMessage) -> Result<(), UStatus> {
-        // A real transport hands the bytes to its technology here.
-        // The loopback "technology" is: match filters, dispatch locally.
-        let matching_listeners = {
-            let source = message.attributes().source();
-            let sink = message.attributes().sink();
-            self.listeners
-                .read()
-                .await
-                .iter()
-                .filter(|registered| {
-                    let source_ok = registered.source.matches(source);
-                    let sink_ok = match (&registered.sink, sink) {
-                        (Some(pattern), Some(candidate)) => pattern.matches(candidate),
-                        (None, None) => true,
-                        _ => false,
-                    };
-                    source_ok && sink_ok
-                })
-                .map(|registered| registered.listener.clone())
-                .collect::<Vec<_>>()
-        };
-
-        // Never hold the registry lock while invoking application code.
-        for listener in matching_listeners {
-            listener.on_receive(message.clone()).await;
-        }
-        Ok(())
-    }
-
-    async fn register_listener(
-        &self,
-        source_filter: &UUri,
-        sink_filter: Option<&UUri>,
-        listener: Arc<dyn UListener>,
-    ) -> Result<(), UStatus> {
-        // Reject filter combinations the spec forbids before storing anything.
-        verify_filter_criteria(source_filter, sink_filter).map_err(|e| *e)?;
-        let registered = Registered {
-            source: source_filter.to_owned(),
-            sink: sink_filter.map(ToOwned::to_owned),
-            listener: ComparableListener::new(listener),
-        };
-        let mut listeners = self.listeners.write().await;
-        if listeners.iter().any(|existing| {
-            existing.source == registered.source
-                && existing.sink == registered.sink
-                && existing.listener == registered.listener
-        }) {
-            return Err(UStatus::fail_with_code(
-                UCode::AlreadyExists,
-                "listener already registered for filters",
-            ));
-        }
-        listeners.push(registered);
-        Ok(())
-    }
-
-    async fn unregister_listener(
-        &self,
-        source_filter: &UUri,
-        sink_filter: Option<&UUri>,
-        listener: Arc<dyn UListener>,
-    ) -> Result<(), UStatus> {
-        let target = ComparableListener::new(listener);
-        let mut listeners = self.listeners.write().await;
-        let before = listeners.len();
-        listeners.retain(|r| {
-            !(r.source == *source_filter
-                && r.sink.as_ref() == sink_filter
-                && r.listener == target)
-        });
-        if listeners.len() < before {
-            Ok(())
-        } else {
-            Err(UStatus::fail_with_code(UCode::NotFound, "no such listener"))
-        }
-    }
-}
-
-// Prove it works: register, send, receive.
-struct Capture(tokio::sync::mpsc::UnboundedSender<UMessage>);
-#[async_trait::async_trait]
-impl UListener for Capture {
-    async fn on_receive(&self, message: UMessage) {
-        let _ = self.0.send(message);
-    }
-}
-
-#[tokio::main]
-async fn main() -> Result<(), Box<dyn std::error::Error>> {
-    use up_rust::{UMessageBuilder, UPayloadFormat};
-    let transport = MiniTransport::default();
-    let topic = UUri::try_from_parts("demo", 0x1_0001, 1, 0x8001)?;
-    let (tx, mut rx) = tokio::sync::mpsc::unbounded_channel();
-
-    let listener: Arc<dyn UListener> = Arc::new(Capture(tx));
-    transport.register_listener(&topic, None, listener.clone()).await?;
-    let duplicate = transport.register_listener(&topic, None, listener).await.unwrap_err();
-    assert_eq!(duplicate.get_code(), UCode::AlreadyExists);
-    transport
-        .send(UMessageBuilder::publish(topic).build_with_payload("42", UPayloadFormat::Text)?)
-        .await?;
-
-    let received = rx.recv().await.expect("message delivered");
-    assert_eq!(received.payload().unwrap().as_ref(), b"42");
-    Ok(())
+fn validate_outbound(message: &UMessage) -> Result<(), UStatus> {
+    UAttributesValidators::get_validator_for_attributes(message.attributes())
+        .validate(message.attributes())
+        .map_err(|error| {
+            UStatus::fail_with_code(UCode::InvalidArgument, error.to_string())
+        })
 }
 ```
 
-The crate's own [`LocalTransport`](crate::local_transport::LocalTransport)
-is this same shape grown up: a `HashSet` keyed on
-[`ComparableListener`](crate::ComparableListener) so duplicate
-registrations are rejected with `AlreadyExists`, and filter matching via
-the message's attributes. Read its source when you outgrow the sketch.
+Successful `send` completion is not a transport-independent delivery receipt.
+For protocol-backed transports, L1 says the message has been handed to the
+underlying protocol's send path, but the observable checkpoint depends on the
+implementation and protocol. For example, one transport might wait for a broker
+acknowledgement while an in-process transport might complete after local
+dispatch. Document that checkpoint without claiming that a recipient received
+or processed the message.
 
-## Payload and routing integrity
+## Build one inbound path
 
-Preserve all three payload states: absent, present with zero bytes, and present
-with nonempty bytes. Payload presence is not inferred from length.
+Decode each native protocol data unit according to the selected binding, rebuild
+the `UMessage`, and validate its attributes before exposing it through push or
+pull. Preserve the message metadata and payload during decoding.
 
-If the underlying protocol or broker mirrors routing fields in native headers,
-validate those fields against the message attributes before invoking a callback
-or forwarding. Route from the validated source and sink, never from payload
-bytes.
+For push, L1 requires invalid inbound data to be discarded. For pull, an
+inbound protocol data unit that cannot produce a valid matching `UMessage` is
+reported as [`UCode::NotFound`](crate::UCode::NotFound). Keep decoding and
+validation shared so both receive modes interpret the binding consistently.
 
-## Listener lifecycle and readiness
+## Implement push delivery
 
-Getting registration right matters more than it looks: a listener registered
-twice double-delivers, and one dropped early loses messages silently.
-Registration completes only when the binding can state what readiness means for
-its technology. Discovery-backed transports should expose a bounded peer or
-subscription readiness result, not use duplicate application sends as a
-readiness protocol. An absent peer returns a bounded, observable status.
+Push delivery uses
+[`UTransport::register_listener`](crate::UTransport::register_listener) and
+[`UTransport::unregister_listener`](crate::UTransport::unregister_listener).
+Both methods identify a registration with the source filter, optional sink
+filter, and listener identity:
 
-Listener dispatch preserves the binding's documented ordering and is bounded by
-an explicit queue, worker, or backpressure policy. Successful unregister is a
-quiescence boundary: a callback already running may complete if the binding says
-so, but no later callback may begin. Cancellation wakes blocking receive or poll
-operations, shutdown joins workers, and native entities are deleted
-deterministically so a transport can be recreated in the same domain.
+```rust
+use std::sync::Arc;
+use up_rust::{UListener, UUri};
 
-Polling is an acceptable native fallback when its wait is wakeable or bounded,
-each iteration bounds take and dispatch work, failures become health or status
-signals, and dropping the transport cannot leave an unjoined worker.
+struct Registration {
+    source_filter: UUri,
+    sink_filter: Option<UUri>,
+    listener: Arc<dyn UListener>,
+}
+```
 
-What a real technology changes: `send` maps the message attributes and payload
-to that binding's wire representation and hands it to the broker or bus. The
-receive side runs the inverse mapping and rebuilds a `UMessage` before
-dispatching to listeners.
+Validate a filter pair before changing registration state. The SDK helper
+implements the shared resource-ID checks from L1:
 
-That is the whole level. Error mapping: use
-[`UCode`](crate::UCode) faithfully — `AlreadyExists` for duplicate
-registration, `NotFound` for unknown listeners, `InvalidArgument` for
-filters your technology cannot express, `Unavailable` when the link is
-down. Applications and the roles built above you switch on these codes.
+```rust
+use up_rust::{verify_filter_criteria, UStatus, UUri};
 
-## Definition of done
+fn validate_filters(
+    source_filter: &UUri,
+    sink_filter: Option<&UUri>,
+) -> Result<(), UStatus> {
+    verify_filter_criteria(source_filter, sink_filter)
+        .map_err(|status| *status)
+}
+```
 
-"It compiles and my demo works" is not enough for a transport. Its tests should
-cover payload presence, exact and wildcard routing, duplicate registration,
-unregister quiescence, bounded failure, reconnect, and deterministic shutdown.
+A push implementation must make these lifecycle points observable:
 
-[the guide hub](crate::guide).
+* Repeating registration with the same filters and listener has the same effect
+  as registering once.
+* Registration does not succeed until messages received afterward can reach the
+  listener.
+* Every valid matching message received after successful registration invokes
+  each matching listener at least once.
+* Successful unregistration is a barrier: the removed registration receives no
+  later messages.
+* Configured total and per-filter listener limits fail registration with
+  [`UCode::ResourceExhausted`](crate::UCode::ResourceExhausted).
+
+Use listener identity, not merely its concrete type, when comparing
+registrations. [`ComparableListener`](crate::ComparableListener) is available
+to implementations that need hashable and comparable `Arc<dyn UListener>`
+values.
+
+## Implement pull delivery
+
+[`UTransport::receive`](crate::UTransport::receive) selects by the same source
+and optional sink filter shape used for push. If multiple unexpired messages
+match, return the oldest one. Return
+[`UCode::NotFound`](crate::UCode::NotFound) when no valid matching message is
+available, and [`UCode::Unimplemented`](crate::UCode::Unimplemented) when the
+transport does not support pull.
+
+The implementation decides how to buffer native messages, but it must preserve
+the L1 selection and expiry behavior at the method boundary.
+
+## Map errors by operation
+
+These notable L1 outcomes are not an exhaustive list of native failures:
+
+| Method | Required outcome |
+| --- | --- |
+| `send` | `InvalidArgument` for an invalid message; `PermissionDenied` is recommended when unauthorized sending can be determined locally |
+| `receive` | `Unimplemented` when pull is unsupported; `NotFound` when no valid matching message is available |
+| `register_listener` | `Unimplemented` when push is unsupported; `InvalidArgument` for invalid filters; `ResourceExhausted` at a configured listener limit; `PermissionDenied` is recommended when unauthorized consumption can be determined locally |
+| `unregister_listener` | `Unimplemented` when push is unsupported; `InvalidArgument` for invalid filters; `NotFound` when the registration does not exist |
+
+Map other native failures to the closest `UCode`, retain useful diagnostic
+detail in `UStatus`, and document any transport-specific outcomes.
+
+## Document transport-specific behavior
+
+L1 and the selected binding remain the conformance authority. A concrete
+transport should additionally document behavior that its technology determines:
+
+* **send completion:** which native event allows `send` to return success;
+* **reconnect:** whether registrations and buffered messages survive a lost
+  connection;
+* **ordering:** which messages, if any, are observed in a stable order;
+* **backpressure:** whether senders wait, fail, or drop when capacity is
+  exhausted; and
+* **shutdown:** how pending sends, receives, and listener callbacks finish.
+
+Do not turn those transport-specific choices into general `UTransport`
+guarantees.
+
+## Existing implementations
+
+The published
+[`up-transport-zenoh`](https://crates.io/crates/up-transport-zenoh),
+[`up-transport-mqtt5`](https://crates.io/crates/up-transport-mqtt5), and
+[`up-transport-vsomeip`](https://crates.io/crates/up-transport-vsomeip) crates
+show how concrete technologies implement the interface. Use them as design
+references; use L1 and the selected binding as the conformance authority.
+
+Return to the [guide](crate::guide).
