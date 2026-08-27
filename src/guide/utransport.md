@@ -25,11 +25,11 @@ selected binding.
 A transport owns two directional paths:
 
 ```text
-outbound: UMessage -> validate -> encode for binding -> native send path
+outbound: validated UMessage -> encode for binding -> native send path
 
-inbound:  native PDU -> decode for binding -> validate UMessage
-                                               |-> matching push listeners
-                                               `-> pull receive queue
+inbound:  native PDU -> decode and validate for binding -> UMessage
+                                                           |-> matching push listeners
+                                                           `-> pull receive queue
 ```
 
 The binding defines the native representation. L1 defines what callers can
@@ -40,27 +40,22 @@ observe at the `UTransport` methods.
 [`UTransport::send`](crate::UTransport::send) takes one complete `UMessage`.
 The implementation should:
 
-1. validate the message attributes;
-2. preserve all attributes and the payload while encoding the selected
+1. preserve all attributes and the payload while encoding the selected
    binding;
-3. perform the protocol-specific send operation; and
-4. convert failures into an appropriate [`UStatus`](crate::UStatus).
+2. perform the protocol-specific send operation; and
+3. convert failures into an appropriate [`UStatus`](crate::UStatus).
 
-The crate exposes the same attribute validators used by its message builders:
+Keep attribute validation at the boundary that constructs a `UMessage`.
+[`UMessageBuilder`](crate::UMessageBuilder) validates attributes before it
+returns a message. Decoders and custom type mappings should likewise reject an
+invalid representation instead of producing an invalid `UMessage`. A transport
+therefore does not normally need to repeat the same validation in `send`.
 
-```rust
-use up_rust::{
-    UAttributesValidator, UAttributesValidators, UCode, UMessage, UStatus,
-};
-
-fn validate_outbound(message: &UMessage) -> Result<(), UStatus> {
-    UAttributesValidators::get_validator_for_attributes(message.attributes())
-        .validate(message.attributes())
-        .map_err(|error| {
-            UStatus::fail_with_code(UCode::InvalidArgument, error.to_string())
-        })
-}
-```
+The pinned L1 specification still requires
+[`UCode::InvalidArgument`](crate::UCode::InvalidArgument) if an invalid message
+does reach `send`. Treat that as a fallback for integrations that do not yet
+enforce validation when constructing a `UMessage`, not as a reason to revalidate
+values from validated constructors.
 
 Successful `send` completion is not a transport-independent delivery receipt.
 For protocol-backed transports, L1 says the message has been handed to the
@@ -151,7 +146,7 @@ These notable L1 outcomes are not an exhaustive list of native failures:
 
 | Method | Required outcome |
 | --- | --- |
-| `send` | `InvalidArgument` for an invalid message; `PermissionDenied` is recommended when unauthorized sending can be determined locally |
+| `send` | `InvalidArgument` if an invalid message reaches the method; `PermissionDenied` is recommended when unauthorized sending can be determined locally |
 | `receive` | `Unimplemented` when pull is unsupported; `NotFound` when no valid matching message is available |
 | `register_listener` | `Unimplemented` when push is unsupported; `InvalidArgument` for invalid filters; `ResourceExhausted` at a configured listener limit; `PermissionDenied` is recommended when unauthorized consumption can be determined locally |
 | `unregister_listener` | `Unimplemented` when push is unsupported; `InvalidArgument` for invalid filters; `NotFound` when the registration does not exist |
@@ -177,7 +172,9 @@ guarantees.
 
 ## Existing implementations
 
-The published
+For a minimal in-process push implementation, see
+[`LocalTransport`](https://docs.rs/up-rust/latest/up_rust/local_transport/struct.LocalTransport.html).
+For protocol-backed designs, the published
 [`up-transport-zenoh`](https://crates.io/crates/up-transport-zenoh),
 [`up-transport-mqtt5`](https://crates.io/crates/up-transport-mqtt5), and
 [`up-transport-vsomeip`](https://crates.io/crates/up-transport-vsomeip) crates

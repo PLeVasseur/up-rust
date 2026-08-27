@@ -74,10 +74,11 @@ transport such as
 [`up-transport-mqtt5`](https://crates.io/crates/up-transport-mqtt5), or
 [`up-transport-vsomeip`](https://crates.io/crates/up-transport-vsomeip).
 
-Publishers, notifiers, subscribers, RPC clients, and RPC servers can share one
-[`Arc`](std::sync::Arc) clone. The role implementations are generic over
-[`UTransport`](crate::UTransport), so application code does not need to name
-the concrete transport type:
+Publishers, notifiers, subscribers, RPC clients, and RPC servers can share the
+same [`UTransport`](crate::UTransport) instance through
+[`Arc`](std::sync::Arc) clones. The role implementations are generic over
+`UTransport`, so application code does not need to name the concrete transport
+type:
 
 ```rust
 # use std::sync::Arc;
