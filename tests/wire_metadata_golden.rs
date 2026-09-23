@@ -30,6 +30,7 @@ use std::fs;
 use std::path::PathBuf;
 
 use bytes::Bytes;
+use up_rust::frame::native::NativeTypeToken;
 use up_rust::{
     NativePrefixFrameMetadataCodec, PayloadEncoding, ProtobufMappable, UAttributes, UFrameMetadata,
     UMessageBuilder, UProtocolNativeWire, UUri, UWire, UWireMetadataCodec, UUID,
@@ -154,6 +155,26 @@ fn fixtures() -> Vec<(&'static str, &'static str, UFrameMetadata)> {
             "response",
             "rpc response; reqid = request fixture id",
             response,
+        ),
+        (
+            "publish-native-private-token",
+            "publish; fixture-private encoding plus independent full-width token",
+            UFrameMetadata::publish(topic())
+                .with_id(fixed_uuid(9))
+                .with_payload_encoding(PayloadEncoding::from_id(0xF001).unwrap())
+                .with_native_type_token(NativeTypeToken::from_u32(0x89AB_CDEF))
+                .build()
+                .unwrap(),
+        ),
+        (
+            "publish-native-contract-token-zero",
+            "publish; present contract-defined zero encoding and present zero token",
+            UFrameMetadata::publish(topic())
+                .with_id(fixed_uuid(10))
+                .with_payload_encoding(PayloadEncoding::IMPLICIT)
+                .with_native_type_token(NativeTypeToken::from_u32(0))
+                .build()
+                .unwrap(),
         ),
     ]
 }
