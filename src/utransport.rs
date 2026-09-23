@@ -204,7 +204,8 @@ pub trait UListener: Send + Sync {
 /// Please refer to the [uProtocol Transport Layer specification](https://github.com/eclipse-uprotocol/up-spec/blob/v1.6.0-alpha.7/up-l1/README.adoc)
 /// for details.
 // [impl->dsn~utransport-declaration~1]
-/// *Role: implemented by transports; called by applications (usually via the [`communication`](crate::communication) roles) — see the trait map.*
+/// *Role: implemented by transports; called by applications (usually via the
+/// Communication Layer roles) — see the [trait map](crate::guide::trait_map).*
 ///
 #[async_trait]
 pub trait UTransport: Send + Sync {
