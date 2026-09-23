@@ -636,9 +636,11 @@ where
     where
         T::Wire: UWireEncode<Request> + UWireDecodeOwned<Response>,
     {
+        let identity = <T::Wire as PayloadCodec>::payload_identity(None)
+            .map_err(|error| ServiceInvocationError::InvalidArgument(error.to_string()))?;
         let payload_bytes = <T::Wire as EncodePayload<Request>>::encode_payload_owned(request)
             .map_err(|error| ServiceInvocationError::InvalidArgument(error.to_string()))?;
-        let payload_encoding = <T::Wire as PayloadCodec>::payload_encoding();
+        let payload_encoding = identity.encoding();
         let response = self
             .invoke_method(
                 method,
@@ -647,6 +649,9 @@ where
             )
             .await?
             .ok_or_else(|| ServiceInvocationError::InvalidArgument("No payload".to_string()))?;
+        identity
+            .verify(Some(&response.payload_encoding()), None)
+            .map_err(|error| ServiceInvocationError::InvalidArgument(error.to_string()))?;
         <T::Wire as DecodePayload<'_, Response>>::decode_payload(response.payload())
             .map_err(|error| ServiceInvocationError::InvalidArgument(error.to_string()))
     }
@@ -982,9 +987,10 @@ where
     where
         T::Wire: UWireEncode<Payload>,
     {
+        let payload_encoding = <T::Wire as PayloadCodec>::payload_encoding(None)
+            .map_err(|error| PubSubError::InvalidArgument(error.to_string()))?;
         let payload_bytes = <T::Wire as EncodePayload<Payload>>::encode_payload_owned(payload)
             .map_err(|error| PubSubError::InvalidArgument(error.to_string()))?;
-        let payload_encoding = <T::Wire as PayloadCodec>::payload_encoding();
         self.publish(
             resource_id,
             call_options,
@@ -1452,7 +1458,12 @@ mod tests {
     }
 }
 
-#[cfg(all(test, feature = "protobuf-support"))]
+#[cfg(all(
+    test,
+    feature = "protobuf-support",
+    feature = "selected-wire-user-api",
+    feature = "transport-implementer-api"
+))]
 mod selected_wire_tests {
     use std::sync::Mutex;
 
