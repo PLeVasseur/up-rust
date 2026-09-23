@@ -537,9 +537,7 @@ impl UFrameMetadata {
                 }
             }
             FrameMessageKind::Notification => {
-                if self.source.is_rpc_response() {
-                    errors.push("source must not be an RPC response URI".to_string());
-                } else if let Err(e) = self.source.verify_no_wildcards() {
+                if let Err(e) = self.source.verify_event() {
                     errors.push(format!("invalid source URI: {e}"));
                 }
                 match &self.sink {
@@ -1184,6 +1182,25 @@ mod tests {
                 .ttl(),
             None
         );
+    }
+
+    #[test_case("vehicle", 0, false; "response resource is not an event")]
+    #[test_case("vehicle", 1, false; "RPC method is not an event")]
+    #[test_case("vehicle", 0x7FFF, false; "last method resource")]
+    #[test_case("vehicle", 0x8000, true; "first event resource")]
+    #[test_case("vehicle", 0xFFFE, true; "last concrete event resource")]
+    #[test_case("vehicle", 0xFFFF, false; "wildcard resource")]
+    #[test_case("*", 0x8000, false; "wildcard authority")]
+    fn native_and_classic_notification_source_rules_agree(
+        authority: &str,
+        resource: u16,
+        valid: bool,
+    ) {
+        let source = UUri::try_from_parts(authority, 0x4210, 1, resource).unwrap();
+        let native = UFrameMetadata::notification(source.clone(), reply_to()).build();
+        let classic = UMessageBuilder::notification(source, reply_to()).build();
+        assert_eq!(native.is_ok(), valid);
+        assert_eq!(classic.is_ok(), valid);
     }
 
     fn topic() -> UUri {
