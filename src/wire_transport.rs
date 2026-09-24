@@ -1197,18 +1197,11 @@ where
 }
 
 #[cfg(any(feature = "zero-copy-transport", feature = "owned-frame-transport"))]
-fn selected_wire_core_source_filter() -> UUri {
-    UUri::try_from_parts("*", u32::MAX, u8::MAX, u16::MAX)
-        .expect("valid selected-wire core wildcard source filter")
-}
-
-#[cfg(any(feature = "zero-copy-transport", feature = "owned-frame-transport"))]
 fn selected_wire_core_source_filter_for(source_filter: &UUri) -> UUri {
-    if source_filter.verify_no_wildcards().is_ok() {
-        source_filter.clone()
-    } else {
-        selected_wire_core_source_filter()
-    }
+    // Preserve useful authority/entity scope even in a partial wildcard. The
+    // binding chooses any necessary physical broadening; decoded metadata is
+    // still filtered independently before public delivery.
+    source_filter.clone()
 }
 
 #[cfg(feature = "owned-frame-transport")]
@@ -2725,7 +2718,7 @@ mod tests {
 
     #[cfg(feature = "zero-copy-transport")]
     #[tokio::test]
-    async fn receive_uses_wildcard_core_filter_for_wildcard_source_filter() {
+    async fn receive_preserves_partial_core_source_filter() {
         let core = RecordingCore::default();
         core.received
             .lock()
@@ -2743,7 +2736,7 @@ mod tests {
         let filters = transport.core().receive_filters.lock().unwrap();
         assert_eq!(filters.len(), 1);
         let filter = filters.first().expect("one receive filter");
-        assert_eq!(filter.0, selected_wire_core_source_filter());
+        assert_eq!(filter.0, source_filter);
         assert_eq!(filter.1, None);
     }
 
@@ -2773,7 +2766,7 @@ mod tests {
 
     #[cfg(feature = "owned-frame-transport")]
     #[tokio::test]
-    async fn owned_receive_uses_wildcard_core_filter_for_wildcard_source_filter() {
+    async fn owned_receive_preserves_partial_core_source_filter() {
         let core = RecordingCore::default();
         core.received
             .lock()
@@ -2791,20 +2784,17 @@ mod tests {
         let filters = transport.core().receive_filters.lock().unwrap();
         assert_eq!(filters.len(), 1);
         let filter = filters.first().expect("one receive filter");
-        assert_eq!(filter.0, selected_wire_core_source_filter());
+        assert_eq!(filter.0, source_filter);
         assert_eq!(filter.1, None);
     }
 
     #[test]
-    fn selected_wire_core_source_filter_uses_exact_source_when_safe() {
+    fn selected_wire_core_source_filter_preserves_exact_and_partial_patterns() {
         let exact = UUri::try_from_parts("vehicle", 0x4210, 0x01, 0x9000).unwrap();
         let wildcard = UUri::try_from_parts("vehicle", 0x4210, 0x01, u16::MAX).unwrap();
 
         assert_eq!(selected_wire_core_source_filter_for(&exact), exact);
-        assert_eq!(
-            selected_wire_core_source_filter_for(&wildcard),
-            selected_wire_core_source_filter()
-        );
+        assert_eq!(selected_wire_core_source_filter_for(&wildcard), wildcard);
     }
 
     #[cfg(feature = "zero-copy-transport")]
