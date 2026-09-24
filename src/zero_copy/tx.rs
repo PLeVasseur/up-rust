@@ -111,6 +111,10 @@ impl UTxLoanSpec {
 }
 
 /// Initialized zero-copy transmit buffer.
+///
+/// The buffer retains its backing allocation and native allocator owner until
+/// it is committed or dropped, independently of the handle which loaned it.
+/// Dropping that handle must not invalidate payload access through this buffer.
 pub trait UTxBuffer {
     /// Returns semantic metadata.
     fn metadata(&self) -> &UFrameMetadata;
@@ -121,6 +125,10 @@ pub trait UTxBuffer {
 }
 
 /// Uninitialized zero-copy transmit buffer.
+///
+/// The loan retains its allocator owner independently of the originating
+/// transport. Initializing it after that transport handle is dropped remains
+/// valid; conversion must transfer the owner into the initialized buffer.
 pub trait UUninitTxBuffer {
     /// Initialized buffer produced after all payload bytes are written.
     type Initialized: UTxBuffer;

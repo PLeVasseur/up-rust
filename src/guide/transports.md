@@ -42,6 +42,14 @@ transport-specific meaning out of payload bytes.
 
 ## Listener lifecycle and readiness
 
+Received leases and transmit loans own their backing lifetime. Native mappings,
+proxies, subscriptions or allocators required by an outstanding object must remain
+alive until that object is released, even if a listener is unregistered or its
+transport handle is dropped. Unregister stops future delivery; it does not revoke
+frames already handed to the application. Verify this with real backend tests that
+retain metadata/payload access and original addresses across teardown, including
+uninitialized TX loans. A heap-backed fixture alone cannot prove native ownership.
+
 Getting registration right matters more than it looks: a listener
 registered twice double-delivers, and one dropped early loses messages
 silently. The UTransport tutorial's loopback shows the registry pattern;
@@ -52,6 +60,11 @@ means for that technology. Discovery-backed transports should expose a
 bounded peer or subscription readiness result, not use duplicate
 application sends as a readiness protocol. An absent peer returns a
 bounded, observable status.
+
+Local registration and remote discovery are different milestones. A binding which
+accepts registration before a peer exists must document that state and how the
+first sample is retained or how bounded data-ready discovery is observed. A success
+marker in an application must not claim a stronger state than the binding provides.
 
 Listener dispatch preserves the binding's documented ordering and is
 bounded by an explicit queue, worker, or backpressure policy.

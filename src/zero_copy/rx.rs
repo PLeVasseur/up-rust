@@ -15,6 +15,12 @@ use crate::NativeProfileAgreement;
 use crate::{validate_frame_view_for_transport, UFrameMetadata, UStatus, UWireError};
 
 /// Public receive lease for zero-copy transport families.
+///
+/// A delivered lease retains the storage and native owner objects needed by its
+/// views until the lease is dropped. Unregistering a listener or dropping the
+/// transport must not revoke outstanding leases. Bindings defer destruction of
+/// native subscriptions/mappings as necessary; callers need not copy or drain
+/// retained leases merely to stop delivery.
 pub trait UZeroCopyRxLease: UFrameView {}
 
 /// Receive frame that exposes one contiguous loan-backed payload.

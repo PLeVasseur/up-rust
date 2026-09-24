@@ -460,6 +460,11 @@ impl PreparedTxLoanSpec {
 /// This is an implementation-boundary trait. Raw encoded receive objects should
 /// not implement public frame or lease traits directly; public receive paths
 /// expose [`UWireRx<Rx, W, C>`] after selected-wire metadata decode and validation.
+///
+/// The object must retain all resources backing both metadata and payload views
+/// for its lifetime, including after listener unregistration or core destruction.
+/// Retaining a sample-handle allocation without its native proxy/mapping owner
+/// does not satisfy this contract.
 pub trait UEncodedRxFrame {
     /// Ordered payload reader type.
     type PayloadReader<'a>: Read + 'a
@@ -912,6 +917,10 @@ pub trait UZeroCopyTransportCore: Send + Sync {
     }
 
     /// Unregisters a raw encoded listener after public filter validation.
+    ///
+    /// On success no new callback may enter for this registration. A binding
+    /// may let an already-entered callback finish under its documented policy.
+    /// Previously delivered receive objects retain their storage independently.
     async fn unregister_encoded_zero_copy_listener(
         &self,
         _source_filter: &UUri,
@@ -999,7 +1008,7 @@ where
         );
         let (listener, inserted) =
             self.registered_zero_copy_listener(&key, source_filter, sink_filter, listener);
-        let core_source_filter = selected_wire_core_source_filter();
+        let core_source_filter = selected_wire_core_source_filter_for(source_filter);
         let result = self
             .core
             .register_encoded_zero_copy_listener(&core_source_filter, sink_filter, listener)
@@ -1025,7 +1034,7 @@ where
             zero_copy_listener_pointer::<TCore::Rx, W, C>(&listener),
         );
         let listener = self.zero_copy_listener_for_unregister(&key, listener);
-        let core_source_filter = selected_wire_core_source_filter();
+        let core_source_filter = selected_wire_core_source_filter_for(source_filter);
         let result = self
             .core
             .unregister_encoded_zero_copy_listener(&core_source_filter, sink_filter, listener)
@@ -1411,7 +1420,7 @@ where
         );
         let (listener, inserted) =
             self.registered_owned_listener(&key, source_filter, sink_filter, listener);
-        let core_source_filter = selected_wire_core_source_filter();
+        let core_source_filter = selected_wire_core_source_filter_for(source_filter);
         let result = self
             .core
             .register_encoded_owned_listener(&core_source_filter, sink_filter, listener)
@@ -1437,7 +1446,7 @@ where
             owned_listener_pointer(&listener),
         );
         let listener = self.owned_listener_for_unregister(&key, listener);
-        let core_source_filter = selected_wire_core_source_filter();
+        let core_source_filter = selected_wire_core_source_filter_for(source_filter);
         let result = self
             .core
             .unregister_encoded_owned_listener(&core_source_filter, sink_filter, listener)
@@ -1632,6 +1641,7 @@ mod tests {
     #[cfg(feature = "protobuf-support")]
     use crate::{EncodePayload, ProtobufPayload};
     use crate::{PayloadEncoding, UMessageBuilder};
+    use test_case::test_case;
 
     #[derive(Clone)]
     struct RawRx {
@@ -1825,6 +1835,9 @@ mod tests {
         listeners: StdMutex<Vec<Arc<dyn UEncodedZeroCopyListener<RawRx>>>>,
         received: StdMutex<VecDeque<RawRx>>,
         receive_filters: StdMutex<Vec<(UUri, Option<UUri>)>>,
+        listener_filters: StdMutex<Vec<(bool, UUri, Option<UUri>)>>,
+        #[cfg(feature = "owned-frame-transport")]
+        owned_listeners: StdMutex<Vec<Arc<dyn UEncodedOwnedListener>>>,
     }
 
     #[cfg(feature = "zero-copy-transport")]
@@ -1863,11 +1876,34 @@ mod tests {
 
         async fn register_encoded_zero_copy_listener(
             &self,
-            _source_filter: &UUri,
-            _sink_filter: Option<&UUri>,
+            source_filter: &UUri,
+            sink_filter: Option<&UUri>,
             listener: Arc<dyn UEncodedZeroCopyListener<Self::Rx>>,
         ) -> Result<(), UStatus> {
+            self.listener_filters.lock().unwrap().push((
+                true,
+                source_filter.clone(),
+                sink_filter.cloned(),
+            ));
             self.listeners.lock().unwrap().push(listener);
+            Ok(())
+        }
+
+        async fn unregister_encoded_zero_copy_listener(
+            &self,
+            source_filter: &UUri,
+            sink_filter: Option<&UUri>,
+            listener: Arc<dyn UEncodedZeroCopyListener<Self::Rx>>,
+        ) -> Result<(), UStatus> {
+            self.listener_filters.lock().unwrap().push((
+                false,
+                source_filter.clone(),
+                sink_filter.cloned(),
+            ));
+            self.listeners
+                .lock()
+                .unwrap()
+                .retain(|registered| !Arc::ptr_eq(registered, &listener));
             Ok(())
         }
     }
@@ -1893,6 +1929,39 @@ mod tests {
     #[cfg(feature = "owned-frame-transport")]
     #[async_trait]
     impl UOwnedTransportCore for RecordingCore {
+        async fn register_encoded_owned_listener(
+            &self,
+            source_filter: &UUri,
+            sink_filter: Option<&UUri>,
+            listener: Arc<dyn UEncodedOwnedListener>,
+        ) -> Result<(), UStatus> {
+            self.listener_filters.lock().unwrap().push((
+                true,
+                source_filter.clone(),
+                sink_filter.cloned(),
+            ));
+            self.owned_listeners.lock().unwrap().push(listener);
+            Ok(())
+        }
+
+        async fn unregister_encoded_owned_listener(
+            &self,
+            source_filter: &UUri,
+            sink_filter: Option<&UUri>,
+            listener: Arc<dyn UEncodedOwnedListener>,
+        ) -> Result<(), UStatus> {
+            self.listener_filters.lock().unwrap().push((
+                false,
+                source_filter.clone(),
+                sink_filter.cloned(),
+            ));
+            self.owned_listeners
+                .lock()
+                .unwrap()
+                .retain(|registered| !Arc::ptr_eq(registered, &listener));
+            Ok(())
+        }
+
         async fn send_prepared_owned(&self, _frame: PreparedOwnedFrame) -> Result<(), UStatus> {
             Ok(())
         }
@@ -1943,6 +2012,18 @@ mod tests {
         fail_register: AtomicBool,
         fail_unregister: AtomicBool,
         listener: StdMutex<Option<Arc<dyn UEncodedZeroCopyListener<RawRx>>>>,
+    }
+
+    #[cfg(feature = "owned-frame-transport")]
+    #[derive(Default)]
+    struct RecordingOwnedListener(StdMutex<Vec<UOwnedFrame>>);
+
+    #[cfg(feature = "owned-frame-transport")]
+    #[async_trait]
+    impl UOwnedListener for RecordingOwnedListener {
+        async fn on_receive_owned(&self, frame: UOwnedFrame) {
+            self.0.lock().unwrap().push(frame);
+        }
     }
 
     #[cfg(feature = "zero-copy-transport")]
@@ -2723,6 +2804,101 @@ mod tests {
         assert_eq!(
             selected_wire_core_source_filter_for(&wildcard),
             selected_wire_core_source_filter()
+        );
+    }
+
+    #[cfg(feature = "zero-copy-transport")]
+    #[test_case(0x9000; "exact listener filter remains exact")]
+    #[test_case(u16::MAX; "wildcard listener filter remains broad")]
+    #[tokio::test]
+    async fn listener_filters_and_owning_leases_survive_adapter_lifecycle(resource: u16) {
+        let transport =
+            RecordingCore::default().into_native_prefix_wire_transport(UProtocolNativeWire);
+        let source = UUri::try_from_parts("vehicle", 0x4210, 1, resource).unwrap();
+        let listener = Arc::new(RecordingZeroCopyListener::default());
+        transport
+            .register_validated_zero_copy_listener(&source, None, listener.clone())
+            .await
+            .unwrap();
+        let encoded_listener = transport
+            .core()
+            .listeners
+            .lock()
+            .unwrap()
+            .first()
+            .expect("registered listener")
+            .clone();
+        encoded_listener
+            .on_receive_encoded_zero_copy(raw_frame_for_topic(0x9000, b"retained"))
+            .await;
+        let frame = listener.frames.lock().unwrap().pop().unwrap();
+        let address = frame.try_contiguous_payload().unwrap().as_ptr();
+        transport
+            .unregister_validated_zero_copy_listener(&source, None, listener)
+            .await
+            .unwrap();
+        let expected = selected_wire_core_source_filter_for(&source);
+        assert_eq!(
+            *transport.core().listener_filters.lock().unwrap(),
+            vec![(true, expected.clone(), None), (false, expected, None)]
+        );
+        assert!(transport.core().listeners.lock().unwrap().is_empty());
+        drop(encoded_listener);
+        drop(transport);
+        // This proves adapter ownership, not a native allocator's implementation.
+        assert_eq!(frame.try_contiguous_payload().unwrap(), b"retained");
+        assert_eq!(frame.try_contiguous_payload().unwrap().as_ptr(), address);
+    }
+
+    #[cfg(feature = "owned-frame-transport")]
+    #[test_case(0x9000; "exact owned listener filter remains exact")]
+    #[test_case(u16::MAX; "wildcard owned listener filter remains broad")]
+    #[tokio::test]
+    async fn owned_listener_registration_and_removal_use_the_same_core_filter(resource: u16) {
+        let transport =
+            RecordingCore::default().into_native_prefix_wire_transport(UProtocolNativeWire);
+        let source = UUri::try_from_parts("vehicle", 0x4210, 1, resource).unwrap();
+        let listener = Arc::new(RecordingOwnedListener::default());
+        transport
+            .register_validated_owned_listener(&source, None, listener.clone())
+            .await
+            .unwrap();
+        let encoded_listener = transport
+            .core()
+            .owned_listeners
+            .lock()
+            .unwrap()
+            .first()
+            .expect("registered owned listener")
+            .clone();
+        let raw = raw_frame_for_topic(0x9000, b"owned-after-unregister");
+        encoded_listener
+            .on_receive_encoded_owned(EncodedOwnedFrame::new(
+                raw.encoded_metadata,
+                Some(raw.payload.into()),
+            ))
+            .await;
+        transport
+            .unregister_validated_owned_listener(&source, None, listener.clone())
+            .await
+            .unwrap();
+        let expected = selected_wire_core_source_filter_for(&source);
+        assert_eq!(
+            *transport.core().listener_filters.lock().unwrap(),
+            vec![(true, expected.clone(), None), (false, expected, None)]
+        );
+        assert!(transport.core().owned_listeners.lock().unwrap().is_empty());
+        drop(encoded_listener);
+        drop(transport);
+        assert_eq!(
+            listener
+                .0
+                .lock()
+                .unwrap()
+                .first()
+                .expect("delivered owned frame")
+                .payload_bytes(),
+            b"owned-after-unregister"
         );
     }
 
