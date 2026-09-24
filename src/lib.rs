@@ -124,6 +124,11 @@ pub mod core;
 #[cfg(feature = "util")]
 pub mod local_transport;
 
+#[cfg(feature = "util")]
+mod listener_admission;
+#[cfg(feature = "util")]
+pub use listener_admission::ListenerAdmission;
+
 #[cfg(feature = "payload-contract-fixtures")]
 pub mod bench_fixtures;
 
@@ -401,6 +406,8 @@ pub mod selected_wire_user_api {
 /// encoded-core contracts for existing transports and focused imports.
 #[cfg(feature = "transport-implementer-api")]
 pub mod transport_implementer_api {
+    #[cfg(feature = "util")]
+    pub use crate::ListenerAdmission;
     #[cfg(feature = "owned-frame-transport")]
     pub use crate::{
         EncodedOwnedFrame, PreparedOwnedFrame, UEncodedOwnedListener, UOwnedTransportCore,

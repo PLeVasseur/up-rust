@@ -35,10 +35,12 @@ bytes. Presence is not inferred from length.
 Encoded metadata and payload regions are opaque to the encoded-core
 [`UOwnedTransportCore`](crate::UOwnedTransportCore): a core moves those bytes and never interprets
 them. If the underlying protocol or broker mirrors routing fields in
-its own native headers, validate those native fields against the
-decoded metadata before invoking a callback or forwarding; route from
-the validated source/sink metadata, never by decoding
-transport-specific meaning out of payload bytes.
+its own native headers, classify those fields explicitly. Required mirrors must
+agree with decoded metadata. Documented untrusted routing hints may select
+physical queues or candidate listeners, but cannot override decoded source/sink
+metadata or satisfy the public listener filter on their own. The shared wire
+adapter performs metadata validation and final filtering before public delivery.
+Never derive routing or wire compatibility from application payload bytes.
 
 ## Listener lifecycle and readiness
 
@@ -73,6 +75,11 @@ running may complete if the binding says so, but no later callback may
 begin. Cancellation wakes blocking receive/poll operations, workers
 expose health, shutdown joins them, and native entities are deleted
 deterministically so a transport can be recreated in the same domain.
+
+The opt-in `util` feature provides `ListenerAdmission` for bindings whose policy
+allows an entered callback to finish. It closes admission at the actual first
+poll, supports self-unregister, and leaves queueing and worker teardown with the
+binding. It is not a substitute for retaining native loan owners.
 
 Polling is an acceptable native fallback when its wait is wakeable or
 bounded, each iteration bounds take and dispatch work, failures become

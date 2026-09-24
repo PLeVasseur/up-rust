@@ -21,6 +21,12 @@ use crate::{validate_frame_view_for_transport, UFrameMetadata, UStatus, UWireErr
 /// transport must not revoke outstanding leases. Bindings defer destruction of
 /// native subscriptions/mappings as necessary; callers need not copy or drain
 /// retained leases merely to stop delivery.
+///
+/// This base trait specifies storage lifetime and frame access, not a measured
+/// end-to-end no-copy guarantee. A binding may adapt owned receive storage to
+/// this API. Contiguous loan access and its provenance are separate capabilities
+/// exposed by [`ULoanedContiguousZeroCopyRxFrame`]; physical copy behavior must
+/// also be documented by the binding.
 pub trait UZeroCopyRxLease: UFrameView {}
 
 /// Receive frame that exposes one contiguous loan-backed payload.
