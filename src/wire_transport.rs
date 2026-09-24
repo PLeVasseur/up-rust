@@ -1187,13 +1187,21 @@ where
     W: UWire,
     C: UWireMetadataCodecFor<W>,
 {
-    source_filter.matches(frame.metadata().source())
-        && sink_filter.is_none_or(|filter| {
-            frame
-                .metadata()
-                .sink()
-                .is_some_and(|sink| filter.matches(sink))
-        })
+    selected_wire_metadata_matches(frame.metadata(), source_filter, sink_filter)
+}
+
+#[cfg(any(feature = "zero-copy-transport", feature = "owned-frame-transport"))]
+fn selected_wire_metadata_matches(
+    metadata: &UFrameMetadata,
+    source: &UUri,
+    sink: Option<&UUri>,
+) -> bool {
+    source.matches(metadata.source())
+        && match (sink, metadata.sink()) {
+            (None, None) => true,
+            (Some(filter), Some(actual)) => filter.matches(actual),
+            _ => false,
+        }
 }
 
 #[cfg(any(feature = "zero-copy-transport", feature = "owned-frame-transport"))]
@@ -1550,13 +1558,7 @@ fn owned_frame_matches(
     source_filter: &UUri,
     sink_filter: Option<&UUri>,
 ) -> bool {
-    source_filter.matches(frame.metadata().source())
-        && sink_filter.is_none_or(|filter| {
-            frame
-                .metadata()
-                .sink()
-                .is_some_and(|sink| filter.matches(sink))
-        })
+    selected_wire_metadata_matches(frame.metadata(), source_filter, sink_filter)
 }
 
 #[cfg(any(feature = "zero-copy-transport", feature = "owned-frame-transport"))]
@@ -2017,6 +2019,85 @@ mod tests {
         async fn on_receive_owned(&self, frame: UOwnedFrame) {
             self.0.lock().unwrap().push(frame);
         }
+    }
+
+    #[cfg(feature = "owned-frame-transport")]
+    #[tokio::test]
+    async fn sinkless_owned_listener_does_not_duplicate_notifications() {
+        use crate::UOwnedTransport;
+        let transport = RecordingCore::default().into_protobuf_transport();
+        let source = UUri::try_from_parts("source", 0x4210, 1, 0x8001).unwrap();
+        let sink = UUri::try_from_parts("sink", 0x4210, 1, 0).unwrap();
+        let publishes = Arc::new(RecordingOwnedListener::default());
+        let notifications = Arc::new(RecordingOwnedListener::default());
+        transport
+            .register_owned_listener(&source, None, publishes.clone())
+            .await
+            .unwrap();
+        transport
+            .register_owned_listener(&source, Some(&sink), notifications.clone())
+            .await
+            .unwrap();
+        let metadata = UFrameMetadata::notification(source, sink)
+            .with_payload_encoding(PayloadEncoding::PROTOBUF)
+            .build()
+            .unwrap();
+        let encoded = NativePrefixFrameMetadataCodec
+            .encode_frame_metadata(ProtobufWire::metadata_context(), &metadata)
+            .unwrap();
+        let listeners = transport.core().owned_listeners.lock().unwrap().clone();
+        for listener in listeners {
+            listener
+                .on_receive_encoded_owned(EncodedOwnedFrame::new(
+                    encoded.clone(),
+                    Some(Bytes::from_static(b"notify")),
+                ))
+                .await;
+        }
+        assert!(
+            publishes.0.lock().unwrap().is_empty(),
+            "None means no sink, not any sink"
+        );
+        assert_eq!(notifications.0.lock().unwrap().len(), 1);
+    }
+
+    #[cfg(feature = "zero-copy-transport")]
+    #[tokio::test]
+    async fn sinkless_zero_copy_listener_does_not_duplicate_notifications() {
+        let transport = RecordingCore::default().into_protobuf_transport();
+        let source = UUri::try_from_parts("source", 0x4210, 1, 0x8001).unwrap();
+        let sink = UUri::try_from_parts("sink", 0x4210, 1, 0).unwrap();
+        let publishes = Arc::new(RecordingZeroCopyListener::<ProtobufWire>::default());
+        let notifications = Arc::new(RecordingZeroCopyListener::<ProtobufWire>::default());
+        transport
+            .register_validated_zero_copy_listener(&source, None, publishes.clone())
+            .await
+            .unwrap();
+        transport
+            .register_validated_zero_copy_listener(&source, Some(&sink), notifications.clone())
+            .await
+            .unwrap();
+        let metadata = UFrameMetadata::notification(source, sink)
+            .with_payload_encoding(PayloadEncoding::PROTOBUF)
+            .build()
+            .unwrap();
+        let encoded = NativePrefixFrameMetadataCodec
+            .encode_frame_metadata(ProtobufWire::metadata_context(), &metadata)
+            .unwrap();
+        let listeners = transport.core().listeners.lock().unwrap().clone();
+        for listener in listeners {
+            listener
+                .on_receive_encoded_zero_copy(RawRx {
+                    encoded_metadata: encoded.clone(),
+                    payload: b"notify".to_vec(),
+                })
+                .await;
+        }
+        assert!(
+            publishes.frames.lock().unwrap().is_empty(),
+            "None means no sink, not any sink"
+        );
+        assert_eq!(notifications.frames.lock().unwrap().len(), 1);
     }
 
     #[cfg(feature = "zero-copy-transport")]
