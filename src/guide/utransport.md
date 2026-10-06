@@ -76,6 +76,25 @@ inbound protocol data unit that cannot produce a valid matching `UMessage` is
 reported as [`UCode::NotFound`](crate::UCode::NotFound). Keep decoding and
 validation shared so both receive modes interpret the binding consistently.
 
+## Exact URI arguments
+
+Use [`ExactUUri`](crate::ExactUUri) when an API accepts one resource rather than
+a wildcard filter. Construction checks every authority, entity, version and
+resource component. Borrow it with `as_uuri`, or recover the original value with
+`into_inner`. This check says nothing about a binding's physical filtering or
+payload-copy behavior; ordinary [`UUri`](crate::UUri) filters remain available.
+
+```rust
+use up_rust::{ExactUUri, UUri, UUriError};
+
+let uri = UUri::try_from_parts("vehicle", 0x0001_2345, 1, 0x8001)?;
+let exact = ExactUUri::try_from(&uri)?;
+assert_eq!(exact.as_uuri(), &uri);
+assert_eq!(exact.into_inner(), uri);
+assert!(matches!(ExactUUri::try_from(UUri::any()), Err(UUriError::ValidationError(_))));
+# Ok::<(), UUriError>(())
+```
+
 ## Implement push delivery
 
 Push delivery uses

@@ -39,3 +39,10 @@ assert_eq!(detail.type_url(), "example.com/error");
 assert_eq!(detail.value(), b"opaque");
 let _creation_time_millis = UUID::build().time();
 ```
+
+## Exact URI arguments
+
+`ExactUUri` is available at the crate root for APIs requiring a URI with no
+wildcard components. Convert an owned or borrowed `UUri` with `TryFrom` and handle
+`UUriError::ValidationError` for wildcard input. Existing `UUri` filter APIs keep
+their matching semantics; no implicit conversion narrows a wildcard filter.

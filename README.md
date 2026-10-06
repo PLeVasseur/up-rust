@@ -55,6 +55,10 @@ cargo build
 
 The crate has some (optional) _features_ as documented in [lib.rs](src/lib.rs).
 
+APIs that require one exact resource can accept `ExactUUri`, a checked URI without
+wildcard components. The [transport implementation guide](src/guide/utransport.md#exact-uri-arguments)
+shows construction and borrowing; ordinary `UUri` values remain the filter type.
+
 VSCode can be instructed to build all features automatically by means of putting the following into `./vscode/settings.json`:
 
 ```json

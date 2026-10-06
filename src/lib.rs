@@ -156,7 +156,7 @@ pub use umessage::{
 };
 
 mod uri;
-pub use uri::{UUri, UUriError};
+pub use uri::{ExactUUri, UUri, UUriError};
 
 mod ustatus;
 pub use ustatus::{UAny, UCode, UStatus};
