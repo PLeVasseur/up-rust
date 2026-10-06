@@ -1,6 +1,9 @@
 # Eclipse uProtocol Rust library
 
-This is the [uProtocol v1.6.0-alpha.7 Language Library](https://github.com/eclipse-uprotocol/up-spec/blob/v1.6.0-alpha.7/languages.adoc) for the Rust programming language.
+This is the [uProtocol Language Library](https://github.com/eclipse-uprotocol/up-spec/blob/main/languages.adoc)
+for Rust. Source builds use the protocol definitions pinned by the `up-spec`
+submodule. The [migration guide](MIGRATION.md) describes the development API's
+explicit payload-encoding identity and opaque carriage rules.
 
 The crate can be used to
 
@@ -13,12 +16,15 @@ The crate can be used to
 Covers:
 - req~up-language-documentation~
 -->
-The crate needs to be added to the `[dependencies]` section of the `Cargo.toml` file:
+For the published 0.9 API, add the crate to the `[dependencies]` section of Cargo.toml:
 
 ```toml
 [dependencies]
 up-rust = { version = "0.9" }
 ```
+
+The 0.10 development API described by this checkout requires an explicit source
+revision or local dependency; it is not supplied by the 0.9 dependency above.
 
 Most developers will want to use the Communication Level API and its default implementation which are provided by the `communication` module. Please refer to the [examples](./examples/) for inspiration how to use this crate.
 

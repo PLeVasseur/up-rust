@@ -71,3 +71,66 @@ let uuid = UUID::build();
 let (most, least) = uuid.as_u64_pair();
 assert_eq!(UUID::from_u64_pair(most, least).unwrap(), uuid);
 ```
+
+## Payload identity and opaque carriage
+
+`UPayloadFormat` is removed. Use the numeric `PayloadEncoding` identity without
+equating structural validity with registry assignment or decoder support:
+
+| Previous API | Replacement |
+| --- | --- |
+| `UPayloadFormat::{ProtobufWrappedInAny, Protobuf, Json, Someip, SomeipTlv, Raw, Text}` | `PayloadEncoding::{PROTOBUF_WRAPPED_IN_ANY, PROTOBUF, JSON, SOMEIP, SOMEIP_TLV, RAW, TEXT}` |
+| `UPayloadFormat::Unspecified` for a present contract-defined payload | `PayloadEncoding::CONTRACT_DEFINED`, explicit ID 0; no payload uses `None` instead. |
+| `UAttributes::payload_format`, `UMessage::payload_format` | `payload_encoding`, returning `Option<PayloadEncoding>` |
+| `payload_format_unchecked` on a message | Prefer checked `payload_encoding`; `payload_encoding_unchecked` still requires presence. |
+| `UAttributes::payload_format_unchecked` | Use `payload_encoding` and handle the optional identity explicitly. |
+| `UPayload::new(bytes, format)`, `UPayload::payload_format` | `UPayload::new(bytes, encoding)`, `UPayload::payload_encoding` |
+| `UMessageBuilder::build_with_payload(bytes, format)` | `build_with_payload(bytes, encoding)` |
+| `UAttributesValidators::get_validator`, `get_validator_for`, `get_validator_for_attributes` | `validator`, `validator_for`, `validator_for_attributes` |
+| Generated protobuf field `payload_format` | Optional `payload_encoding_id`, field 12, with uint32 wire storage and a 16-bit accepted range |
+
+There is no `IMPLICIT` alias for `CONTRACT_DEFINED`. ID 0 displays as
+`0 (contract-defined)` and requires an applicable contract; it is not absence or
+an instruction to guess an encoding. `from_id` preserves every structurally valid
+16-bit value, including unknown, unassigned, reserved and private identifiers.
+`from_registry_entry` checks the assignment range; `private_use` checks the private
+range. Neither constructor establishes an allocation or decoding agreement.
+
+Builders reject origination of reserved IDs (`0xE000..=0xEFFF`) with
+`UMessageError::AttributesValidationError`. Received/forwarded reserved identities
+remain valid opaque carriage. `with_declared_payload_encoding` is the explicit
+carrier/decorator operation for existing payload bytes; it does not turn an
+absent payload into a present one. Payload and identifier must both be present
+or both absent. A zero-length present payload is still present; mismatched
+presence produces `UMessageError::PayloadError`.
+
+```rust
+use up_rust::{PayloadEncoding, UAttributesError, UMessageBuilder, UMessageError, UUri};
+
+let topic = UUri::try_from_parts("vehicle", 0x1234, 1, 0x8001)?;
+let present = UMessageBuilder::publish(topic.clone())
+    .build_with_payload(Vec::new(), PayloadEncoding::CONTRACT_DEFINED)?;
+assert_eq!(present.payload_encoding(), Some(PayloadEncoding::CONTRACT_DEFINED));
+assert!(present.payload().unwrap().is_empty());
+let reserved = PayloadEncoding::from_id(0xE000)?;
+assert!(matches!(
+    UMessageBuilder::publish(topic).build_with_payload("new payload", reserved),
+    Err(UMessageError::AttributesValidationError(UAttributesError::ValidationError(_)))
+));
+let carried = present.with_declared_payload_encoding(reserved)?;
+assert_eq!(carried.payload_encoding(), Some(reserved));
+carried.validate()?;
+# Ok::<(), Box<dyn std::error::Error>>(())
+```
+
+CloudEvents output carries payload octets opaquely: binary data in Protobuf Event
+Format, and `data_base64` rather than parsed `data` in JSON Event Format. `pformat`
+preserves the identifier and the carriage media type is `application/octet-stream`.
+JSON consumers must decode `data_base64` before parsing the application JSON, or
+apply an explicit application-aware projection. Any present data property without
+`pformat` is rejected regardless of its type. Legacy typed input remains a closed
+set, not media-type inference or generic payload decoding.
+
+TTL zero now consistently means no expiration (`None`); positive u32 millisecond
+values are preserved without clamping. Requests still require a positive TTL.
+Bindings with a smaller carrier range must report unrepresentability.
