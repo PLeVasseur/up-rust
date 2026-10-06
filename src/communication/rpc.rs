@@ -67,36 +67,36 @@ pub enum ServiceInvocationError {
 
 impl From<UStatus> for ServiceInvocationError {
     fn from(value: UStatus) -> Self {
-        match value.get_code() {
-            UCode::AlreadyExists => ServiceInvocationError::AlreadyExists(
-                value.get_message_or_default("N/A").to_string(),
-            ),
+        match value.code() {
+            UCode::AlreadyExists => {
+                ServiceInvocationError::AlreadyExists(value.message_or_default("N/A").to_string())
+            }
             UCode::DeadlineExceeded => ServiceInvocationError::DeadlineExceeded,
             UCode::FailedPrecondition => ServiceInvocationError::FailedPrecondition(
-                value.get_message_or_default("N/A").to_string(),
+                value.message_or_default("N/A").to_string(),
             ),
             UCode::Internal => {
-                ServiceInvocationError::Internal(value.get_message_or_default("N/A").to_string())
+                ServiceInvocationError::Internal(value.message_or_default("N/A").to_string())
             }
-            UCode::InvalidArgument => ServiceInvocationError::InvalidArgument(
-                value.get_message_or_default("N/A").to_string(),
-            ),
+            UCode::InvalidArgument => {
+                ServiceInvocationError::InvalidArgument(value.message_or_default("N/A").to_string())
+            }
             UCode::NotFound => {
-                ServiceInvocationError::NotFound(value.get_message_or_default("N/A").to_string())
+                ServiceInvocationError::NotFound(value.message_or_default("N/A").to_string())
             }
             UCode::PermissionDenied => ServiceInvocationError::PermissionDenied(
-                value.get_message_or_default("N/A").to_string(),
+                value.message_or_default("N/A").to_string(),
             ),
             UCode::ResourceExhausted => ServiceInvocationError::ResourceExhausted(
-                value.get_message_or_default("N/A").to_string(),
+                value.message_or_default("N/A").to_string(),
             ),
             UCode::Unauthenticated => ServiceInvocationError::Unauthenticated,
             UCode::Unavailable => {
-                ServiceInvocationError::Unavailable(value.get_message_or_default("N/A").to_string())
+                ServiceInvocationError::Unavailable(value.message_or_default("N/A").to_string())
             }
-            UCode::Unimplemented => ServiceInvocationError::Unimplemented(
-                value.get_message_or_default("N/A").to_string(),
-            ),
+            UCode::Unimplemented => {
+                ServiceInvocationError::Unimplemented(value.message_or_default("N/A").to_string())
+            }
             UCode::Ok
             | UCode::Cancelled
             | UCode::Unknown

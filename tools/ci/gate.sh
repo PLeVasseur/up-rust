@@ -53,10 +53,10 @@ if [[ "$configuration" == current && ( "$group" == all || "$group" == docs ) ]];
   python3 tools/ci/run_check.py --log "$log_root/docs-default.log" --timeout 1200 --completion command -- cargo +1.95.0 doc --locked --workspace --no-default-features --no-deps
 fi
 if [[ "$configuration" == current && ( "$group" == all || "$group" == tests ) ]]; then
-  python3 tools/ci/run_check.py --log "$log_root/lib-core.log" --timeout 1200 --completion libtest -- cargo +1.95.0 test --locked --workspace --features protobuf-support,up-l2-api --lib
+  python3 tools/ci/run_check.py --log "$log_root/lib-core.log" --timeout 1200 --completion libtest -- cargo +1.95.0 test --locked --workspace --features protobuf-support,communication-api --lib
 fi
 if [[ "$configuration" == current && ( "$group" == all || "$group" == tests ) ]]; then
-  python3 tools/ci/run_check.py --log "$log_root/doctests-core.log" --timeout 1200 --completion libtest -- cargo +1.95.0 test --locked --workspace --features protobuf-support,up-l2-api --doc
+  python3 tools/ci/run_check.py --log "$log_root/doctests-core.log" --timeout 1200 --completion libtest -- cargo +1.95.0 test --locked --workspace --features protobuf-support,communication-api --doc
 fi
 if [[ "$configuration" == current && ( "$group" == all || "$group" == tests ) ]]; then
   python3 tools/ci/run_check.py --log "$log_root/lib-all.log" --timeout 1200 --completion libtest -- cargo +1.95.0 test --locked --workspace --all-features --lib
@@ -83,10 +83,10 @@ if [[ "$configuration" == msrv && ( "$group" == all || "$group" == check ) ]]; t
   python3 tools/ci/run_check.py --log "$log_root/check-all.log" --timeout 1200 --completion command -- cargo +1.88.0 check --locked --workspace --all-features --all-targets
 fi
 if [[ "$configuration" == msrv && ( "$group" == all || "$group" == tests ) ]]; then
-  python3 tools/ci/run_check.py --log "$log_root/lib-core.log" --timeout 1200 --completion libtest -- cargo +1.88.0 test --locked --workspace --features protobuf-support,up-l2-api --lib
+  python3 tools/ci/run_check.py --log "$log_root/lib-core.log" --timeout 1200 --completion libtest -- cargo +1.88.0 test --locked --workspace --features protobuf-support,communication-api --lib
 fi
 if [[ "$configuration" == msrv && ( "$group" == all || "$group" == tests ) ]]; then
-  python3 tools/ci/run_check.py --log "$log_root/doctests-core.log" --timeout 1200 --completion libtest -- cargo +1.88.0 test --locked --workspace --features protobuf-support,up-l2-api --doc
+  python3 tools/ci/run_check.py --log "$log_root/doctests-core.log" --timeout 1200 --completion libtest -- cargo +1.88.0 test --locked --workspace --features protobuf-support,communication-api --doc
 fi
 if [[ "$configuration" == msrv && ( "$group" == all || "$group" == tests ) ]]; then
   python3 tools/ci/run_check.py --log "$log_root/lib-all.log" --timeout 1200 --completion libtest -- cargo +1.88.0 test --locked --workspace --all-features --lib

@@ -78,7 +78,7 @@ impl<T: UTransport> RequestListener<T> {
             Err(e) => {
                 let error = UStatus::from(e);
                 response_builder
-                    .with_comm_status(error.get_code())
+                    .with_comm_status(error.code())
                     .build_with_protobuf_payload(&error)
             }
         };
@@ -86,10 +86,7 @@ impl<T: UTransport> RequestListener<T> {
         match response {
             Ok(response_message) => {
                 if let Err(e) = transport_clone.send(response_message).await {
-                    info!(
-                        ucode = e.get_code().value(),
-                        "failed to send response message"
-                    );
+                    info!(ucode = e.code().value(), "failed to send response message");
                 }
             }
             Err(e) => {
@@ -465,9 +462,9 @@ mod tests {
             .once()
             .withf(move |response_message| {
                 let error: UStatus = response_message.extract_protobuf().unwrap();
-                error.get_code() == UCode::NotFound
+                error.code() == UCode::NotFound
                     && response_message.is_response()
-                    && response_message.commstatus_unchecked() == error.get_code()
+                    && response_message.commstatus_unchecked() == error.code()
                     && response_message.request_id_unchecked() == &message_id_clone
             })
             .returning(move |_msg| {
@@ -527,9 +524,9 @@ mod tests {
             .once()
             .withf(move |response_message| {
                 let error: UStatus = response_message.extract_protobuf().unwrap();
-                error.get_code() == UCode::DeadlineExceeded
+                error.code() == UCode::DeadlineExceeded
                     && response_message.is_response()
-                    && response_message.commstatus_unchecked() == error.get_code()
+                    && response_message.commstatus_unchecked() == error.code()
                     && response_message.request_id_unchecked() == &message_id_clone
             })
             .returning(move |_msg| {

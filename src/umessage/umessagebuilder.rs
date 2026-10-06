@@ -862,7 +862,7 @@ impl UMessageBuilder<ResponseBuilderState> {
 #[cfg(test)]
 mod tests {
     use super::*;
-    #[cfg(feature = "up-core-types")]
+    #[cfg(feature = "up-core-api")]
     use crate::ProtobufMappable;
 
     use test_case::test_case;
@@ -946,7 +946,7 @@ mod tests {
         assert!(message.permission_level().is_none());
         assert!(message.token().is_none());
 
-        #[cfg(feature = "up-core-types")]
+        #[cfg(feature = "up-core-api")]
         {
             // [utest->req~uattributes-data-model-proto~1]
             // [utest->req~umessage-data-model-proto~1]
@@ -993,7 +993,7 @@ mod tests {
         assert!(message.permission_level().is_none());
         assert!(message.token().is_none());
 
-        #[cfg(feature = "up-core-types")]
+        #[cfg(feature = "up-core-api")]
         {
             // [utest->req~uattributes-data-model-proto~1]
             // [utest->req~umessage-data-model-proto~1]
@@ -1049,7 +1049,7 @@ mod tests {
 
         // [utest->req~uattributes-data-model-proto~1]
         // [utest->req~umessage-data-model-proto~1]
-        #[cfg(feature = "up-core-types")]
+        #[cfg(feature = "up-core-api")]
         {
             let proto = message
                 .write_to_protobuf_bytes()
@@ -1156,7 +1156,7 @@ mod tests {
 
         // [utest->req~uattributes-data-model-proto~1]
         // [utest->req~umessage-data-model-proto~1]
-        #[cfg(feature = "up-core-types")]
+        #[cfg(feature = "up-core-api")]
         {
             let proto = message
                 .write_to_protobuf_bytes()

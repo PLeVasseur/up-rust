@@ -17,9 +17,9 @@ use mockall::automock;
 
 use crate::{communication::SubscriptionStatus, UStatus, UUri};
 
-#[cfg(all(feature = "up-l2-rpc-client", feature = "up-core-types"))]
+#[cfg(feature = "communication-api")]
 mod usubscription_client;
-#[cfg(all(feature = "up-l2-rpc-client", feature = "up-core-types"))]
+#[cfg(feature = "communication-api")]
 pub use usubscription_client::RpcClientUSubscription;
 
 /// The uEntity (type) identifier of the uSubscription service.

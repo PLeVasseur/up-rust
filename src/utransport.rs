@@ -555,15 +555,15 @@ mod tests {
         assert!(transport
             .receive(&UUri::any(), None)
             .await
-            .is_err_and(|e| e.get_code() == UCode::Unimplemented));
+            .is_err_and(|e| e.code() == UCode::Unimplemented));
         assert!(transport
             .register_listener(&UUri::any(), None, listener.clone())
             .await
-            .is_err_and(|e| e.get_code() == UCode::Unimplemented));
+            .is_err_and(|e| e.code() == UCode::Unimplemented));
         assert!(transport
             .unregister_listener(&UUri::any(), None, listener)
             .await
-            .is_err_and(|e| e.get_code() == UCode::Unimplemented));
+            .is_err_and(|e| e.code() == UCode::Unimplemented));
     }
 
     #[test]
@@ -639,6 +639,6 @@ mod tests {
         "sink is empty but source has non-topic resource ID")]
     fn test_verify_filter_criteria_fails_for(source_filter: UUri, sink_filter: Option<UUri>) {
         assert!(verify_filter_criteria(&source_filter, sink_filter.as_ref())
-            .is_err_and(|err| matches!(err.get_code(), UCode::InvalidArgument)));
+            .is_err_and(|err| matches!(err.code(), UCode::InvalidArgument)));
     }
 }

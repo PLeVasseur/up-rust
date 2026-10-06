@@ -14,7 +14,7 @@
 use bytes::Bytes;
 use thiserror::Error;
 
-#[cfg(all(feature = "up-l2-api", feature = "protobuf-support"))]
+#[cfg(all(feature = "communication-api", feature = "protobuf-support"))]
 pub(crate) use protobuf_support::deserialize_protobuf_bytes;
 pub use umessagebuilder::*;
 
@@ -928,7 +928,7 @@ mod protobuf_support {
     }
 }
 
-#[cfg(feature = "up-core-types")]
+#[cfg(feature = "up-core-api")]
 mod core_types_support {
     use protobuf::{well_known_types::any::Any, Message};
 

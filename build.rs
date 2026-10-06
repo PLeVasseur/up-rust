@@ -11,9 +11,13 @@
  * SPDX-License-Identifier: Apache-2.0
  ********************************************************************************/
 
-#[cfg(feature = "up-core-types")]
+#![allow(missing_docs)] // build script, not public API
+
+#[cfg(feature = "up-core-api")]
+const UPROTOCOL_BASE_URI: &str = "up-spec/up-core-api/";
+
+#[cfg(feature = "up-core-api")]
 fn proto_api() -> Result<(), Box<dyn std::error::Error>> {
-    const UPROTOCOL_BASE_URI: &str = "up-spec/up-core-api/";
     let files = vec![
         // uProtocol-project proto definitions
         format!("{}uprotocol/uoptions.proto", UPROTOCOL_BASE_URI),
@@ -73,7 +77,7 @@ fn cloudevents() -> Result<(), Box<dyn std::error::Error>> {
 }
 
 fn main() -> Result<(), Box<dyn std::error::Error>> {
-    #[cfg(feature = "up-core-types")]
+    #[cfg(feature = "up-core-api")]
     proto_api()?;
 
     #[cfg(feature = "cloudevents")]

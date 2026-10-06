@@ -112,7 +112,7 @@ pub enum SubscriptionStatus {
     UnsubscribePending,
 }
 
-#[cfg(all(feature = "up-core-types", feature = "usubscription"))]
+#[cfg(all(feature = "up-core-api", feature = "usubscription"))]
 mod core_types_support {
     use super::{SubscriptionStatus, UCode, UStatus};
     use crate::up_core_api::usubscription::subscription_status::State;
@@ -164,13 +164,13 @@ pub enum RegistrationError {
 
 impl From<UStatus> for RegistrationError {
     fn from(value: UStatus) -> Self {
-        match value.get_code() {
+        match value.code() {
             UCode::AlreadyExists => RegistrationError::AlreadyExists,
             UCode::NotFound => RegistrationError::NoSuchListener,
             UCode::ResourceExhausted => RegistrationError::MaxListenersExceeded,
             UCode::Unimplemented => RegistrationError::PushDeliveryMethodNotSupported,
             UCode::InvalidArgument => {
-                RegistrationError::InvalidFilter(value.get_message().unwrap_or("N/A").to_string())
+                RegistrationError::InvalidFilter(value.message().unwrap_or("N/A").to_string())
             }
             UCode::Ok
             | UCode::Cancelled

@@ -254,7 +254,7 @@ mod tests {
             .await
             .unwrap_err();
 
-        assert_eq!(error.get_code(), UCode::InvalidArgument);
+        assert_eq!(error.code(), UCode::InvalidArgument);
     }
 
     #[tokio::test]
@@ -270,6 +270,6 @@ mod tests {
             .await
             .unwrap_err();
 
-        assert_eq!(error.get_code(), UCode::InvalidArgument);
+        assert_eq!(error.code(), UCode::InvalidArgument);
     }
 }

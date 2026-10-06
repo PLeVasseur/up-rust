@@ -226,7 +226,7 @@ mod tests {
         assert!(udiscovery_client
             .find_services(service_pattern_uri.clone(), false)
             .await
-            .is_err_and(|e| e.get_code() == UCode::Internal));
+            .is_err_and(|e| e.code() == UCode::Internal));
         assert!(udiscovery_client
             .find_services(service_pattern_uri.clone(), false)
             .await
@@ -301,7 +301,7 @@ mod tests {
         assert!(udiscovery_client
             .get_service_topics(topic_pattern_uri.clone(), false)
             .await
-            .is_err_and(|e| e.get_code() == UCode::Internal));
+            .is_err_and(|e| e.code() == UCode::Internal));
         assert!(udiscovery_client
             .get_service_topics(topic_pattern_uri.clone(), false)
             .await

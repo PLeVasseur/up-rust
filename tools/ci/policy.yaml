@@ -42,13 +42,13 @@ checks:
     roles: [current, msrv]
     timeout: 1200
     completion: libtest
-    command: [cargo, "+{toolchain}", test, --locked, --workspace, --features, "protobuf-support,up-l2-api", --lib]
+    command: [cargo, "+{toolchain}", test, --locked, --workspace, --features, "protobuf-support,communication-api", --lib]
   - name: doctests-core
     group: tests
     roles: [current, msrv]
     timeout: 1200
     completion: libtest
-    command: [cargo, "+{toolchain}", test, --locked, --workspace, --features, "protobuf-support,up-l2-api", --doc]
+    command: [cargo, "+{toolchain}", test, --locked, --workspace, --features, "protobuf-support,communication-api", --doc]
   - name: lib-all
     group: tests
     roles: [current, msrv]

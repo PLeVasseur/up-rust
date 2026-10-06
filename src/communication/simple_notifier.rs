@@ -236,7 +236,7 @@ mod tests {
         let options = CallOptions::for_notification(None, None, None);
         let result = notifier.notify(0xB10F, &destination, options, None).await;
         assert!(result.is_err_and(|e| match e {
-            NotificationError::NotifyError(status) => status.get_code() == UCode::Unavailable,
+            NotificationError::NotifyError(status) => status.code() == UCode::Unavailable,
             _ => false,
         }));
     }

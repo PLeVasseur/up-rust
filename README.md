@@ -23,6 +23,9 @@ up-rust = { version = "0.9" }
 Most developers will want to use the Communication Level API and its default implementation which are provided by the `communication` module. Please refer to the [examples](./examples/) for inspiration how to use this crate.
 
 ## Building from Source
+For source-level feature and accessor changes, see the
+[0.9 to 0.10 migration guide](MIGRATION.md).
+
 <!--
 `uman~up-language-building~1`
 Covers:
