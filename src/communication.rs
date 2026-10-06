@@ -106,9 +106,13 @@ pub(crate) fn build_message<S: crate::umessage::BuilderState>(
 #[derive(Clone, Debug, PartialEq)]
 #[repr(C)]
 pub enum SubscriptionStatus {
+    /// Not subscribed.
     Unsubscribed,
+    /// Subscription requested; confirmation pending.
     SubscribePending,
+    /// Actively subscribed.
     Subscribed,
+    /// Unsubscription requested; confirmation pending.
     UnsubscribePending,
 }
 

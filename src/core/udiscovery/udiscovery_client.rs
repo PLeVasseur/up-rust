@@ -79,6 +79,13 @@ pub struct RpcClientUDiscovery {
     rpc_client: Arc<dyn RpcClient>,
 }
 
+impl core::fmt::Debug for RpcClientUDiscovery {
+    fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
+        f.debug_struct("RpcClientUDiscovery")
+            .finish_non_exhaustive()
+    }
+}
+
 impl RpcClientUDiscovery {
     /// Creates a new uDiscovery client for a given transport.
     ///

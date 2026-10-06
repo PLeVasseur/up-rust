@@ -11,11 +11,11 @@
  * SPDX-License-Identifier: Apache-2.0
  ********************************************************************************/
 
-use bytes::{Buf, Bytes};
-use rand::Rng;
 use std::time::{Duration, SystemTime};
 use std::{hash::Hash, str::FromStr};
 
+use bytes::{Buf, Bytes};
+use rand::Rng;
 use uuid_simd::{AsciiCase, Out};
 
 use crate::UAttributesError;
@@ -54,6 +54,7 @@ impl std::fmt::Display for UuidConversionError {
 
 impl std::error::Error for UuidConversionError {}
 
+/// A uProtocol UUIDv7 message identifier (RFC 9562 layout).
 #[derive(Debug, Clone, PartialEq)]
 #[repr(C)]
 pub struct UUID {
@@ -133,6 +134,17 @@ impl UUID {
             return Err(UuidConversionError::new("not an RFC4122 UUID"));
         }
         Ok(UUID { msb, lsb })
+    }
+
+    /// Gets this UUID as a pair of 64 bit integers.
+    ///
+    /// # Returns
+    ///
+    /// A tuple of the most significant and least significant 8 bytes,
+    /// i.e. the inverse of [`UUID::from_u64_pair`].
+    #[must_use]
+    pub fn as_u64_pair(&self) -> (u64, u64) {
+        (self.msb, self.lsb)
     }
 
     // [impl->dsn~uuid-spec~1]

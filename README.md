@@ -89,4 +89,10 @@ The crate is published under the terms of the [Apache License 2.0](LICENSE).
 
 ## Contributing
 
+Public API items must have documentation and public types must support `Debug`.
+Unsafe blocks need a concrete safety justification, and public unsafe functions
+need a `# Safety` contract. The repository enforces these rules with its Rust and
+Clippy lint configuration. The minimal notification example now also enables
+`protobuf-support`; each example declares the features it uses in Cargo.toml.
+
 Contributions are more than welcome. Please refer to the [Contribution Guide](CONTRIBUTING.md).

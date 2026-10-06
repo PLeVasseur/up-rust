@@ -46,3 +46,28 @@ let _creation_time_millis = UUID::build().time();
 wildcard components. Convert an owned or borrowed `UUri` with `TryFrom` and handle
 `UUriError::ValidationError` for wildcard input. Existing `UUri` filter APIs keep
 their matching semantics; no implicit conversion narrows a wildcard filter.
+
+## Extensible errors and UUID representation
+
+`UUriError`, `ServiceInvocationError`, and `PubSubError` are non-exhaustive.
+Downstream matches must retain a fallback arm for future variants rather than
+assuming the current list is closed. Named variants keep their meaning.
+
+`UUID::as_u64_pair` returns the most- and least-significant 64-bit words, the inverse
+of `UUID::from_u64_pair`, without changing the UUID representation:
+
+```rust
+use up_rust::{UUriError, UUID};
+
+fn classify(error: &UUriError) -> &'static str {
+    match error {
+        UUriError::SerializationError(_) => "syntax",
+        UUriError::ValidationError(_) => "validation",
+        _ => "other URI error",
+    }
+}
+assert_eq!(classify(&UUriError::ValidationError("wildcard".into())), "validation");
+let uuid = UUID::build();
+let (most, least) = uuid.as_u64_pair();
+assert_eq!(UUID::from_u64_pair(most, least).unwrap(), uuid);
+```

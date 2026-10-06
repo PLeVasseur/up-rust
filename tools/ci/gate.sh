@@ -76,6 +76,18 @@ fi
 if [[ "$configuration" == current && ( "$group" == all || "$group" == tests ) ]]; then
   python3 tools/ci/run_check.py --log "$log_root/tck-uuid.log" --timeout 600 --completion cucumber -- cargo +1.95.0 test --locked --all-features --test tck_uuid
 fi
+if [[ "$configuration" == current && ( "$group" == all || "$group" == tests ) ]]; then
+  python3 tools/ci/run_check.py --log "$log_root/example-notify.log" --timeout 600 --completion command -- cargo +1.95.0 check --locked --no-default-features --example simple_notify --features up-l2-notifier,protobuf-support,util
+fi
+if [[ "$configuration" == current && ( "$group" == all || "$group" == tests ) ]]; then
+  python3 tools/ci/run_check.py --log "$log_root/example-publish.log" --timeout 600 --completion command -- cargo +1.95.0 check --locked --no-default-features --example simple_publish --features up-l2-publisher,protobuf-support,util
+fi
+if [[ "$configuration" == current && ( "$group" == all || "$group" == tests ) ]]; then
+  python3 tools/ci/run_check.py --log "$log_root/example-rpc.log" --timeout 600 --completion command -- cargo +1.95.0 check --locked --no-default-features --example simple_rpc --features up-l2-rpc-client,up-l2-rpc-server,util
+fi
+if [[ "$configuration" == current && ( "$group" == all || "$group" == tests ) ]]; then
+  python3 tools/ci/run_check.py --log "$log_root/example-symphony.log" --timeout 600 --completion command -- cargo +1.95.0 check --locked --no-default-features --example symphony_target --features symphony,up-l2-rpc-client,up-l2-rpc-server,util
+fi
 if [[ "$configuration" == current && ( "$group" == all || "$group" == dependency ) ]]; then
   python3 tools/ci/run_check.py --log "$log_root/dependency-policy.log" --timeout 600 --completion command -- cargo deny --all-features check
 fi
@@ -105,4 +117,16 @@ if [[ "$configuration" == msrv && ( "$group" == all || "$group" == tests ) ]]; t
 fi
 if [[ "$configuration" == msrv && ( "$group" == all || "$group" == tests ) ]]; then
   python3 tools/ci/run_check.py --log "$log_root/tck-uuid.log" --timeout 600 --completion cucumber -- cargo +1.88.0 test --locked --all-features --test tck_uuid
+fi
+if [[ "$configuration" == msrv && ( "$group" == all || "$group" == tests ) ]]; then
+  python3 tools/ci/run_check.py --log "$log_root/example-notify.log" --timeout 600 --completion command -- cargo +1.88.0 check --locked --no-default-features --example simple_notify --features up-l2-notifier,protobuf-support,util
+fi
+if [[ "$configuration" == msrv && ( "$group" == all || "$group" == tests ) ]]; then
+  python3 tools/ci/run_check.py --log "$log_root/example-publish.log" --timeout 600 --completion command -- cargo +1.88.0 check --locked --no-default-features --example simple_publish --features up-l2-publisher,protobuf-support,util
+fi
+if [[ "$configuration" == msrv && ( "$group" == all || "$group" == tests ) ]]; then
+  python3 tools/ci/run_check.py --log "$log_root/example-rpc.log" --timeout 600 --completion command -- cargo +1.88.0 check --locked --no-default-features --example simple_rpc --features up-l2-rpc-client,up-l2-rpc-server,util
+fi
+if [[ "$configuration" == msrv && ( "$group" == all || "$group" == tests ) ]]; then
+  python3 tools/ci/run_check.py --log "$log_root/example-symphony.log" --timeout 600 --completion command -- cargo +1.88.0 check --locked --no-default-features --example symphony_target --features symphony,up-l2-rpc-client,up-l2-rpc-server,util
 fi

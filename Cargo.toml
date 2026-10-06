@@ -90,6 +90,8 @@ cucumber = { version = "0.23.0", features = ["output-junit"] }
 hex = { version = "0.4.3" }
 junit-report = { version = "0.9.1" }
 mockall = { version = "0.15.0" }
+pretty_assertions = { version = "1.4" }
+proptest = { version = "=1.5.0" }
 test-case = { version = "3.3.1" }
 tokio = { version = "1.53.1", default-features = false, features = [
     "macros",
@@ -152,7 +154,7 @@ max_combination_size = 3
 
 [[example]]
 name = "simple_notify"
-required-features = ["up-l2-notifier", "util"]
+required-features = ["up-l2-notifier", "protobuf-support", "util"]
 
 [[example]]
 name = "simple_publish"
@@ -166,23 +168,30 @@ required-features = ["up-l2-rpc-client", "up-l2-rpc-server", "util"]
 name = "symphony_target"
 required-features = ["symphony", "up-l2-rpc-client", "up-l2-rpc-server", "util"]
 
+# Cucumber owns execution and reporting for these conformance targets.
 [[test]]
 name = "tck_uuri"
-harness = false                       # allows Cucumber to print output instead of libtest
+harness = false
 required-features = ["up-core-api"]
 
 [[test]]
 name = "tck_uuid"
-harness = false                       # allows Cucumber to print output instead of libtest
+harness = false
 required-features = ["up-core-api"]
 
 [lints.rust]
-# this prevents cargo from complaining about code blocks
-# excluded from tarpaulin coverage checks
+# Every public item is documented and every public type is inspectable.
+# Copy is a per-type semver commitment, not a crate-wide hygiene default.
+missing_docs = "deny"
+missing_debug_implementations = "deny"
+# Accept code blocks excluded from tarpaulin coverage checks.
 unexpected_cfgs = { level = "warn", check-cfg = ['cfg(tarpaulin_include)'] }
 
 [lints.clippy]
 # see https://corrode.dev/blog/defensive-programming/#clippy-lints-for-defensive-programming
+# Every unsafe block and every public unsafe fn states its proof obligation.
+undocumented_unsafe_blocks = "deny"
+missing_safety_doc = "deny"
 indexing_slicing = "deny"
 fallible_impl_from = "deny"
 wildcard_enum_match_arm = "deny"

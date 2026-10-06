@@ -85,6 +85,26 @@ checks:
     timeout: 600
     completion: cucumber
     command: [cargo, "+{toolchain}", test, --locked, --all-features, --test, tck_uuid]
+  - name: example-notify
+    group: tests
+    roles: [current, msrv]
+    timeout: 600
+    command: [cargo, "+{toolchain}", check, --locked, --no-default-features, --example, simple_notify, --features, "up-l2-notifier,protobuf-support,util"]
+  - name: example-publish
+    group: tests
+    roles: [current, msrv]
+    timeout: 600
+    command: [cargo, "+{toolchain}", check, --locked, --no-default-features, --example, simple_publish, --features, "up-l2-publisher,protobuf-support,util"]
+  - name: example-rpc
+    group: tests
+    roles: [current, msrv]
+    timeout: 600
+    command: [cargo, "+{toolchain}", check, --locked, --no-default-features, --example, simple_rpc, --features, "up-l2-rpc-client,up-l2-rpc-server,util"]
+  - name: example-symphony
+    group: tests
+    roles: [current, msrv]
+    timeout: 600
+    command: [cargo, "+{toolchain}", check, --locked, --no-default-features, --example, symphony_target, --features, "symphony,up-l2-rpc-client,up-l2-rpc-server,util"]
   - name: dependency-policy
     group: dependency
     roles: [current]

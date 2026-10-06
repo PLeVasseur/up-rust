@@ -17,29 +17,57 @@ use bytes::Bytes;
 
 use crate::SerializationError;
 
+/// Canonical status codes for uProtocol operations.
+///
+/// These mirror the gRPC canonical codes, as required by the uProtocol
+/// specification; every transport and role reports failures through
+/// them. The application guide shows how
+/// callers act on the common ones.
 #[derive(Copy, Debug, Clone, PartialEq)]
 #[repr(C)]
 pub enum UCode {
+    /// Not an error; the operation completed successfully.
     Ok = 0,
+    /// The operation was cancelled, typically by the caller.
     Cancelled = 1,
+    /// Unknown error, or an error from a foreign error space.
     Unknown = 2,
+    /// The caller specified an invalid argument, regardless of system state.
     InvalidArgument = 3,
+    /// A deadline expired before the operation could complete.
     DeadlineExceeded = 4,
+    /// A requested entity (listener, topic, resource) was not found.
     NotFound = 5,
+    /// The entity a caller attempted to create already exists.
     AlreadyExists = 6,
+    /// The caller lacks permission to execute the operation.
     PermissionDenied = 7,
+    /// A resource (quota, buffer space, loan capacity) has been exhausted.
     ResourceExhausted = 8,
+    /// The system is not in a state required for the operation.
     FailedPrecondition = 9,
+    /// The operation was aborted, typically due to a concurrency conflict.
     Aborted = 10,
+    /// The operation was attempted past the valid range.
     OutOfRange = 11,
+    /// The operation is not implemented or supported by this transport or service.
     Unimplemented = 12,
+    /// An internal invariant was broken; a bug in the implementation.
     Internal = 13,
+    /// The service or link is currently unavailable; retrying may succeed.
     Unavailable = 14,
+    /// Unrecoverable data loss or corruption.
     DataLoss = 15,
+    /// The request lacks valid authentication credentials.
     Unauthenticated = 16,
 }
 
 impl UCode {
+    /// Converts from the protobuf wire value.
+    ///
+    /// # Errors
+    ///
+    /// Returns an error if `value` is not a defined code.
     pub fn try_from_i32(value: i32) -> Result<Self, SerializationError> {
         match value {
             x if x == UCode::Ok as i32 => Ok(UCode::Ok),
@@ -66,12 +94,14 @@ impl UCode {
         }
     }
 
+    /// Returns the protobuf wire value of this code.
     #[must_use]
     pub fn value(&self) -> i32 {
         *self as i32
     }
 }
 
+/// Minimal `google.protobuf.Any` carrier: a type URL plus serialized bytes.
 #[derive(Debug, Clone, PartialEq)]
 #[repr(C)]
 pub struct UAny {
@@ -80,6 +110,7 @@ pub struct UAny {
 }
 
 impl UAny {
+    /// Creates a carrier from a type URL and serialized value bytes.
     pub fn new<V: Into<Bytes>>(type_url: String, value: V) -> Self {
         UAny {
             type_url,
@@ -98,6 +129,7 @@ impl UAny {
     }
 }
 
+/// Operation status: a [`UCode`] with optional message and details.
 #[derive(Debug, Clone, PartialEq)]
 #[repr(C)]
 pub struct UStatus {

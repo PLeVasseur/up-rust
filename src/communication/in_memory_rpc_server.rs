@@ -127,6 +127,12 @@ pub struct InMemoryRpcServer<T, P> {
     request_listeners: tokio::sync::Mutex<HashMap<u16, Arc<dyn UListener>>>,
 }
 
+impl<T, P> core::fmt::Debug for InMemoryRpcServer<T, P> {
+    fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
+        f.debug_struct("InMemoryRpcServer").finish_non_exhaustive()
+    }
+}
+
 impl<T: UTransport, P: LocalUriProvider> InMemoryRpcServer<T, P> {
     /// Creates a new RPC server for a given transport.
     pub fn new(transport: Arc<T>, uri_provider: Arc<P>) -> Self {

@@ -60,14 +60,14 @@ impl RequestHandler for EchoOperation {
     }
 }
 
+/// Runs the colocated RPC client-and-server example.
 #[tokio::main]
 pub async fn main() -> Result<(), Box<dyn std::error::Error>> {
     const METHOD_RESOURCE_ID: u16 = 0x00a0;
     let uri_provider = Arc::new(StaticUriProvider::new("my-vehicle", 0xa34b, 0x01)?);
     // using the LocalTransport here allows us to run the client and server in the same process
     // without any network communication, which is useful for testing purposes
-    // in a real application, you would use a transport that employs the network to communicate
-    // between the client and server, such as an asynchronous transport
+    // A networked deployment can supply another UTransport implementation.
     let transport = Arc::new(LocalTransport::default());
 
     // create the RpcServer using the local transport

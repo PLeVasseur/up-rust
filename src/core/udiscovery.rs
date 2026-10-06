@@ -35,6 +35,7 @@ type MessageTypeString = String;
 
 #[derive(Clone, Debug)]
 #[repr(C)]
+/// One discoverable topic as reported by the uDiscovery service.
 pub struct TopicInfo {
     pub(crate) topic: UUri,
     pub(crate) message_type: MessageTypeString,

@@ -73,6 +73,7 @@ fn cloudevents() -> Result<(), Box<dyn std::error::Error>> {
         .inputs(["proto/io/cloudevents/v1/cloudevents.proto"])
         .cargo_out_dir("cloudevents")
         .run_from_script();
+
     Ok(())
 }
 
@@ -82,5 +83,6 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
 
     #[cfg(feature = "cloudevents")]
     cloudevents()?;
+
     Ok(())
 }

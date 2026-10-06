@@ -23,6 +23,7 @@ use super::{CallOptions, RegistrationError, UPayload};
 /// An error indicating a problem with invoking a (remote) service operation.
 // [impl->dsn~communication-layer-api-declaration~1]
 #[derive(Clone, Error, Debug)]
+#[non_exhaustive]
 pub enum ServiceInvocationError {
     /// Indicates that the calling uE requested to add/create something that already exists.
     #[error("entity already exists: {0}")]
@@ -139,7 +140,7 @@ impl From<ServiceInvocationError> for UStatus {
             ServiceInvocationError::Unimplemented(msg) => {
                 UStatus::fail_with_code(UCode::Unimplemented, msg)
             }
-            _ => UStatus::fail_with_code(UCode::Unknown, "unknown"),
+            ServiceInvocationError::RpcError(status) => *status,
         }
     }
 }
@@ -307,7 +308,17 @@ mockall::mock! {
     /// This extra struct is necessary in order to comply with mockall's requirements regarding the parameter lifetimes
     /// see <https://github.com/asomers/mockall/issues/571>
     pub RpcServerImpl {
+        /// Mock hook; configure with mockall expectations.
+    ///
+    /// # Errors
+    ///
+    /// Returns whatever the test's expectations are configured to return.
         pub async fn do_register_endpoint<'a>(&'a self, origin_filter: Option<&'a UUri>, resource_id: u16, request_handler: Arc<dyn RequestHandler>) -> Result<(), RegistrationError>;
+        /// Mock hook; configure with mockall expectations.
+    ///
+    /// # Errors
+    ///
+    /// Returns whatever the test's expectations are configured to return.
         pub async fn do_unregister_endpoint<'a>(&'a self, origin_filter: Option<&'a UUri>, resource_id: u16, request_handler: Arc<dyn RequestHandler>) -> Result<(), RegistrationError>;
     }
 }

@@ -54,6 +54,7 @@ fn is_valid_authority_name(name: &str) -> bool {
 
 /// An error indicating a problem with creating or parsing a UUri.
 #[derive(Debug, Error)]
+#[non_exhaustive]
 pub enum UUriError {
     /// Indicates that a given URI string cannot be parsed into a UUri due to invalid formatting or content.
     #[error("Serialization error: {0}")]
@@ -64,6 +65,7 @@ pub enum UUriError {
 }
 
 impl UUriError {
+    /// Creates a serialization error with the given message.
     pub fn serialization_error<T>(message: T) -> UUriError
     where
         T: Into<String>,
@@ -71,6 +73,7 @@ impl UUriError {
         Self::SerializationError(message.into())
     }
 
+    /// Creates a validation error with the given message.
     pub fn validation_error<T>(message: T) -> UUriError
     where
         T: Into<String>,
@@ -565,6 +568,7 @@ impl UUri {
         self.resource_id
     }
 
+    /// Returns a copy of this URI with the resource id replaced.
     #[must_use]
     pub fn clone_with_resource_id(&self, resource_id: u16) -> Self {
         UUri {
@@ -1222,5 +1226,35 @@ mod tests {
                 && uuri.ue_version_major == 0xA1
                 && uuri.resource_id == 0xBCD1
         }));
+    }
+}
+
+#[cfg(test)]
+mod round_trip_properties {
+    use std::str::FromStr;
+
+    use proptest::prelude::*;
+
+    use super::UUri;
+
+    proptest! {
+        /// Serialization round-trip: any valid URI built from parts survives
+        /// `to_string` -> `from_str` unchanged. Hand-enumerated cases pin the
+        /// known edges; this pins the space between them.
+        #[test]
+        fn uri_survives_string_round_trip(
+            authority in "[a-z][a-z0-9]{0,11}",
+            ue_id in 1u32..0xFFFF,
+            version in 1u8..=0xFE,
+            resource in 0u16..0xFFFE,
+        ) {
+            let uri = UUri::try_from_parts(&authority, ue_id, version, resource)
+                .expect("parts chosen from the valid, wildcard-free range");
+
+            let round_tripped = UUri::from_str(&uri.to_uri(false))
+                .expect("serialized form of a valid URI must parse");
+
+            prop_assert_eq!(uri, round_tripped);
+        }
     }
 }
