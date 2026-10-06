@@ -1,0 +1,92 @@
+# Copyright (c) 2026 Contributors to the Eclipse Foundation
+# See the NOTICE file(s) distributed with this work for copyright ownership.
+# Licensed under the Apache License, Version 2.0.
+# SPDX-License-Identifier: Apache-2.0
+version: 1
+toolchains:
+  current: "1.95.0"
+  msrv: "1.88.0"
+checks:
+  - name: format
+    group: style
+    roles: [current]
+    timeout: 120
+    command: [cargo, "+{toolchain}", fmt, --all, --, --check]
+  - name: check-all
+    group: check
+    roles: [current, msrv]
+    timeout: 1200
+    command: [cargo, "+{toolchain}", check, --locked, --workspace, --all-features, --all-targets]
+  - name: clippy-all
+    group: style
+    roles: [current]
+    timeout: 1200
+    command: [cargo, "+{toolchain}", clippy, --locked, --workspace, --all-features, --all-targets, --, -D, warnings]
+  - name: clippy-default
+    group: style
+    roles: [current]
+    timeout: 1200
+    command: [cargo, "+{toolchain}", clippy, --locked, --workspace, --no-default-features, --all-targets, --, -D, warnings]
+  - name: docs-all
+    group: docs
+    roles: [current]
+    timeout: 1200
+    command: [cargo, "+{toolchain}", doc, --locked, --workspace, --all-features, --no-deps]
+  - name: docs-default
+    group: docs
+    roles: [current]
+    timeout: 1200
+    command: [cargo, "+{toolchain}", doc, --locked, --workspace, --no-default-features, --no-deps]
+  - name: lib-core
+    group: tests
+    roles: [current, msrv]
+    timeout: 1200
+    completion: libtest
+    command: [cargo, "+{toolchain}", test, --locked, --workspace, --features, "protobuf-support,up-l2-api", --lib]
+  - name: doctests-core
+    group: tests
+    roles: [current, msrv]
+    timeout: 1200
+    completion: libtest
+    command: [cargo, "+{toolchain}", test, --locked, --workspace, --features, "protobuf-support,up-l2-api", --doc]
+  - name: lib-all
+    group: tests
+    roles: [current, msrv]
+    timeout: 1200
+    completion: libtest
+    command: [cargo, "+{toolchain}", test, --locked, --workspace, --all-features, --lib]
+  - name: lib-default
+    group: tests
+    roles: [current, msrv]
+    timeout: 1200
+    completion: libtest
+    command: [cargo, "+{toolchain}", test, --locked, --workspace, --no-default-features, --lib]
+  - name: doctests-all
+    group: tests
+    roles: [current, msrv]
+    timeout: 1200
+    completion: libtest
+    command: [cargo, "+{toolchain}", test, --locked, --workspace, --all-features, --doc]
+  - name: doctests-default
+    group: tests
+    roles: [current, msrv]
+    timeout: 1200
+    completion: libtest
+    command: [cargo, "+{toolchain}", test, --locked, --workspace, --no-default-features, --doc]
+  - name: tck-uri
+    group: tests
+    roles: [current, msrv]
+    timeout: 600
+    completion: cucumber
+    command: [cargo, "+{toolchain}", test, --locked, --all-features, --test, tck_uuri]
+  - name: tck-uuid
+    group: tests
+    roles: [current, msrv]
+    timeout: 600
+    completion: cucumber
+    command: [cargo, "+{toolchain}", test, --locked, --all-features, --test, tck_uuid]
+  - name: dependency-policy
+    group: dependency
+    roles: [current]
+    timeout: 600
+    command: [cargo, deny, --all-features, check]

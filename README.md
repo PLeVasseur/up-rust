@@ -68,6 +68,14 @@ The API documentation can be generated using
 cargo doc --no-deps --all-features --open
 ```
 
+### Repository Checks
+
+Run the checked-in gates locally with
+`bash tools/ci/gate.sh --configuration current --all` and
+`bash tools/ci/gate.sh --configuration msrv --all`.
+The [CI guide](tools/ci/README.md) lists the required tool versions, generated
+policy workflow, separate link/feature jobs and test-log artifact contract.
+
 ## License
 
 The crate is published under the terms of the [Apache License 2.0](LICENSE).

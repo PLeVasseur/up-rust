@@ -52,7 +52,7 @@ pub async fn main() -> Result<(), Box<dyn std::error::Error>> {
     // using the LocalTransport here allows us to run the client and server in the same process
     // without any network communication, which is useful for testing purposes
     // in a real application, you would use a transport that employs the network to communicate
-    // between the client and server, such as the MQTT5 or the Eclipse Zenoh transport
+    // between the client and server, such as an asynchronous transport
     let transport = Arc::new(LocalTransport::default());
     let publisher = SimplePublisher::new(transport.clone(), uri_provider.clone());
     let listener = Arc::new(ConsolePrinter {});
@@ -87,7 +87,7 @@ pub async fn main() -> Result<(), Box<dyn std::error::Error>> {
     // At this point we can be sure that all events have been processed already.
     // This is because the LocalTransport dispatches all messages to listeners on the same
     // thread that has been used to send the messages.
-    // When using an asynchronous transport, such as MQTT5 or Eclipse Zenoh, we would need to
+    // When using an asynchronous transport, we would need to
     // notify the sender from within the listener, e.g. by means of a Channel, before stopping
     // the listener.
     transport

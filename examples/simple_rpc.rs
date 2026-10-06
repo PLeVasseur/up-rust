@@ -67,7 +67,7 @@ pub async fn main() -> Result<(), Box<dyn std::error::Error>> {
     // using the LocalTransport here allows us to run the client and server in the same process
     // without any network communication, which is useful for testing purposes
     // in a real application, you would use a transport that employs the network to communicate
-    // between the client and server, such as the MQTT5 or the Eclipse Zenoh transport
+    // between the client and server, such as an asynchronous transport
     let transport = Arc::new(LocalTransport::default());
 
     // create the RpcServer using the local transport

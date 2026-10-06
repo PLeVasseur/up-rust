@@ -1,0 +1,50 @@
+# Copyright (c) 2026 Contributors to the Eclipse Foundation
+# See the NOTICE file(s) distributed with this work for copyright ownership.
+# Licensed under the Apache License, Version 2.0.
+# SPDX-License-Identifier: Apache-2.0
+# Existing independent documentation-link and feature-powerset checks.
+check-links:
+  runs-on: ubuntu-latest
+  steps:
+    - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+      with:
+        submodules: recursive
+        persist-credentials: false
+    - name: Restore lychee cache
+      uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9
+      with:
+        path: .lycheecache
+        key: cache-lychee-${{ github.sha }}
+        restore-keys: cache-lychee-
+    - name: Run lychee
+      uses: lycheeverse/lychee-action@e7477775783ea5526144ba13e8db5eec57747ce8
+      with:
+        args: "--cache --max-cache-age 1d --verbose --no-progress -- ."
+feature-check:
+  runs-on: ubuntu-latest
+  steps:
+    - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+      with:
+        submodules: recursive
+        persist-credentials: false
+    - uses: actions-rust-lang/setup-rust-toolchain@166cdcfd11aee3cb47222f9ddb555ce30ddb9659
+      with:
+        toolchain: "@CURRENT_TOOLCHAIN@"
+    - name: Install cargo-hack
+      env:
+        CARGO_HACK_VERSION: v0.6.45
+        GH_TOKEN: ${{ github.token }}
+      run: |
+        host=$(rustc -vV | grep '^host:' | cut -d' ' -f2)
+        curl --proto '=https' --tlsv1.2 -fsSL -o cargo-hack.tar.gz "https://github.com/taiki-e/cargo-hack/releases/download/${CARGO_HACK_VERSION}/cargo-hack-${host}.tar.gz"
+        gh release -R https://github.com/taiki-e/cargo-hack verify-asset cargo-hack.tar.gz
+        gh attestation verify --repo taiki-e/cargo-hack --signer-workflow taiki-e/github-actions/.github/workflows/rust-release.yml cargo-hack.tar.gz
+        tar xf cargo-hack.tar.gz -C "${CARGO_HOME:-"$HOME/.cargo"}"/bin
+        rm cargo-hack.tar.gz
+    - name: Run cargo hack powerset
+      run: |
+        cargo hack check \
+          --no-dev-deps \
+          --feature-powerset \
+          --group-features communication,usubscription,udiscovery,symphony \
+          --depth 2
