@@ -24,7 +24,7 @@ while (($#)); do
   esac
 done
 case "$configuration:$group" in
-  current:check|current:dependency|current:docs|current:style|current:tests|current:all|msrv:check|msrv:tests|msrv:all) ;;
+  current:abi|current:check|current:dependency|current:docs|current:style|current:tests|current:all|msrv:abi|msrv:check|msrv:tests|msrv:all) ;;
   *) printf "Choose --configuration current|msrv and --all or --group NAME\n" >&2; exit 2 ;;
 esac
 if [[ "$configuration" == current && ${UP_RUST_SKIP_TRYBUILD+x} ]]; then
@@ -88,6 +88,9 @@ fi
 if [[ "$configuration" == current && ( "$group" == all || "$group" == tests ) ]]; then
   python3 tools/ci/run_check.py --log "$log_root/example-symphony.log" --timeout 600 --completion command -- cargo +1.95.0 check --locked --no-default-features --example symphony_target --features symphony,up-l2-rpc-client,up-l2-rpc-server,util
 fi
+if [[ "$configuration" == current && ( "$group" == all || "$group" == abi ) ]]; then
+  python3 tools/ci/run_check.py --log "$log_root/abi-layout.log" --timeout 600 --completion command -- bash tools/ci/check_abi.sh 1.95.0
+fi
 if [[ "$configuration" == current && ( "$group" == all || "$group" == dependency ) ]]; then
   python3 tools/ci/run_check.py --log "$log_root/dependency-policy.log" --timeout 600 --completion command -- cargo deny --all-features check
 fi
@@ -129,4 +132,7 @@ if [[ "$configuration" == msrv && ( "$group" == all || "$group" == tests ) ]]; t
 fi
 if [[ "$configuration" == msrv && ( "$group" == all || "$group" == tests ) ]]; then
   python3 tools/ci/run_check.py --log "$log_root/example-symphony.log" --timeout 600 --completion command -- cargo +1.88.0 check --locked --no-default-features --example symphony_target --features symphony,up-l2-rpc-client,up-l2-rpc-server,util
+fi
+if [[ "$configuration" == msrv && ( "$group" == all || "$group" == abi ) ]]; then
+  python3 tools/ci/run_check.py --log "$log_root/abi-layout.log" --timeout 600 --completion command -- bash tools/ci/check_abi.sh 1.88.0
 fi

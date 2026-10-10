@@ -1357,6 +1357,33 @@ mod tests {
         );
     }
 
+    #[cfg(feature = "zero-copy-transport")]
+    #[test]
+    fn inline_uri_layout_matches_fixed_abi() {
+        use crate::frame::abi::UUriAbi;
+        use std::mem::{align_of, offset_of, size_of};
+
+        assert_eq!(size_of::<UUri>(), size_of::<UUriAbi>());
+        assert_eq!(align_of::<UUri>(), align_of::<UUriAbi>());
+        assert_eq!(offset_of!(UUri, ue_id), offset_of!(UUriAbi, ue_id));
+        assert_eq!(
+            offset_of!(UUri, resource_id),
+            offset_of!(UUriAbi, resource_id)
+        );
+        assert_eq!(
+            offset_of!(UUri, ue_version_major),
+            offset_of!(UUriAbi, ue_version_major)
+        );
+        assert_eq!(
+            offset_of!(UUri, authority_name) + offset_of!(AuthorityNameString, len),
+            offset_of!(UUriAbi, authority_name_len)
+        );
+        assert_eq!(
+            offset_of!(UUri, authority_name) + offset_of!(AuthorityNameString, bytes),
+            offset_of!(UUriAbi, authority_name)
+        );
+    }
+
     #[test_case("*", 0x0001_2345, 1, 0x8001; "authority")]
     #[test_case("vehicle", 0xFFFF_2345, 1, 0x8001; "entity instance")]
     #[test_case("vehicle", 0x0001_FFFF, 1, 0x8001; "entity type")]

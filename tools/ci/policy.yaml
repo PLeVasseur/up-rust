@@ -105,6 +105,11 @@ checks:
     roles: [current, msrv]
     timeout: 600
     command: [cargo, "+{toolchain}", check, --locked, --no-default-features, --example, symphony_target, --features, "symphony,up-l2-rpc-client,up-l2-rpc-server,util"]
+  - name: abi-layout
+    group: abi
+    roles: [current, msrv]
+    timeout: 600
+    command: [bash, tools/ci/check_abi.sh, "{toolchain}"]
   - name: dependency-policy
     group: dependency
     roles: [current]

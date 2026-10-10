@@ -144,3 +144,24 @@ set, not media-type inference or generic payload decoding.
 TTL zero now consistently means no expiration (`None`); positive u32 millisecond
 values are preserved without clamping. Requests still require a positive TTL.
 Bindings with a smaller carrier range must report unrepresentability.
+
+## Frame metadata and payload codec interfaces
+
+For caller-owned metadata storage, use `frame_metadata_fields_len` and
+`encode_frame_metadata_fields_to`. Zero-copy builds expose borrowed
+`TxHeaderParts`/`RxHeader`, `header_len`, `write_header_uninit`, `write_header`
+and `parse_header` with fixed-size `UFrameHeaderError` failures. The default
+receive token limit is 2048 bytes and traceparent is bounded at 63; fixed ABI
+capacities remain separate. Received authority validation runs before typed access.
+
+Frame carriers use `UFrameMetadata` for semantic metadata and implement
+`UFrameView::has_payload` explicitly; an empty byte slice is not sufficient to
+determine absence. The metadata builder validates message structure, and metadata
+decoders validate raw fields before exposing the decoded value. Projections to
+classic attributes reject fractional/overflowing TTL values rather than clamp them.
+
+`PayloadCodec`, `PayloadLayout` and `ReadDecodePayload` separate encoding identity,
+byte layout and bounded decoding from transport storage. `UWireError` distinguishes
+missing payload/encoding, unsupported encoding, malformed bytes, insufficient output
+space and structured `SchemaMismatch` diagnostics. The new
+[frame metadata guide](src/guide/frame_metadata.md) contains compile-tested examples.

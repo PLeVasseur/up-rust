@@ -28,6 +28,19 @@ revision or local dependency; it is not supplied by the 0.9 dependency above.
 
 Most developers will want to use the Communication Level API and its default implementation which are provided by the `communication` module. Please refer to the [examples](./examples/) for inspiration how to use this crate.
 
+## Provisional Interfaces
+
+Frame APIs, metadata field codecs and the opt-in fixed ABI are provisional while
+their representation/native-profile specification is developed. Formats carry
+explicit versions and require peer agreement; a version change requires coordinated
+endpoint updates and regeneration of affected artifacts. These local SDK formats
+do not establish normative registry assignments. See the
+[frame metadata guide](src/guide/frame_metadata.md) for contracts and examples.
+The canonical field block supports caller-slice output. In-place zero-copy headers
+borrow token/traceparent, reject malformed input with fixed-size errors and report
+their initialized extents. Header/token storage policies remain distinct from
+payload interpretation and binding-owned physical storage.
+
 ## Building from Source
 
 With `zero-copy-transport`, `UUri` stores its bounded authority inline rather than

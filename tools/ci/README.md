@@ -33,6 +33,10 @@ Each example is also checked with its exact declared feature set on both compile
 roles. This catches a missing `required-features` entry that an all-feature build
 would hide, including the notification example's `protobuf-support` dependency.
 
+The `abi` group compiles the standalone Rust ABI mirror with the selected compiler
+and compiles/runs the C11 and C++17 layout probes. A C/C++ compiler is required;
+this is host layout conformance, not a native middleware integration trial.
+
 Current runs reject any inherited `UP_RUST_SKIP_TRYBUILD` value, including `0`.
 MSRV sets that variable explicitly for version-sensitive compiler diagnostics.
 `RUSTC_BOOTSTRAP` is rejected for either compiler. Checks do not silently skip

@@ -105,6 +105,9 @@ pub mod guide {
     #[doc = include_str!("guide/uris.md")]
     pub mod uris {}
 
+    #[doc = include_str!("guide/frame_metadata.md")]
+    pub mod frame_metadata {}
+
     #[cfg_attr(
         all(feature = "communication", feature = "util"),
         doc = include_str!("guide/applications.md")
@@ -161,6 +164,12 @@ pub use umessage::{
 mod uri;
 pub use uri::{ExactUUri, UUri, UUriError, UUriPartsError};
 
+#[cfg(feature = "zero-copy-transport")]
+pub use frame::header::{
+    header_fields_len, header_len, parse_header, write_header, write_header_uninit, HeaderLimits,
+    RxHeader, TxHeaderParts, UFrameHeaderError, WrittenHeader, HEADER_TRACEPARENT_CAPACITY,
+};
+
 mod ustatus;
 pub use ustatus::{UAny, UCode, UStatus};
 
@@ -188,3 +197,19 @@ pub use protobuf_mappable::ProtobufMappable;
 
 mod serialization_error;
 pub use serialization_error::SerializationError;
+
+// ---- native frame model ----
+
+mod validation_state;
+pub use validation_state::{Unvalidated, Validated};
+
+/// The native frame data model: metadata, canonical field-block codec, and
+/// the read-side frame view contract.
+pub mod frame;
+pub use frame::metadata::{FrameMessageKind, FramePriority, UFrameMetadata, UFrameMetadataError};
+pub use frame::{validate_frame_view_for_transport, UFrameView};
+
+/// Payload codec contracts shared by the frame families.
+pub mod payload;
+pub use payload::codec::{PayloadCodec, PayloadLayout, ReadDecodePayload};
+pub use payload::UWireError;
