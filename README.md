@@ -29,6 +29,14 @@ revision or local dependency; it is not supplied by the 0.9 dependency above.
 Most developers will want to use the Communication Level API and its default implementation which are provided by the `communication` module. Please refer to the [examples](./examples/) for inspiration how to use this crate.
 
 ## Building from Source
+
+With `zero-copy-transport`, `UUri` stores its bounded authority inline rather than
+allocating on URI construction/cloning. Default builds retain String storage.
+`UUri::try_from_wire_parts` returns Copy `UUriPartsError` diagnostics; both forms
+reject IPvFuture hosts and trailing authority components. The [URI guide](src/guide/uris.md)
+explains layout, UTF-8 bounds and legacy conversion behavior.
+`UUID::is_valid_u64_pair` and `UCode::from_i32` provide fixed-size scalar validation
+without constructing error strings.
 For source-level feature and accessor changes, see the
 [0.9 to 0.10 migration guide](MIGRATION.md).
 

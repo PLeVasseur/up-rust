@@ -42,7 +42,123 @@ const SCHEME_UP: &Scheme = Scheme::new_or_panic("up");
 
 const AUTHORITY_NAME_MAX_LENGTH: usize = 128;
 
+#[cfg(not(feature = "zero-copy-transport"))]
 type AuthorityNameString = String;
+
+/// Validated authority bytes stored without a heap allocation.
+#[cfg(feature = "zero-copy-transport")]
+#[derive(Clone, Eq, PartialEq)]
+#[repr(C)]
+pub(crate) struct AuthorityNameString {
+    len: u8,
+    bytes: [u8; AUTHORITY_NAME_MAX_LENGTH],
+}
+
+#[cfg(feature = "zero-copy-transport")]
+impl AuthorityNameString {
+    fn new(value: &str) -> Result<Self, UUriPartsError> {
+        if value.len() > AUTHORITY_NAME_MAX_LENGTH {
+            return Err(UUriPartsError::AuthorityTooLong);
+        }
+        let mut bytes = [0; AUTHORITY_NAME_MAX_LENGTH];
+        bytes
+            .get_mut(..value.len())
+            .ok_or(UUriPartsError::AuthorityTooLong)?
+            .copy_from_slice(value.as_bytes());
+        Ok(Self {
+            len: value.len() as u8,
+            bytes,
+        })
+    }
+
+    fn as_str(&self) -> &str {
+        // Only `new` and `default` construct the private, immutable valid prefix.
+        std::str::from_utf8(
+            self.bytes
+                .get(..usize::from(self.len))
+                .expect("validated authority length"),
+        )
+        .expect("authority prefix is constructed from valid UTF-8")
+    }
+
+    fn is_empty(&self) -> bool {
+        self.len == 0
+    }
+}
+
+#[cfg(feature = "zero-copy-transport")]
+impl Default for AuthorityNameString {
+    fn default() -> Self {
+        Self {
+            len: 0,
+            bytes: [0; AUTHORITY_NAME_MAX_LENGTH],
+        }
+    }
+}
+
+#[cfg(feature = "zero-copy-transport")]
+impl From<&str> for AuthorityNameString {
+    fn from(value: &str) -> Self {
+        Self::new(value).expect("internal authority literal fits its storage")
+    }
+}
+
+#[cfg(feature = "zero-copy-transport")]
+impl std::fmt::Debug for AuthorityNameString {
+    fn fmt(&self, formatter: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        std::fmt::Debug::fmt(self.as_str(), formatter)
+    }
+}
+
+#[cfg(feature = "zero-copy-transport")]
+impl PartialEq<&str> for AuthorityNameString {
+    fn eq(&self, other: &&str) -> bool {
+        self.as_str() == *other
+    }
+}
+
+#[cfg(feature = "zero-copy-transport")]
+impl Hash for AuthorityNameString {
+    fn hash<H: Hasher>(&self, state: &mut H) {
+        self.as_str().hash(state);
+    }
+}
+
+/// A rejection of URI parts that carries no heap-allocated diagnostic data.
+///
+/// [`UUri::try_from_wire_parts`] returns this error in every feature configuration.
+/// Converting it to [`UUriError`] creates the legacy owned diagnostic string.
+#[derive(Clone, Copy, Debug, Error, Eq, PartialEq)]
+#[non_exhaustive]
+pub enum UUriPartsError {
+    /// The authority exceeds the specification's 128-byte bound.
+    #[error("uProtocol URI's authority is too long")]
+    AuthorityTooLong,
+    /// The input cannot be parsed as a URI authority.
+    #[error("invalid authority")]
+    MalformedAuthority,
+    /// A port is not part of a uProtocol authority.
+    #[error("uProtocol URI's authority must not contain port")]
+    AuthorityHasPort,
+    /// User information is not part of a uProtocol authority.
+    #[error("uProtocol URI's authority must not contain userinfo")]
+    AuthorityHasUserinfo,
+    /// IPvFuture literals are not supported by the uProtocol authority model.
+    #[error("uProtocol URI's authority must not be an IPvFuture literal")]
+    UnsupportedHost,
+    /// An authority argument includes a path, query, or fragment.
+    #[error("uProtocol URI's authority must not contain a path, query or fragment")]
+    AuthorityHasTrailingComponent,
+    /// A registered name contains a character outside the permitted set.
+    #[error("uProtocol URI's authority contains invalid characters")]
+    InvalidAuthorityCharacters,
+}
+
+impl From<UUriPartsError> for UUriError {
+    fn from(error: UUriPartsError) -> Self {
+        Self::validation_error(error.to_string())
+    }
+}
 
 // Equivalent to matching against `^[a-z0-9\-._~]{0,128}$`.
 fn is_valid_authority_name(name: &str) -> bool {
@@ -83,13 +199,24 @@ impl UUriError {
 }
 
 /// A URI that represents a uProtocol resource identifier.
+///
+/// The `zero-copy-transport` feature stores the authority inline, so successful
+/// construction from validated parts and cloning do not allocate. Other builds
+/// retain owned `String` storage. URI serialization still returns an owned string.
 #[derive(Debug, Clone, PartialEq)]
 #[repr(C)]
 pub struct UUri {
+    #[cfg(not(feature = "zero-copy-transport"))]
     authority_name: AuthorityNameString,
     ue_id: u32,
-    ue_version_major: u8,
+    #[cfg(feature = "zero-copy-transport")]
     resource_id: u16,
+    ue_version_major: u8,
+    #[cfg(not(feature = "zero-copy-transport"))]
+    resource_id: u16,
+    // The scalar prefix occupies seven bytes; the inline authority occupies 129.
+    #[cfg(feature = "zero-copy-transport")]
+    authority_name: AuthorityNameString,
 }
 
 impl std::fmt::Display for UUri {
@@ -467,7 +594,27 @@ impl UUri {
         entity_version: u8,
         resource_id: u16,
     ) -> Result<Self, UUriError> {
-        let authority_name = Self::verify_authority_name(authority)?;
+        Self::try_from_wire_parts(authority, entity_id, entity_version, resource_id)
+            .map_err(UUriError::from)
+    }
+
+    /// Validates received URI parts with an allocation-free error representation.
+    ///
+    /// Success also avoids allocation when `zero-copy-transport` selects inline
+    /// authority storage. Default builds store a successful nonempty authority
+    /// in a `String`. The entire authority argument must be consumed; a suffix
+    /// path, query, fragment, port, user information, or IPvFuture host is rejected.
+    ///
+    /// # Errors
+    ///
+    /// Returns the specific [`UUriPartsError`] for invalid authority input.
+    pub fn try_from_wire_parts(
+        authority: &str,
+        entity_id: u32,
+        entity_version: u8,
+        resource_id: u16,
+    ) -> Result<Self, UUriPartsError> {
+        let authority_name = Self::check_authority_name(authority)?;
         Ok(UUri {
             authority_name,
             ue_id: entity_id,
@@ -605,14 +752,35 @@ impl UUri {
     // [impl->dsn~uri-authority-name-length~1]
     // [impl->dsn~uri-host-only~2]
     pub(crate) fn verify_authority_name(authority: &str) -> Result<AuthorityNameString, UUriError> {
-        // sadly, there is no way to parse a string into an Authority directly in fluent-uri
-        let uri_ref = UriRef::parse(format!("//{authority}"))
-            .map_err(|e| UUriError::validation_error(format!("invalid authority: {e:?}")))?;
-        if let Some(auth) = uri_ref.authority() {
-            Self::verify_parsed_authority(&auth)
-        } else {
-            Err(UUriError::validation_error("missing authority"))
+        Self::check_authority_name(authority).map_err(UUriError::from)
+    }
+
+    fn check_authority_name(authority: &str) -> Result<AuthorityNameString, UUriPartsError> {
+        if authority.len() > AUTHORITY_NAME_MAX_LENGTH {
+            return Err(UUriPartsError::AuthorityTooLong);
         }
+        // fluent-uri parses an authority within a URI reference. The length check
+        // above bounds both the addition and the stack-storage slice.
+        let mut storage = [0; 2 + AUTHORITY_NAME_MAX_LENGTH];
+        storage[..2].copy_from_slice(b"//");
+        storage
+            .get_mut(2..2 + authority.len())
+            .ok_or(UUriPartsError::AuthorityTooLong)?
+            .copy_from_slice(authority.as_bytes());
+        let prefixed = std::str::from_utf8(
+            storage
+                .get(..2 + authority.len())
+                .ok_or(UUriPartsError::AuthorityTooLong)?,
+        )
+        .map_err(|_| UUriPartsError::MalformedAuthority)?;
+        let parsed = UriRef::parse(prefixed).map_err(|_| UUriPartsError::MalformedAuthority)?;
+        let auth = parsed
+            .authority()
+            .ok_or(UUriPartsError::MalformedAuthority)?;
+        if auth.as_str() != authority {
+            return Err(UUriPartsError::AuthorityHasTrailingComponent);
+        }
+        Self::check_parsed_authority(&auth)
     }
 
     // [impl->dsn~uri-authority-name-length~1]
@@ -620,30 +788,38 @@ impl UUri {
     pub(crate) fn verify_parsed_authority(
         auth: &Authority,
     ) -> Result<AuthorityNameString, UUriError> {
+        Self::check_parsed_authority(auth).map_err(UUriError::from)
+    }
+
+    fn check_parsed_authority(auth: &Authority) -> Result<AuthorityNameString, UUriPartsError> {
         if auth.has_port() {
-            Err(UUriError::validation_error(
-                "uProtocol URI's authority must not contain port",
-            ))
+            Err(UUriPartsError::AuthorityHasPort)
         } else if auth.has_userinfo() {
-            Err(UUriError::validation_error(
-                "uProtocol URI's authority must not contain userinfo",
-            ))
+            Err(UUriPartsError::AuthorityHasUserinfo)
         } else {
             let verified_name = match auth.host_parsed() {
-                Host::Ipv4(_) | Host::Ipv6(_) => auth.host().to_string(),
+                Host::Ipv4(_) | Host::Ipv6(_) => auth.host(),
                 Host::RegName(name) => {
                     if !WILDCARD_AUTHORITY.eq(name.as_str())
                         && !is_valid_authority_name(name.as_str())
                     {
-                        return Err(UUriError::validation_error(
-                            "uProtocol URI's authority contains invalid characters",
-                        ));
+                        return Err(UUriPartsError::InvalidAuthorityCharacters);
                     }
-                    name.to_string()
+                    name.as_str()
                 }
-                _ => todo!(),
+                Host::IpvFuture { .. } => return Err(UUriPartsError::UnsupportedHost),
             };
-            Ok(verified_name)
+            if verified_name.len() > AUTHORITY_NAME_MAX_LENGTH {
+                return Err(UUriPartsError::AuthorityTooLong);
+            }
+            #[cfg(feature = "zero-copy-transport")]
+            {
+                AuthorityNameString::new(verified_name)
+            }
+            #[cfg(not(feature = "zero-copy-transport"))]
+            {
+                Ok(verified_name.to_owned())
+            }
         }
     }
 
@@ -1118,6 +1294,68 @@ mod core_types_support {
 mod tests {
     use super::*;
     use test_case::test_case;
+
+    #[test_case(""; "empty authority")]
+    #[test_case("vehicle"; "registered name")]
+    #[test_case("*"; "wildcard")]
+    #[test_case("192.168.1.10"; "IPv4")]
+    #[test_case("[2001:db8::8]"; "IPv6")]
+    fn wire_parts_preserve_valid_authority(authority: &str) {
+        let uri = UUri::try_from_wire_parts(authority, 0x1234, 1, 0x8001).unwrap();
+        assert_eq!(uri.authority_name(), authority);
+        assert_eq!(
+            uri.clone_with_resource_id(0x8002).authority_name(),
+            authority
+        );
+        assert_eq!(UUri::from_str(&uri.to_uri(true)).unwrap(), uri);
+    }
+
+    #[test_case("vin/", UUriPartsError::AuthorityHasTrailingComponent; "empty trailing path")]
+    #[test_case("vin/x", UUriPartsError::AuthorityHasTrailingComponent; "trailing path")]
+    #[test_case("vin?x", UUriPartsError::AuthorityHasTrailingComponent; "trailing query")]
+    #[test_case("vin#x", UUriPartsError::AuthorityHasTrailingComponent; "trailing fragment")]
+    #[test_case("[v1.xy]", UUriPartsError::UnsupportedHost; "IPvFuture")]
+    #[test_case("user@vin", UUriPartsError::AuthorityHasUserinfo; "userinfo")]
+    #[test_case("vin:80", UUriPartsError::AuthorityHasPort; "port")]
+    #[test_case("INVALID", UUriPartsError::InvalidAuthorityCharacters; "uppercase name")]
+    fn wire_parts_report_typed_rejections(authority: &str, expected: UUriPartsError) {
+        assert_eq!(UUri::try_from_wire_parts(authority, 1, 1, 1), Err(expected));
+        let Err(UUriError::ValidationError(message)) = UUri::try_from_parts(authority, 1, 1, 1)
+        else {
+            panic!("legacy constructor must reject the same authority");
+        };
+        assert_eq!(message, expected.to_string());
+        assert!(matches!(
+            UUri::verify_authority(authority),
+            Err(UUriError::ValidationError(_))
+        ));
+    }
+
+    #[test]
+    fn wire_parts_enforce_authority_boundary() {
+        let maximum = "a".repeat(128);
+        assert_eq!(
+            UUri::try_from_wire_parts(&maximum, 1, 1, 1)
+                .unwrap()
+                .authority_name(),
+            maximum
+        );
+        assert_eq!(
+            UUri::try_from_wire_parts(&(maximum + "a"), 1, 1, 1),
+            Err(UUriPartsError::AuthorityTooLong)
+        );
+    }
+
+    #[test]
+    fn uri_storage_matches_feature_contract() {
+        #[cfg(feature = "zero-copy-transport")]
+        assert_eq!(std::mem::size_of::<UUri>(), 136);
+        #[cfg(not(feature = "zero-copy-transport"))]
+        assert_eq!(
+            std::mem::size_of::<UUri>(),
+            std::mem::size_of::<String>() + 8
+        );
+    }
 
     #[test_case("*", 0x0001_2345, 1, 0x8001; "authority")]
     #[test_case("vehicle", 0xFFFF_2345, 1, 0x8001; "entity instance")]

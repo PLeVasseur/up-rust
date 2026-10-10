@@ -1,6 +1,7 @@
 # Guide
 
 * [Migrating from 0.9 to 0.10](crate::guide::migration): source-level changes and examples.
+* [URI storage and validation](crate::guide::uris): bounded wire-part parsing and feature-selected storage.
 
 * [Writing an application](crate::guide::applications): overview, with
   runnable Communication Layer role examples and examples that use

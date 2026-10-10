@@ -25,12 +25,35 @@ const VERSION_7: u64 = 0b0111 << 12;
 const BITMASK_VARIANT: u64 = 0b11 << 62;
 const VARIANT_RFC4122: u64 = 0b10 << 62;
 
-fn is_correct_version(msb: u64) -> bool {
+const fn is_correct_version(msb: u64) -> bool {
     msb & BITMASK_VERSION == VERSION_7
 }
 
-fn is_correct_variant(lsb: u64) -> bool {
+const fn is_correct_variant(lsb: u64) -> bool {
     lsb & BITMASK_VARIANT == VARIANT_RFC4122
+}
+
+#[cfg(test)]
+mod wire_value_tests {
+    use super::UUID;
+
+    #[test]
+    fn wire_uuid_predicate_checks_every_version_and_variant() {
+        for version in 0..16_u64 {
+            for variant in 0..4_u64 {
+                let msb = (1234 << 16) | (version << 12) | 0x345;
+                let lsb = (variant << 62) | 0x1234;
+                assert_eq!(
+                    UUID::is_valid_u64_pair(msb, lsb),
+                    version == 7 && variant == 2
+                );
+                assert_eq!(
+                    UUID::is_valid_u64_pair(msb, lsb),
+                    UUID::from_u64_pair(msb, lsb).is_ok()
+                );
+            }
+        }
+    }
 }
 
 #[derive(Debug)]
@@ -69,6 +92,15 @@ impl std::fmt::Display for UUID {
 }
 
 impl UUID {
+    /// Checks the UUIDv7 version and RFC variant bits without creating an error string.
+    ///
+    /// This applies the same bit constraints as [`UUID::from_u64_pair`]. It does
+    /// not impose a timestamp freshness or origin policy.
+    #[must_use]
+    pub const fn is_valid_u64_pair(msb: u64, lsb: u64) -> bool {
+        is_correct_version(msb) && is_correct_variant(lsb)
+    }
+
     /// Creates a new UUID from a byte array.
     ///
     /// # Arguments

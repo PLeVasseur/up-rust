@@ -36,6 +36,7 @@ resolver = "2"
 
 [features]
 default = []
+zero-copy-transport = []
 cloudevents = ["protobuf-support"]
 communication = [
     "up-l2-notifier",

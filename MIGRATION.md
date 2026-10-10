@@ -1,5 +1,15 @@
 # Migrating from 0.9 to 0.10
 
+## URI storage and rejection
+
+`zero-copy-transport` enables inline authority storage in `UUri`; default builds
+retain String. Use `try_from_wire_parts` for allocation-free URI construction and
+Copy `UUriPartsError` failures on that feature. Legacy constructors retain their
+owned error-string conversion. IPvFuture hosts and authority suffixes containing
+a path, query or fragment are rejected in every build, including protobuf source
+and sink conversion. `UUID::is_valid_u64_pair` and `UCode::from_i32` support
+allocation-free scalar rejection. See the URI guide for storage and layout details.
+
 ## Feature and accessor names
 
 Update direct feature selections in Cargo.toml and dependent-crate feature

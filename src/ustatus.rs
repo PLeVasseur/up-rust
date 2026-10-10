@@ -69,29 +69,33 @@ impl UCode {
     ///
     /// Returns an error if `value` is not a defined code.
     pub fn try_from_i32(value: i32) -> Result<Self, SerializationError> {
-        match value {
-            x if x == UCode::Ok as i32 => Ok(UCode::Ok),
-            x if x == UCode::Cancelled as i32 => Ok(UCode::Cancelled),
-            x if x == UCode::Unknown as i32 => Ok(UCode::Unknown),
-            x if x == UCode::InvalidArgument as i32 => Ok(UCode::InvalidArgument),
-            x if x == UCode::DeadlineExceeded as i32 => Ok(UCode::DeadlineExceeded),
-            x if x == UCode::NotFound as i32 => Ok(UCode::NotFound),
-            x if x == UCode::AlreadyExists as i32 => Ok(UCode::AlreadyExists),
-            x if x == UCode::PermissionDenied as i32 => Ok(UCode::PermissionDenied),
-            x if x == UCode::ResourceExhausted as i32 => Ok(UCode::ResourceExhausted),
-            x if x == UCode::FailedPrecondition as i32 => Ok(UCode::FailedPrecondition),
-            x if x == UCode::Aborted as i32 => Ok(UCode::Aborted),
-            x if x == UCode::OutOfRange as i32 => Ok(UCode::OutOfRange),
-            x if x == UCode::Unimplemented as i32 => Ok(UCode::Unimplemented),
-            x if x == UCode::Internal as i32 => Ok(UCode::Internal),
-            x if x == UCode::Unavailable as i32 => Ok(UCode::Unavailable),
-            x if x == UCode::DataLoss as i32 => Ok(UCode::DataLoss),
-            x if x == UCode::Unauthenticated as i32 => Ok(UCode::Unauthenticated),
-            _ => Err(SerializationError::new(format!(
-                "unknown UCode value: {}",
-                value
-            ))),
-        }
+        Self::from_i32(value)
+            .ok_or_else(|| SerializationError::new(format!("unknown UCode value: {}", value)))
+    }
+
+    /// Converts a defined wire value without allocating an error for unknown codes.
+    #[must_use]
+    pub const fn from_i32(value: i32) -> Option<Self> {
+        Some(match value {
+            0 => Self::Ok,
+            1 => Self::Cancelled,
+            2 => Self::Unknown,
+            3 => Self::InvalidArgument,
+            4 => Self::DeadlineExceeded,
+            5 => Self::NotFound,
+            6 => Self::AlreadyExists,
+            7 => Self::PermissionDenied,
+            8 => Self::ResourceExhausted,
+            9 => Self::FailedPrecondition,
+            10 => Self::Aborted,
+            11 => Self::OutOfRange,
+            12 => Self::Unimplemented,
+            13 => Self::Internal,
+            14 => Self::Unavailable,
+            15 => Self::DataLoss,
+            16 => Self::Unauthenticated,
+            _ => return None,
+        })
     }
 
     /// Returns the protobuf wire value of this code.

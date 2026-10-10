@@ -102,6 +102,9 @@ pub mod guide {
     #[doc = include_str!("../MIGRATION.md")]
     pub mod migration {}
 
+    #[doc = include_str!("guide/uris.md")]
+    pub mod uris {}
+
     #[cfg_attr(
         all(feature = "communication", feature = "util"),
         doc = include_str!("guide/applications.md")
@@ -156,7 +159,7 @@ pub use umessage::{
 };
 
 mod uri;
-pub use uri::{ExactUUri, UUri, UUriError};
+pub use uri::{ExactUUri, UUri, UUriError, UUriPartsError};
 
 mod ustatus;
 pub use ustatus::{UAny, UCode, UStatus};
