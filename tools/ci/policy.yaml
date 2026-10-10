@@ -110,6 +110,12 @@ checks:
     roles: [current, msrv]
     timeout: 600
     command: [bash, tools/ci/check_abi.sh, "{toolchain}"]
+  - name: wire-private-identity
+    group: tests
+    roles: [current, msrv]
+    timeout: 600
+    completion: libtest
+    command: [cargo, "+{toolchain}", test, --locked, --all-features, --test, wire_private_identity]
   - name: dependency-policy
     group: dependency
     roles: [current]

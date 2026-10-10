@@ -143,6 +143,8 @@ pub mod guide {
         doc = include_str!("guide/trait_map_core.md")
     )]
     pub mod trait_map {}
+    #[doc = include_str!("guide/wire_identity.md")]
+    pub mod wire_identity {}
 }
 
 #[cfg(feature = "symphony")]
@@ -211,5 +213,25 @@ pub use frame::{validate_frame_view_for_transport, UFrameView};
 
 /// Payload codec contracts shared by the frame families.
 pub mod payload;
-pub use payload::codec::{PayloadCodec, PayloadLayout, ReadDecodePayload};
+pub use payload::codec::{
+    DecodePayload, EncodePayload, PayloadCodec, PayloadCodecIdentity, PayloadLayout,
+    ProtobufPayload, ReadDecodePayload,
+};
 pub use payload::UWireError;
+
+#[cfg(feature = "wire-implementer-api")]
+pub mod wire;
+#[cfg(not(feature = "wire-implementer-api"))]
+mod wire;
+#[cfg(any(feature = "selected-wire-user-api", feature = "wire-implementer-api"))]
+pub use wire::{
+    ProtobufWire, UFrameFieldsMetadataCodec, UProtocolNativeWire, WireCompatibility, WireIdentity,
+    WireIdentityNamespace, WireIdentityRef, NATIVE_EXPLICIT_PAYLOAD_FAMILY_ID,
+    PROTOBUF_PAYLOAD_FAMILY_ID, PROTOBUF_WIRE_ID, UFRAME_FIELDS_METADATA_LAYOUT_ID,
+    UPROTOCOL_NATIVE_WIRE_ID, XCDR_V2_PAYLOAD_FAMILY_ID, XCDR_V2_WIRE_ID,
+};
+#[cfg(feature = "wire-implementer-api")]
+pub use wire::{
+    UWire, UWireDecode, UWireDecodeOwned, UWireEncode, UWireMetadataCodec, UWireMetadataCodecFor,
+    UWireMetadataContext, UWireMetadataError, UWirePayload, UWireReadDecode,
+};

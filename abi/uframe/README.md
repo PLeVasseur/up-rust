@@ -10,6 +10,7 @@ applies to both.
 
 | Path | Representation | Check |
 |---|---|---|
+| `WIRE-FORMAT.md` | SDK metadata field-block and whole-frame envelope contracts | corresponding codec and envelope tests when their carrier features are enabled |
 | `rust/uframe_metadata_abi_v1.rs` | standalone `no_std` Rust reference definition | selected current/MSRV `rustc --edition 2021 -D warnings --crate-type lib` and const layout assertions |
 | `c/uframe_metadata_abi_v1.h` (+ `check_layout.c`) | C11 definition | `gcc -std=c11 -Wall -Wextra -Werror -pedantic` + `static_assert` |
 | `cpp/uframe_metadata_abi_v1.hpp` (+ `check_layout.cpp`) | C++17 definition | `g++ -std=c++17 -Wall -Wextra -Werror -pedantic` + `static_assert` |

@@ -818,6 +818,48 @@ mod tests {
         println!("header_mutation_differential: base_cases=1024 mutations=49152 accepted={accepted} rejected={rejected} accepted_fields_equal=true");
     }
 
+    #[cfg(feature = "selected-wire-codec-core")]
+    #[test]
+    fn native_prefix_and_in_place_header_match_the_whole_codec() {
+        use crate::wire::{
+            UFrameFieldsMetadataCodec, UProtocolNativeWire, UWireMetadataCodec,
+            UWireMetadataContext,
+        };
+        let codec = UFrameFieldsMetadataCodec;
+        let context =
+            UWireMetadataContext::from_wire::<UProtocolNativeWire, UFrameFieldsMetadataCodec>();
+        let prefix = codec.native_prefix(context).unwrap();
+        for seed in 0..1024 {
+            let metadata = metadata(seed);
+            let parts = TxHeaderParts::from(&metadata);
+            let mut output = vec![0; header_len(&prefix, &parts).unwrap()];
+            write_header(&prefix, &parts, &mut output).unwrap();
+            assert_eq!(
+                output,
+                codec.encode_frame_metadata(context, &metadata).unwrap()
+            );
+            assert_eq!(
+                codec
+                    .encoded_frame_metadata_len(context, &metadata)
+                    .unwrap(),
+                output.len()
+            );
+            let mut slice = vec![0xA5; output.len() + 5];
+            let len = codec
+                .encode_frame_metadata_into(context, &metadata, &mut slice)
+                .unwrap();
+            assert_eq!(slice.get(..len).unwrap(), output);
+            assert!(slice.get(len..).unwrap().iter().all(|byte| *byte == 0xA5));
+            assert_eq!(
+                codec.decode_frame_metadata(context, &output).unwrap(),
+                metadata
+            );
+            let received = parse_header(&prefix, &output, &HeaderLimits::default()).unwrap();
+            assert_received_fields(&received, &metadata);
+        }
+        println!("header_whole_codec_differential: metadata_cases=1024 receive_comparisons=1024");
+    }
+
     #[test]
     fn short_output_and_invalid_metadata_leave_bytes_unchanged() {
         let metadata = metadata(511);

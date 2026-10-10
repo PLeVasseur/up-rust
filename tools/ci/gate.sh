@@ -91,6 +91,9 @@ fi
 if [[ "$configuration" == current && ( "$group" == all || "$group" == abi ) ]]; then
   python3 tools/ci/run_check.py --log "$log_root/abi-layout.log" --timeout 600 --completion command -- bash tools/ci/check_abi.sh 1.95.0
 fi
+if [[ "$configuration" == current && ( "$group" == all || "$group" == tests ) ]]; then
+  python3 tools/ci/run_check.py --log "$log_root/wire-private-identity.log" --timeout 600 --completion libtest -- cargo +1.95.0 test --locked --all-features --test wire_private_identity
+fi
 if [[ "$configuration" == current && ( "$group" == all || "$group" == dependency ) ]]; then
   python3 tools/ci/run_check.py --log "$log_root/dependency-policy.log" --timeout 600 --completion command -- cargo deny --all-features check
 fi
@@ -135,4 +138,7 @@ if [[ "$configuration" == msrv && ( "$group" == all || "$group" == tests ) ]]; t
 fi
 if [[ "$configuration" == msrv && ( "$group" == all || "$group" == abi ) ]]; then
   python3 tools/ci/run_check.py --log "$log_root/abi-layout.log" --timeout 600 --completion command -- bash tools/ci/check_abi.sh 1.88.0
+fi
+if [[ "$configuration" == msrv && ( "$group" == all || "$group" == tests ) ]]; then
+  python3 tools/ci/run_check.py --log "$log_root/wire-private-identity.log" --timeout 600 --completion libtest -- cargo +1.88.0 test --locked --all-features --test wire_private_identity
 fi

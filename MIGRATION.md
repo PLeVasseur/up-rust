@@ -165,3 +165,25 @@ byte layout and bounded decoding from transport storage. `UWireError` distinguis
 missing payload/encoding, unsupported encoding, malformed bytes, insufficient output
 space and structured `SchemaMismatch` diagnostics. The new
 [frame metadata guide](src/guide/frame_metadata.md) contains compile-tested examples.
+
+## Selected-wire API ownership
+
+Metadata codec implementations provide `encoded_frame_metadata_len` and
+`encode_frame_metadata_into`; owned encoding has a default implementation using
+them. The canonical codec also exposes setup `native_prefix` and
+`native_prefix_into` APIs. Short caller output rejects before writing, preserving
+bytes beyond the encoded extent and all wire/family/layout identities.
+
+Wire contracts use crate-root imports under `wire-implementer-api`; there is no
+redundant `wire_implementer_api` compatibility module. `UFrameFieldsMetadataCodec`
+names the metadata field-block codec and owns layout identity 2. The selected
+`UWire` marker owns the wire/family identity and format version, independently
+of storage or a whole-frame envelope. `UWire::REQUIRES_NATIVE_AGREEMENT` names
+the native proof requirement rather than a locally configured profile.
+
+The whole-frame interface is named `UFrameEnvelope` in the envelope source, which
+is compiled only with its owning frame-carrier capability. `UProtocolNativeWire`
+and `ProtobufWire` remain selected-wire markers. No wire identity bytes or
+metadata-layout value changes accompany these naming choices. Layout compact
+value 1 remains an internal SDK reservation with no decoder, not a public constant
+or a payload-registry assignment.

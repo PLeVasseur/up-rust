@@ -40,6 +40,19 @@ The canonical field block supports caller-slice output. In-place zero-copy heade
 borrow token/traceparent, reject malformed input with fixed-size errors and report
 their initialized extents. Header/token storage policies remain distinct from
 payload interpretation and binding-owned physical storage.
+Selected-wire metadata codecs expose exact-length and caller-slice encoding,
+including a setup prefix writer. These reproduce the same canonical metadata
+bytes while keeping wire/family/layout identities independent of payload encoding.
+
+### Selected-wire identity
+
+Payload encoding, selected wire, payload family and metadata layout use separate
+namespaces. Private selected-wire identities require their agreed literals;
+compact-only matching is limited to registered first-wave SDK pairs. The metadata
+codec owns its layout identity. Use canonical crate-root imports such as
+`UWire`, `WireIdentity` and `UFrameFieldsMetadataCodec` with `wire-implementer-api`.
+The [wire identity guide](src/guide/wire_identity.md) explains the namespace and
+private-alias rules under the same provisional policy.
 
 ## Building from Source
 

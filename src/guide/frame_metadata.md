@@ -31,6 +31,13 @@ Short output returns a typed error before mutation and bytes beyond the encoded
 extent are unchanged. `encode_frame_metadata_fields_into` appends to an existing
 vector, while `encode_frame_metadata_fields` creates an owned vector.
 
+At the selected-wire boundary, `UWireMetadataCodec::encoded_frame_metadata_len`
+and `encode_frame_metadata_into` include the wire/family/layout prefix in that
+caller-storage operation. `UFrameFieldsMetadataCodec::native_prefix` prepares
+the prefix at setup without encoding a probe message; `native_prefix_into` writes
+only that prefix to fixed setup storage. Private identities retain their agreed
+literal, while registered identities can use their compact representation.
+
 ## In-place headers
 
 With `zero-copy-transport`, `TxHeaderParts` borrows URI, token and traceparent
