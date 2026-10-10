@@ -187,3 +187,11 @@ and `ProtobufWire` remain selected-wire markers. No wire identity bytes or
 metadata-layout value changes accompany these naming choices. Layout compact
 value 1 remains an internal SDK reservation with no decoder, not a public constant
 or a payload-registry assignment.
+
+## Metadata conformance fixtures
+
+Metadata vector manifests are required and bind both the decoded bytes and exact
+hex files with SHA-256. Verification decodes the stored vectors. Setting
+`UP_GOLDEN_UPDATE` on a normal test run is an error; regeneration requires the
+explicitly ignored updater described in the fixtures README. No field-block or
+classic-attribute bytes change merely to add these integrity checks.

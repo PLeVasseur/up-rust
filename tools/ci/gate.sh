@@ -94,6 +94,12 @@ fi
 if [[ "$configuration" == current && ( "$group" == all || "$group" == tests ) ]]; then
   python3 tools/ci/run_check.py --log "$log_root/wire-private-identity.log" --timeout 600 --completion libtest -- cargo +1.95.0 test --locked --all-features --test wire_private_identity
 fi
+if [[ "$configuration" == current && ( "$group" == all || "$group" == tests ) ]]; then
+  python3 tools/ci/run_check.py --log "$log_root/metadata-conformance.log" --timeout 600 --completion libtest -- cargo +1.95.0 test --locked --all-features --test wire_metadata_conformance
+fi
+if [[ "$configuration" == current && ( "$group" == all || "$group" == tests ) ]]; then
+  python3 tools/ci/run_check.py --log "$log_root/metadata-golden.log" --timeout 600 --completion libtest -- cargo +1.95.0 test --locked --all-features --test wire_metadata_golden
+fi
 if [[ "$configuration" == current && ( "$group" == all || "$group" == dependency ) ]]; then
   python3 tools/ci/run_check.py --log "$log_root/dependency-policy.log" --timeout 600 --completion command -- cargo deny --all-features check
 fi
@@ -141,4 +147,10 @@ if [[ "$configuration" == msrv && ( "$group" == all || "$group" == abi ) ]]; the
 fi
 if [[ "$configuration" == msrv && ( "$group" == all || "$group" == tests ) ]]; then
   python3 tools/ci/run_check.py --log "$log_root/wire-private-identity.log" --timeout 600 --completion libtest -- cargo +1.88.0 test --locked --all-features --test wire_private_identity
+fi
+if [[ "$configuration" == msrv && ( "$group" == all || "$group" == tests ) ]]; then
+  python3 tools/ci/run_check.py --log "$log_root/metadata-conformance.log" --timeout 600 --completion libtest -- cargo +1.88.0 test --locked --all-features --test wire_metadata_conformance
+fi
+if [[ "$configuration" == msrv && ( "$group" == all || "$group" == tests ) ]]; then
+  python3 tools/ci/run_check.py --log "$log_root/metadata-golden.log" --timeout 600 --completion libtest -- cargo +1.88.0 test --locked --all-features --test wire_metadata_golden
 fi

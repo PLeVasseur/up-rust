@@ -1,0 +1,58 @@
+[
+  {
+    "file": "publish-no-payload.uframe-fields.hex",
+    "fixture": "publish-no-payload",
+    "hex_sha256": "a845ca9d86c9c35573ae0c155c7fd690f7294a70db521c47607da5adcdb1a60e",
+    "len": 60,
+    "profile": "uframe-fields",
+    "sha256": "76c4dd8529e970d4d9e3d115f3ffe11c4a3fdb9943595a8c7ad60bf0ecad2a44"
+  },
+  {
+    "file": "publish-raw-payload.uframe-fields.hex",
+    "fixture": "publish-raw-payload",
+    "hex_sha256": "70a9f93f3219f67a74826447faf404cee17b0ffe6312eba8ff32c8a666f49b5f",
+    "len": 64,
+    "profile": "uframe-fields",
+    "sha256": "7103557da61c2780b2929b4de01869f725b123ae477f9d690fa7a636cd1667d5"
+  },
+  {
+    "file": "publish-private-use-payload.uframe-fields.hex",
+    "fixture": "publish-private-use-payload",
+    "hex_sha256": "b4ed8d1d7b859593461cab663419ee2c225f7c84649c8f12de56d49e1f6352e8",
+    "len": 64,
+    "profile": "uframe-fields",
+    "sha256": "7dac8c12b767c20665d2bf24c58e71f648e33a1dad4c61b6a9fdc59081ffc937"
+  },
+  {
+    "file": "notification.uframe-fields.hex",
+    "fixture": "notification",
+    "hex_sha256": "43acb8b516f2a7f9f9079c35aa8c3846dcd5f3aa8ceac485f7b74e6494cfa737",
+    "len": 73,
+    "profile": "uframe-fields",
+    "sha256": "3129dca791ec5675f0f22d61aca92f2b3e24580925f11b8ede8caeec5e975db7"
+  },
+  {
+    "file": "request.uframe-fields.hex",
+    "fixture": "request",
+    "hex_sha256": "04404267b42893a31957d8b6951e48367f5623d12c4e607f1cefca4ce0fec064",
+    "len": 81,
+    "profile": "uframe-fields",
+    "sha256": "fa8bce8052efcacc5b72b5652fec10819d2399136f084f1299ed08e11f350e7b"
+  },
+  {
+    "file": "response.uframe-fields.hex",
+    "fixture": "response",
+    "hex_sha256": "1264414e2204ab98b75231f255204f17eef8d9707b468d7fb52444dba84d4cec",
+    "len": 89,
+    "profile": "uframe-fields",
+    "sha256": "a8d419c9fdea6b576ffba4ac9781586a61fc7e6ea57884e7e667130b4deaeb45"
+  },
+  {
+    "file": "publish-explicit-zero-ttl.uframe-fields.hex",
+    "fixture": "publish-explicit-zero-ttl",
+    "hex_sha256": "c4fc91659269e1c5ac989ab34a25144a2d7042f93d997dba3fec57f1397974a4",
+    "len": 68,
+    "profile": "uframe-fields",
+    "sha256": "7d0399416acf4ea8cafc19fa77550a285f3f7882b2fc9c56cb69e74a5b7eb49e"
+  }
+]

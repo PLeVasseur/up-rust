@@ -54,6 +54,11 @@ codec owns its layout identity. Use canonical crate-root imports such as
 The [wire identity guide](src/guide/wire_identity.md) explains the namespace and
 private-alias rules under the same provisional policy.
 
+Checked-in [metadata fixtures](tests/fixtures/wire_metadata/README.md) are verified
+against hash-bound manifests; normal tests do not regenerate them. Deliberate
+representation changes use the explicit ignored updater and include reviewed
+vector/manifest changes together.
+
 ## Building from Source
 
 With `zero-copy-transport`, `UUri` stores its bounded authority inline rather than

@@ -116,6 +116,18 @@ checks:
     timeout: 600
     completion: libtest
     command: [cargo, "+{toolchain}", test, --locked, --all-features, --test, wire_private_identity]
+  - name: metadata-conformance
+    group: tests
+    roles: [current, msrv]
+    timeout: 600
+    completion: libtest
+    command: [cargo, "+{toolchain}", test, --locked, --all-features, --test, wire_metadata_conformance]
+  - name: metadata-golden
+    group: tests
+    roles: [current, msrv]
+    timeout: 600
+    completion: libtest
+    command: [cargo, "+{toolchain}", test, --locked, --all-features, --test, wire_metadata_golden]
   - name: dependency-policy
     group: dependency
     roles: [current]

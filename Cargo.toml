@@ -97,6 +97,8 @@ junit-report = { version = "0.9.1" }
 mockall = { version = "0.15.0" }
 pretty_assertions = { version = "1.4" }
 proptest = { version = "=1.5.0" }
+serde_json = "1.0.150"
+sha2 = "0.11.0"
 test-case = { version = "3.3.1" }
 tokio = { version = "1.53.1", default-features = false, features = [
     "macros",
@@ -183,6 +185,14 @@ required-features = ["up-core-api"]
 name = "tck_uuid"
 harness = false
 required-features = ["up-core-api"]
+
+[[test]]
+name = "wire_metadata_conformance"
+required-features = ["wire-implementer-api", "up-core-api"]
+
+[[test]]
+name = "wire_metadata_golden"
+required-features = ["wire-implementer-api", "up-core-api"]
 
 [lints.rust]
 # Every public item is documented and every public type is inspectable.

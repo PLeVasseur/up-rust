@@ -145,6 +145,8 @@ pub mod guide {
     pub mod trait_map {}
     #[doc = include_str!("guide/wire_identity.md")]
     pub mod wire_identity {}
+    #[doc = include_str!("guide/wires.md")]
+    pub mod wires {}
 }
 
 #[cfg(feature = "symphony")]
