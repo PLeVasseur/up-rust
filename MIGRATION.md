@@ -299,7 +299,7 @@ Enable `native-identity` to use `NativeRepresentation`, `NativeTypeToken` and
 Message-only default builds do not activate the runtime SHA-256 dependency.
 Native descriptors bind target, layout and field semantics. Their independent
 32-bit tokens do not allocate payload IDs or by themselves authorize typed access.
-Use a checked private-ID table or an explicit ID-zero contract, with independently
+Use a checked private-ID table or an explicit ID-zero single-type agreement, with independently
 supplied peer configuration. The native identity guide covers generation retention
 and canonical descriptor limits.
 
@@ -414,3 +414,23 @@ Rust discriminants as wire codes. Absent priority remains `None`, encoded as zer
 reserved kind/priority codes remain invalid. Encoded values, classic API signatures,
 metadata goldens and the fixed ABI remain unchanged. Core types gain `Eq`/`Hash`;
 priority also gains `Ord`, preserving its existing CS0-through-CS6 ordering.
+
+## Explicit single-type deployment profiles
+
+Replace `NativeProfileMode::ContractDefined(NativeContract)` with
+`NativeProfileMode::SingleType(NativeSingleType::new(representation))`.
+The unused operation label and its accessor are removed. This mode agrees one
+exact representation for ID zero across a deployment; it does not bind a URI,
+method or subscription. Use Table for multiple native representations.
+
+Regenerate old `contract_defined` artifacts with the tool's `single-type` command,
+omitting `--operation`; the loader rejects the old mode by name instead of aliasing
+it. `AgreementArtifact::generate_single_type` replaces `generate_contract`.
+Canonical mode tag 3 replaces tag 2; Table bytes/artifacts and descriptor/token
+version 2 are unchanged. The JSON artifact format remains version 1; unsupported
+versions fail with a named error. Routing owners migrate their configuration and
+regenerate inputs together with this API. Payload ID zero retains its independent
+`PayloadEncoding::CONTRACT_DEFINED` name and never means absent payload.
+
+The tool's exact dependency states compatible SDK `0.10.0-SNAPSHOT`; publishing stays disabled.
+Provisional version/mode changes have no compatibility window and fail closed.

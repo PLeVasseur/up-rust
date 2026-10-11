@@ -203,8 +203,8 @@ impl InventoryArtifact {
     /// # Errors
     /// Rejects old/unknown formats, mismatches, duplicate type keys or token collisions.
     pub fn validate(&self) -> Result<(), ProfileToolError> {
+        crate::check_format_version(u64::from(self.format_version))?;
         if self.schema != "uprotocol.native-inventory.provisional"
-            || self.format_version != FORMAT_VERSION
             || !self.provisional
             || self.descriptor_version != NATIVE_DESCRIPTOR_VERSION
             || self.token_derivation_version != NATIVE_TOKEN_DERIVATION_VERSION

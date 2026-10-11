@@ -84,7 +84,7 @@ fn exported_inventory_drives_all_six_cli_subcommands() {
     let inventory_path = directory.path().join("inventory.json");
     let identities_path = directory.path().join("identities.json");
     let agreement_path = directory.path().join("agreement.json");
-    let contract_path = directory.path().join("contract.json");
+    let single_type_path = directory.path().join("single-type.json");
     let endpoints_path = directory.path().join("endpoints.json");
     let routes_path = directory.path().join("routes.json");
     let manifest_path = directory.path().join("manifest.json");
@@ -163,20 +163,67 @@ fn exported_inventory_drives_all_six_cli_subcommands() {
     run(
         tool,
         &[
-            "contract",
+            "single-type",
             "--inventory",
             inventory_path.to_str().unwrap(),
             "--domain",
             "example.cli",
-            "--operation",
-            "door.event",
             "--type-name",
             "example.DoorState",
             "--output",
-            contract_path.to_str().unwrap(),
+            single_type_path.to_str().unwrap(),
         ],
         0,
     );
+    run(
+        tool,
+        &["verify", "--agreement", single_type_path.to_str().unwrap()],
+        0,
+    );
+    let single_type: AgreementArtifact = read_artifact(&single_type_path).unwrap();
+    let single_type_json = serde_json::to_value(&single_type).unwrap();
+    let native = single_type_json.get("native").unwrap();
+    assert_eq!(
+        native.get("mode").and_then(serde_json::Value::as_str),
+        Some("single_type")
+    );
+    assert!(native.get("operation").is_none());
+    let error = run(tool, &["contract", "--help"], 2);
+    assert!(error.contains("unrecognized subcommand 'contract'"));
+    let error = run(tool, &["single-type", "--operation", "door.event"], 2);
+    assert!(error.contains("unexpected argument '--operation'"));
+
+    // Keep deliberately invalid inputs separate from the nine delivered artifacts.
+    let invalid_directory = tempfile::tempdir().unwrap();
+    let invalid_path = invalid_directory.path().join("unsupported.json");
+    for mode in ["contract_defined", "future_mode"] {
+        let mut value = single_type_json.clone();
+        let native = value
+            .get_mut("native")
+            .and_then(serde_json::Value::as_object_mut)
+            .unwrap();
+        native.insert("mode".into(), serde_json::json!(mode));
+        native.insert("operation".into(), serde_json::json!("door.event"));
+        std::fs::write(&invalid_path, serde_json::to_vec(&value).unwrap()).unwrap();
+        let error = run(
+            tool,
+            &["verify", "--agreement", invalid_path.to_str().unwrap()],
+            1,
+        );
+        assert!(error.contains(&format!("unsupported native mode `{mode}`")));
+    }
+    for version in [0, 99, u64::MAX] {
+        let mut value = single_type_json.clone();
+        *value.get_mut("format_version").unwrap() = serde_json::json!(version);
+        std::fs::write(&invalid_path, serde_json::to_vec(&value).unwrap()).unwrap();
+        let error = run(
+            tool,
+            &["verify", "--agreement", invalid_path.to_str().unwrap()],
+            1,
+        );
+        assert!(error.contains(&format!("unsupported artifact format_version {version}")));
+    }
+
     let agreement: AgreementArtifact = read_artifact(&agreement_path).unwrap();
     agreement
         .require_wire::<StableContainerWire, UFrameFieldsMetadataCodec>()

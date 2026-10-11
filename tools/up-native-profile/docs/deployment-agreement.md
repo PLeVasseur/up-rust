@@ -8,6 +8,13 @@ explicitly provisional. Canonical descriptor and token-derivation versions are 2
 including the actual compiler triple and pointer width. Older or unknown versions
 are rejected; no implicit migration reinterprets old canonical bytes.
 
+The SDK owns this tool. Its version `0.1.0` names compatible SDK `0.10.0-SNAPSHOT`
+in its exact dependency. Publishing remains disabled pending
+an authorized coordinated SDK/macros/tool release; release notes name compatibility
+even when the package version numbers differ. Provisional formats have no
+compatibility window: unknown `format_version` or mode fails with a named error.
+Regenerate deployment artifacts for an intentional format/mode change.
+
 Artifacts use schema identifiers `uprotocol.native-inventory.provisional`,
 `uprotocol.deployment-agreement.provisional` and
 `uprotocol.native-deployment.provisional`. Each carries `format_version:1` and
@@ -71,7 +78,7 @@ semantic checks such as hashes, canonical descriptor agreement and append-only h
 
 ## Two identity namespaces in one artifact
 
-The `native` section is explicitly `table` or `contract_defined`. Tables contain
+The `native` section is explicitly `table` or `single_type`. Tables contain
 private payload encoding assignments. `identities.private_payloads` records other
 private payload reservations, such as serialized codec formats, without pretending
 they are native layouts. Those IDs cannot overlap native assignments or tombstones.
@@ -89,9 +96,16 @@ Before configuring a selected wire, `AgreementArtifact::require_wire` checks its
 actual SDK identity pairs. Registered first-wave pairs may be omitted from the
 optional list; each private pair requires an explicit literal declaration.
 
-`contract` explicitly creates an ID 0 operation agreement for one inventoried type.
-It is never selected because a table lookup failed. Byte size/alignment and a
-short token alone do not establish application-type agreement.
+`single-type` explicitly creates an ID 0 agreement for one inventoried type,
+without an operation label. It is deployment-scoped, not URI/method/subscription
+bound, and is never selected because a table lookup failed. Byte size/alignment
+and a short token alone do not establish application-type agreement.
+
+The old `contract_defined` mode is rejected by name, and `contract --operation`
+has no alias. SingleType canonical mode tag 3 replaces retired tag 2; the descriptor
+and token-derivation versions stay 2. Table canonical bytes, artifacts and hashes
+are unchanged. JSON `native` contains only `mode: "single_type"` and `descriptor`
+for this mode; unknown fields including `operation` fail deserialization.
 
 ## Distribution and activation
 
@@ -121,7 +135,7 @@ this is configuration agreement, not a network handshake or cryptographic attest
 
 ## Diagnostics and commands
 
-The six subcommands are `generate`, `contract`, `verify`, `verify-inventory`,
+The six subcommands are `generate`, `single-type`, `verify`, `verify-inventory`,
 `manifest` and `admit`; each flag has `--help` text. Success exits 0, an artifact or
 I/O operation failure exits 1, and invalid command-line usage exits 2. I/O errors
 name the concrete file/directory and preserve the underlying source. Collision

@@ -135,13 +135,39 @@ their allocations across the deployment; private use is valid for production.
 Immutable agreement objects retain their generation for in-flight work. A newer
 generation is prepared and checked independently before activating a replacement.
 
-## Explicit operation contracts
+## Explicit single-type agreement
 
-[`NativeProfileMode::ContractDefined`](crate::NativeProfileMode::ContractDefined)
-uses payload ID 0 with an explicit operation/subscription contract. There is no
-automatic fallback from a missing table allocation. Equal-sized values alone do
-not establish that contract. Route composition must preserve its agreed identity
-and any additional policy required when identity evidence is lost across a hop.
+[`NativeProfileMode::SingleType`](crate::NativeProfileMode::SingleType) uses payload
+ID 0 for one exact [`NativeSingleType`](crate::NativeSingleType) representation.
+It is deployment-scoped, not bound to a URI, RPC method or subscription. A profile
+cannot choose multiple types by operation; prefer Table for that deployment.
+There is no automatic fallback from a missing allocation. Equal-sized values do
+not establish agreement. Route composition preserves its identity and any explicit
+policy required when identity evidence is lost across a hop.
+
+```rust
+use std::sync::Arc;
+use up_rust::{NativeByteOrder, NativeProfile, NativeProfileAgreement,
+    NativeProfileError, NativeProfileMode, NativeRepresentation, NativeSingleType, PayloadEncoding};
+
+fn agree_with_peer(peer: &NativeProfile) -> Result<NativeProfileAgreement, NativeProfileError> {
+let door = NativeRepresentation::new("example.DoorState", 1, 4, 4,
+    NativeByteOrder::native(), vec![])?;
+let seat = NativeRepresentation::new("example.SeatState", 1, 4, 4,
+    NativeByteOrder::native(), vec![])?;
+let local = NativeProfile::new("example.vehicle", 1,
+    NativeProfileMode::SingleType(NativeSingleType::new(door.clone())))?;
+// Independently supplied peer content must match before activating an endpoint.
+let agreement = NativeProfileAgreement::new(Arc::new(local), peer)?;
+assert_eq!(agreement.identity_for(&door)?.encoding(), PayloadEncoding::CONTRACT_DEFINED);
+assert!(agreement.identity_for(&seat).is_err());
+Ok(agreement)
+}
+```
+
+Canonical mode tag 3 and JSON `single_type` replace the former operation-labelled
+mode. Old `contract_defined` artifacts fail by name; deployments regenerate rather
+than alias them. Table bytes and descriptor/token-derivation version 2 are unchanged.
 
 ## Carriage and classic projection
 

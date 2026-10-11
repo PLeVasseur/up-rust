@@ -8,7 +8,7 @@ use serde::{Deserialize, Serialize};
 use std::collections::{BTreeMap, BTreeSet};
 use up_rust::wire::WireIdentityNamespace;
 use up_rust::{
-    NativeContract, NativeProfile, NativeProfileMode, NativeProfileTable, PayloadEncoding,
+    NativeProfile, NativeProfileMode, NativeProfileTable, NativeSingleType, PayloadEncoding,
     NATIVE_DESCRIPTOR_VERSION, NATIVE_TOKEN_DERIVATION_VERSION,
 };
 
@@ -248,11 +248,9 @@ pub enum NativeMode {
         /// All assignments, including retired identities, ordered by encoding ID.
         allocations: Vec<NativeAllocation>,
     },
-    /// Explicit operation agreement using payload ID 0.
-    ContractDefined {
-        /// Deployment-stable operation/subscription identity.
-        operation: String,
-        /// Full representation agreed for that operation.
+    /// One exact native representation explicitly selected for payload ID 0.
+    SingleType {
+        /// Full representation agreed for this deployment; no operation binding.
         descriptor: NativeDescriptor,
     },
 }
@@ -281,7 +279,7 @@ pub struct AgreementArtifact {
     pub previous_content_sha256: Option<String>,
     /// Content identity of the selected actual inventory.
     pub inventory_sha256: String,
-    /// Explicit native table or operation contract.
+    /// Explicit native table or single-type agreement.
     pub native: NativeMode,
     /// Separate private payload and wire/family/layout declarations.
     #[serde(default)]
@@ -399,7 +397,7 @@ impl AgreementArtifact {
                         "the successor must keep the table band; a band change needs a new deployment profile",
                     ))
                 }
-                NativeMode::ContractDefined { .. } => {
+                NativeMode::SingleType { .. } => {
                     return Err(invalid("a table successor requires a table predecessor"));
                 }
             }
@@ -494,14 +492,13 @@ impl AgreementArtifact {
         )
     }
 
-    /// Generates an explicit ID 0 operation contract from one inventoried type.
+    /// Generates an explicit ID 0 agreement for one inventoried representation.
     ///
     /// # Errors
-    /// Rejects a missing type/operation or invalid inventory/declarations.
-    pub fn generate_contract(
+    /// Rejects a missing type or invalid inventory/declarations.
+    pub fn generate_single_type(
         inventory: &InventoryArtifact,
         domain: String,
-        operation: String,
         key: &TypeKey,
         identities: IdentityDeclarations,
     ) -> Result<Self, ProfileToolError> {
@@ -510,17 +507,14 @@ impl AgreementArtifact {
             .types
             .iter()
             .find(|value| &value.key == key)
-            .ok_or_else(|| invalid("contract type absent from inventory"))?
+            .ok_or_else(|| invalid("single type absent from inventory"))?
             .clone();
         Self::build(
             inventory,
             domain,
             1,
             None,
-            NativeMode::ContractDefined {
-                operation,
-                descriptor,
-            },
+            NativeMode::SingleType { descriptor },
             identities,
         )
     }
@@ -530,8 +524,8 @@ impl AgreementArtifact {
     /// # Errors
     /// Rejects old/unknown versions, corrupt content, duplicate/reused IDs or token collisions.
     pub fn validate(&self) -> Result<(), ProfileToolError> {
+        crate::check_format_version(u64::from(self.format_version))?;
         if self.schema != "uprotocol.deployment-agreement.provisional"
-            || self.format_version != FORMAT_VERSION
             || !self.provisional
             || self.descriptor_version != NATIVE_DESCRIPTOR_VERSION
             || self.token_derivation_version != NATIVE_TOKEN_DERIVATION_VERSION
@@ -599,15 +593,11 @@ impl AgreementArtifact {
                     previous = Some(value.encoding_id);
                 }
             }
-            NativeMode::ContractDefined {
-                operation,
-                descriptor,
-            } => {
-                if operation.is_empty()
-                    || self.previous_content_sha256.is_some()
+            NativeMode::SingleType { descriptor } => {
+                if self.previous_content_sha256.is_some()
                     || !self.target.matches(&descriptor.representation()?)
                 {
-                    return Err(invalid("invalid explicit operation contract"));
+                    return Err(invalid("invalid explicit single-type agreement"));
                 }
             }
         }
@@ -688,13 +678,9 @@ impl AgreementArtifact {
                     .collect::<Result<Vec<_>, ProfileToolError>>()?;
                 NativeProfileMode::Table(NativeProfileTable::new(entries)?)
             }
-            NativeMode::ContractDefined {
-                operation,
-                descriptor,
-            } => NativeProfileMode::ContractDefined(NativeContract::new(
-                operation.clone(),
-                descriptor.representation()?,
-            )?),
+            NativeMode::SingleType { descriptor } => {
+                NativeProfileMode::SingleType(NativeSingleType::new(descriptor.representation()?))
+            }
         };
         Ok(NativeProfile::new(
             self.domain.clone(),

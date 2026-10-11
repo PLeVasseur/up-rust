@@ -289,9 +289,9 @@ pub mod frame;
 pub use frame::metadata::{NativeTypeToken, UFrameMetadata, UFrameMetadataError};
 #[cfg(feature = "native-identity")]
 pub use frame::native::{
-    NativeByteOrder, NativeContract, NativeField, NativePayloadIdentity, NativeProfile,
-    NativeProfileAgreement, NativeProfileError, NativeProfileMode, NativeProfileTable,
-    NativeRepresentation, NativeTarget, MAX_NATIVE_DESCRIPTOR_BYTES, NATIVE_DESCRIPTOR_VERSION,
+    NativeByteOrder, NativeField, NativePayloadIdentity, NativeProfile, NativeProfileAgreement,
+    NativeProfileError, NativeProfileMode, NativeProfileTable, NativeRepresentation,
+    NativeSingleType, NativeTarget, MAX_NATIVE_DESCRIPTOR_BYTES, NATIVE_DESCRIPTOR_VERSION,
     NATIVE_TOKEN_DERIVATION_VERSION,
 };
 pub use frame::{validate_frame_view_for_transport, UFrameView};

@@ -423,9 +423,7 @@ struct Value {
 fn agreement(single: bool) -> NativeProfileAgreement {
     let representation = Value::native_representation();
     let mode = if single {
-        NativeProfileMode::ContractDefined(
-            crate::NativeContract::new("wire.event", representation).unwrap(),
-        )
+        NativeProfileMode::SingleType(crate::NativeSingleType::new(representation))
     } else {
         NativeProfileMode::Table(
             NativeProfileTable::new([(PayloadEncoding::private_use(0xF111), representation)])

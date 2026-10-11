@@ -85,10 +85,8 @@ impl DeploymentManifest {
     /// # Errors
     /// Rejects unknown formats, missing or duplicated peers, invalid paths and hash drift.
     pub fn validate(&self) -> Result<(), ProfileToolError> {
-        if self.schema != "uprotocol.native-deployment.provisional"
-            || self.format_version != FORMAT_VERSION
-            || !self.provisional
-        {
+        crate::check_format_version(u64::from(self.format_version))?;
+        if self.schema != "uprotocol.native-deployment.provisional" || !self.provisional {
             return Err(invalid("unsupported deployment manifest version"));
         }
         if self.endpoints.len() < 2
@@ -298,7 +296,7 @@ impl LoadedDeployment {
                         value.state == AllocationState::Active && &value.descriptor.key == key
                     })
                     .map(|value| &value.descriptor),
-                NativeMode::ContractDefined { descriptor, .. } => {
+                NativeMode::SingleType { descriptor } => {
                     (&descriptor.key == key).then_some(descriptor)
                 }
             }

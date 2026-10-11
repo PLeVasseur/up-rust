@@ -42,7 +42,7 @@ fn assignments(value: &AgreementArtifact) -> Vec<(String, u16, AllocationState)>
                 )
             })
             .collect(),
-        NativeMode::ContractDefined { .. } => panic!("expected table"),
+        NativeMode::SingleType { .. } => panic!("expected table"),
     }
 }
 
@@ -245,12 +245,18 @@ fn old_or_unknown_versions_are_not_reinterpreted(format: u32, descriptor: u32) {
     value.format_version = format;
     value.descriptor_version = descriptor;
     value.content_sha256 = content_hash(&value).unwrap();
-    assert!(matches!(
-        value.validate(),
-        Err(ProfileToolError::Invalid(
-            "unsupported inventory/descriptor/token version"
-        ))
-    ));
+    if format != FORMAT_VERSION {
+        assert!(matches!(value.validate(),
+            Err(ProfileToolError::UnsupportedFormatVersion { found, supported })
+            if found == u64::from(format) && supported == FORMAT_VERSION));
+    } else {
+        assert!(matches!(
+            value.validate(),
+            Err(ProfileToolError::Invalid(
+                "unsupported inventory/descriptor/token version"
+            ))
+        ));
+    }
 }
 
 #[test]
@@ -424,12 +430,11 @@ fn selected_private_wire_must_be_declared_before_admission() {
 }
 
 #[test]
-fn explicit_contract_is_not_a_missing_table_fallback() {
+fn explicit_single_type_is_not_a_missing_table_fallback() {
     let inv = inventory(&["Door", "Seat"]);
-    let contract = AgreementArtifact::generate_contract(
+    let single_type = AgreementArtifact::generate_single_type(
         &inv,
         "example.vehicle".into(),
-        "door.event".into(),
         &TypeKey {
             name: "Door".into(),
             revision: 0,
@@ -437,8 +442,8 @@ fn explicit_contract_is_not_a_missing_table_fallback() {
         IdentityDeclarations::default(),
     )
     .unwrap();
-    let profile = std::sync::Arc::new(contract.profile().unwrap());
-    let peer = contract.profile().unwrap();
+    let profile = std::sync::Arc::new(single_type.profile().unwrap());
+    let peer = single_type.profile().unwrap();
     let agreement = up_rust::NativeProfileAgreement::new(profile, &peer).unwrap();
     assert_eq!(
         agreement.identity_for(&scalar("Door")).unwrap().encoding(),
@@ -449,10 +454,73 @@ fn explicit_contract_is_not_a_missing_table_fallback() {
         Err(up_rust::NativeProfileError::UnknownRepresentation)
     );
     assert!(matches!(
-        generate(&inventory(&["Seat"]), Some(&contract)),
+        generate(&inventory(&["Seat"]), Some(&single_type)),
         Err(ProfileToolError::Invalid(
             "a table successor requires a table predecessor"
         ))
+    ));
+    let encoded = serde_json::to_value(&single_type).unwrap();
+    let native = encoded.get("native").unwrap();
+    assert_eq!(
+        native.get("mode").and_then(serde_json::Value::as_str),
+        Some("single_type")
+    );
+    assert!(native.get("operation").is_none());
+    let decoded: AgreementArtifact = serde_json::from_value(encoded.clone()).unwrap();
+    decoded.validate().unwrap();
+    assert_eq!(decoded, single_type);
+    let mut old_field = encoded;
+    old_field
+        .get_mut("native")
+        .and_then(serde_json::Value::as_object_mut)
+        .unwrap()
+        .insert("operation".into(), serde_json::json!("door.event"));
+    assert!(serde_json::from_value::<AgreementArtifact>(old_field).is_err());
+}
+
+#[test_case("contract_defined"; "retired mode has no alias")]
+#[test_case("future_mode"; "unknown mode")]
+fn unsupported_native_modes_are_named_at_the_file_boundary(mode: &str) {
+    let artifact = generate(&inventory(&["Door"]), None).unwrap();
+    let mut value = serde_json::to_value(artifact).unwrap();
+    *value
+        .get_mut("native")
+        .and_then(|native| native.get_mut("mode"))
+        .unwrap() = serde_json::json!(mode);
+    let directory = tempfile::tempdir().unwrap();
+    let path = directory.path().join("unsupported.json");
+    std::fs::write(&path, serde_json::to_vec(&value).unwrap()).unwrap();
+    assert!(matches!(read_artifact::<AgreementArtifact>(&path),
+        Err(ProfileToolError::UnsupportedNativeMode(found)) if found == mode));
+}
+
+#[test_case(0; "old format")]
+#[test_case(99; "future format")]
+#[test_case(u64::MAX; "hostile version never truncates")]
+fn unsupported_format_versions_are_named_at_the_file_boundary(version: u64) {
+    let mut value = serde_json::to_value(inventory(&["Door"])).unwrap();
+    *value.get_mut("format_version").unwrap() = serde_json::json!(version);
+    let directory = tempfile::tempdir().unwrap();
+    let path = directory.path().join("unsupported.json");
+    std::fs::write(&path, serde_json::to_vec(&value).unwrap()).unwrap();
+    assert!(matches!(read_artifact::<InventoryArtifact>(&path),
+        Err(ProfileToolError::UnsupportedFormatVersion { found, supported })
+        if found == version && supported == FORMAT_VERSION));
+}
+
+#[test]
+fn bounded_version_inspection_does_not_hide_duplicate_fields() {
+    let bytes = serde_json::to_string(&inventory(&["Door"])).unwrap();
+    let duplicated = format!(
+        "{{\"format_version\":1,{}",
+        bytes.strip_prefix('{').unwrap()
+    );
+    let directory = tempfile::tempdir().unwrap();
+    let path = directory.path().join("duplicate.json");
+    std::fs::write(&path, duplicated).unwrap();
+    assert!(matches!(
+        read_artifact::<InventoryArtifact>(&path),
+        Err(ProfileToolError::Json(_))
     ));
 }
 

@@ -22,8 +22,8 @@
         {"type": "object", "additionalProperties": false, "required": ["mode", "allocation_band", "allocations"],
          "properties": {"mode": {"const": "table"}, "allocation_band": {"$ref": "#/$defs/band"},
            "allocations": {"type": "array", "maxItems": 4096, "items": {"$ref": "#/$defs/allocation"}}}},
-        {"type": "object", "additionalProperties": false, "required": ["mode", "operation", "descriptor"],
-         "properties": {"mode": {"const": "contract_defined"}, "operation": {"type": "string", "minLength": 1},
+        {"type": "object", "additionalProperties": false, "required": ["mode", "descriptor"],
+         "properties": {"mode": {"const": "single_type"},
            "descriptor": {"$ref": "urn:uprotocol:native-inventory:provisional:1#/$defs/descriptor"}}}
       ]
     }

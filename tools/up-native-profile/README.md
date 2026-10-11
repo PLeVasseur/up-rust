@@ -39,9 +39,30 @@ cargo run -p up-native-profile -- admit --profile-root deployment \
   --manifest deployment/manifest.json --route direct --local publisher --peer subscriber
 ```
 
-`contract` is an explicit separate choice for an ID 0 operation agreement. A missing
-table allocation never falls back to it. `verify-inventory --expect-target ...`
+`single-type` is an explicit separate choice for one exact ID 0 representation,
+without URI/operation binding or an operation argument. A missing table allocation
+never falls back to it. `verify-inventory --expect-target ...`
 checks an export's target; it does not relabel or regenerate a host layout.
+
+```text
+cargo run -p up-native-profile -- single-type --inventory inventory.json \
+  --domain example.vehicle --type-name example.DoorState --type-revision 1 \
+  --output single-type-1.json
+```
+
+## SDK ownership and compatibility
+
+The SDK owns and reviews this package. Package version `0.1.0` is compatible with
+SDK `0.10.0-SNAPSHOT`, expressed by its exact SDK dependency.
+It remains `publish = false` until an authorized coordinated release with up-rust
+and up-rust-macros. Release notes must name the compatible SDK; version numbers
+need not coincide. Downstream exact Git revisions remain necessary until publication.
+
+Provisional format 1 has no compatibility window: unsupported `format_version`
+and native mode values produce named errors, and deployments regenerate. The
+retired `contract_defined` mode and `contract --operation` command have no aliases.
+`single_type` uses canonical native-profile mode tag 3 without an operation label;
+Table artifact bytes and descriptor/token version 2 are unchanged.
 
 ## Policy and validation
 
@@ -60,7 +81,7 @@ package. Its guide is also rendered as `up_native_profile::guide`.
 
 ## Commands, limits and errors
 
-The six subcommands are `generate`, `contract`, `verify`, `verify-inventory`,
+The six subcommands are `generate`, `single-type`, `verify`, `verify-inventory`,
 `manifest` and `admit`. Each accepts `--help` with the purpose of every flag.
 Exit status is **0** for success, **1** for artifact/I/O failure and **2** for
 invalid command-line usage. Errors use their human-readable `Display`: I/O errors

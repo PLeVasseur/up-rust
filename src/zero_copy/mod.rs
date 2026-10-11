@@ -147,15 +147,12 @@ mod tests {
     }
 
     #[test_case::test_case(false; "private table agreement")]
-    #[test_case::test_case(true; "explicit contract defined agreement")]
-    fn receive_lease_borrows_valid_stable_payload(contract_defined: bool) {
-        let agreement = if contract_defined {
-            let contract =
-                crate::NativeContract::new("test.event", ZeroCopyValue::native_representation())
-                    .unwrap();
+    #[test_case::test_case(true; "explicit single type agreement")]
+    fn receive_lease_borrows_valid_stable_payload(single_type: bool) {
+        let agreement = if single_type {
+            let single_type = crate::NativeSingleType::new(ZeroCopyValue::native_representation());
             let profile =
-                NativeProfile::new("test", 1, NativeProfileMode::ContractDefined(contract))
-                    .unwrap();
+                NativeProfile::new("test", 1, NativeProfileMode::SingleType(single_type)).unwrap();
             self_agreement(profile)
         } else {
             profile()

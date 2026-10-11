@@ -125,7 +125,7 @@ impl PayloadDecodeLimit {
 pub enum PayloadIdentity {
     /// A fixed encoding without a native representation claim.
     Fixed(PayloadEncoding),
-    /// A native representation resolved from the agreed table or operation contract.
+    /// A native representation resolved from the agreed table or single-type selection.
     Native(NativePayloadIdentity),
 }
 

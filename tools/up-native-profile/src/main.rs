@@ -52,17 +52,14 @@ enum Command {
         #[arg(long)]
         output: PathBuf,
     },
-    /// Generate an explicitly selected operation contract using payload ID 0.
-    Contract {
+    /// Generate an explicit single-type native agreement using payload ID 0.
+    SingleType {
         /// Target-side inventory containing the selected type.
         #[arg(long)]
         inventory: PathBuf,
         /// Deployment domain shared by the participating peers.
         #[arg(long)]
         domain: String,
-        /// Explicit operation label for this provisional ID-zero agreement.
-        #[arg(long)]
-        operation: String,
         /// Exact deployment-stable name from the inventory.
         #[arg(long)]
         type_name: String,
@@ -186,10 +183,9 @@ fn run(command: Command) -> Result<(), ProfileToolError> {
             write_artifact(&output, &result)?;
             println!("{}", result.content_sha256);
         }
-        Command::Contract {
+        Command::SingleType {
             inventory,
             domain,
-            operation,
             type_name,
             type_revision,
             identities,
@@ -201,10 +197,9 @@ fn run(command: Command) -> Result<(), ProfileToolError> {
                 .map(read_artifact)
                 .transpose()?
                 .unwrap_or_default();
-            let result = AgreementArtifact::generate_contract(
+            let result = AgreementArtifact::generate_single_type(
                 &inventory,
                 domain,
-                operation,
                 &TypeKey {
                     name: type_name,
                     revision: type_revision,

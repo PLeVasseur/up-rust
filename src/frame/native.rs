@@ -14,8 +14,8 @@
 //! Scoped native representation agreement.
 //!
 //! A structural type token is independent of a payload encoding allocation.
-//! Deployments explicitly select either a private-ID table or a typed operation
-//! contract using ID zero. Neither mode has an implicit fallback to the other.
+//! Deployments explicitly select either a private-ID table or one exact native
+//! representation using ID zero. Neither mode has an implicit fallback to the other.
 //! Immutable route agreements retain their complete generation while frames are
 //! in flight. Load matching peer configurations before activating a new route;
 //! changing a table requires a new version, with old routes drained separately.
@@ -439,43 +439,26 @@ impl NativeProfileTable {
     }
 }
 
-/// Typed operation/subscription contract used explicitly with encoding ID zero.
+/// One exact native representation explicitly selected for encoding ID zero.
+///
+/// This agreement is deployment-scoped, not bound to a URI, method or subscription.
+/// It does not select different types for different operations. Prefer a private-ID
+/// table when a deployment needs more than one native representation.
 #[derive(Clone, Debug, Eq, PartialEq)]
-pub struct NativeContract {
-    operation: String,
+pub struct NativeSingleType {
     representation: NativeRepresentation,
     /// Token derived once at construction, so carried-ID lookups never hash.
     token: NativeTypeToken,
 }
 
-impl NativeContract {
-    /// Associates one exact representation with a deployment operation contract.
-    ///
-    /// # Errors
-    ///
-    /// Rejects an empty operation identity. The route owner must bind this
-    /// operation to its endpoint/filter, rather than choosing it from bytes.
-    pub fn new(
-        operation: impl Into<String>,
-        representation: NativeRepresentation,
-    ) -> Result<Self, NativeProfileError> {
-        let operation = operation.into();
-        if operation.is_empty() {
-            return Err(NativeProfileError::InvalidProfile(
-                "empty operation contract",
-            ));
-        }
+impl NativeSingleType {
+    /// Selects one already checked representation; its token is derived once.
+    pub fn new(representation: NativeRepresentation) -> Self {
         let token = representation.token();
-        Ok(Self {
-            operation,
+        Self {
             representation,
             token,
-        })
-    }
-
-    /// Returns the operation/subscription contract identity.
-    pub fn operation(&self) -> &str {
-        &self.operation
+        }
     }
 }
 
@@ -484,8 +467,8 @@ impl NativeContract {
 pub enum NativeProfileMode {
     /// Private encoding IDs identify full native representations.
     Table(NativeProfileTable),
-    /// An explicit operation contract defines the representation for ID zero.
-    ContractDefined(NativeContract),
+    /// One exact representation is explicitly selected for ID zero.
+    SingleType(NativeSingleType),
 }
 
 /// Immutable native profile generation, scoped to one deployment domain.
@@ -537,9 +520,11 @@ impl NativeProfile {
     /// Returns canonical agreement bytes, including domain, version and mode.
     ///
     /// Version 2 uses the ASCII domain below: u64-length-prefixed UTF-8 domain, u32 LE
-    /// version, mode byte (1=table, 2=contract). A table has u64 LE entry count
+    /// version, mode byte (1=table, 3=single type; retired tag 2 is not emitted).
+    /// A table has u64 LE entry count
     /// followed by ascending u16 LE IDs and target-qualified representation encodings.
-    /// A contract has its length-prefixed operation name then its representation.
+    /// SingleType contains its representation without an operation label.
+    /// Table bytes and descriptor/token-derivation version 2 are unchanged.
     pub fn canonical_bytes(&self) -> Vec<u8> {
         let mut bytes = b"uprotocol.native-profile.v2\0".to_vec();
         append_string(&mut bytes, &self.domain);
@@ -553,10 +538,9 @@ impl NativeProfile {
                     representation.append_canonical(&mut bytes);
                 }
             }
-            NativeProfileMode::ContractDefined(contract) => {
-                bytes.push(2);
-                append_string(&mut bytes, &contract.operation);
-                contract.representation.append_canonical(&mut bytes);
+            NativeProfileMode::SingleType(single_type) => {
+                bytes.push(3);
+                single_type.representation.append_canonical(&mut bytes);
             }
         }
         bytes
@@ -571,8 +555,8 @@ impl NativeProfile {
     fn token_for(&self, encoding: PayloadEncoding) -> Option<NativeTypeToken> {
         match &self.mode {
             NativeProfileMode::Table(table) => table.tokens.get(&encoding).copied(),
-            NativeProfileMode::ContractDefined(contract) => {
-                (encoding == PayloadEncoding::CONTRACT_DEFINED).then_some(contract.token)
+            NativeProfileMode::SingleType(single_type) => {
+                (encoding == PayloadEncoding::CONTRACT_DEFINED).then_some(single_type.token)
             }
         }
     }
@@ -596,7 +580,7 @@ pub struct NativeProfileAgreement {
 }
 
 impl NativeProfileAgreement {
-    /// Confirms exact domain, version, mode and full table/contract content.
+    /// Confirms exact domain, version, mode and full table/single-type content.
     ///
     /// # Errors
     ///
@@ -705,7 +689,7 @@ impl NativeProfileAgreement {
     ///
     /// # Errors
     ///
-    /// Rejects representations absent from the table or operation contract.
+    /// Rejects representations absent from the table or explicit single-type agreement.
     pub fn identity_for(
         &self,
         representation: &NativeRepresentation,
@@ -714,7 +698,7 @@ impl NativeProfileAgreement {
             NativeProfileMode::Table(table) => table
                 .entries()
                 .find_map(|(encoding, actual)| (actual == representation).then_some(encoding)),
-            NativeProfileMode::ContractDefined(contract) => (&contract.representation
+            NativeProfileMode::SingleType(single_type) => (&single_type.representation
                 == representation)
                 .then_some(PayloadEncoding::CONTRACT_DEFINED),
         }
@@ -726,7 +710,7 @@ impl NativeProfileAgreement {
         Ok(NativePayloadIdentity { encoding, token })
     }
 
-    /// Resolves a carried ID from the agreed table/contract, without inspecting
+    /// Resolves a carried ID from the agreed table/single type, without inspecting
     /// bytes or substituting a receiver's expected type.
     pub fn identity_for_encoding(
         &self,
@@ -781,7 +765,7 @@ pub enum NativeProfileError {
     /// The structural description is internally inconsistent.
     #[error("invalid native representation: {0}")]
     InvalidDescriptor(&'static str),
-    /// The profile lacks an explicit domain, version or operation contract.
+    /// The profile lacks an explicit domain or nonzero version.
     #[error("invalid native profile: {0}")]
     InvalidProfile(&'static str),
     /// A table attempts to allocate outside the deployment-private range.
@@ -793,10 +777,10 @@ pub enum NativeProfileError {
     /// Multiple entries share a short structural token.
     #[error("native type token collision: {0:?}")]
     TokenCollision(NativeTypeToken),
-    /// The full representation has no agreed allocation/contract.
+    /// The full representation has no agreed allocation or single-type selection.
     #[error("native representation is not in the agreed profile")]
     UnknownRepresentation,
-    /// The carried ID has no agreed allocation/contract.
+    /// The carried ID has no agreed allocation or single-type selection.
     #[error("payload encoding {0} is not in the agreed native profile")]
     UnknownEncoding(PayloadEncoding),
     /// A carried identity differs from the agreed representation.
@@ -943,13 +927,14 @@ mod tests {
     }
 
     #[test]
-    fn contract_defined_requires_exact_operation_and_representation() {
-        let contract = NativeContract::new("vehicle.temperature.event.v1", scalar("u32")).unwrap();
+    fn single_type_requires_exact_representation_and_peer_content() {
+        let single_type = NativeSingleType::new(scalar("u32"));
         let local =
-            NativeProfile::new("vehicle", 1, NativeProfileMode::ContractDefined(contract)).unwrap();
+            NativeProfile::new("vehicle", 1, NativeProfileMode::SingleType(single_type)).unwrap();
         let agreement = NativeProfileAgreement::new(Arc::new(local.clone()), &local).unwrap();
         let identity = agreement.identity_for(&scalar("u32")).unwrap();
         assert_eq!(identity.encoding(), PayloadEncoding::CONTRACT_DEFINED);
+        assert_eq!(identity.token(), scalar("u32").token());
         assert_eq!(
             agreement.identity_for(&scalar("i32")),
             Err(NativeProfileError::UnknownRepresentation)
@@ -967,15 +952,32 @@ mod tests {
         let peer = NativeProfile::new(
             "vehicle",
             1,
-            NativeProfileMode::ContractDefined(
-                NativeContract::new("different.operation", scalar("u32")).unwrap(),
-            ),
+            NativeProfileMode::SingleType(NativeSingleType::new(scalar("i32"))),
         )
         .unwrap();
         assert!(matches!(
             NativeProfileAgreement::new(Arc::new(local), &peer),
             Err(NativeProfileError::ProfileMismatch)
         ));
+    }
+
+    #[test]
+    fn single_type_uses_new_mode_tag_without_changing_descriptor_bytes() {
+        let representation = scalar("u32");
+        let profile = NativeProfile::new(
+            "vehicle",
+            1,
+            NativeProfileMode::SingleType(NativeSingleType::new(representation.clone())),
+        )
+        .unwrap();
+        let mut expected = b"uprotocol.native-profile.v2\0".to_vec();
+        append_string(&mut expected, "vehicle");
+        expected.extend_from_slice(&1u32.to_le_bytes());
+        expected.push(3);
+        representation.append_canonical(&mut expected);
+        assert_eq!(profile.canonical_bytes(), expected);
+        assert_eq!(NATIVE_DESCRIPTOR_VERSION, 2);
+        assert_eq!(NATIVE_TOKEN_DERIVATION_VERSION, 2);
     }
 
     #[test]

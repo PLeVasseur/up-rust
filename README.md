@@ -76,7 +76,9 @@ results or invoking application listeners.
 tokens and immutable deployment agreement. Selected-wire capabilities imply it;
 default message-only builds do not require the `sha2` runtime dependency. See the
 [native identity guide](src/guide/native_identity.md) for checked descriptors,
-private-ID tables and explicit ID-zero contracts under the provisional policy.
+private-ID tables and explicit ID-zero single-type agreements under the provisional
+policy. `SingleType(NativeSingleType)` selects one exact representation for a
+deployment; it does not associate different types with operations or URI filters.
 The lightweight `NativeTypeToken` and metadata field remain available in default
 builds for opaque carriage. Classic projection of a carried token requires the
 agreement-aware APIs; ordinary projection refuses to silently remove it.
@@ -165,6 +167,9 @@ is the ordinary path. The [wire guide](src/guide/wires.md) states the per-call
 unsafe producer/bit-validity obligations for the expert receive path.
 The [up-native-profile tool](tools/up-native-profile/README.md) owns versioned
 deployment artifacts, append-only allocation and independently provisioned admission.
+Its `single-type` command emits the explicit ID-zero selection without an operation
+label. Retired `contract_defined` artifacts fail by name and must be regenerated.
+The SDK-owned tool states compatibility in its exact SDK dependency and remains unpublished.
 
 `up-l2-zero-copy` adds stable-native Publisher, Notifier and RPC facades under
 `communication::zero_copy`; add `usubscription` for Subscriber. An endpoint uses an

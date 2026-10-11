@@ -90,8 +90,9 @@ require matching peer support. Incompatible changes after publication require a
 new profile version and coordinated peer updates; unsupported versions/bits reject.
 
 `native-identity` enables agreement over full descriptors, deployment domain,
-version and explicit table/contract mode. A table assigns private 16-bit IDs;
-the explicit operation contract uses ID 0. Plain classic projection rejects
+version and explicit table/single-type mode. A table assigns private 16-bit IDs;
+an explicit single-type agreement uses ID 0 for one exact representation across
+the deployment, without an operation label. Plain classic projection rejects
 token-bearing metadata. Agreement-aware projection checks the carried ID/token
 before removing the token, and reconstructs it from the agreed mapping on return.
 Payload bytes and requested output types never determine this identity.

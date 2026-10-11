@@ -67,6 +67,17 @@ pub enum ProfileToolError {
         /// Other type identity with the same token.
         second: TypeKey,
     },
+    /// The provisional format is unsupported and must be regenerated.
+    #[error("unsupported artifact format_version {found}; expected {supported}; regenerate deployment artifacts")]
+    UnsupportedFormatVersion {
+        /// Actual unsigned version from the artifact.
+        found: u64,
+        /// This tool's only supported provisional version.
+        supported: u32,
+    },
+    /// The mode is unsupported; retired `contract_defined` is never aliased.
+    #[error("unsupported native mode `{0}`; expected `table` or `single_type`; regenerate deployment artifacts")]
+    UnsupportedNativeMode(String),
 }
 
 pub(crate) fn io_error(path: &Path, source: std::io::Error) -> ProfileToolError {
@@ -78,6 +89,16 @@ pub(crate) fn io_error(path: &Path, source: std::io::Error) -> ProfileToolError 
 
 pub(crate) fn invalid(reason: &'static str) -> ProfileToolError {
     ProfileToolError::Invalid(reason)
+}
+
+pub(crate) fn check_format_version(found: u64) -> Result<(), ProfileToolError> {
+    if found != u64::from(FORMAT_VERSION) {
+        return Err(ProfileToolError::UnsupportedFormatVersion {
+            found,
+            supported: FORMAT_VERSION,
+        });
+    }
+    Ok(())
 }
 
 pub(crate) fn digest(bytes: &[u8]) -> String {
@@ -149,7 +170,8 @@ pub(crate) fn check_hash(value: &impl Serialize, expected: &str) -> Result<(), P
 /// Reads JSON only after enforcing a finite file/input bound.
 ///
 /// # Errors
-/// Rejects oversized files, I/O failure and malformed or trailing JSON.
+/// Rejects oversized files, I/O failure, malformed/trailing JSON and unsupported
+/// artifact versions or native modes, including retired `contract_defined`.
 pub fn read_artifact<T: DeserializeOwned>(path: &Path) -> Result<T, ProfileToolError> {
     let file = std::fs::File::open(path).map_err(|error| io_error(path, error))?;
     if file
@@ -167,6 +189,24 @@ pub fn read_artifact<T: DeserializeOwned>(path: &Path) -> Result<T, ProfileToolE
     if bytes.len() > MAX_ARTIFACT_BYTES {
         return Err(invalid("artifact grew beyond input limit"));
     }
+    let value: serde_json::Value = serde_json::from_slice(&bytes)?;
+    if let Some(version) = value
+        .get("format_version")
+        .and_then(serde_json::Value::as_u64)
+    {
+        check_format_version(version)?;
+    }
+    if let Some(mode) = value
+        .get("native")
+        .and_then(|native| native.get("mode"))
+        .and_then(serde_json::Value::as_str)
+    {
+        if !matches!(mode, "table" | "single_type") {
+            return Err(ProfileToolError::UnsupportedNativeMode(mode.to_owned()));
+        }
+    }
+    // Deserialize the original bytes so duplicate fields still fail instead of
+    // being silently collapsed by the bounded version/mode inspection above.
     Ok(serde_json::from_slice(&bytes)?)
 }
 

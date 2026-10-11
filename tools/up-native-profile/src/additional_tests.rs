@@ -301,10 +301,9 @@ fn id_zero_loaded_deployment_checks_the_linked_descriptor(mismatch: bool) {
         name: LocalDoor::TYPE_NAME.into(),
         revision: LocalDoor::REVISION,
     };
-    let artifact = AgreementArtifact::generate_contract(
+    let artifact = AgreementArtifact::generate_single_type(
         &inventory,
         "local".into(),
-        "local.event".into(),
         &key,
         IdentityDeclarations::default(),
     )

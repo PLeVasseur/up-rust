@@ -851,8 +851,8 @@ mod tests {
     mod native_agreements {
         use super::*;
         use crate::frame::native::{
-            NativeByteOrder, NativeContract, NativeProfile, NativeProfileMode, NativeProfileTable,
-            NativeRepresentation,
+            NativeByteOrder, NativeProfile, NativeProfileMode, NativeProfileTable,
+            NativeRepresentation, NativeSingleType,
         };
         use ::test_case::test_case;
         use std::sync::Arc;
@@ -868,9 +868,7 @@ mod tests {
             )
             .unwrap();
             let mode = if id == 0 {
-                NativeProfileMode::ContractDefined(
-                    NativeContract::new("test.event", representation.clone()).unwrap(),
-                )
+                NativeProfileMode::SingleType(NativeSingleType::new(representation.clone()))
             } else {
                 NativeProfileMode::Table(
                     NativeProfileTable::new([(
@@ -887,8 +885,8 @@ mod tests {
             (agreement, identity)
         }
 
-        #[test_case(0, b""; "contract defined empty payload")]
-        #[test_case(0, b"\xff\0\xfe"; "contract defined opaque bytes")]
+        #[test_case(0, b""; "single type empty payload")]
+        #[test_case(0, b"\xff\0\xfe"; "single type opaque bytes")]
         #[test_case(0xF001, b""; "private empty payload")]
         #[test_case(0xF001, b"\xff\0\xfe"; "private opaque bytes")]
         fn native_classic_projection_requires_agreement_and_preserves_bytes(
