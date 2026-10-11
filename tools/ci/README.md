@@ -70,6 +70,19 @@ Minimal zero-copy/inventory checks qualify their feature closures. Current alone
 executes the stable-payload and owned-frame diagnostic batteries, including the
 tuple initializer pass case; MSRV explicitly omits current compiler diagnostics.
 
+Default/core SDK checks select `-p up-rust` so tool/fixture dependencies cannot
+unify native features into a supposedly minimal SDK build. All-feature workspace
+checks still cover every member, including the deployment tool's library tests.
+The selected-wire UI verifies privacy and explicit unsafe calls on current Rust;
+the constructor codegen probe checks the real stable wire and executes its explicit
+agreement constructor on both compilers.
+
+`native-tool-cli` prebuilds the real exporter and tool, captures Cargo's executable
+paths/hashes, then runs the Rust `CARGO_BIN_EXE` CLI test through all six subcommands.
+Its unique proof directory retains commands, output streams and the nine generated
+artifact inputs/outputs. Direct CLI-test invocation without the prebuilt exporter
+uses an isolated Cargo target directory to avoid waiting on the parent's target lock.
+
 Logs live in `${CARGO_TARGET_DIR:-target}/ci-logs/<configuration>/`. CI uploads the
 current test group's logs as `test-results`, preserving the artifact name and
 workflow output consumed by `release.yaml`. The artifact is readable command/test

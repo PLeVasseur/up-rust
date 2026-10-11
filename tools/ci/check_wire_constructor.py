@@ -52,7 +52,9 @@ def main():
     control = output / 'standalone_control.rs'
     control.write_text(source.replace(needle, 'const REQUIRES_NATIVE_AGREEMENT: bool = false;'))
     commands = []
-    for name, path in [('negative', fixture), ('control', control)]:
+    for name, path in [('negative', fixture), ('control', control),
+                       ('stable-negative', ROOT / 'tests/ui/stable_container_requires_agreement.rs'),
+                       ('stable-control', ROOT / 'tests/ui/stable_container_with_agreement.rs')]:
         binary = output / name
         command = ['rustc', '+' + args.toolchain, '--edition=2021', '-Dwarnings', '--emit=link',
                    '--extern', 'up_rust=' + str(library), '-L', 'dependency=' + str(dependency_dir),
@@ -61,7 +63,7 @@ def main():
         (output / (name + '.stderr')).write_text(result.stderr)
         commands.append(dict(argv=command, exit_code=result.returncode, source_sha256=sha(path),
                              stderr_sha256=sha(output / (name + '.stderr'))))
-        if name == 'negative':
+        if name in {'negative', 'stable-negative'}:
             assert result.returncode != 0, 'native-required ordinary constructor unexpectedly built'
             assert 'E0080' in result.stderr and 'this wire requires an explicit native agreement constructor' in result.stderr, result.stderr
         else:
@@ -69,7 +71,8 @@ def main():
             subprocess.run([str(binary)], cwd=ROOT, check=True)
     receipt = dict(result='PASS_CONSTRUCTOR_CODEGEN_PROOF', toolchain=args.toolchain,
                    sdk_library=str(library), sdk_library_sha256=sha(library), commands=commands,
-                   positive_control_sha256=sha(output / 'control'), positive_control_executed=True)
+                    positive_control_sha256=sha(output / 'control'), positive_control_executed=True,
+                    stable_control_sha256=sha(output / 'stable-control'), stable_control_executed=True)
     (output / 'RESULT.json').write_text(json.dumps(receipt, indent=2) + '\n')
     print(json.dumps(receipt, indent=2))
     return 0

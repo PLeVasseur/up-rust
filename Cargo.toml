@@ -36,7 +36,7 @@ version = "0.10.0-SNAPSHOT"
 resolver = "2"
 
 [workspace]
-members = ["macros"]
+members = ["macros", "tools/up-native-profile", "test-fixtures/native-inventory-types", "test-fixtures/native-inventory-export"]
 
 [features]
 default = []
@@ -237,7 +237,14 @@ required-features = ["native-inventory"]
 name = "native_inventory_duplicate"
 required-features = ["native-inventory"]
 
-[lints.rust]
+[[test]]
+name = "selected_wire_payload_trybuild"
+required-features = ["zero-copy-transport", "transport-implementer-api", "selected-wire-user-api"]
+
+[lints]
+workspace = true
+
+[workspace.lints.rust]
 # Every public item is documented and every public type is inspectable.
 # Copy is a per-type semver commitment, not a crate-wide hygiene default.
 missing_docs = "deny"
@@ -245,7 +252,7 @@ missing_debug_implementations = "deny"
 # Accept code blocks excluded from tarpaulin coverage checks.
 unexpected_cfgs = { level = "warn", check-cfg = ['cfg(tarpaulin_include)'] }
 
-[lints.clippy]
+[workspace.lints.clippy]
 # see https://corrode.dev/blog/defensive-programming/#clippy-lints-for-defensive-programming
 # Every unsafe block and every public unsafe fn states its proof obligation.
 undocumented_unsafe_blocks = "deny"

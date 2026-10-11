@@ -1,0 +1,51 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "urn:uprotocol:deployment-agreement:provisional:1",
+  "title": "Provisional native and private-wire deployment agreement",
+  "type": "object", "additionalProperties": false,
+  "required": ["schema", "format_version", "provisional", "descriptor_version", "token_derivation_version", "target", "domain", "generation", "inventory_sha256", "native", "content_sha256"],
+  "properties": {
+    "schema": {"const": "uprotocol.deployment-agreement.provisional"},
+    "format_version": {"const": 1},
+    "provisional": {"const": true},
+    "descriptor_version": {"const": 2},
+    "token_derivation_version": {"const": 2},
+    "target": {"$ref": "urn:uprotocol:native-inventory:provisional:1#/$defs/target"},
+    "domain": {"type": "string", "minLength": 1},
+    "generation": {"type": "integer", "minimum": 1, "maximum": 4294967295},
+    "previous_content_sha256": {"anyOf": [{"type": "null"}, {"$ref": "urn:uprotocol:native-inventory:provisional:1#/$defs/sha256"}]},
+    "inventory_sha256": {"$ref": "urn:uprotocol:native-inventory:provisional:1#/$defs/sha256"},
+    "content_sha256": {"$ref": "urn:uprotocol:native-inventory:provisional:1#/$defs/sha256"},
+    "identities": {"$ref": "#/$defs/identities"},
+    "native": {
+      "oneOf": [
+        {"type": "object", "additionalProperties": false, "required": ["mode", "allocation_band", "allocations"],
+         "properties": {"mode": {"const": "table"}, "allocation_band": {"$ref": "#/$defs/band"},
+           "allocations": {"type": "array", "maxItems": 4096, "items": {"$ref": "#/$defs/allocation"}}}},
+        {"type": "object", "additionalProperties": false, "required": ["mode", "operation", "descriptor"],
+         "properties": {"mode": {"const": "contract_defined"}, "operation": {"type": "string", "minLength": 1},
+           "descriptor": {"$ref": "urn:uprotocol:native-inventory:provisional:1#/$defs/descriptor"}}}
+      ]
+    }
+  },
+  "$defs": {
+    "band": {"type": "object", "additionalProperties": false, "required": ["first", "last"],
+      "properties": {"first": {"type": "integer", "minimum": 61440, "maximum": 65535}, "last": {"type": "integer", "minimum": 61440, "maximum": 65535}}},
+    "allocation": {"type": "object", "additionalProperties": false, "required": ["encoding_id", "state", "descriptor"],
+      "properties": {"encoding_id": {"type": "integer", "minimum": 61440, "maximum": 65535}, "state": {"enum": ["active", "retired"]},
+        "descriptor": {"$ref": "urn:uprotocol:native-inventory:provisional:1#/$defs/descriptor"}}},
+    "identities": {"type": "object", "additionalProperties": false,
+      "properties": {
+        "private_payloads": {"type": "array", "maxItems": 4096, "items": {"$ref": "#/$defs/private_payload"}},
+        "wires": {"type": "array", "maxItems": 4096, "items": {"$ref": "#/$defs/wire"}}
+      }},
+    "private_payload": {"type": "object", "additionalProperties": false, "required": ["encoding_id", "meaning", "owner", "version"],
+      "properties": {"encoding_id": {"type": "integer", "minimum": 61440, "maximum": 65535}, "meaning": {"type": "string", "minLength": 1},
+        "owner": {"type": "string", "minLength": 1}, "version": {"type": "integer", "minimum": 1, "maximum": 4294967295}}},
+    "wire": {"type": "object", "additionalProperties": false, "required": ["namespace", "literal", "compact_id", "owner", "version", "reference"],
+      "properties": {"namespace": {"enum": ["wire", "payload_family", "metadata_layout"]}, "literal": {"type": "string", "minLength": 1, "maxLength": 65535},
+        "compact_id": {"type": "integer", "minimum": 0, "maximum": 65535}, "owner": {"type": "string", "minLength": 1},
+        "version": {"type": "integer", "minimum": 1, "maximum": 4294967295}, "reference": {"enum": ["literal", "registered_compact"]}}}
+  },
+  "$comment": "Semantic checks additionally enforce private payload reservation disjointness, exact registered SDK namespace pairs, literal matching for private wires, immutable assignments/tombstones, target equality, token collisions and actual previous-ledger hashes."
+}

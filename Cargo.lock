@@ -85,6 +85,12 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "f2032f911046de80f0a198e0901378627c33f59ea0ac00e363d481118bd70a53"
 
 [[package]]
+name = "base64"
+version = "0.22.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "72b3254f16251a8381aa12e40e3c4d2f0199f8c6508fbecb9d91f575e0fbb8c6"
+
+[[package]]
 name = "bit-set"
 version = "0.5.3"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -839,6 +845,22 @@ dependencies = [
  "proc-macro2",
  "quote",
  "syn 2.0.119",
+]
+
+[[package]]
+name = "native-inventory-fixture-export"
+version = "0.0.0"
+dependencies = [
+ "clap",
+ "native-inventory-fixture-types",
+ "up-native-profile",
+]
+
+[[package]]
+name = "native-inventory-fixture-types"
+version = "0.0.0"
+dependencies = [
+ "up-rust",
 ]
 
 [[package]]
@@ -1904,6 +1926,22 @@ name = "unicode-xid"
 version = "0.2.6"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "ebc1c04c71510c7f702b52b7c350734c9ff1295c464a03335b00bb84fc54f853"
+
+[[package]]
+name = "up-native-profile"
+version = "0.1.0"
+dependencies = [
+ "base64",
+ "clap",
+ "hex",
+ "serde",
+ "serde_json",
+ "sha2",
+ "tempfile",
+ "test-case",
+ "thiserror 2.0.20",
+ "up-rust",
+]
 
 [[package]]
 name = "up-rust"

@@ -280,3 +280,23 @@ use `field_0`, `field_1`, etc.; array setters borrow or fill elements in place.
 Checked borrowing validates representation, exact length, alignment and field bits
 before returning a reference. The explicitly unsafe lane retains its caller contract.
 Enable `native-inventory` only when concrete linked types should be exported.
+
+## Agreement-retaining selected-wire adapters
+
+Use `StableContainerWire` and construct its adapter with
+`UWireTransport::with_native_agreement` or `into_stable_container_transport(agreement)`.
+Ordinary `new` rejects native-required wires during code generation. The redundant
+`with_wire_and_metadata_codec` constructor is removed; ordinary wires use `new`.
+`into_parts` includes the optional retained agreement as its fourth element.
+
+`UHasWire::native_agreement` and `UFrameView::native_agreement` expose configured
+context; `UWireRx::try_from_encoded_with_native_agreement` retains it with received
+storage. A successor generation cannot reinterpret an old retained view. Typed TX
+helpers verify identity against the adapter's agreement. The explicit unsafe borrow
+lane may omit field-bit validation only under its documented producer proof; target,
+representation, size, alignment and metadata checks remain.
+
+The `up-native-profile` workspace tool creates and verifies deployment artifacts.
+Its I/O errors retain the failing path and source; CLI exit codes are documented in
+the tool README. Default/core SDK checks select the SDK package independently so
+tool dependencies cannot conceal missing feature requirements.

@@ -157,6 +157,23 @@ check the carried ID/token before classic projection. The reverse
 only for an ID in the agreed mapping. Plain projection refuses to discard a token;
 unknown classic IDs remain opaque without an invented native identity.
 
+## Retain the agreed generation
+
+`StableContainerWire` uses an explicitly supplied immutable agreement. Construct
+the adapter through `with_native_agreement` or the stable-container convenience
+constructor; the ordinary constructor rejects native-required wires at codegen.
+Receive views and registered listeners retain their configured generation.
+`native_agreement()` exposes it, and checked borrowing rejects a different supplied
+generation. Typed TX helpers verify identity while borrowing the configured adapter.
+Storage owners and callback quiescence remain separate lifetime contracts.
+
+The `up-native-profile` workspace tool supplies inventory, allocation and deployment
+manifest handling. The source checkout's
+`tools/up-native-profile/docs/deployment-agreement.md` describes the provisional
+files and independently provisioned peer expectations.
+Applications check required linked descriptors and private wire declarations before
+activation. SDK agreements neither discover peers nor attest a remote producer.
+
 ## Separate payload and wire identities
 
 Payload encoding IDs and selected-wire/family/layout identities are different

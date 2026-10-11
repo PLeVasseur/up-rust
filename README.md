@@ -126,6 +126,13 @@ explicit agreement, caller-built metadata and registration teardown.
 In-memory TX constructors report impossible sizes/allocation failure as
 `ResourceExhausted`; backend capacity and allocation behavior belong to bindings.
 
+`StableContainerWire` requires explicit `with_native_agreement` construction.
+Selected-wire receive views retain that immutable generation; checked borrowing
+is the ordinary path. The [wire guide](src/guide/wires.md) states the per-call
+unsafe producer/bit-validity obligations for the expert receive path.
+The [up-native-profile tool](tools/up-native-profile/README.md) owns versioned
+deployment artifacts, append-only allocation and independently provisioned admission.
+
 ## Building from Source
 
 With `zero-copy-transport`, `UUri` stores its bounded authority inline rather than

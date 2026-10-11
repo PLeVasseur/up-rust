@@ -156,3 +156,42 @@ family gets a distinct identity; unsupported versions/layouts are rejected.
 
 Enable `wire-implementer-api` for the complete public authoring surface instead
 of relying on feature unification from a larger workspace.
+
+## Explicit native agreement and expert receive
+
+`StableContainerWire` maps stable payloads to their checked native codec. Its
+adapter requires `with_native_agreement` or `into_stable_container_transport`;
+the ordinary constructor rejects it at code generation. `UWireRx` retains the
+agreement supplied at receive, including after a route is replaced.
+
+Ordinary applications use checked `borrow_payload`. The per-call unsafe method
+requires proof that every producer in the closed domain constructs the exact Rust
+representation with valid field bits and that no writer can mutate the live loan.
+A claimed wire identity is not that proof.
+
+```rust,no_run
+# #[cfg(all(feature = "zero-copy-transport", feature = "selected-wire-user-api", feature = "transport-implementer-api"))]
+# mod example {
+use up_rust::{UFrameFieldsMetadataCodec, StableContainerWire, StablePayload,
+    UEncodedLoanedRxFrame, UWireError, UWireRx};
+#[repr(C)]
+#[derive(StablePayload)]
+#[stable_payload(type_name = "example.controlled.DoorState")]
+struct DoorState { open: bool }
+
+/// # Safety
+/// Every producer must have constructed this exact DoorState through typed
+/// initialization, including valid bool bits. No untrusted producer or concurrent
+/// mutator may access this live loan.
+unsafe fn read_controlled_door<R: UEncodedLoanedRxFrame>(
+    frame: &UWireRx<R, StableContainerWire, UFrameFieldsMetadataCodec>,
+) -> Result<&DoorState, UWireError> {
+    // SAFETY: The caller proves closed-domain typed construction and recursive
+    // validity. The SDK retains identity, presence, size and alignment checks.
+    unsafe { frame.borrow_payload_unchecked::<DoorState>() }
+}
+# }
+```
+
+There is no safe attested-provenance witness. These caller obligations are
+separate from callback admission/quiescence and backing-storage ownership.

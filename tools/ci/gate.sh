@@ -44,31 +44,31 @@ if [[ "$configuration" == current && ( "$group" == all || "$group" == style ) ]]
   python3 tools/ci/run_check.py --log "$log_root/clippy-all.log" --timeout 1200 --completion command -- cargo +1.95.0 clippy --locked --workspace --all-features --all-targets -- -D warnings
 fi
 if [[ "$configuration" == current && ( "$group" == all || "$group" == style ) ]]; then
-  python3 tools/ci/run_check.py --log "$log_root/clippy-default.log" --timeout 1200 --completion command -- cargo +1.95.0 clippy --locked --workspace --no-default-features --all-targets -- -D warnings
+  python3 tools/ci/run_check.py --log "$log_root/clippy-default.log" --timeout 1200 --completion command -- cargo +1.95.0 clippy --locked -p up-rust --no-default-features --all-targets -- -D warnings
 fi
 if [[ "$configuration" == current && ( "$group" == all || "$group" == docs ) ]]; then
   python3 tools/ci/run_check.py --log "$log_root/docs-all.log" --timeout 1200 --completion command -- cargo +1.95.0 doc --locked --workspace --all-features --no-deps
 fi
 if [[ "$configuration" == current && ( "$group" == all || "$group" == docs ) ]]; then
-  python3 tools/ci/run_check.py --log "$log_root/docs-default.log" --timeout 1200 --completion command -- cargo +1.95.0 doc --locked --workspace --no-default-features --no-deps
+  python3 tools/ci/run_check.py --log "$log_root/docs-default.log" --timeout 1200 --completion command -- cargo +1.95.0 doc --locked -p up-rust --no-default-features --no-deps
 fi
 if [[ "$configuration" == current && ( "$group" == all || "$group" == tests ) ]]; then
-  python3 tools/ci/run_check.py --log "$log_root/lib-core.log" --timeout 1200 --completion libtest -- cargo +1.95.0 test --locked --workspace --features protobuf-support,communication-api --lib
+  python3 tools/ci/run_check.py --log "$log_root/lib-core.log" --timeout 1200 --completion libtest -- cargo +1.95.0 test --locked -p up-rust --features protobuf-support,communication-api --lib
 fi
 if [[ "$configuration" == current && ( "$group" == all || "$group" == tests ) ]]; then
-  python3 tools/ci/run_check.py --log "$log_root/doctests-core.log" --timeout 1200 --completion libtest -- cargo +1.95.0 test --locked --workspace --features protobuf-support,communication-api --doc
+  python3 tools/ci/run_check.py --log "$log_root/doctests-core.log" --timeout 1200 --completion libtest -- cargo +1.95.0 test --locked -p up-rust --features protobuf-support,communication-api --doc
 fi
 if [[ "$configuration" == current && ( "$group" == all || "$group" == tests ) ]]; then
   python3 tools/ci/run_check.py --log "$log_root/lib-all.log" --timeout 1200 --completion libtest -- cargo +1.95.0 test --locked --workspace --all-features --lib
 fi
 if [[ "$configuration" == current && ( "$group" == all || "$group" == tests ) ]]; then
-  python3 tools/ci/run_check.py --log "$log_root/lib-default.log" --timeout 1200 --completion libtest -- cargo +1.95.0 test --locked --workspace --no-default-features --lib
+  python3 tools/ci/run_check.py --log "$log_root/lib-default.log" --timeout 1200 --completion libtest -- cargo +1.95.0 test --locked -p up-rust --no-default-features --lib
 fi
 if [[ "$configuration" == current && ( "$group" == all || "$group" == tests ) ]]; then
   python3 tools/ci/run_check.py --log "$log_root/doctests-all.log" --timeout 1200 --completion libtest -- cargo +1.95.0 test --locked --workspace --all-features --doc
 fi
 if [[ "$configuration" == current && ( "$group" == all || "$group" == tests ) ]]; then
-  python3 tools/ci/run_check.py --log "$log_root/doctests-default.log" --timeout 1200 --completion libtest -- cargo +1.95.0 test --locked --workspace --no-default-features --doc
+  python3 tools/ci/run_check.py --log "$log_root/doctests-default.log" --timeout 1200 --completion libtest -- cargo +1.95.0 test --locked -p up-rust --no-default-features --doc
 fi
 if [[ "$configuration" == current && ( "$group" == all || "$group" == tests ) ]]; then
   python3 tools/ci/run_check.py --log "$log_root/tck-uri.log" --timeout 600 --completion cucumber -- cargo +1.95.0 test --locked --all-features --test tck_uuri
@@ -163,26 +163,32 @@ fi
 if [[ "$configuration" == current && ( "$group" == all || "$group" == tests ) ]]; then
   python3 tools/ci/run_check.py --log "$log_root/owned-frame-ui.log" --timeout 1200 --completion libtest -- cargo +1.95.0 test --locked --all-features --test owned_frame_trybuild
 fi
+if [[ "$configuration" == current && ( "$group" == all || "$group" == tests ) ]]; then
+  python3 tools/ci/run_check.py --log "$log_root/selected-wire-ui.log" --timeout 1200 --completion libtest -- cargo +1.95.0 test --locked --all-features --test selected_wire_payload_trybuild
+fi
+if [[ "$configuration" == current && ( "$group" == all || "$group" == tests ) ]]; then
+  python3 tools/ci/run_check.py --log "$log_root/native-tool-cli.log" --timeout 1200 --completion command -- python3 tools/ci/check_native_tool.py --toolchain 1.95.0
+fi
 if [[ "$configuration" == msrv && ( "$group" == all || "$group" == check ) ]]; then
   python3 tools/ci/run_check.py --log "$log_root/check-all.log" --timeout 1200 --completion command -- cargo +1.88.0 check --locked --workspace --all-features --all-targets
 fi
 if [[ "$configuration" == msrv && ( "$group" == all || "$group" == tests ) ]]; then
-  python3 tools/ci/run_check.py --log "$log_root/lib-core.log" --timeout 1200 --completion libtest -- cargo +1.88.0 test --locked --workspace --features protobuf-support,communication-api --lib
+  python3 tools/ci/run_check.py --log "$log_root/lib-core.log" --timeout 1200 --completion libtest -- cargo +1.88.0 test --locked -p up-rust --features protobuf-support,communication-api --lib
 fi
 if [[ "$configuration" == msrv && ( "$group" == all || "$group" == tests ) ]]; then
-  python3 tools/ci/run_check.py --log "$log_root/doctests-core.log" --timeout 1200 --completion libtest -- cargo +1.88.0 test --locked --workspace --features protobuf-support,communication-api --doc
+  python3 tools/ci/run_check.py --log "$log_root/doctests-core.log" --timeout 1200 --completion libtest -- cargo +1.88.0 test --locked -p up-rust --features protobuf-support,communication-api --doc
 fi
 if [[ "$configuration" == msrv && ( "$group" == all || "$group" == tests ) ]]; then
   python3 tools/ci/run_check.py --log "$log_root/lib-all.log" --timeout 1200 --completion libtest -- cargo +1.88.0 test --locked --workspace --all-features --lib
 fi
 if [[ "$configuration" == msrv && ( "$group" == all || "$group" == tests ) ]]; then
-  python3 tools/ci/run_check.py --log "$log_root/lib-default.log" --timeout 1200 --completion libtest -- cargo +1.88.0 test --locked --workspace --no-default-features --lib
+  python3 tools/ci/run_check.py --log "$log_root/lib-default.log" --timeout 1200 --completion libtest -- cargo +1.88.0 test --locked -p up-rust --no-default-features --lib
 fi
 if [[ "$configuration" == msrv && ( "$group" == all || "$group" == tests ) ]]; then
   python3 tools/ci/run_check.py --log "$log_root/doctests-all.log" --timeout 1200 --completion libtest -- cargo +1.88.0 test --locked --workspace --all-features --doc
 fi
 if [[ "$configuration" == msrv && ( "$group" == all || "$group" == tests ) ]]; then
-  python3 tools/ci/run_check.py --log "$log_root/doctests-default.log" --timeout 1200 --completion libtest -- cargo +1.88.0 test --locked --workspace --no-default-features --doc
+  python3 tools/ci/run_check.py --log "$log_root/doctests-default.log" --timeout 1200 --completion libtest -- cargo +1.88.0 test --locked -p up-rust --no-default-features --doc
 fi
 if [[ "$configuration" == msrv && ( "$group" == all || "$group" == tests ) ]]; then
   python3 tools/ci/run_check.py --log "$log_root/tck-uri.log" --timeout 600 --completion cucumber -- cargo +1.88.0 test --locked --all-features --test tck_uuri
@@ -264,4 +270,7 @@ if [[ "$configuration" == msrv && ( "$group" == all || "$group" == tests ) ]]; t
 fi
 if [[ "$configuration" == msrv && ( "$group" == all || "$group" == tests ) ]]; then
   python3 tools/ci/run_check.py --log "$log_root/native-path-zero-alloc.log" --timeout 1200 --completion libtest -- cargo +1.88.0 test --locked --all-features --test native_path_zero_alloc -- --test-threads=8
+fi
+if [[ "$configuration" == msrv && ( "$group" == all || "$group" == tests ) ]]; then
+  python3 tools/ci/run_check.py --log "$log_root/native-tool-cli.log" --timeout 1200 --completion command -- python3 tools/ci/check_native_tool.py --toolchain 1.88.0
 fi

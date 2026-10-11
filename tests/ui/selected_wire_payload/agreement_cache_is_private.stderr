@@ -1,0 +1,15 @@
+error[E0624]: method `resolve_type_identity` is private
+  --> tests/ui/selected_wire_payload/agreement_cache_is_private.rs:22:23
+   |
+22 |       let _ = agreement.resolve_type_identity::<Door, up_rust::UWireError>(|| {
+   |                         ^^^^^^^^^^^^^^^^^^^^^ private method
+   |
+  ::: src/frame/native.rs
+   |
+   | /     pub(crate) fn resolve_type_identity<T: 'static, E>(
+   | |         &self,
+   | |         represent: impl FnOnce() -> Result<NativeRepresentation, E>,
+   | |     ) -> Result<NativePayloadIdentity, E>
+   | |     where
+   | |         E: From<NativeProfileError>,
+   | |____________________________________- private method defined here

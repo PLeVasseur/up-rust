@@ -26,7 +26,7 @@ checks:
     group: style
     roles: [current]
     timeout: 1200
-    command: [cargo, "+{toolchain}", clippy, --locked, --workspace, --no-default-features, --all-targets, --, -D, warnings]
+    command: [cargo, "+{toolchain}", clippy, --locked, -p, up-rust, --no-default-features, --all-targets, --, -D, warnings]
   - name: docs-all
     group: docs
     roles: [current]
@@ -36,19 +36,19 @@ checks:
     group: docs
     roles: [current]
     timeout: 1200
-    command: [cargo, "+{toolchain}", doc, --locked, --workspace, --no-default-features, --no-deps]
+    command: [cargo, "+{toolchain}", doc, --locked, -p, up-rust, --no-default-features, --no-deps]
   - name: lib-core
     group: tests
     roles: [current, msrv]
     timeout: 1200
     completion: libtest
-    command: [cargo, "+{toolchain}", test, --locked, --workspace, --features, "protobuf-support,communication-api", --lib]
+    command: [cargo, "+{toolchain}", test, --locked, -p, up-rust, --features, "protobuf-support,communication-api", --lib]
   - name: doctests-core
     group: tests
     roles: [current, msrv]
     timeout: 1200
     completion: libtest
-    command: [cargo, "+{toolchain}", test, --locked, --workspace, --features, "protobuf-support,communication-api", --doc]
+    command: [cargo, "+{toolchain}", test, --locked, -p, up-rust, --features, "protobuf-support,communication-api", --doc]
   - name: lib-all
     group: tests
     roles: [current, msrv]
@@ -60,7 +60,7 @@ checks:
     roles: [current, msrv]
     timeout: 1200
     completion: libtest
-    command: [cargo, "+{toolchain}", test, --locked, --workspace, --no-default-features, --lib]
+    command: [cargo, "+{toolchain}", test, --locked, -p, up-rust, --no-default-features, --lib]
   - name: doctests-all
     group: tests
     roles: [current, msrv]
@@ -72,7 +72,7 @@ checks:
     roles: [current, msrv]
     timeout: 1200
     completion: libtest
-    command: [cargo, "+{toolchain}", test, --locked, --workspace, --no-default-features, --doc]
+    command: [cargo, "+{toolchain}", test, --locked, -p, up-rust, --no-default-features, --doc]
   - name: tck-uri
     group: tests
     roles: [current, msrv]
@@ -242,3 +242,14 @@ checks:
     timeout: 1200
     completion: libtest
     command: [cargo, "+{toolchain}", test, --locked, --all-features, --test, owned_frame_trybuild]
+  - name: selected-wire-ui
+    group: tests
+    roles: [current]
+    timeout: 1200
+    completion: libtest
+    command: [cargo, "+{toolchain}", test, --locked, --all-features, --test, selected_wire_payload_trybuild]
+  - name: native-tool-cli
+    group: tests
+    roles: [current, msrv]
+    timeout: 1200
+    command: [python3, tools/ci/check_native_tool.py, --toolchain, "{toolchain}"]
