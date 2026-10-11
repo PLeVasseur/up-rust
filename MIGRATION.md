@@ -195,3 +195,17 @@ hex files with SHA-256. Verification decodes the stored vectors. Setting
 `UP_GOLDEN_UPDATE` on a normal test run is an error; regeneration requires the
 explicitly ignored updater described in the fixtures README. No field-block or
 classic-attribute bytes change merely to add these integrity checks.
+
+## Owned frames and listener admission
+
+Enable `owned-frame-transport` for validated owned payload storage and its listener/
+transport contracts. Unchecked frames carry `Unvalidated` and must pass `validate`
+before they can be sent. Payload encoding and payload presence are checked together.
+`InMemoryOwnedTransport` is public only under explicit `test-util`; cfg(test)
+does not change the public export surface.
+
+Enable `transport-implementer-api` for `ListenerAdmission`, `NativeCallbackGuard`
+and `ListenerQuiesceError`; `util` implies this feature for existing utility users.
+`stop` closes callback admission, while `cancel` plus `quiesce` supports bounded
+native teardown. A timeout never revokes retained storage. Native callback guards
+must stay on their entering thread and are not `Send`.

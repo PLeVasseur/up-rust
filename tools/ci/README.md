@@ -43,6 +43,12 @@ MSRV sets that variable explicitly for version-sensitive compiler diagnostics.
 missing targets; add new targets and their applicability to the policy when their
 implementation is introduced. Empty or incomplete test summaries are failures.
 
+The `native-callback-ui` check runs on the current compiler only and verifies the
+checked-in diagnostic showing that a native callback guard is not `Send`. MSRV's
+policy explicitly omits this current diagnostic; its runtime/admission tests still
+run. Direct invocation with the skip variable verifies the actual MSRV version and
+prints a named skipped-diagnostic message rather than consuming current stderr.
+
 Logs live in `${CARGO_TARGET_DIR:-target}/ci-logs/<configuration>/`. CI uploads the
 current test group's logs as `test-results`, preserving the artifact name and
 workflow output consumed by `release.yaml`. The artifact is readable command/test

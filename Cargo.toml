@@ -37,7 +37,7 @@ resolver = "2"
 
 [features]
 default = []
-zero-copy-transport = []
+zero-copy-transport = ["selected-wire-transport-core"]
 cloudevents = ["protobuf-support"]
 communication = [
     "up-l2-notifier",
@@ -52,6 +52,9 @@ test-util = ["dep:mockall"]
 # Generated core-service protobuf APIs and conversions.
 up-core-api = ["protobuf-support"]
 selected-wire-codec-core = []
+selected-wire-transport-core = ["selected-wire-codec-core"]
+transport-implementer-api = ["selected-wire-transport-core", "tokio/sync", "tokio/rt", "tokio/time"]
+owned-frame-transport = ["selected-wire-transport-core", "up-core-api"]
 wire-implementer-api = ["selected-wire-codec-core"]
 protobuf-wire = ["up-core-api"]
 # Communication Layer traits, independently of their default implementations.
@@ -63,7 +66,7 @@ up-l2-rpc-client = ["communication-api", "up-core-api", "tokio/sync", "tokio/tim
 up-l2-rpc-server = ["communication-api", "up-core-api", "tokio/sync", "tokio/time"]
 udiscovery = ["up-l2-rpc-client"]
 usubscription = ["up-l2-rpc-client"]
-util = ["tokio/sync"]
+util = ["transport-implementer-api"]
 
 [dependencies]
 async-trait = { version = "0.1.92" }
@@ -100,6 +103,7 @@ proptest = { version = "=1.5.0" }
 serde_json = "1.0.150"
 sha2 = "0.11.0"
 test-case = { version = "3.3.1" }
+trybuild = "=1.0.121"
 tokio = { version = "1.53.1", default-features = false, features = [
     "macros",
     "rt",
@@ -193,6 +197,14 @@ required-features = ["wire-implementer-api", "up-core-api"]
 [[test]]
 name = "wire_metadata_golden"
 required-features = ["wire-implementer-api", "up-core-api"]
+
+[[test]]
+name = "owned_listener_lifetime"
+required-features = ["owned-frame-transport"]
+
+[[test]]
+name = "listener_admission_ui"
+required-features = ["transport-implementer-api"]
 
 [lints.rust]
 # Every public item is documented and every public type is inspectable.

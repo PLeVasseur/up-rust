@@ -147,6 +147,44 @@ registrations. [`ComparableListener`](crate::ComparableListener) is available
 to implementations that need hashable and comparable `Arc<dyn UListener>`
 values.
 
+### Admission and native quiescence
+
+With `transport-implementer-api`, `ListenerAdmission` supplies a gate per
+registration; `util` also enables that surface.
+`stop().await` is the classic first-poll admission barrier, not a drain: an entered
+callback may still be pending when it returns. Transport queue limits and retained
+payload storage are separate from this gate.
+
+Native bindings that promise bounded quiescence close admission with `cancel()`,
+derive their deadline from `closed_at()`, and wait with `quiesce(deadline)` unless
+`is_current_callback()` identifies the current/enclosing callback. Their README
+and configuration must name the chosen timeout interval. Timeout returns
+`ListenerQuiesceError::QuiesceTimedOut`; admission stays closed and live callbacks
+and loans retain their owners. A timeout does not permit storage reclamation.
+
+```rust,no_run
+# #[cfg(feature = "transport-implementer-api")]
+# async fn example(gate: &up_rust::ListenerAdmission) -> Result<(), up_rust::ListenerQuiesceError> {
+use std::time::Duration;
+gate.cancel();
+let deadline = gate.closed_at().expect("closed") + Duration::from_secs(5);
+if !gate.is_current_callback() {
+    gate.quiesce(deadline).await?;
+}
+# Ok(())
+# }
+```
+
+The entered counter is per registration and its guard releases on completion,
+cancellation or panic. Async dispatch scopes task-local context through the future's
+polls, including thread migration. Synchronous native workers use
+`enter_native_callback()` and keep its thread-bound guard through the callback.
+An unrelated registration or spawned task does not become re-entrant because it
+shares a thread. Arbitrary child tasks do not inherit a parent callback's context;
+applications must avoid cleanup dependency cycles across separately spawned work.
+The deadline covers the racing admission barrier and entered work. As with any
+async timeout, user callbacks must not block all executor threads.
+
 ## Implement pull delivery
 
 [`UTransport::receive`](crate::UTransport::receive) selects by the same source

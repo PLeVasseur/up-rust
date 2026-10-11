@@ -2,6 +2,7 @@
 
 * [Migrating from 0.9 to 0.10](crate::guide::migration): source-level changes and examples.
 * [URI storage and validation](crate::guide::uris): bounded wire-part parsing and feature-selected storage.
+* [Bounded receive registrations](crate::guide::registrations): setup capacity, generic workers and lifecycle.
 * [Frame metadata](crate::guide::frame_metadata): validated metadata, representations and codec errors.
 
 * [Writing an application](crate::guide::applications): overview, with

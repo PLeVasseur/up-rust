@@ -95,6 +95,19 @@ pub mod core;
 #[cfg(feature = "util")]
 pub mod local_transport;
 
+#[cfg(feature = "transport-implementer-api")]
+mod listener_admission;
+#[cfg(feature = "transport-implementer-api")]
+pub use listener_admission::{ListenerAdmission, ListenerQuiesceError, NativeCallbackGuard};
+
+#[cfg(feature = "transport-implementer-api")]
+mod registration;
+#[cfg(feature = "transport-implementer-api")]
+pub use registration::{
+    InboxPushError, OverflowPolicy, Registration, RegistrationConfig, RegistrationHandler,
+    RegistrationInbox, RegistrationSetupError, RegistrationStats, RegistrationStopError,
+};
+
 /// Audience-oriented examples and implementation guidance.
 pub mod guide {
     #![doc = include_str!("guide/README.md")]
@@ -104,6 +117,9 @@ pub mod guide {
 
     #[doc = include_str!("guide/uris.md")]
     pub mod uris {}
+
+    #[doc = include_str!("guide/registrations.md")]
+    pub mod registrations {}
 
     #[doc = include_str!("guide/frame_metadata.md")]
     pub mod frame_metadata {}
@@ -220,6 +236,17 @@ pub use payload::codec::{
     ProtobufPayload, ReadDecodePayload,
 };
 pub use payload::UWireError;
+
+#[cfg(feature = "owned-frame-transport")]
+pub use frame::envelope::{UFrameEnvelope, UFrameWireError};
+#[cfg(feature = "owned-frame-transport")]
+mod owned_frame;
+#[cfg(all(feature = "owned-frame-transport", feature = "test-util"))]
+pub use owned_frame::InMemoryOwnedTransport;
+#[cfg(feature = "owned-frame-transport")]
+pub use owned_frame::UOwnedFrame;
+#[cfg(feature = "owned-frame-transport")]
+pub use utransport::{UOwnedListener, UOwnedTransport, UOwnedTransportImpl};
 
 #[cfg(feature = "wire-implementer-api")]
 pub mod wire;

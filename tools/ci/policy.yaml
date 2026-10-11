@@ -128,6 +128,33 @@ checks:
     timeout: 600
     completion: libtest
     command: [cargo, "+{toolchain}", test, --locked, --all-features, --test, wire_metadata_golden]
+  - name: owned-listener-lifetime
+    group: tests
+    roles: [current, msrv]
+    timeout: 600
+    completion: libtest
+    command: [cargo, "+{toolchain}", test, --locked, --all-features, --test, owned_listener_lifetime]
+  - name: implementer-minimal
+    group: check
+    roles: [current, msrv]
+    timeout: 1200
+    command: [cargo, "+{toolchain}", check, --locked, --no-default-features, --features, transport-implementer-api, --all-targets]
+  - name: owned-minimal
+    group: check
+    roles: [current, msrv]
+    timeout: 1200
+    command: [cargo, "+{toolchain}", check, --locked, --no-default-features, --features, owned-frame-transport, --all-targets]
+  - name: util-minimal
+    group: check
+    roles: [current, msrv]
+    timeout: 1200
+    command: [cargo, "+{toolchain}", check, --locked, --no-default-features, --features, util, --all-targets]
+  - name: native-callback-ui
+    group: tests
+    roles: [current]
+    timeout: 1200
+    completion: libtest
+    command: [cargo, "+{toolchain}", test, --locked, --all-features, --test, listener_admission_ui]
   - name: dependency-policy
     group: dependency
     roles: [current]

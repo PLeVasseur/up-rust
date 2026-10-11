@@ -44,6 +44,18 @@ Selected-wire metadata codecs expose exact-length and caller-slice encoding,
 including a setup prefix writer. These reproduce the same canonical metadata
 bytes while keeping wire/family/layout identities independent of payload encoding.
 
+`owned-frame-transport` provides `UOwnedFrame`, `UOwnedTransport` and
+`UOwnedListener`. Frames are validated before entering the public send/receive
+surface; test transports require the explicit `test-util` feature.
+`transport-implementer-api` provides listener admission and bounded quiescence,
+also enabled by `util`. Admission closure, callback completion and retained storage
+remain separate contracts, described in the transport implementation guide.
+The same implementer feature provides a bounded `RegistrationInbox` and one
+generic async `RegistrationHandler` worker per `Registration`. Storage and tasks
+are created at setup; synchronous pushes use an explicit overflow policy. Stop
+drains earlier admissions, while Drop cancels queued work. The
+[registration guide](src/guide/registrations.md) explains lifecycle and blocking.
+
 ### Selected-wire identity
 
 Payload encoding, selected wire, payload family and metadata layout use separate
