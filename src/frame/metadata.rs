@@ -68,167 +68,6 @@ impl NativeTypeToken {
 }
 
 // ---------------------------------------------------------------------------
-// FrameMessageKind
-// ---------------------------------------------------------------------------
-
-/// Semantic kind of a native uProtocol frame.
-///
-/// This is the native-frame vocabulary. The numeric wire codes used by frame
-/// codecs and ABI profiles are defined by [`FrameMessageKind::wire_code`];
-/// the mapping to the legacy `UMessageType` is an explicit projection
-/// (see [`FrameMessageKind::from_legacy_type`]).
-#[derive(Clone, Copy, Debug, Eq, Hash, PartialEq)]
-pub enum FrameMessageKind {
-    /// An event published to a topic.
-    Publish,
-    /// A directed notification to one consumer.
-    Notification,
-    /// An RPC request.
-    Request,
-    /// An RPC response.
-    Response,
-}
-
-impl FrameMessageKind {
-    /// Gets the normative UFrame wire code of this kind.
-    ///
-    /// Codes are defined by the UFrame specification: 1 = Publish,
-    /// 2 = Request, 3 = Response, 4 = Notification, 0 and 5..=255 reserved.
-    /// They deliberately coincide with the legacy protobuf `UMessageType`
-    /// numbering so that projections are value-preserving, but the UFrame
-    /// registry is normative from here on.
-    #[must_use]
-    pub fn wire_code(self) -> u8 {
-        match self {
-            Self::Publish => 1,
-            Self::Request => 2,
-            Self::Response => 3,
-            Self::Notification => 4,
-        }
-    }
-
-    /// Gets the kind denoted by a UFrame wire code.
-    #[must_use]
-    pub fn from_wire_code(code: u8) -> Option<Self> {
-        match code {
-            1 => Some(Self::Publish),
-            2 => Some(Self::Request),
-            3 => Some(Self::Response),
-            4 => Some(Self::Notification),
-            _ => None,
-        }
-    }
-
-    /// Projects a legacy `UMessageType` to a frame message kind.
-    #[must_use]
-    pub fn from_legacy_type(value: UMessageType) -> Self {
-        match value {
-            UMessageType::Publish => Self::Publish,
-            UMessageType::Notification => Self::Notification,
-            UMessageType::Request => Self::Request,
-            UMessageType::Response => Self::Response,
-        }
-    }
-
-    /// Projects this frame message kind to the legacy `UMessageType`.
-    #[must_use]
-    pub fn to_legacy_type(self) -> UMessageType {
-        match self {
-            Self::Publish => UMessageType::Publish,
-            Self::Notification => UMessageType::Notification,
-            Self::Request => UMessageType::Request,
-            Self::Response => UMessageType::Response,
-        }
-    }
-}
-
-// ---------------------------------------------------------------------------
-// FramePriority
-// ---------------------------------------------------------------------------
-
-/// Semantic QoS class of a native uProtocol frame.
-#[derive(Clone, Copy, Debug, Eq, Hash, Ord, PartialEq, PartialOrd)]
-pub enum FramePriority {
-    /// Best effort (lowest priority).
-    CS0,
-    /// Priority class CS1.
-    CS1,
-    /// Priority class CS2.
-    CS2,
-    /// Priority class CS3.
-    CS3,
-    /// Priority class CS4 (streaming).
-    CS4,
-    /// Priority class CS5 (RPC default).
-    CS5,
-    /// Priority class CS6 (highest; network control).
-    CS6,
-}
-
-impl FramePriority {
-    /// Gets the normative UFrame wire code of this priority.
-    ///
-    /// Codes are defined by the UFrame specification: 1..=7 = CS0..=CS6,
-    /// 0 = absent (wire/ABI representations only), 8..=255 reserved. They
-    /// deliberately coincide with the legacy protobuf `UPriority` numbering.
-    #[must_use]
-    pub fn wire_code(self) -> u8 {
-        match self {
-            Self::CS0 => 1,
-            Self::CS1 => 2,
-            Self::CS2 => 3,
-            Self::CS3 => 4,
-            Self::CS4 => 5,
-            Self::CS5 => 6,
-            Self::CS6 => 7,
-        }
-    }
-
-    /// Gets the priority denoted by a UFrame wire code.
-    #[must_use]
-    pub fn from_wire_code(code: u8) -> Option<Self> {
-        match code {
-            1 => Some(Self::CS0),
-            2 => Some(Self::CS1),
-            3 => Some(Self::CS2),
-            4 => Some(Self::CS3),
-            5 => Some(Self::CS4),
-            6 => Some(Self::CS5),
-            7 => Some(Self::CS6),
-            _ => None,
-        }
-    }
-
-    /// Projects a legacy `UPriority` to a frame priority.
-    #[must_use]
-    pub fn from_legacy_priority(value: UPriority) -> Self {
-        match value {
-            UPriority::CS0 => Self::CS0,
-            UPriority::CS1 => Self::CS1,
-            UPriority::CS2 => Self::CS2,
-            UPriority::CS3 => Self::CS3,
-            UPriority::CS4 => Self::CS4,
-            UPriority::CS5 => Self::CS5,
-            UPriority::CS6 => Self::CS6,
-        }
-    }
-
-    /// Projects this frame priority to the legacy `UPriority`.
-    #[must_use]
-    pub fn to_legacy_priority(self) -> UPriority {
-        match self {
-            Self::CS0 => UPriority::CS0,
-            Self::CS1 => UPriority::CS1,
-            Self::CS2 => UPriority::CS2,
-            Self::CS3 => UPriority::CS3,
-            Self::CS4 => UPriority::CS4,
-            Self::CS5 => UPriority::CS5,
-            Self::CS6 => UPriority::CS6,
-        }
-    }
-}
-
-// ---------------------------------------------------------------------------
 // PayloadEncoding: the unified registry-id identity, defined in
 // `crate::uattributes::payloadencoding` and re-exported at the crate root.
 // ---------------------------------------------------------------------------
@@ -302,12 +141,12 @@ impl From<UMessageError> for UFrameMetadataError {
 /// `payload_encoding` is present" is enforced at those boundaries.
 #[derive(Clone, Debug, PartialEq)]
 pub struct UFrameMetadata {
-    kind: FrameMessageKind,
+    kind: UMessageType,
     id: UUID,
     source: UUri,
     sink: Option<UUri>,
     reqid: Option<UUID>,
-    priority: Option<FramePriority>,
+    priority: Option<UPriority>,
     ttl: Option<Duration>,
     comm_status: Option<UCode>,
     permission_level: Option<u32>,
@@ -321,25 +160,24 @@ impl UFrameMetadata {
     /// Starts building metadata for a publish frame on `topic`.
     #[must_use]
     pub fn publish(topic: UUri) -> UFrameMetadataBuilder {
-        UFrameMetadataBuilder::new(FrameMessageKind::Publish, topic, None)
+        UFrameMetadataBuilder::new(UMessageType::Publish, topic, None)
     }
 
     /// Starts building metadata for a notification frame from `origin` to
     /// `destination`.
     #[must_use]
     pub fn notification(origin: UUri, destination: UUri) -> UFrameMetadataBuilder {
-        UFrameMetadataBuilder::new(FrameMessageKind::Notification, origin, Some(destination))
+        UFrameMetadataBuilder::new(UMessageType::Notification, origin, Some(destination))
     }
 
     /// Starts building metadata for an RPC request frame invoking `method`,
     /// with responses directed to `reply_to`.
     ///
-    /// Request frames require a TTL and default to [`FramePriority::CS4`].
+    /// Request frames require a TTL and default to [`UPriority::CS4`].
     #[must_use]
     pub fn request(method: UUri, reply_to: UUri, ttl: Duration) -> UFrameMetadataBuilder {
-        let mut builder =
-            UFrameMetadataBuilder::new(FrameMessageKind::Request, reply_to, Some(method));
-        builder.priority = Some(FramePriority::CS4);
+        let mut builder = UFrameMetadataBuilder::new(UMessageType::Request, reply_to, Some(method));
+        builder.priority = Some(UPriority::CS4);
         builder.ttl = Some(ttl);
         builder
     }
@@ -347,7 +185,7 @@ impl UFrameMetadata {
     /// Starts building metadata for an RPC response frame from `invoked_method`
     /// to `reply_to`, correlated to the request with id `request_id`.
     ///
-    /// Response frames default to [`FramePriority::CS4`].
+    /// Response frames default to [`UPriority::CS4`].
     #[must_use]
     pub fn response(
         invoked_method: UUri,
@@ -355,8 +193,8 @@ impl UFrameMetadata {
         request_id: UUID,
     ) -> UFrameMetadataBuilder {
         let mut builder =
-            UFrameMetadataBuilder::new(FrameMessageKind::Response, invoked_method, Some(reply_to));
-        builder.priority = Some(FramePriority::CS4);
+            UFrameMetadataBuilder::new(UMessageType::Response, invoked_method, Some(reply_to));
+        builder.priority = Some(UPriority::CS4);
         builder.reqid = Some(request_id);
         builder
     }
@@ -367,12 +205,12 @@ impl UFrameMetadata {
     /// [`UFrameMetadata::validate`] on the result.
     #[allow(clippy::too_many_arguments)]
     pub(crate) fn from_decoded_parts(
-        kind: FrameMessageKind,
+        kind: UMessageType,
         id: UUID,
         source: UUri,
         sink: Option<UUri>,
         reqid: Option<UUID>,
-        priority: Option<FramePriority>,
+        priority: Option<UPriority>,
         ttl: Option<Duration>,
         comm_status: Option<UCode>,
         permission_level: Option<u32>,
@@ -400,7 +238,7 @@ impl UFrameMetadata {
 
     /// Returns the frame message kind.
     #[must_use]
-    pub fn kind(&self) -> FrameMessageKind {
+    pub fn kind(&self) -> UMessageType {
         self.kind
     }
 
@@ -430,7 +268,7 @@ impl UFrameMetadata {
 
     /// Returns the frame priority, if present.
     #[must_use]
-    pub fn priority(&self) -> Option<FramePriority> {
+    pub fn priority(&self) -> Option<UPriority> {
         self.priority
     }
 
@@ -545,14 +383,14 @@ impl UFrameMetadata {
     ///
     /// Returns an error if the metadata violates the rules for its kind, for
     /// example a publish frame carrying a sink, a request frame without TTL,
-    /// or an RPC frame with a priority below [`FramePriority::CS4`].
+    /// or an RPC frame with a priority below [`UPriority::CS4`].
     pub fn validate(&self) -> Result<(), UFrameMetadataError> {
         let mut errors: Vec<String> = Vec::new();
         if self.native_type_token.is_some() && self.payload_encoding.is_none() {
             errors.push("native type token requires payload encoding".to_string());
         }
         match self.kind {
-            FrameMessageKind::Publish => {
+            UMessageType::Publish => {
                 if let Err(e) = self.source.verify_event() {
                     errors.push(format!("invalid source URI: {e}"));
                 }
@@ -560,7 +398,7 @@ impl UFrameMetadata {
                     errors.push("publish frame must not have a sink".to_string());
                 }
             }
-            FrameMessageKind::Notification => {
+            UMessageType::Notification => {
                 if let Err(e) = self.source.verify_event() {
                     errors.push(format!("invalid source URI: {e}"));
                 }
@@ -575,7 +413,7 @@ impl UFrameMetadata {
                     None => errors.push("notification frame must have a sink".to_string()),
                 }
             }
-            FrameMessageKind::Request => {
+            UMessageType::Request => {
                 if let Err(e) = self.source.verify_rpc_response() {
                     errors.push(format!("invalid source URI: {e}"));
                 }
@@ -599,7 +437,7 @@ impl UFrameMetadata {
                     errors.push(e);
                 }
             }
-            FrameMessageKind::Response => {
+            UMessageType::Response => {
                 if let Err(e) = self.source.verify_rpc_method() {
                     errors.push(format!("invalid source URI: {e}"));
                 }
@@ -628,7 +466,7 @@ impl UFrameMetadata {
 
     fn validate_rpc_priority(&self) -> Result<(), String> {
         match self.priority {
-            Some(priority) if priority >= FramePriority::CS4 => Ok(()),
+            Some(priority) if priority >= UPriority::CS4 => Ok(()),
             Some(_) => Err("RPC frame must have a priority of at least CS4".to_string()),
             None => Err("RPC frame must have a priority".to_string()),
         }
@@ -649,11 +487,11 @@ impl UFrameMetadata {
             });
         }
         Ok(UAttributes {
-            type_: self.kind.to_legacy_type(),
+            type_: self.kind,
             id: self.id.clone(),
             source: self.source.clone(),
             sink: self.sink.clone(),
-            priority: self.priority.map(FramePriority::to_legacy_priority),
+            priority: self.priority,
             commstatus: self.comm_status,
             ttl: self
                 .ttl
@@ -731,12 +569,12 @@ fn project_ttl_to_legacy_millis(ttl: Duration) -> Result<u32, UFrameMetadataErro
 /// of going through `UMessageBuilder` and projecting.
 #[derive(Clone, Debug)]
 pub struct UFrameMetadataBuilder {
-    kind: FrameMessageKind,
+    kind: UMessageType,
     id: Option<UUID>,
     source: UUri,
     sink: Option<UUri>,
     reqid: Option<UUID>,
-    priority: Option<FramePriority>,
+    priority: Option<UPriority>,
     ttl: Option<Duration>,
     comm_status: Option<UCode>,
     permission_level: Option<u32>,
@@ -747,7 +585,7 @@ pub struct UFrameMetadataBuilder {
 }
 
 impl UFrameMetadataBuilder {
-    fn new(kind: FrameMessageKind, source: UUri, sink: Option<UUri>) -> Self {
+    fn new(kind: UMessageType, source: UUri, sink: Option<UUri>) -> Self {
         Self {
             kind,
             id: None,
@@ -774,7 +612,7 @@ impl UFrameMetadataBuilder {
 
     /// Sets the frame priority.
     #[must_use]
-    pub fn with_priority(mut self, priority: FramePriority) -> Self {
+    pub fn with_priority(mut self, priority: UPriority) -> Self {
         self.priority = Some(priority);
         self
     }
@@ -895,12 +733,12 @@ pub(crate) fn try_project_attributes_to_frame_metadata(
     attributes: &UAttributes,
 ) -> Result<UFrameMetadata, UFrameMetadataError> {
     let metadata = UFrameMetadata {
-        kind: FrameMessageKind::from_legacy_type(attributes.type_),
+        kind: attributes.type_,
         id: attributes.id.clone(),
         source: attributes.source.clone(),
         sink: attributes.sink.clone(),
         reqid: attributes.reqid.clone(),
-        priority: attributes.priority.map(FramePriority::from_legacy_priority),
+        priority: attributes.priority,
         ttl: attributes
             .ttl
             .filter(|ttl| *ttl != 0)
@@ -1214,16 +1052,16 @@ mod tests {
     #[test]
     fn builder_constructs_native_publish_metadata() {
         let metadata = UFrameMetadata::publish(topic())
-            .with_priority(FramePriority::CS1)
+            .with_priority(UPriority::CS1)
             .with_traceparent("00-4bf92f3577b34da6a3ce929d0e0e4736-00f067aa0ba902b7-01")
             .with_payload_encoding(PayloadEncoding::JSON)
             .build()
             .expect("metadata");
 
-        assert_eq!(metadata.kind(), FrameMessageKind::Publish);
+        assert_eq!(metadata.kind(), UMessageType::Publish);
         assert_eq!(metadata.source(), &topic());
         assert!(metadata.sink().is_none());
-        assert_eq!(metadata.priority(), Some(FramePriority::CS1));
+        assert_eq!(metadata.priority(), Some(UPriority::CS1));
         assert_eq!(metadata.payload_encoding(), Some(&PayloadEncoding::JSON));
     }
 
@@ -1237,7 +1075,7 @@ mod tests {
 
         // rpc priority below CS4
         let error = UFrameMetadata::request(method(), reply_to(), Duration::from_secs(5))
-            .with_priority(FramePriority::CS2)
+            .with_priority(UPriority::CS2)
             .build()
             .unwrap_err();
         assert!(matches!(error, UFrameMetadataError::InvalidMetadata(_)));
@@ -1248,14 +1086,14 @@ mod tests {
         let request = UFrameMetadata::request(method(), reply_to(), Duration::from_secs(5))
             .build()
             .expect("request metadata");
-        assert_eq!(request.kind(), FrameMessageKind::Request);
-        assert_eq!(request.priority(), Some(FramePriority::CS4));
+        assert_eq!(request.kind(), UMessageType::Request);
+        assert_eq!(request.priority(), Some(UPriority::CS4));
         assert_eq!(request.ttl(), Some(Duration::from_secs(5)));
 
         let response = UFrameMetadata::response(method(), reply_to(), request.id().clone())
             .build()
             .expect("response metadata");
-        assert_eq!(response.kind(), FrameMessageKind::Response);
+        assert_eq!(response.kind(), UMessageType::Response);
         assert_eq!(response.reqid(), Some(request.id()));
     }
 
@@ -1268,7 +1106,7 @@ mod tests {
         assert!(message.payload().is_none());
         assert!(metadata.payload_encoding().is_none());
         assert_eq!(metadata.id(), message.id());
-        assert_eq!(metadata.kind(), FrameMessageKind::Publish);
+        assert_eq!(metadata.kind(), UMessageType::Publish);
     }
 
     #[test]

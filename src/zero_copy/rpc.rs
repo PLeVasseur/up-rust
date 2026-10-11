@@ -24,11 +24,11 @@ use std::{
 };
 
 use crate::{
-    AdmissionError, Frame, FrameMessageKind, FramePriority, FrameSink, HeaderLimits,
-    InitializedStablePayload, MessageFields, NativeProfileAgreement, PayloadInit,
-    PreparedTransportCore, Registration, RegistrationConfig, RouteConfig, RouteDefinition,
-    RxAdmission, RxLease, SendError, SetupError, StablePayload, StablePayloadInit, TokenBuffer,
-    TokenError, TxRoute, TxTemplate, UCode, UUri, ZeroCopyHandler, UUID,
+    AdmissionError, Frame, FrameSink, HeaderLimits, InitializedStablePayload, MessageFields,
+    NativeProfileAgreement, PayloadInit, PreparedTransportCore, Registration, RegistrationConfig,
+    RouteConfig, RouteDefinition, RxAdmission, RxLease, SendError, SetupError, StablePayload,
+    StablePayloadInit, TokenBuffer, TokenError, TxRoute, TxTemplate, UCode, UMessageType,
+    UPriority, UUri, ZeroCopyHandler, UUID,
 };
 
 fn lock<T>(value: &Mutex<T>) -> MutexGuard<'_, T> {
@@ -47,7 +47,7 @@ pub struct RpcClientConfig {
     /// Reserved token capacity; zero disables token transmission.
     pub max_token_len: usize,
     /// Request priority, at least CS4.
-    pub priority: FramePriority,
+    pub priority: UPriority,
 }
 
 /// Fixed-size outcome of one prepared RPC call.
@@ -135,7 +135,7 @@ impl<P: StablePayload, F: Frame> FrameSink<F> for PendingTable<P, F> {
         }
         let header = match self.admission.parse(frame.encoded_metadata()) {
             Ok(header)
-                if header.kind == FrameMessageKind::Response
+                if header.kind == UMessageType::Response
                     && header.source == self.source
                     && header.sink.as_ref() == Some(&self.sink) =>
             {
@@ -287,7 +287,7 @@ where
         let request = TxTemplate::<Req>::new(agreement)?.route(
             Arc::clone(&core),
             RouteDefinition {
-                kind: FrameMessageKind::Request,
+                kind: UMessageType::Request,
                 source: reply_to.clone(),
                 sink: Some(method.clone()),
                 priority: Some(config.priority),
@@ -495,10 +495,10 @@ impl<C: PreparedTransportCore, Resp: StablePayloadInit> ServerState<C, Resp> {
         let route = self.template.route(
             Arc::clone(&self.core),
             RouteDefinition {
-                kind: FrameMessageKind::Response,
+                kind: UMessageType::Response,
                 source: self.method.clone(),
                 sink: Some(reply_to.clone()),
-                priority: Some(FramePriority::CS4),
+                priority: Some(UPriority::CS4),
                 ttl: None,
                 permission_level: None,
             },
@@ -527,7 +527,7 @@ where
     async fn on_receive(&mut self, request: RxLease<Req, C::Rx>) {
         let header = match request.header() {
             Ok(header)
-                if header.kind == FrameMessageKind::Request
+                if header.kind == UMessageType::Request
                     && header.sink.as_ref() == Some(&self.state.method) =>
             {
                 header
@@ -759,7 +759,7 @@ mod tests {
             max_in_flight: 2,
             ttl: Duration::from_secs(1),
             max_token_len: 2048,
-            priority: FramePriority::CS4,
+            priority: UPriority::CS4,
         }
     }
     fn server_config(clients: usize) -> RpcServerConfig {
@@ -858,10 +858,10 @@ mod tests {
             .route(
                 Arc::clone(&core),
                 RouteDefinition {
-                    kind: FrameMessageKind::Response,
+                    kind: UMessageType::Response,
                     source: method.clone(),
                     sink: Some(reply_to.clone()),
-                    priority: Some(FramePriority::CS4),
+                    priority: Some(UPriority::CS4),
                     ttl: None,
                     permission_level: None,
                 },
@@ -966,10 +966,10 @@ mod tests {
             .route(
                 Arc::clone(&core),
                 RouteDefinition {
-                    kind: FrameMessageKind::Request,
+                    kind: UMessageType::Request,
                     source: reply_to,
                     sink: Some(other_method),
-                    priority: Some(FramePriority::CS4),
+                    priority: Some(UPriority::CS4),
                     ttl: Some(Duration::from_secs(1)),
                     permission_level: None,
                 },

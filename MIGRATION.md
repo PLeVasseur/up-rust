@@ -399,3 +399,18 @@ variant, and `UFrameMetadata::try_project_to_attributes` and its agreement-aware
 variant, retain their checked contracts. Fractional/overflowing TTLs still fail
 rather than truncate. Wire bytes, canonical metadata layouts and the fixed ABI
 are unchanged.
+
+## Shared semantic enums
+
+Replace `FrameMessageKind` with `UMessageType` and `FramePriority` with `UPriority`.
+Frame metadata, prepared headers, routes and communication roles now use those
+unconditional, protobuf-independent core enums. The four
+`from_legacy_type`/`to_legacy_type` and
+`from_legacy_priority`/`to_legacy_priority` converters are removed: no conversion
+is necessary between identical semantic types.
+
+Use `wire_code()`/`from_wire_code()` for encoded kinds and priorities. Never use
+Rust discriminants as wire codes. Absent priority remains `None`, encoded as zero;
+reserved kind/priority codes remain invalid. Encoded values, classic API signatures,
+metadata goldens and the fixed ABI remain unchanged. Core types gain `Eq`/`Hash`;
+priority also gains `Ord`, preserving its existing CS0-through-CS6 ordering.

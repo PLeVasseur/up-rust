@@ -126,8 +126,10 @@ the metadata declares a payload encoding. A present empty payload
 
 ### 3.1 Frame message kind wire codes
 
-These SDK representation codes have explicit projections to the protobuf
-`UMessageType` values. They do not establish an independent normative registry.
+The shared semantic `UMessageType` uses explicit `wire_code`/`from_wire_code`
+mappings for these SDK representation codes; Rust enum discriminants are not
+serialization codes. Protobuf numbering is unchanged. These codes do not establish
+an independent normative registry.
 
 | code | kind         | legacy `UMessageType` projection |
 |------|--------------|----------------------------------|
@@ -139,6 +141,9 @@ These SDK representation codes have explicit projections to the protobuf
 | 5..=255 | reserved  | —                                |
 
 ### 3.2 Frame priority wire codes
+
+The shared semantic `UPriority` uses the same explicit encoded-code methods.
+Zero represents absent priority, not a QoS class; reserved values are rejected.
 
 | code | priority | legacy `UPriority` projection |
 |------|----------|-------------------------------|

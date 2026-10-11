@@ -27,9 +27,9 @@ use up_rust::bench_fixtures::payload_contract::{
 };
 use up_rust::communication::zero_copy::{Endpoint, ReceiveConfig, SendConfig};
 use up_rust::{
-    FrameMessageKind, HeaderLimits, LocalUriProvider, MessageFields, OverflowPolicy, PoolCore,
-    PoolCoreConfig, PoolFrame, RegistrationConfig, RouteConfig, RxLease, StableContainerWire,
-    StaticUriProvider, UFrameFieldsMetadataCodec, UUri, UWireTransport, ZeroCopyHandler,
+    HeaderLimits, LocalUriProvider, MessageFields, OverflowPolicy, PoolCore, PoolCoreConfig,
+    PoolFrame, RegistrationConfig, RouteConfig, RxLease, StableContainerWire, StaticUriProvider,
+    UFrameFieldsMetadataCodec, UMessageType, UUri, UWireTransport, ZeroCopyHandler,
 };
 
 const TRACEPARENT: &str = "00-0af7651916cd43dd8448eb211c80319c-b7ad6b7169203331-01";
@@ -96,7 +96,7 @@ struct Observer {
     sequence: u32,
     source: UUri,
     sink: Option<UUri>,
-    kind: FrameMessageKind,
+    kind: UMessageType,
     traceparent: Option<&'static str>,
 }
 
@@ -210,7 +210,7 @@ fn publish(
                         sequence: 0,
                         source: topic.clone(),
                         sink: None,
-                        kind: FrameMessageKind::Publish,
+                        kind: UMessageType::Publish,
                         traceparent,
                     },
                     config(block),
@@ -274,7 +274,7 @@ fn notify(runtime: &Runtime) {
                 sequence: 0,
                 source,
                 sink: Some(destination),
-                kind: FrameMessageKind::Notification,
+                kind: UMessageType::Notification,
                 traceparent: None,
             },
             config(false),

@@ -52,9 +52,9 @@ Profile properties:
 
 * Magic is `"UFA1"`; the profile is 928 bytes and carries
   one `u32` payload-encoding registry identifier.
-* Kind/priority/presence vocabularies are defined by this provisional native
-  profile with explicit projection tables to the protobuf enums; the value
-  coincidence is a documented choice, not an inheritance.
+* Kinds/priorities use the shared `UMessageType`/`UPriority` semantic enums and
+  explicit encoded-code mappings; Rust discriminants are never serialized.
+  This provisional profile's existing numeric codes and presence bits are unchanged.
 * Payload identifiers are structurally 16-bit values stored in a four-byte
   slot. Presence is independent of zero, including a present empty payload
   with contract-defined encoding. Allocation/decoder policy is not inferred

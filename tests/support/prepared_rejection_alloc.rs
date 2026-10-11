@@ -23,13 +23,13 @@ use std::{
 use tokio::{runtime::Runtime, sync::Semaphore};
 use up_rust::bench_fixtures::payload_contract::{init_streamer_4k, StreamChunk4kV1};
 use up_rust::{
-    AdmissionError, Frame, FrameMessageKind, FramePriority, HeaderLimits, InboxPushError,
-    LoanError, LoanedPayload, MessageFields, NativeProfile, NativeProfileAgreement,
-    NativeProfileMode, NativeProfileTable, OverflowPolicy, PayloadEncoding, PayloadLoanProvenance,
-    PoolCore, PoolCoreConfig, PoolFrame, PreparedTransportCore, RegistrationConfig,
-    RegistrationInbox, RouteConfig, RouteDefinition, RxAdmission, RxLease, SendError,
-    StableContainerWire, StablePayload, TxTemplate, UFrameFieldsMetadataCodec, UFrameMetadata,
-    UUri, UUriPartsError, UWireMetadataCodec, UWireMetadataContext, ZeroCopyHandler, UUID,
+    AdmissionError, Frame, HeaderLimits, InboxPushError, LoanError, LoanedPayload, MessageFields,
+    NativeProfile, NativeProfileAgreement, NativeProfileMode, NativeProfileTable, OverflowPolicy,
+    PayloadEncoding, PayloadLoanProvenance, PoolCore, PoolCoreConfig, PoolFrame,
+    PreparedTransportCore, RegistrationConfig, RegistrationInbox, RouteConfig, RouteDefinition,
+    RxAdmission, RxLease, SendError, StableContainerWire, StablePayload, TxTemplate,
+    UFrameFieldsMetadataCodec, UFrameMetadata, UMessageType, UPriority, UUri, UUriPartsError,
+    UWireMetadataCodec, UWireMetadataContext, ZeroCopyHandler, UUID,
 };
 
 fn core(slots: usize) -> Arc<PoolCore> {
@@ -195,10 +195,10 @@ fn send_fields() {
         .route(
             Arc::clone(&core),
             RouteDefinition {
-                kind: FrameMessageKind::Response,
+                kind: UMessageType::Response,
                 source: UUri::try_from_wire_parts("server", 1, 1, 1).unwrap(),
                 sink: Some(UUri::try_from_wire_parts("client", 2, 1, 0).unwrap()),
-                priority: Some(FramePriority::CS4),
+                priority: Some(UPriority::CS4),
                 ttl: None,
                 permission_level: None,
             },
@@ -259,7 +259,7 @@ fn send_fields() {
                 response.send(
                     MessageFields {
                         reqid: Some(&reqid),
-                        priority: Some(FramePriority::CS1),
+                        priority: Some(UPriority::CS1),
                         ..MessageFields::default()
                     },
                     |_| panic!("invalid priority")

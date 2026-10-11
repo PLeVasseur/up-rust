@@ -33,13 +33,13 @@ use up_rust::{
     PreparedTxStorage, RouteLimits, TxFrameLayout, WrittenHeader,
 };
 use up_rust::{
-    FrameMessageKind, LoanedPayload, LocalUriProvider, MessageFields, NativeProfile,
-    NativeProfileAgreement, NativeProfileMode, NativeProfileTable, PayloadEncoding,
-    PayloadLoanProvenance, PoolCore, PoolCoreConfig, RouteConfig, RouteDefinition,
-    StableContainerPayload, StableContainerWire, StablePayload, StablePayloadInit,
-    StaticUriProvider, UEncodedLoanedRxFrame, UEncodedRxFrame, UFrameFieldsMetadataCodec,
-    UFrameMetadata, UMessageBuilder, UTxBuffer, UUninitTxBuffer, UUri, UVecTxBuffer,
-    UVecUninitTxBuffer, UWireMetadataCodec, UWireMetadataContext, UWireRx, UWireTransport,
+    LoanedPayload, LocalUriProvider, MessageFields, NativeProfile, NativeProfileAgreement,
+    NativeProfileMode, NativeProfileTable, PayloadEncoding, PayloadLoanProvenance, PoolCore,
+    PoolCoreConfig, RouteConfig, RouteDefinition, StableContainerPayload, StableContainerWire,
+    StablePayload, StablePayloadInit, StaticUriProvider, UEncodedLoanedRxFrame, UEncodedRxFrame,
+    UFrameFieldsMetadataCodec, UFrameMetadata, UMessageBuilder, UMessageType, UTxBuffer,
+    UUninitTxBuffer, UUri, UVecTxBuffer, UVecUninitTxBuffer, UWireMetadataCodec,
+    UWireMetadataContext, UWireRx, UWireTransport,
 };
 
 struct CountingAllocator;
@@ -287,7 +287,7 @@ fn main() {
         profile.clone(),
     );
     let definition = RouteDefinition {
-        kind: FrameMessageKind::Publish,
+        kind: UMessageType::Publish,
         source: UUri::try_from_parts("payload-contract-bench", 0x4210, 1, 0x9000).unwrap(),
         sink: None,
         priority: None,
@@ -513,7 +513,7 @@ fn main() {
                 .route(
                     Arc::clone(&core),
                     RouteDefinition {
-                        kind: FrameMessageKind::Publish,
+                        kind: UMessageType::Publish,
                         source: provider.get_resource_uri(0x9000),
                         sink: None,
                         priority: None,

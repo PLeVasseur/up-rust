@@ -18,12 +18,12 @@
 //! the [stable-native guide](crate::guide::zero_copy) for capacities and lifetimes.
 
 use crate::{
-    Frame, FrameMessageKind, FramePriority, HeaderLimits, InitializedStablePayload,
-    LocalUriProvider, MessageFields, NativeProfileAgreement, PayloadInit, PreparedTransportCore,
-    Registration, RegistrationConfig, RegistrationStopError, RequestHandler, RouteConfig,
-    RouteDefinition, RpcClientConfig, RpcServerConfig, RxLease, SendError, SetupError,
-    StableContainerWire, StablePayload, StablePayloadInit, TxRoute, UFrameFieldsMetadataCodec,
-    UHasWire, UUri, UWireTransport, ZeroCopyHandler,
+    Frame, HeaderLimits, InitializedStablePayload, LocalUriProvider, MessageFields,
+    NativeProfileAgreement, PayloadInit, PreparedTransportCore, Registration, RegistrationConfig,
+    RegistrationStopError, RequestHandler, RouteConfig, RouteDefinition, RpcClientConfig,
+    RpcServerConfig, RxLease, SendError, SetupError, StableContainerWire, StablePayload,
+    StablePayloadInit, TxRoute, UFrameFieldsMetadataCodec, UHasWire, UMessageType, UPriority, UUri,
+    UWireTransport, ZeroCopyHandler,
 };
 use std::{
     sync::{
@@ -46,7 +46,7 @@ pub type StableRx<C, P> = RxLease<P, <C as PreparedTransportCore>::Rx>;
 #[derive(Clone, Copy, Debug, Default)]
 pub struct SendConfig {
     /// Default message priority.
-    pub priority: Option<FramePriority>,
+    pub priority: Option<UPriority>,
     /// Fixed time to live; absent means no expiration.
     pub ttl: Option<Duration>,
     /// Maximum token length and traceparent policy.
@@ -145,7 +145,7 @@ impl<C: PreparedTransportCore, U: LocalUriProvider + ?Sized> Endpoint<C, U> {
             &self.transport,
             topic,
             Some(self.uri_provider.get_source_uri()),
-            FrameMessageKind::Notification,
+            UMessageType::Notification,
             handler,
             config,
         )
@@ -228,7 +228,7 @@ impl<C: PreparedTransportCore, P: StablePayloadInit> Publisher<C, P> {
     ) -> Result<Self, SetupError> {
         let route = transport.prepare_stable_route(
             RouteDefinition {
-                kind: FrameMessageKind::Publish,
+                kind: UMessageType::Publish,
                 source: topic,
                 sink: None,
                 priority: config.priority,
@@ -245,7 +245,7 @@ impl<C: PreparedTransportCore, P: StablePayloadInit> Publisher<C, P> {
     /// # Errors
     /// Rejects a route whose kind is not Publish.
     pub fn from_route(route: TxRoute<C, P>) -> Result<Self, SetupError> {
-        if route.definition().kind != FrameMessageKind::Publish {
+        if route.definition().kind != UMessageType::Publish {
             return Err(SetupError::InvalidRoute("publisher route kind"));
         }
         Ok(Self { route })
@@ -286,7 +286,7 @@ impl<C: PreparedTransportCore, P: StablePayloadInit> Notifier<C, P> {
     ) -> Result<Self, SetupError> {
         let route = transport.prepare_stable_route(
             RouteDefinition {
-                kind: FrameMessageKind::Notification,
+                kind: UMessageType::Notification,
                 source: topic,
                 sink: Some(destination),
                 priority: config.priority,
@@ -324,7 +324,7 @@ pub struct ReceiverStats {
 struct FilteredHandler<H> {
     source: UUri,
     sink: Option<UUri>,
-    kind: FrameMessageKind,
+    kind: UMessageType,
     stats: Arc<ReceiverStats>,
     handler: H,
 }
@@ -382,7 +382,7 @@ impl<C: PreparedTransportCore> Receiver<C> {
         transport: &StableTransport<C>,
         source: UUri,
         sink: Option<UUri>,
-        kind: FrameMessageKind,
+        kind: UMessageType,
         handler: H,
         config: ReceiveConfig,
     ) -> Result<Self, SetupError> {
@@ -535,7 +535,7 @@ impl<C: PreparedTransportCore> Subscriber<C> {
             &self.transport,
             topic.clone(),
             None,
-            FrameMessageKind::Publish,
+            UMessageType::Publish,
             handler,
             config,
         )
@@ -731,7 +731,7 @@ mod tests {
         assert_eq!(header.id, id);
         assert_eq!(header.source, topic);
         assert_eq!(header.sink, Some(destination));
-        assert_eq!(header.kind, FrameMessageKind::Notification);
+        assert_eq!(header.kind, UMessageType::Notification);
     }
 
     #[cfg(feature = "usubscription")]
@@ -772,7 +772,7 @@ mod tests {
         assert_eq!(header.source, topic);
         assert_eq!(header.sink, None);
         assert_eq!(header.ttl, Some(Duration::from_millis(250)));
-        assert_eq!(header.kind, FrameMessageKind::Publish);
+        assert_eq!(header.kind, UMessageType::Publish);
         frames.clear();
         assert_eq!(core.free_slots(), 8);
     }
@@ -853,7 +853,7 @@ mod tests {
                     max_in_flight: 1,
                     ttl: Duration::from_secs(1),
                     max_token_len: 2048,
-                    priority: FramePriority::CS4,
+                    priority: UPriority::CS4,
                 },
             )
             .await

@@ -16,11 +16,11 @@ use std::{marker::PhantomData, mem, sync::Arc, time::Duration};
 
 use crate::wire::{UFrameFieldsMetadataCodec, UWireMetadataContext};
 use crate::{
-    header_len, write_header_uninit, FrameMessageKind, FramePriority, InitializedStablePayload,
-    InitializedTx, NativePayloadIdentity, NativeProfileAgreement, PreparedTransportCore,
-    PreparedTxStorage, RouteLimits, SendError, SetupError, StableContainerPayload,
-    StableContainerWire, StablePayload, StablePayloadInit, TxFrameLayout, TxHeaderParts, UCode,
-    UFrameHeaderError, UUri, HEADER_TRACEPARENT_CAPACITY, UUID,
+    header_len, write_header_uninit, InitializedStablePayload, InitializedTx,
+    NativePayloadIdentity, NativeProfileAgreement, PreparedTransportCore, PreparedTxStorage,
+    RouteLimits, SendError, SetupError, StableContainerPayload, StableContainerWire, StablePayload,
+    StablePayloadInit, TxFrameLayout, TxHeaderParts, UCode, UFrameHeaderError, UMessageType,
+    UPriority, UUri, HEADER_TRACEPARENT_CAPACITY, UUID,
 };
 
 /// Per-route capacities reserved before any frame is sent.
@@ -45,13 +45,13 @@ impl Default for RouteConfig {
 #[derive(Clone, Debug)]
 pub struct RouteDefinition {
     /// Message kind.
-    pub kind: FrameMessageKind,
+    pub kind: UMessageType,
     /// Source address.
     pub source: UUri,
     /// Optional sink address.
     pub sink: Option<UUri>,
     /// Default priority; RPC routes require CS4 or higher.
-    pub priority: Option<FramePriority>,
+    pub priority: Option<UPriority>,
     /// Fixed time to live; requests require a positive value.
     pub ttl: Option<Duration>,
     /// Fixed permission level.
@@ -66,7 +66,7 @@ pub struct MessageFields<'a> {
     /// Correlated request ID, required for responses.
     pub reqid: Option<&'a UUID>,
     /// Optional priority override.
-    pub priority: Option<FramePriority>,
+    pub priority: Option<UPriority>,
     /// Optional communication status.
     pub comm_status: Option<UCode>,
     /// Optional token borrowed only for the synchronous send.
@@ -161,7 +161,7 @@ impl<P: StablePayload> TxTemplate<P> {
             kind: definition.kind,
             priority: definition.priority,
             id: &id,
-            reqid: (definition.kind == FrameMessageKind::Response).then_some(&id),
+            reqid: (definition.kind == UMessageType::Response).then_some(&id),
             ttl: definition.ttl,
             comm_status: None,
             permission_level: definition.permission_level,
@@ -182,7 +182,7 @@ impl<P: StablePayload> TxTemplate<P> {
                 .ok_or(SetupError::InvalidConfig("header capacity overflow"))?;
             Ok(())
         };
-        if definition.kind != FrameMessageKind::Response {
+        if definition.kind != UMessageType::Response {
             add(16)?;
         }
         add(4)?; // A per-message communication status may be present.
@@ -268,12 +268,12 @@ impl<C: PreparedTransportCore, P: StablePayloadInit> TxRoute<C, P> {
         let priority = fields.priority.or(self.definition.priority);
         if matches!(
             self.definition.kind,
-            FrameMessageKind::Request | FrameMessageKind::Response
-        ) && priority.is_none_or(|value| value < FramePriority::CS4)
+            UMessageType::Request | UMessageType::Response
+        ) && priority.is_none_or(|value| value < UPriority::CS4)
         {
             return Err(SendError::PriorityRejected);
         }
-        if self.definition.kind == FrameMessageKind::Response && fields.reqid.is_none() {
+        if self.definition.kind == UMessageType::Response && fields.reqid.is_none() {
             return Err(SendError::MissingRequestId);
         }
         Ok(TxHeaderParts {
@@ -470,7 +470,7 @@ impl<C: PreparedTransportCore, P: StablePayloadInit> TxRoute<C, P> {
         mut fields: MessageFields<'_>,
         status: UCode,
     ) -> Result<(), SendError> {
-        if self.definition.kind != FrameMessageKind::Response {
+        if self.definition.kind != UMessageType::Response {
             return Err(SendError::Header(UFrameHeaderError::Invalid(
                 "status-only route kind",
             )));
@@ -565,25 +565,25 @@ mod tests {
         )
     }
 
-    fn definition(kind: FrameMessageKind) -> RouteDefinition {
+    fn definition(kind: UMessageType) -> RouteDefinition {
         let source = UUri::try_from_wire_parts(
             "sender",
             1,
             1,
-            if kind == FrameMessageKind::Response {
+            if kind == UMessageType::Response {
                 1
             } else {
                 0x8001
             },
         )
         .unwrap();
-        let sink = (kind == FrameMessageKind::Response)
+        let sink = (kind == UMessageType::Response)
             .then(|| UUri::try_from_wire_parts("client", 2, 1, 0).unwrap());
         RouteDefinition {
             kind,
             source,
             sink,
-            priority: (kind == FrameMessageKind::Response).then_some(FramePriority::CS4),
+            priority: (kind == UMessageType::Response).then_some(UPriority::CS4),
             ttl: None,
             permission_level: None,
         }
@@ -593,7 +593,7 @@ mod tests {
     async fn prepared_send_preserves_typed_value_and_default_token_capacity() {
         let core = core();
         let agreement = agreement();
-        let definition = definition(FrameMessageKind::Publish);
+        let definition = definition(UMessageType::Publish);
         let receiver =
             RxAdmission::<Value>::new(agreement.clone(), HeaderLimits::default()).unwrap();
         let template = TxTemplate::<Value>::new(agreement).unwrap();
@@ -642,7 +642,7 @@ mod tests {
         let route = template
             .route(
                 Arc::clone(&core),
-                definition(FrameMessageKind::Publish),
+                definition(UMessageType::Publish),
                 RouteConfig {
                     max_token_len: 4,
                     allow_traceparent: false,
@@ -673,7 +673,7 @@ mod tests {
         let response = template
             .route(
                 Arc::clone(&core),
-                definition(FrameMessageKind::Response),
+                definition(UMessageType::Response),
                 RouteConfig::default(),
             )
             .unwrap();
@@ -690,7 +690,7 @@ mod tests {
         use crate::wire::{UWireMetadataCodec, UWireMetadataContext};
         let core = core();
         let agreement = agreement();
-        let definition = definition(FrameMessageKind::Publish);
+        let definition = definition(UMessageType::Publish);
         let admission =
             RxAdmission::<Value>::new(agreement.clone(), HeaderLimits::default()).unwrap();
         let route = TxTemplate::<Value>::new(agreement)
@@ -704,7 +704,7 @@ mod tests {
         let metadata = crate::UFrameMetadata::publish(definition.source.clone())
             .with_native_payload_identity(admission.identity())
             .with_token("borrowed credential")
-            .with_priority(FramePriority::CS2)
+            .with_priority(UPriority::CS2)
             .build()
             .unwrap();
         let expected = UFrameFieldsMetadataCodec
@@ -763,7 +763,7 @@ mod tests {
     #[tokio::test]
     async fn status_only_response_preserves_correlation_and_absence() {
         let core = core();
-        let definition = definition(FrameMessageKind::Response);
+        let definition = definition(UMessageType::Response);
         let template = TxTemplate::<Value>::new(agreement()).unwrap();
         let route = template
             .route(

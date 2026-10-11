@@ -35,11 +35,11 @@ use std::{
 };
 use up_rust::bench_fixtures::payload_contract::{init_streamer_4k, StreamChunk4kV1};
 use up_rust::{
-    Frame, FrameMessageKind, HeaderLimits, InboxPushError, MessageFields, NativeProfile,
-    NativeProfileAgreement, NativeProfileMode, NativeProfileTable, OverflowPolicy, PayloadEncoding,
-    PoolCore, PoolCoreConfig, PoolFrame, PreparedTransportCore, RegistrationConfig,
-    RegistrationInbox, RouteConfig, RouteDefinition, RxLease, StableContainerWire, StablePayload,
-    StablePayloadInit, TokenBuffer, TokenError, UFrameFieldsMetadataCodec, UFrameMetadata, UUri,
+    Frame, HeaderLimits, InboxPushError, MessageFields, NativeProfile, NativeProfileAgreement,
+    NativeProfileMode, NativeProfileTable, OverflowPolicy, PayloadEncoding, PoolCore,
+    PoolCoreConfig, PoolFrame, PreparedTransportCore, RegistrationConfig, RegistrationInbox,
+    RouteConfig, RouteDefinition, RxLease, StableContainerWire, StablePayload, StablePayloadInit,
+    TokenBuffer, TokenError, UFrameFieldsMetadataCodec, UFrameMetadata, UMessageType, UUri,
     UWireTransport, ZeroCopyHandler, UUID,
 };
 
@@ -161,7 +161,7 @@ fn agreement() -> NativeProfileAgreement {
 
 fn definition() -> RouteDefinition {
     RouteDefinition {
-        kind: FrameMessageKind::Publish,
+        kind: UMessageType::Publish,
         source: UUri::try_from_wire_parts("allocation", 1, 1, 0x8001).unwrap(),
         sink: None,
         priority: None,

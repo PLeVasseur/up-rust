@@ -58,7 +58,7 @@ use crate::NativeTypeToken;
 use core::mem::{align_of, offset_of, size_of};
 use std::time::Duration;
 
-use crate::{FrameMessageKind, FramePriority, PayloadEncoding, UCode, UFrameMetadata, UUri, UUID};
+use crate::{PayloadEncoding, UCode, UFrameMetadata, UMessageType, UPriority, UUri, UUID};
 
 // Reuse the canonical presence-bit vocabulary of the field block so the two
 // representations stay aligned.
@@ -245,9 +245,9 @@ pub struct UFrameMetadataAbiV1 {
     /// Bitwise OR of `FIELD_*` presence bits (shared with the canonical
     /// field block).
     pub presence: u32,
-    /// [`FrameMessageKind`] wire code (1..=4).
+    /// [`UMessageType`] wire code (1..=4).
     pub kind: u8,
-    /// [`FramePriority`] wire code; 0 = absent.
+    /// [`UPriority`] wire code; 0 = absent.
     pub priority: u8,
     /// `UCode` value; valid iff [`FIELD_COMM_STATUS`].
     pub comm_status: u8,
@@ -423,7 +423,7 @@ impl UFrameMetadataAbiV1 {
         let (msb, lsb) = metadata.id().as_u64_pair();
         let mut abi = Self {
             kind: metadata.kind().wire_code(),
-            priority: metadata.priority().map_or(0, FramePriority::wire_code),
+            priority: metadata.priority().map_or(0, UPriority::wire_code),
             id: UUuidAbi { msb, lsb },
             source: uuri_to_abi(metadata.source(), "source.authority_name")?,
             ..Self::default()
@@ -530,12 +530,12 @@ impl UFrameMetadataAbiV1 {
             ));
         }
 
-        let kind = FrameMessageKind::from_wire_code(self.kind).ok_or_else(|| {
+        let kind = UMessageType::from_wire_code(self.kind).ok_or_else(|| {
             UFrameAbiError::InvalidProfile(format!("unknown kind code {}", self.kind))
         })?;
         let priority = match self.priority {
             0 => None,
-            code => Some(FramePriority::from_wire_code(code).ok_or_else(|| {
+            code => Some(UPriority::from_wire_code(code).ok_or_else(|| {
                 UFrameAbiError::InvalidProfile(format!("unknown priority code {code}"))
             })?),
         };
@@ -788,7 +788,7 @@ mod tests {
     #[test]
     fn fully_populated_request_round_trips_through_profile() {
         let metadata = UFrameMetadata::request(method(), reply_to(), Duration::from_millis(250))
-            .with_priority(FramePriority::CS6)
+            .with_priority(UPriority::CS6)
             .with_comm_status(UCode::Ok)
             .with_permission_level(3)
             .with_token("token-value")

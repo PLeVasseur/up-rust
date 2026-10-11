@@ -18,7 +18,7 @@ const CE_TYPE_NOTIFICATION: &str = "up-not.v1";
 const CE_TYPE_REQUEST: &str = "up-req.v1";
 const CE_TYPE_RESPONSE: &str = "up-res.v1";
 
-#[derive(Debug, Clone, Copy, PartialEq)]
+#[derive(Debug, Clone, Copy, Eq, Hash, PartialEq)]
 #[repr(C)]
 /// The four uProtocol message kinds.
 pub enum UMessageType {
@@ -33,6 +33,32 @@ pub enum UMessageType {
 }
 
 impl UMessageType {
+    /// Returns the explicit selected-wire/ABI code for this message kind.
+    ///
+    /// These codes are independent of Rust enum discriminants: publish = 1,
+    /// request = 2, response = 3 and notification = 4.
+    #[must_use]
+    pub const fn wire_code(self) -> u8 {
+        match self {
+            Self::Publish => 1,
+            Self::Request => 2,
+            Self::Response => 3,
+            Self::Notification => 4,
+        }
+    }
+
+    /// Decodes an explicit selected-wire/ABI code; reserved codes return `None`.
+    #[must_use]
+    pub const fn from_wire_code(code: u8) -> Option<Self> {
+        match code {
+            1 => Some(Self::Publish),
+            2 => Some(Self::Request),
+            3 => Some(Self::Response),
+            4 => Some(Self::Notification),
+            _ => None,
+        }
+    }
+
     /// Gets this message type's CloudEvent type name.
     ///
     /// # Returns
@@ -113,6 +139,20 @@ mod tests {
     const TYPE_NOTIFICATION: &str = "up-not.v1";
     const TYPE_REQUEST: &str = "up-req.v1";
     const TYPE_RESPONSE: &str = "up-res.v1";
+
+    #[test_case(1, Some(UMessageType::Publish); "publish code")]
+    #[test_case(2, Some(UMessageType::Request); "request code")]
+    #[test_case(3, Some(UMessageType::Response); "response code")]
+    #[test_case(4, Some(UMessageType::Notification); "notification code")]
+    #[test_case(0, None; "absent kind is invalid")]
+    #[test_case(5, None; "first reserved kind")]
+    #[test_case(255, None; "last reserved kind")]
+    fn wire_kind_codes(code: u8, expected: Option<UMessageType>) {
+        assert_eq!(UMessageType::from_wire_code(code), expected);
+        if let Some(kind) = expected {
+            assert_eq!(kind.wire_code(), code);
+        }
+    }
 
     #[test_case(UMessageType::Publish, TYPE_PUBLISH; "for PUBLISH")]
     #[test_case(UMessageType::Notification, TYPE_NOTIFICATION; "for NOTIFICATION")]

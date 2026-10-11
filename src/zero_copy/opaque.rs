@@ -474,9 +474,9 @@ mod tests {
     use super::*;
     use crate::wire::{UProtocolNativeWire, WireIdentity};
     use crate::{
-        FrameMessageKind, NativeTypeToken, OverflowPolicy, PayloadEncoding, PayloadLoanProvenance,
-        PoolCore, PoolCoreConfig, PreparedTransportCore, RegistrationConfig, RegistrationInbox,
-        RouteConfig, RouteLimits, SendError, TxHeaderParts, UFrameHeaderError, UUri, UUID,
+        NativeTypeToken, OverflowPolicy, PayloadEncoding, PayloadLoanProvenance, PoolCore,
+        PoolCoreConfig, PreparedTransportCore, RegistrationConfig, RegistrationInbox, RouteConfig,
+        RouteLimits, SendError, TxHeaderParts, UFrameHeaderError, UMessageType, UUri, UUID,
     };
 
     struct Raw {
@@ -504,9 +504,9 @@ mod tests {
         let sink = sink.then(|| UUri::try_from_wire_parts("receiver", 2, 1, 0).unwrap());
         let fields = TxHeaderParts {
             kind: if sink.is_some() {
-                FrameMessageKind::Notification
+                UMessageType::Notification
             } else {
-                FrameMessageKind::Publish
+                UMessageType::Publish
             },
             priority: None,
             id: &id,

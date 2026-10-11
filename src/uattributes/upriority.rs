@@ -13,7 +13,7 @@
 
 use crate::uattributes::UAttributesError;
 
-#[derive(Debug, Clone, Copy, PartialEq, PartialOrd)]
+#[derive(Debug, Clone, Copy, Eq, Hash, Ord, PartialEq, PartialOrd)]
 #[repr(C)]
 /// QoS priority classes defined by the uProtocol specification.
 pub enum UPriority {
@@ -34,6 +34,38 @@ pub enum UPriority {
 }
 
 impl UPriority {
+    /// Returns the explicit selected-wire/ABI code, CS0 = 1 through CS6 = 7.
+    ///
+    /// Rust enum discriminants are not serialization codes. Zero denotes an
+    /// absent priority in the encoded representation, rather than a QoS class.
+    #[must_use]
+    pub const fn wire_code(self) -> u8 {
+        match self {
+            Self::CS0 => 1,
+            Self::CS1 => 2,
+            Self::CS2 => 3,
+            Self::CS3 => 4,
+            Self::CS4 => 5,
+            Self::CS5 => 6,
+            Self::CS6 => 7,
+        }
+    }
+
+    /// Decodes an explicit selected-wire/ABI code; absent/reserved codes return `None`.
+    #[must_use]
+    pub const fn from_wire_code(code: u8) -> Option<Self> {
+        match code {
+            1 => Some(Self::CS0),
+            2 => Some(Self::CS1),
+            3 => Some(Self::CS2),
+            4 => Some(Self::CS3),
+            5 => Some(Self::CS4),
+            6 => Some(Self::CS5),
+            7 => Some(Self::CS6),
+            _ => None,
+        }
+    }
+
     /// Encodes this priority to a string.
     ///
     /// The encoding of priorities to strings is defined in the
@@ -134,6 +166,29 @@ mod core_types_support {
                     value as i32
                 ))),
             }
+        }
+    }
+}
+
+#[cfg(test)]
+mod wire_code_tests {
+    use super::UPriority;
+    use test_case::test_case;
+
+    #[test_case(1, Some(UPriority::CS0); "CS0")]
+    #[test_case(2, Some(UPriority::CS1); "CS1")]
+    #[test_case(3, Some(UPriority::CS2); "CS2")]
+    #[test_case(4, Some(UPriority::CS3); "CS3")]
+    #[test_case(5, Some(UPriority::CS4); "CS4")]
+    #[test_case(6, Some(UPriority::CS5); "CS5")]
+    #[test_case(7, Some(UPriority::CS6); "CS6")]
+    #[test_case(0, None; "absent priority")]
+    #[test_case(8, None; "first reserved priority")]
+    #[test_case(255, None; "last reserved priority")]
+    fn wire_priority_codes(code: u8, expected: Option<UPriority>) {
+        assert_eq!(UPriority::from_wire_code(code), expected);
+        if let Some(priority) = expected {
+            assert_eq!(priority.wire_code(), code);
         }
     }
 }

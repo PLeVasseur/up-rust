@@ -24,7 +24,7 @@
 //!
 //! ```text
 //! u8   block_version        = 1
-//! u8   kind                 FrameMessageKind wire code (1..=4)
+//! u8   kind                 UMessageType wire code (1..=4)
 //! u8   priority             0 = absent, 1..=7 = CS0..=CS6
 //! u8   reserved             = 0
 //! u32  presence             FIELD_* bitmask; unknown bits MUST be zero
@@ -65,8 +65,8 @@ use crate::NativeTypeToken;
 use std::time::Duration;
 
 use crate::{
-    FrameMessageKind, FramePriority, PayloadEncoding, UCode, UFrameMetadata, UFrameMetadataError,
-    UUri, UUID,
+    PayloadEncoding, UCode, UFrameMetadata, UFrameMetadataError, UMessageType, UPriority, UUri,
+    UUID,
 };
 
 /// Version of the field block emitted by [`encode_frame_metadata_fields`].
@@ -278,7 +278,7 @@ fn write_frame_metadata_fields(
 
     out.push(FRAME_FIELDS_VERSION)?;
     out.push(metadata.kind().wire_code())?;
-    out.push(metadata.priority().map_or(0, FramePriority::wire_code))?;
+    out.push(metadata.priority().map_or(0, UPriority::wire_code))?;
     out.push(0)?; // reserved
     out.extend_from_slice(&presence.to_le_bytes())?;
     write_uuid(out, metadata.id())?;
@@ -403,12 +403,12 @@ pub fn decode_frame_metadata_fields(src: &[u8]) -> Result<UFrameMetadata, UFrame
             "unsupported field block version {version}"
         )));
     }
-    let kind = FrameMessageKind::from_wire_code(reader.u8()?).ok_or_else(|| {
+    let kind = UMessageType::from_wire_code(reader.u8()?).ok_or_else(|| {
         UFrameFieldsError::Malformed("unknown frame message kind code".to_string())
     })?;
     let priority = match reader.u8()? {
         0 => None,
-        code => Some(FramePriority::from_wire_code(code).ok_or_else(|| {
+        code => Some(UPriority::from_wire_code(code).ok_or_else(|| {
             UFrameFieldsError::Malformed(format!("unknown frame priority code {code}"))
         })?),
     };
@@ -640,9 +640,9 @@ pub(crate) fn received_authority_fields(authority: &str, in_sink: bool) -> Vec<u
     // Independently construct received bytes: a validating UUri/metadata encoder
     // must not prevent invalid authorities from ever reaching a decoder test.
     let kind = if in_sink {
-        FrameMessageKind::Notification
+        UMessageType::Notification
     } else {
-        FrameMessageKind::Publish
+        UMessageType::Publish
     };
     let mut bytes = vec![FRAME_FIELDS_VERSION, kind.wire_code(), 0, 0];
     bytes.extend_from_slice(&(if in_sink { FIELD_SINK } else { 0 }).to_le_bytes());
@@ -677,15 +677,15 @@ mod tests {
         UUri::try_from_parts("cloud", 0x10ab, 0x02, 0x0000).expect("reply-to")
     }
 
-    #[test_case::test_case(FrameMessageKind::Request, reply_to(), Some(method()), None; "request without TTL")]
-    #[test_case::test_case(FrameMessageKind::Response, method(), Some(reply_to()), None; "response without request id")]
-    #[test_case::test_case(FrameMessageKind::Response, method(), None, Some(UUID::build()); "response without sink")]
-    #[test_case::test_case(FrameMessageKind::Publish, topic(), Some(reply_to()), None; "publish with sink")]
-    #[test_case::test_case(FrameMessageKind::Publish, UUri::any(), None, None; "wildcard source")]
-    #[test_case::test_case(FrameMessageKind::Notification, topic(), None, None; "notification without sink")]
-    #[test_case::test_case(FrameMessageKind::Notification, topic(), Some(method()), None; "notification with method sink")]
+    #[test_case::test_case(UMessageType::Request, reply_to(), Some(method()), None; "request without TTL")]
+    #[test_case::test_case(UMessageType::Response, method(), Some(reply_to()), None; "response without request id")]
+    #[test_case::test_case(UMessageType::Response, method(), None, Some(UUID::build()); "response without sink")]
+    #[test_case::test_case(UMessageType::Publish, topic(), Some(reply_to()), None; "publish with sink")]
+    #[test_case::test_case(UMessageType::Publish, UUri::any(), None, None; "wildcard source")]
+    #[test_case::test_case(UMessageType::Notification, topic(), None, None; "notification without sink")]
+    #[test_case::test_case(UMessageType::Notification, topic(), Some(method()), None; "notification with method sink")]
     fn decoded_structure_is_rejected(
-        kind: FrameMessageKind,
+        kind: UMessageType,
         source: UUri,
         sink: Option<UUri>,
         reqid: Option<UUID>,
@@ -702,7 +702,7 @@ mod tests {
         let mut bytes = vec![
             FRAME_FIELDS_VERSION,
             kind.wire_code(),
-            FramePriority::CS4.wire_code(),
+            UPriority::CS4.wire_code(),
             0,
         ];
         bytes.extend_from_slice(&presence.to_le_bytes());
@@ -838,7 +838,7 @@ mod tests {
     #[test]
     fn fully_populated_request_metadata_round_trips() {
         let metadata = UFrameMetadata::request(method(), reply_to(), Duration::from_millis(250))
-            .with_priority(FramePriority::CS5)
+            .with_priority(UPriority::CS5)
             .with_comm_status(UCode::Ok)
             .with_permission_level(4)
             .with_token("bearer-token")
@@ -858,7 +858,7 @@ mod tests {
     fn caller_owned_encoding_matches_standalone_field_block(token: Option<u32>) {
         let mut metadata =
             UFrameMetadata::request(method(), reply_to(), Duration::from_millis(250))
-                .with_priority(FramePriority::CS5)
+                .with_priority(UPriority::CS5)
                 .with_token("bearer-token")
                 .with_payload_encoding(PayloadEncoding::PROTOBUF)
                 .build()

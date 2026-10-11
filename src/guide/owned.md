@@ -48,6 +48,12 @@ impl UOwnedTransportImpl for MyTransport {
 
 Frame constructors validate metadata and payload presence before returning:
 
+Native frames and messages share the unconditional `UMessageType` and `UPriority`
+semantic enums: `UFrameMetadata::kind()` and `priority()` return those core types.
+Codecs use their explicit `wire_code()`/`from_wire_code()` methods; casting Rust
+enum discriminants is not serialization. Classic message and transport signatures,
+wire codes and the fixed metadata ABI retain their existing contracts.
+
 ```rust
 use up_rust::{PayloadEncoding, UMessageBuilder, UOwnedFrame, UUri};
 use up_rust::frame::metadata::try_project_umessage_to_frame_metadata;

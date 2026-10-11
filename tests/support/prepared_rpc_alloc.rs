@@ -72,13 +72,12 @@ use std::{
 use tokio::runtime::Runtime;
 use up_rust::bench_fixtures::payload_contract::{init_streamer_4k, StreamChunk4kV1};
 use up_rust::{
-    AdmissionError, CallError, FrameMessageKind, FramePriority, HeaderLimits,
-    InitializedStablePayload, LoanError, MessageFields, NativeProfile, NativeProfileAgreement,
-    NativeProfileMode, NativeProfileTable, OverflowPolicy, PayloadEncoding, PoolCore,
-    PoolCoreConfig, PoolFrame, PreparedRpcClient, PreparedRpcServer, PreparedTransportCore,
-    RegistrationConfig, RegistrationInbox, RequestHandler, RouteConfig, RouteDefinition,
-    RpcClientConfig, RpcServerConfig, RxAdmission, RxLease, SendError, StablePayload,
-    StablePayloadInit, TokenError, TxTemplate, UCode, UUri,
+    AdmissionError, CallError, HeaderLimits, InitializedStablePayload, LoanError, MessageFields,
+    NativeProfile, NativeProfileAgreement, NativeProfileMode, NativeProfileTable, OverflowPolicy,
+    PayloadEncoding, PoolCore, PoolCoreConfig, PoolFrame, PreparedRpcClient, PreparedRpcServer,
+    PreparedTransportCore, RegistrationConfig, RegistrationInbox, RequestHandler, RouteConfig,
+    RouteDefinition, RpcClientConfig, RpcServerConfig, RxAdmission, RxLease, SendError,
+    StablePayload, StablePayloadInit, TokenError, TxTemplate, UCode, UMessageType, UPriority, UUri,
 };
 
 #[repr(C)]
@@ -185,7 +184,7 @@ fn client(
             max_in_flight: 1,
             ttl,
             max_token_len: 2048,
-            priority: FramePriority::CS4,
+            priority: UPriority::CS4,
         },
     ))
     .unwrap()
@@ -365,10 +364,10 @@ fn pending_and_late(runtime: &Runtime) {
     let admission =
         RxAdmission::<StreamChunk4kV1>::new(agreement.clone(), HeaderLimits::default()).unwrap();
     let reply_definition = RouteDefinition {
-        kind: FrameMessageKind::Response,
+        kind: UMessageType::Response,
         source: method,
         sink: Some(reply_to(1)),
-        priority: Some(FramePriority::CS4),
+        priority: Some(UPriority::CS4),
         ttl: None,
         permission_level: None,
     };
@@ -517,7 +516,7 @@ fn closed(runtime: &Runtime) {
             max_in_flight: 1,
             ttl: Duration::from_secs(30),
             max_token_len: 2048,
-            priority: FramePriority::CS4,
+            priority: UPriority::CS4,
         },
     ))
     .unwrap();

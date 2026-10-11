@@ -21,7 +21,7 @@ use std::{mem::MaybeUninit, time::Duration};
 
 use super::codec::*;
 use crate::{
-    FrameMessageKind, FramePriority, NativeTypeToken, PayloadEncoding, UCode, UFrameMetadata, UUri,
+    NativeTypeToken, PayloadEncoding, UCode, UFrameMetadata, UMessageType, UPriority, UUri,
     UUriPartsError, UUID,
 };
 
@@ -64,9 +64,9 @@ pub enum UFrameHeaderError {
 #[derive(Clone, Copy)]
 pub struct TxHeaderParts<'a> {
     /// Message kind.
-    pub kind: FrameMessageKind,
+    pub kind: UMessageType,
     /// Priority, when present.
-    pub priority: Option<FramePriority>,
+    pub priority: Option<UPriority>,
     /// Message identifier.
     pub id: &'a UUID,
     /// Correlated request identifier.
@@ -174,9 +174,9 @@ impl Default for HeaderLimits {
 #[derive(Clone)]
 pub struct RxHeader<'a> {
     /// Message kind.
-    pub kind: FrameMessageKind,
+    pub kind: UMessageType,
     /// Priority, if present.
-    pub priority: Option<FramePriority>,
+    pub priority: Option<UPriority>,
     /// Message identifier.
     pub id: UUID,
     /// Correlated request identifier.
@@ -374,7 +374,7 @@ pub fn write_header_uninit(
     writer.put(&[
         FRAME_FIELDS_VERSION,
         parts.kind.wire_code(),
-        parts.priority.map_or(0, FramePriority::wire_code),
+        parts.priority.map_or(0, UPriority::wire_code),
         0,
     ])?;
     writer.put(&presence.to_le_bytes())?;
@@ -528,13 +528,13 @@ pub fn parse_header<'a>(
     if reader.byte()? != FRAME_FIELDS_VERSION {
         return Err(UFrameHeaderError::Malformed("field block version"));
     }
-    let kind = FrameMessageKind::from_wire_code(reader.byte()?)
+    let kind = UMessageType::from_wire_code(reader.byte()?)
         .ok_or(UFrameHeaderError::Malformed("message kind"))?;
     let priority = match reader.byte()? {
         0 => None,
-        value => Some(
-            FramePriority::from_wire_code(value).ok_or(UFrameHeaderError::Malformed("priority"))?,
-        ),
+        value => {
+            Some(UPriority::from_wire_code(value).ok_or(UFrameHeaderError::Malformed("priority"))?)
+        }
     };
     if reader.byte()? != 0 {
         return Err(UFrameHeaderError::Malformed("reserved byte"));
@@ -666,29 +666,26 @@ pub(crate) fn validate_parts(parts: &TxHeaderParts<'_>) -> Result<(), UFrameHead
         ));
     }
     match parts.kind {
-        FrameMessageKind::Publish | FrameMessageKind::Notification => {
+        UMessageType::Publish | UMessageType::Notification => {
             if !parts.source.is_event() || !concrete(parts.source) {
                 return Err(UFrameHeaderError::Invalid("source topic"));
             }
             match (parts.kind, parts.sink) {
-                (FrameMessageKind::Publish, None) => {}
-                (FrameMessageKind::Notification, Some(sink))
+                (UMessageType::Publish, None) => {}
+                (UMessageType::Notification, Some(sink))
                     if sink.is_notification_destination() && concrete(sink) => {}
                 _ => return Err(UFrameHeaderError::Invalid("sink for message kind")),
             }
         }
-        FrameMessageKind::Request | FrameMessageKind::Response => {
-            if parts
-                .priority
-                .is_none_or(|value| value < FramePriority::CS4)
-            {
+        UMessageType::Request | UMessageType::Response => {
+            if parts.priority.is_none_or(|value| value < UPriority::CS4) {
                 return Err(UFrameHeaderError::Invalid("RPC priority"));
             }
             let sink = parts.sink.ok_or(UFrameHeaderError::Invalid("RPC sink"))?;
             if !concrete(parts.source) || !concrete(sink) {
                 return Err(UFrameHeaderError::Invalid("RPC wildcard"));
             }
-            if parts.kind == FrameMessageKind::Request {
+            if parts.kind == UMessageType::Request {
                 if !parts.source.is_rpc_response() || !sink.is_rpc_method() {
                     return Err(UFrameHeaderError::Invalid("RPC request addressing"));
                 }
@@ -725,7 +722,7 @@ mod tests {
             _ => UFrameMetadata::response(method, reply, UUID::build()),
         };
         if seed & 4 != 0 {
-            builder = builder.with_priority(FramePriority::CS5);
+            builder = builder.with_priority(UPriority::CS5);
         }
         if seed & 8 != 0 {
             builder = builder.with_ttl(Duration::from_nanos(999));
@@ -905,7 +902,7 @@ mod tests {
             Err(UFrameHeaderError::OutputTooShort)
         );
         assert_eq!(output, [0xA5; 8]);
-        parts.priority = Some(FramePriority::CS0);
+        parts.priority = Some(UPriority::CS0);
         assert_eq!(
             write_header(PREFIX, &parts, &mut output),
             Err(UFrameHeaderError::Invalid("RPC priority"))

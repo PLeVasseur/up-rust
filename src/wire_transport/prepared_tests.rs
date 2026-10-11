@@ -442,7 +442,7 @@ impl ZeroCopyHandler<Value, Input> for TypedCapture {
 }
 fn definition() -> RouteDefinition {
     RouteDefinition {
-        kind: crate::FrameMessageKind::Publish,
+        kind: crate::UMessageType::Publish,
         source: topic(0x9000),
         sink: None,
         priority: None,

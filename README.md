@@ -60,6 +60,8 @@ and `try_project_frame_to_umessage`, using their `_with_native_agreement` varian
 for native identity. These check payload presence and the carried encoding together.
 Attribute-only conversion uses `UAttributes::try_project_to_frame_metadata()`;
 there is no separate encoding override. See the owned-frame guide for migration.
+Frames and messages share the protobuf-independent `UMessageType`/`UPriority`
+semantics. Their explicit encoded-code methods preserve selected-wire and ABI bytes.
 
 Selected-wire adapters compose an encoded transport core with a wire marker and
 metadata codec. Enable `selected-wire-user-api` for application construction and
