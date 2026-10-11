@@ -124,6 +124,12 @@ fi
 if [[ "$configuration" == current && ( "$group" == all || "$group" == tests ) ]]; then
   python3 tools/ci/run_check.py --log "$log_root/wire-constructor-codegen.log" --timeout 1200 --completion command -- python3 tools/ci/check_wire_constructor.py --toolchain 1.95.0
 fi
+if [[ "$configuration" == current && ( "$group" == all || "$group" == check ) ]]; then
+  python3 tools/ci/run_check.py --log "$log_root/owned-role-minimal.log" --timeout 1200 --completion command -- cargo +1.95.0 check --locked --no-default-features --features owned-frame-transport,usubscription --all-targets
+fi
+if [[ "$configuration" == current && ( "$group" == all || "$group" == check ) ]]; then
+  python3 tools/ci/run_check.py --log "$log_root/owned-typed-role-minimal.log" --timeout 1200 --completion command -- cargo +1.95.0 check --locked --no-default-features --features owned-frame-transport,usubscription,selected-wire-transport-adapter --all-targets
+fi
 if [[ "$configuration" == current && ( "$group" == all || "$group" == dependency ) ]]; then
   python3 tools/ci/run_check.py --log "$log_root/dependency-policy.log" --timeout 600 --completion command -- cargo deny --all-features check
 fi
@@ -198,4 +204,10 @@ if [[ "$configuration" == msrv && ( "$group" == all || "$group" == check ) ]]; t
 fi
 if [[ "$configuration" == msrv && ( "$group" == all || "$group" == tests ) ]]; then
   python3 tools/ci/run_check.py --log "$log_root/wire-constructor-codegen.log" --timeout 1200 --completion command -- python3 tools/ci/check_wire_constructor.py --toolchain 1.88.0
+fi
+if [[ "$configuration" == msrv && ( "$group" == all || "$group" == check ) ]]; then
+  python3 tools/ci/run_check.py --log "$log_root/owned-role-minimal.log" --timeout 1200 --completion command -- cargo +1.88.0 check --locked --no-default-features --features owned-frame-transport,usubscription --all-targets
+fi
+if [[ "$configuration" == msrv && ( "$group" == all || "$group" == check ) ]]; then
+  python3 tools/ci/run_check.py --log "$log_root/owned-typed-role-minimal.log" --timeout 1200 --completion command -- cargo +1.88.0 check --locked --no-default-features --features owned-frame-transport,usubscription,selected-wire-transport-adapter --all-targets
 fi

@@ -13,6 +13,12 @@
 
 /*!
 Traits representing uProtocol's [Communication Layer API](https://github.com/eclipse-uprotocol/up-spec/blob/v1.6.0-alpha.7/up-l2/api.adoc) for publishing and subscribing to topics and for invoking RPC methods. Also contains default implementations of the traits employing uProtocol's [Transport & Session Layer API](crate::UTransport).
+
+The classic role implementations use `UTransport` and `UMessage`. With
+`owned-frame-transport` and `usubscription`, the `owned` family provides the same
+Publisher, Subscriber, Notifier, RpcClient and RpcServer semantics over validated
+owned frames. The application supplies its transport and URI provider; subscribers
+also require a subscription service. Public mock helpers require `test-util`.
 */
 
 use bytes::Bytes;
@@ -21,8 +27,11 @@ use thiserror::Error;
 use crate::{PayloadEncoding, UCode, UPriority, UStatus, UUID};
 
 mod notification;
-#[cfg(any(test, feature = "test-util"))]
+#[cfg(feature = "test-util")]
 pub use notification::MockNotifier;
+#[cfg(all(test, not(feature = "test-util")))]
+#[allow(unused_imports)] // Private test support across feature combinations.
+pub(crate) use notification::MockNotifier;
 pub use notification::{NotificationError, Notifier};
 
 #[cfg(feature = "up-l2-notifier")]
@@ -31,8 +40,11 @@ mod simple_notifier;
 pub use simple_notifier::SimpleNotifier;
 
 mod pubsub;
-#[cfg(any(test, feature = "test-util"))]
+#[cfg(feature = "test-util")]
 pub use pubsub::MockSubscriptionChangeHandler;
+#[cfg(all(test, not(feature = "test-util")))]
+#[allow(unused_imports)] // Private test support across feature combinations.
+pub(crate) use pubsub::MockSubscriptionChangeHandler;
 pub use pubsub::{PubSubError, Publisher, Subscriber, SubscriptionChangeHandler};
 
 #[cfg(feature = "up-l2-publisher")]
@@ -46,8 +58,11 @@ mod in_memory_subscriber;
 pub use in_memory_subscriber::InMemorySubscriber;
 
 mod rpc;
-#[cfg(any(test, feature = "test-util"))]
+#[cfg(feature = "test-util")]
 pub use rpc::{MockRequestHandler, MockRpcClient, MockRpcServerImpl};
+#[cfg(all(test, not(feature = "test-util")))]
+#[allow(unused_imports)] // Private test support across feature combinations.
+pub(crate) use rpc::{MockRequestHandler, MockRpcClient, MockRpcServerImpl};
 pub use rpc::{RequestHandler, RpcClient, RpcServer, ServiceInvocationError};
 
 #[cfg(feature = "up-l2-rpc-client")]
@@ -446,3 +461,25 @@ impl UPayload {
         crate::umessage::deserialize_protobuf_bytes(&self.payload, self.payload_encoding)
     }
 }
+
+#[cfg(all(
+    feature = "owned-frame-transport",
+    feature = "usubscription",
+    feature = "selected-wire-transport-core"
+))]
+pub(crate) fn validate_listener_topic(topic: &crate::UUri) -> Result<(), RegistrationError> {
+    topic
+        .verify_no_wildcards()
+        .map_err(|error| RegistrationError::InvalidFilter(error.to_string()))
+}
+
+#[cfg(all(
+    feature = "owned-frame-transport",
+    feature = "usubscription",
+    feature = "selected-wire-transport-core"
+))]
+/// Owned-frame implementations of the publisher, subscriber, notifier and RPC roles.
+///
+/// These facades implement the classic role traits over `UOwnedTransport`; the
+/// caller supplies URI identity and, for subscription, a uSubscription service.
+pub mod owned;

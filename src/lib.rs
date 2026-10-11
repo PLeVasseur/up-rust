@@ -150,6 +150,15 @@ pub mod guide {
     #[doc = include_str!("guide/utransport.md")]
     pub mod utransport {}
 
+    #[doc = include_str!("guide/transports.md")]
+    pub mod transports {}
+    #[cfg_attr(feature = "owned-frame-transport", doc = include_str!("guide/owned.md"))]
+    #[cfg_attr(
+        not(feature = "owned-frame-transport"),
+        doc = "Enable `owned-frame-transport` for the owned-frame guide."
+    )]
+    pub mod owned {}
+
     #[cfg_attr(
         feature = "communication",
         doc = include_str!("guide/trait_map.md")

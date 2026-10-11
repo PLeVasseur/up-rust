@@ -65,6 +65,14 @@ The explicit `test-util` feature exposes `PoolCore` as an owned-memory conforman
 core, without claiming native shared-memory provenance. See the prepared-core
 section of the [transport guide](src/guide/utransport.md).
 
+For application facades, enable `owned-frame-transport` with `usubscription`.
+`communication::owned::Endpoint` creates Publisher, Subscriber, Notifier,
+RpcClient and RpcServer values with the existing role semantics. The
+[owned guide](src/guide/owned.md) covers setup, validated frames, notification
+receive, RPC and error handling; the subscriber needs a subscription service.
+Owned RPC listeners use weak transport references to avoid registry cycles;
+entered callbacks retain the sender only through handler and reply completion.
+
 Selected-wire adapters compose an encoded transport core with a wire marker and
 metadata codec. Enable `selected-wire-user-api` for application construction and
 `transport-implementer-api` for encoded-core contracts, with the required frame

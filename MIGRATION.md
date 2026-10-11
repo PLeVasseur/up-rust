@@ -223,3 +223,17 @@ a native-agreement requirement. A marker setting `REQUIRES_NATIVE_AGREEMENT` can
 bypass that requirement through an ordinary constructor. Received metadata must
 match wire, family and layout before an owned frame is returned or a listener is
 called. Registration wrappers are scoped to the adapter instance.
+
+## Owned communication roles
+
+Owned RPC request listeners no longer keep their transport alive through a registry
+cycle. They upgrade a weak sender reference on callback entry and retain it through
+the reply. A callback after transport destruction does not invoke the handler.
+Endpoint unregistration remains explicit while the transport is live.
+
+`communication::owned` provides `Endpoint` and the Publisher, Subscriber, Notifier,
+RpcClient and RpcServer facades over `UOwnedTransport`. Enable `owned-frame-transport`
+and `usubscription`; the classic communication traits keep their APIs. Owned
+listeners project representable frames to `UMessage` before calling existing
+`UListener` handlers. Notification receive uses the notifier's listening methods.
+Typed selected-wire operations additionally require the adapter capability.

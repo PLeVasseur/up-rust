@@ -170,6 +170,16 @@ checks:
     roles: [current, msrv]
     timeout: 1200
     command: [python3, tools/ci/check_wire_constructor.py, --toolchain, "{toolchain}"]
+  - name: owned-role-minimal
+    group: check
+    roles: [current, msrv]
+    timeout: 1200
+    command: [cargo, "+{toolchain}", check, --locked, --no-default-features, --features, "owned-frame-transport,usubscription", --all-targets]
+  - name: owned-typed-role-minimal
+    group: check
+    roles: [current, msrv]
+    timeout: 1200
+    command: [cargo, "+{toolchain}", check, --locked, --no-default-features, --features, "owned-frame-transport,usubscription,selected-wire-transport-adapter", --all-targets]
   - name: dependency-policy
     group: dependency
     roles: [current]
