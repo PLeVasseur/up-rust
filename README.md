@@ -87,6 +87,9 @@ tokens and immutable deployment agreement. Selected-wire capabilities imply it;
 default message-only builds do not require the `sha2` runtime dependency. See the
 [native identity guide](src/guide/native_identity.md) for checked descriptors,
 private-ID tables and explicit ID-zero contracts under the provisional policy.
+The lightweight `NativeTypeToken` and metadata field remain available in default
+builds for opaque carriage. Classic projection of a carried token requires the
+agreement-aware APIs; ordinary projection refuses to silently remove it.
 
 Payload encoding, selected wire, payload family and metadata layout use separate
 namespaces. Private selected-wire identities require their agreed literals;

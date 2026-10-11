@@ -241,13 +241,15 @@ pub use validation_state::{Unvalidated, Validated};
 /// The native frame data model: metadata, canonical field-block codec, and
 /// the read-side frame view contract.
 pub mod frame;
-pub use frame::metadata::{FrameMessageKind, FramePriority, UFrameMetadata, UFrameMetadataError};
+pub use frame::metadata::{
+    FrameMessageKind, FramePriority, NativeTypeToken, UFrameMetadata, UFrameMetadataError,
+};
 #[cfg(feature = "native-identity")]
 pub use frame::native::{
     NativeByteOrder, NativeContract, NativeField, NativePayloadIdentity, NativeProfile,
     NativeProfileAgreement, NativeProfileError, NativeProfileMode, NativeProfileTable,
-    NativeRepresentation, NativeTarget, NativeTypeToken, MAX_NATIVE_DESCRIPTOR_BYTES,
-    NATIVE_DESCRIPTOR_VERSION, NATIVE_TOKEN_DERIVATION_VERSION,
+    NativeRepresentation, NativeTarget, MAX_NATIVE_DESCRIPTOR_BYTES, NATIVE_DESCRIPTOR_VERSION,
+    NATIVE_TOKEN_DERIVATION_VERSION,
 };
 pub use frame::{validate_frame_view_for_transport, UFrameView};
 

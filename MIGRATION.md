@@ -248,3 +248,17 @@ Native descriptors bind target, layout and field semantics. Their independent
 Use a checked private-ID table or an explicit ID-zero contract, with independently
 supplied peer configuration. The native identity guide covers generation retention
 and canonical descriptor limits.
+
+## Carried native tokens
+
+Frame metadata carries `Option<NativeTypeToken>` independently of the payload
+encoding. The opaque type is available at the crate root and in `frame::metadata`
+without `native-identity`; the enabled `frame::native` module reexports that same
+type. Descriptor/hash/agreement APIs remain opt-in. Presence bit 8 carries all 32
+token bits, including zero, and fixed ABI storage is at offset 28.
+
+Plain classic projection rejects token-bearing frames. The `with_native_agreement`
+projection variants require the feature, check identity before token removal and
+restore only identities known to the agreement. Unrelated unknown IDs stay opaque.
+The field-block/fixed-ABI profiles retain token-free bytes, size 928/alignment 8;
+peers must coordinate supported profile versions and reject unknown presence bits.

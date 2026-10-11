@@ -25,6 +25,13 @@ runtime acceptance or proof of interoperability with every external implementati
 
 ## Representation layers
 
+The provisional v1 profiles require matching peer implementations. Incompatible
+changes after publication require a new profile version and coordinated peer updates;
+decoders reject unsupported versions and presence bits rather than guessing.
+Native tokens occupy presence bit 8 and fixed offset 28, retaining size 928/alignment 8
+and token-free bytes. The variable field block carries its own optional u32 token
+after the payload encoding; a fixed slot does not replace this field.
+
 The semantic model, serialized bytes and fixed-layout ABI have distinct contracts:
 
 1. **Semantic model:** `up_rust::UFrameMetadata`, with owned fields and no
@@ -57,7 +64,10 @@ Profile properties:
   projection.
 * The presence-bit vocabulary is shared verbatim between the field block
   and the ABI profile, so a fixed-profile consumer and a field-block
-  consumer reason about the same bits.
+   consumer reason about the same bits.
+* Native type tokens are independent u32 values, including a present zero. They
+  require payload encoding presence. An absent fixed token has zero storage;
+  agreement and typed payload validation are separate from opaque carriage.
 
 ## TTL projection and canonicalization
 

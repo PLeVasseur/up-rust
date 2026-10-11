@@ -25,6 +25,7 @@ use std::sync::Arc;
 
 use sha2::{Digest, Sha256};
 
+pub use crate::frame::metadata::NativeTypeToken;
 use crate::PayloadEncoding;
 
 mod canonical;
@@ -86,27 +87,6 @@ impl NativeTarget {
     /// Returns the target pointer width in bits.
     pub fn pointer_width(&self) -> u8 {
         self.pointer_width
-    }
-}
-
-/// A versioned structural native type token, not a registry encoding ID.
-///
-/// All 32-bit values, including zero, can be carried opaquely. Equality alone
-/// does not authorize a cast: profile membership, layout, bit validity and loan
-/// lifetime/provenance must also be established.
-#[derive(Clone, Copy, Debug, Eq, Hash, Ord, PartialEq, PartialOrd)]
-#[repr(transparent)]
-pub struct NativeTypeToken(u32);
-
-impl NativeTypeToken {
-    /// Preserves a token received from metadata without interpreting its payload.
-    pub const fn from_u32(value: u32) -> Self {
-        Self(value)
-    }
-
-    /// Returns the token's complete 32-bit value.
-    pub const fn as_u32(self) -> u32 {
-        self.0
     }
 }
 

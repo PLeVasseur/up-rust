@@ -51,7 +51,10 @@
 //!
 //! This provisional representation is versioned by this SDK and requires explicit
 //! peer agreement. It is not a normative metadata-profile registry assignment.
+//! Representation changes require coordinated profile support across peers;
+//! unknown presence bits are rejected. Native tokens use bit 8 and offset 28.
 
+use crate::NativeTypeToken;
 use core::mem::{align_of, offset_of, size_of};
 use std::time::Duration;
 
@@ -60,8 +63,8 @@ use crate::{FrameMessageKind, FramePriority, PayloadEncoding, UCode, UFrameMetad
 // Reuse the canonical presence-bit vocabulary of the field block so the two
 // representations stay aligned.
 pub use crate::frame::codec::{
-    FIELD_COMM_STATUS, FIELD_MASK_V1, FIELD_PAYLOAD_ENCODING, FIELD_PERMISSION_LEVEL, FIELD_REQID,
-    FIELD_SINK, FIELD_TOKEN, FIELD_TRACEPARENT, FIELD_TTL,
+    FIELD_COMM_STATUS, FIELD_MASK_V1, FIELD_NATIVE_TYPE_TOKEN, FIELD_PAYLOAD_ENCODING,
+    FIELD_PERMISSION_LEVEL, FIELD_REQID, FIELD_SINK, FIELD_TOKEN, FIELD_TRACEPARENT, FIELD_TTL,
 };
 
 /// Magic bytes at offset 0 of every [`UFrameMetadataAbiV1`]: `"UFA1"`.
@@ -256,8 +259,8 @@ pub struct UFrameMetadataAbiV1 {
     pub ttl_ns: u64,
     /// Valid iff [`FIELD_PERMISSION_LEVEL`].
     pub permission_level: u32,
-    /// MUST be zero.
-    pub _reserved1: u32,
+    /// Valid iff [`FIELD_NATIVE_TYPE_TOKEN`]; MUST be zero when absent.
+    pub native_type_token: u32,
 
     // identifiers: 32..64
     /// Message id as a fixed-layout UUID.
@@ -303,7 +306,7 @@ impl Default for UFrameMetadataAbiV1 {
             _reserved0: 0,
             ttl_ns: 0,
             permission_level: 0,
-            _reserved1: 0,
+            native_type_token: 0,
             id: UUuidAbi::default(),
             reqid: UUuidAbi::default(),
             payload_size: 0,
@@ -477,6 +480,10 @@ impl UFrameMetadataAbiV1 {
             abi.payload_size = payload_size.unwrap_or_default();
             abi.presence |= FIELD_PAYLOAD_ENCODING;
         }
+        if let Some(token) = metadata.native_type_token() {
+            abi.native_type_token = token.as_u32();
+            abi.presence |= FIELD_NATIVE_TYPE_TOKEN;
+        }
         Ok(abi)
     }
 
@@ -512,9 +519,14 @@ impl UFrameMetadataAbiV1 {
                 "unknown presence bits".to_string(),
             ));
         }
-        if self._reserved0 != 0 || self._reserved1 != 0 || self._reserved_tail != [0; 4] {
+        if self._reserved0 != 0 || self._reserved_tail != [0; 4] {
             return Err(UFrameAbiError::InvalidProfile(
                 "reserved fields must be zero".to_string(),
+            ));
+        }
+        if self.presence & FIELD_NATIVE_TYPE_TOKEN == 0 && self.native_type_token != 0 {
+            return Err(UFrameAbiError::InvalidProfile(
+                "absent native type token storage must be zero".to_string(),
             ));
         }
 
@@ -618,6 +630,8 @@ impl UFrameMetadataAbiV1 {
             token,
             traceparent,
             payload_encoding,
+            (self.presence & FIELD_NATIVE_TYPE_TOKEN != 0)
+                .then_some(NativeTypeToken::from_u32(self.native_type_token)),
         );
         metadata.validate()?;
         Ok((metadata, payload_size))
@@ -653,7 +667,7 @@ const _: () = {
     assert!(offset_of!(UFrameMetadataAbiV1, _reserved0) == 15);
     assert!(offset_of!(UFrameMetadataAbiV1, ttl_ns) == 16);
     assert!(offset_of!(UFrameMetadataAbiV1, permission_level) == 24);
-    assert!(offset_of!(UFrameMetadataAbiV1, _reserved1) == 28);
+    assert!(offset_of!(UFrameMetadataAbiV1, native_type_token) == 28);
     assert!(offset_of!(UFrameMetadataAbiV1, id) == 32);
     assert!(offset_of!(UFrameMetadataAbiV1, reqid) == 48);
     assert!(offset_of!(UFrameMetadataAbiV1, payload_size) == 64);
@@ -693,6 +707,46 @@ mod tests {
         let (decoded, payload_size) = abi.try_to_metadata().expect("metadata");
         assert_eq!(decoded, metadata);
         assert_eq!(payload_size, None);
+    }
+
+    #[test_case::test_case(0; "present zero token")]
+    #[test_case::test_case(u32::MAX; "all 32 token bits")]
+    fn native_token_round_trips_through_fixed_slot(token: u32) {
+        let metadata = UFrameMetadata::publish(topic())
+            .with_payload_encoding(PayloadEncoding::CONTRACT_DEFINED)
+            .with_native_type_token(NativeTypeToken::from_u32(token))
+            .build()
+            .unwrap();
+        let abi = UFrameMetadataAbiV1::try_from_metadata(&metadata, Some(0)).unwrap();
+        assert_eq!(abi.native_type_token, token);
+        assert_eq!(
+            abi.presence,
+            FIELD_PAYLOAD_ENCODING | FIELD_NATIVE_TYPE_TOKEN
+        );
+        assert_eq!(abi.try_to_metadata().unwrap(), (metadata, Some(0)));
+    }
+
+    #[test_case::test_case(FIELD_NATIVE_TYPE_TOKEN; "nonzero storage without token presence")]
+    #[test_case::test_case(FIELD_PAYLOAD_ENCODING; "token without encoding presence")]
+    fn native_token_presence_cannot_be_removed_independently(bit: u32) {
+        let metadata = UFrameMetadata::publish(topic())
+            .with_payload_encoding(PayloadEncoding::CONTRACT_DEFINED)
+            .with_native_type_token(NativeTypeToken::from_u32(7))
+            .build()
+            .unwrap();
+        let mut abi = UFrameMetadataAbiV1::try_from_metadata(&metadata, Some(0)).unwrap();
+        abi.presence &= !bit;
+        let result = abi.try_to_metadata();
+        if bit == FIELD_NATIVE_TYPE_TOKEN {
+            assert!(matches!(result, Err(UFrameAbiError::InvalidProfile(_))));
+        } else {
+            assert!(matches!(
+                result,
+                Err(UFrameAbiError::Metadata(
+                    crate::UFrameMetadataError::InvalidMetadata(_)
+                ))
+            ));
+        }
     }
 
     #[test_case::test_case(0; "explicit contract defined zero")]
@@ -826,6 +880,7 @@ mod tests {
     #[test_case::test_case(FIELD_TOKEN; "access token")]
     #[test_case::test_case(FIELD_TRACEPARENT; "traceparent")]
     #[test_case::test_case(FIELD_PAYLOAD_ENCODING; "payload encoding")]
+    #[test_case::test_case(FIELD_NATIVE_TYPE_TOKEN; "native type token")]
     fn each_presence_bit_controls_only_its_field(bit: u32) {
         let metadata = UFrameMetadata::response(method(), reply_to(), UUID::build())
             .with_ttl(Duration::from_millis(250))
@@ -837,9 +892,11 @@ mod tests {
             .build()
             .unwrap();
         let mut abi = UFrameMetadataAbiV1::try_from_metadata(&metadata, Some(0)).unwrap();
+        abi.native_type_token = 0;
+        abi.presence |= FIELD_NATIVE_TYPE_TOKEN;
         assert_eq!(abi.presence, FIELD_MASK_V1);
         abi.presence &= !bit;
-        if bit == FIELD_SINK || bit == FIELD_REQID {
+        if bit == FIELD_SINK || bit == FIELD_REQID || bit == FIELD_PAYLOAD_ENCODING {
             assert!(matches!(
                 abi.try_to_metadata(),
                 Err(UFrameAbiError::Metadata(
@@ -873,5 +930,9 @@ mod tests {
             (bit != FIELD_PAYLOAD_ENCODING).then_some(PayloadEncoding::CONTRACT_DEFINED)
         );
         assert_eq!(size, (bit != FIELD_PAYLOAD_ENCODING).then_some(0));
+        assert_eq!(
+            decoded.native_type_token(),
+            (bit != FIELD_NATIVE_TYPE_TOKEN).then_some(NativeTypeToken::from_u32(0))
+        );
     }
 }

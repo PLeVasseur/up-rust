@@ -61,6 +61,32 @@ metadata does not establish payload type, byte validity or physical ownership.
 The zero-copy URI's scalar/inline authority layout is checked against `UUriAbi`;
 default String storage remains a separate representation.
 
+## Preserve opaque native tokens
+
+`NativeTypeToken` and its frame field are available without `native-identity`:
+forwarding a value does not need descriptor hashing or deployment agreement.
+Presence is separate from its numeric value. A token requires a payload encoding.
+
+```rust
+use up_rust::{NativeTypeToken, PayloadEncoding, UFrameMetadata, UFrameMetadataError, UUri};
+use up_rust::frame::codec::{decode_frame_metadata_fields, encode_frame_metadata_fields};
+
+let topic = UUri::try_from_parts("vehicle", 0x1234, 1, 0x8001)?;
+let metadata = UFrameMetadata::publish(topic)
+    .with_payload_encoding(PayloadEncoding::CONTRACT_DEFINED)
+    .with_native_type_token(NativeTypeToken::from_u32(u32::MAX)).build()?;
+let restored = decode_frame_metadata_fields(&encode_frame_metadata_fields(&metadata)?)?;
+assert_eq!(restored.native_type_token(), Some(NativeTypeToken::from_u32(u32::MAX)));
+assert!(matches!(restored.try_project_to_attributes(),
+    Err(UFrameMetadataError::FieldNotRepresentable { field: "native_type_token", .. })));
+# Ok::<(), Box<dyn std::error::Error>>(())
+```
+
+Plain classic projection rejects token-bearing metadata. Agreement-aware
+projections require `native-identity` and verify the carried pair before removing
+the token; see [native identity](crate::guide::native_identity). This is distinct
+from payload bit-validity, alignment and backing-lifetime checks.
+
 Payload codecs describe encoding identity and byte layout while bindings own
 storage. A bounded reader rejects short or overlong input, and impossible declared
 lengths return a typed error rather than driving an unbounded allocation/read.

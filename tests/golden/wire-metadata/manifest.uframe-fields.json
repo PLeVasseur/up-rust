@@ -48,6 +48,22 @@
     "sha256": "a8d419c9fdea6b576ffba4ac9781586a61fc7e6ea57884e7e667130b4deaeb45"
   },
   {
+    "file": "publish-native-private-token.uframe-fields.hex",
+    "fixture": "publish-native-private-token",
+    "hex_sha256": "464def437fcbaeda55e381be1a34c2457cf4fee0530e1c45f30a9f81315008d8",
+    "len": 68,
+    "profile": "uframe-fields",
+    "sha256": "e4ff5f8d35f304913f2f7d07ef3adad558df7ba1feac72aad0889bf1191ab186"
+  },
+  {
+    "file": "publish-native-contract-token-zero.uframe-fields.hex",
+    "fixture": "publish-native-contract-token-zero",
+    "hex_sha256": "3b8d9e36a2e99c8f57ed632d9705451ceaa4c5452543f2b370674a67c5cd9a3d",
+    "len": 68,
+    "profile": "uframe-fields",
+    "sha256": "c75f3a31ec23f115472d66354f0d7093dd79c963bebbc0b468c7e1e744bdc4a4"
+  },
+  {
     "file": "publish-explicit-zero-ttl.uframe-fields.hex",
     "fixture": "publish-explicit-zero-ttl",
     "hex_sha256": "c4fc91659269e1c5ac989ab34a25144a2d7042f93d997dba3fec57f1397974a4",

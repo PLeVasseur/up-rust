@@ -40,6 +40,7 @@
 //! [FIELD_TOKEN]             u16 len, token bytes (UTF-8)
 //! [FIELD_TRACEPARENT]       u8 len, traceparent bytes (UTF-8)
 //! [FIELD_PAYLOAD_ENCODING]  u32 LE payload-encoding registry identifier
+//! [FIELD_NATIVE_TYPE_TOKEN] u32 LE structural native type token
 //! ```
 //!
 //! Values that do not fit a length field are rejected at encode time;
@@ -60,6 +61,7 @@
 //! agreement and is separate from whole-frame envelopes and application payload
 //! codecs; it does not assign a normative metadata-profile registry identity.
 
+use crate::NativeTypeToken;
 use std::time::Duration;
 
 use crate::{
@@ -86,8 +88,10 @@ pub const FIELD_TOKEN: u32 = 1 << 5;
 pub const FIELD_TRACEPARENT: u32 = 1 << 6;
 /// Presence bit: the frame has a payload encoding.
 pub const FIELD_PAYLOAD_ENCODING: u32 = 1 << 7;
+/// Presence bit: an independent structural native type token is carried.
+pub const FIELD_NATIVE_TYPE_TOKEN: u32 = 1 << 8;
 /// All presence bits defined by field block version 1.
-pub const FIELD_MASK_V1: u32 = (1 << 8) - 1;
+pub const FIELD_MASK_V1: u32 = (1 << 9) - 1;
 
 /// Errors returned by the frame metadata field block codec.
 #[derive(Clone, Debug, Eq, PartialEq)]
@@ -268,6 +272,9 @@ fn write_frame_metadata_fields(
     if metadata.payload_encoding().is_some() {
         presence |= FIELD_PAYLOAD_ENCODING;
     }
+    if metadata.native_type_token().is_some() {
+        presence |= FIELD_NATIVE_TYPE_TOKEN;
+    }
 
     out.push(FRAME_FIELDS_VERSION)?;
     out.push(metadata.kind().wire_code())?;
@@ -308,6 +315,9 @@ fn write_frame_metadata_fields(
     }
     if let Some(encoding) = metadata.payload_encoding() {
         write_payload_encoding(out, encoding)?;
+    }
+    if let Some(token) = metadata.native_type_token() {
+        out.extend_from_slice(&token.as_u32().to_le_bytes())?;
     }
     Ok(())
 }
@@ -368,6 +378,9 @@ pub fn frame_metadata_fields_len(metadata: &UFrameMetadata) -> Result<usize, UFr
         add(&mut len, traceparent.len())?;
     }
     if metadata.payload_encoding().is_some() {
+        add(&mut len, 4)?;
+    }
+    if metadata.native_type_token().is_some() {
         add(&mut len, 4)?;
     }
     Ok(len)
@@ -460,6 +473,11 @@ pub fn decode_frame_metadata_fields(src: &[u8]) -> Result<UFrameMetadata, UFrame
     } else {
         None
     };
+    let native_type_token = if presence & FIELD_NATIVE_TYPE_TOKEN != 0 {
+        Some(NativeTypeToken::from_u32(reader.u32()?))
+    } else {
+        None
+    };
     reader.finish()?;
 
     let metadata = UFrameMetadata::from_decoded_parts(
@@ -475,6 +493,7 @@ pub fn decode_frame_metadata_fields(src: &[u8]) -> Result<UFrameMetadata, UFrame
         token,
         traceparent,
         payload_encoding,
+        native_type_token,
     );
     metadata.validate()?;
     Ok(metadata)
@@ -759,6 +778,63 @@ mod tests {
         ));
     }
 
+    #[test_case::test_case(0; "present zero token")]
+    #[test_case::test_case(u32::MAX; "all 32 token bits")]
+    fn native_token_has_its_own_variable_field_and_presence(token: u32) {
+        let base = UFrameMetadata::publish(topic())
+            .with_payload_encoding(PayloadEncoding::CONTRACT_DEFINED)
+            .build()
+            .unwrap();
+        let baseline = encode_frame_metadata_fields(&base).unwrap();
+        let metadata = base
+            .with_native_type_token(NativeTypeToken::from_u32(token))
+            .unwrap();
+        let bytes = encode_frame_metadata_fields(&metadata).unwrap();
+        assert_eq!(bytes.len(), baseline.len() + 4);
+        assert_eq!(bytes.get(baseline.len()..).unwrap(), token.to_le_bytes());
+        let presence = u32::from_le_bytes(bytes.get(4..8).unwrap().try_into().unwrap());
+        assert_eq!(presence, FIELD_PAYLOAD_ENCODING | FIELD_NATIVE_TYPE_TOKEN);
+        assert_ne!(
+            presence & !0xFF,
+            0,
+            "historical readers must reject the new bit"
+        );
+        assert_eq!(decode_frame_metadata_fields(&bytes).unwrap(), metadata);
+    }
+
+    #[test_case::test_case(1; "one token byte missing")]
+    #[test_case::test_case(4; "complete token missing")]
+    fn native_token_field_is_required_when_present(missing: usize) {
+        let metadata = UFrameMetadata::publish(topic())
+            .with_payload_encoding(PayloadEncoding::CONTRACT_DEFINED)
+            .with_native_type_token(NativeTypeToken::from_u32(7))
+            .build()
+            .unwrap();
+        let mut bytes = encode_frame_metadata_fields(&metadata).unwrap();
+        bytes.truncate(bytes.len() - missing);
+        assert!(matches!(
+            decode_frame_metadata_fields(&bytes),
+            Err(UFrameFieldsError::Malformed(_))
+        ));
+    }
+
+    #[test]
+    fn decoded_native_token_without_encoding_is_rejected() {
+        let metadata = UFrameMetadata::publish(topic()).build().unwrap();
+        let mut bytes = encode_frame_metadata_fields(&metadata).unwrap();
+        bytes
+            .get_mut(4..8)
+            .unwrap()
+            .copy_from_slice(&FIELD_NATIVE_TYPE_TOKEN.to_le_bytes());
+        bytes.extend_from_slice(&0_u32.to_le_bytes());
+        assert!(matches!(
+            decode_frame_metadata_fields(&bytes),
+            Err(UFrameFieldsError::Metadata(
+                UFrameMetadataError::InvalidMetadata(_)
+            ))
+        ));
+    }
+
     #[test]
     fn fully_populated_request_metadata_round_trips() {
         let metadata = UFrameMetadata::request(method(), reply_to(), Duration::from_millis(250))
@@ -776,14 +852,22 @@ mod tests {
         assert_eq!(decoded, metadata);
     }
 
-    #[test]
-    fn caller_owned_encoding_matches_standalone_field_block() {
-        let metadata = UFrameMetadata::request(method(), reply_to(), Duration::from_millis(250))
-            .with_priority(FramePriority::CS5)
-            .with_token("bearer-token")
-            .with_payload_encoding(PayloadEncoding::PROTOBUF)
-            .build()
-            .expect("metadata");
+    #[test_case::test_case(None; "no native token")]
+    #[test_case::test_case(Some(0); "present zero native token")]
+    #[test_case::test_case(Some(u32::MAX); "full width native token")]
+    fn caller_owned_encoding_matches_standalone_field_block(token: Option<u32>) {
+        let mut metadata =
+            UFrameMetadata::request(method(), reply_to(), Duration::from_millis(250))
+                .with_priority(FramePriority::CS5)
+                .with_token("bearer-token")
+                .with_payload_encoding(PayloadEncoding::PROTOBUF)
+                .build()
+                .expect("metadata");
+        if let Some(token) = token {
+            metadata = metadata
+                .with_native_type_token(NativeTypeToken::from_u32(token))
+                .unwrap();
+        }
         let standalone = encode_frame_metadata_fields(&metadata).expect("standalone encode");
         assert_eq!(
             frame_metadata_fields_len(&metadata).expect("encoded length"),

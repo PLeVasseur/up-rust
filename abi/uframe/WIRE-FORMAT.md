@@ -47,6 +47,7 @@ source UUri block         (always present; §1.1)
 [FIELD_TOKEN]             u16 len, `len` UTF-8 bytes
 [FIELD_TRACEPARENT]       u8 len, `len` UTF-8 bytes
 [FIELD_PAYLOAD_ENCODING]  payload encoding block (§1.2)
+[FIELD_NATIVE_TYPE_TOKEN] u32 native structural type token (§1.3)
 ```
 
 Decoders MUST consume the entire input; trailing bytes are an error.
@@ -74,6 +75,26 @@ Presence is independent of its numeric value; zero means contract-defined.
 ```text
 u32  payload_encoding_id  little-endian; 0..=65535
 ```
+
+### 1.3 Native structural type token
+
+`native_type_token` is an independent 32-bit value. When bit 8 is present, all
+values including zero are preserved. A token requires encoding and payload
+presence; an empty payload remains present. Unknown tokens are opaque. A token
+alone never authorizes typed access.
+
+The field block appends four bytes after the encoding ID. The fixed 928-byte ABI
+stores the token at offset 28 under the same presence bit; storage MUST be zero
+when absent. Token-free bytes retain their layout. These provisional v1 profiles
+require matching peer support. Incompatible changes after publication require a
+new profile version and coordinated peer updates; unsupported versions/bits reject.
+
+`native-identity` enables agreement over full descriptors, deployment domain,
+version and explicit table/contract mode. A table assigns private 16-bit IDs;
+the explicit operation contract uses ID 0. Plain classic projection rejects
+token-bearing metadata. Agreement-aware projection checks the carried ID/token
+before removing the token, and reconstructs it from the agreed mapping on return.
+Payload bytes and requested output types never determine this identity.
 
 ## 2. Native whole-frame envelope ("UPFE"), version 1
 
@@ -137,7 +158,8 @@ These SDK representation codes have explicit projections to the protobuf
 | 5   | FIELD_TOKEN              |
 | 6   | FIELD_TRACEPARENT        |
 | 7   | FIELD_PAYLOAD_ENCODING   |
-| 8..=31 | reserved (MUST be 0 in v1) |
+| 8   | FIELD_NATIVE_TYPE_TOKEN  |
+| 9..=31 | reserved (MUST be 0 in v1) |
 
 ### 3.4 Payload encoding and metadata identity policy
 

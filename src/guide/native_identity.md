@@ -89,6 +89,20 @@ automatic fallback from a missing table allocation. Equal-sized values alone do
 not establish that contract. Route composition must preserve its agreed identity
 and any additional policy required when identity evidence is lost across a hop.
 
+## Carriage and classic projection
+
+The lightweight `NativeTypeToken` and metadata codecs preserve all u32 values even
+without `native-identity`; this feature gates interpretation and agreement, not
+opaque forwarding. Token presence requires encoding presence. Changing the
+encoding alone while a token is present rejects; clearing payload identity clears
+both fields.
+
+Use `frame::metadata::try_project_frame_to_umessage_with_native_agreement` to
+check the carried ID/token before classic projection. The reverse
+`try_project_umessage_to_frame_metadata_with_native_agreement` restores a token
+only for an ID in the agreed mapping. Plain projection refuses to discard a token;
+unknown classic IDs remain opaque without an invented native identity.
+
 ## Separate payload and wire identities
 
 Payload encoding IDs and selected-wire/family/layout identities are different

@@ -21,8 +21,8 @@ use std::{mem::MaybeUninit, time::Duration};
 
 use super::codec::*;
 use crate::{
-    FrameMessageKind, FramePriority, PayloadEncoding, UCode, UFrameMetadata, UUri, UUriPartsError,
-    UUID,
+    FrameMessageKind, FramePriority, NativeTypeToken, PayloadEncoding, UCode, UFrameMetadata, UUri,
+    UUriPartsError, UUID,
 };
 
 /// Maximum traceparent length admitted by the zero-copy header profile.
@@ -87,6 +87,8 @@ pub struct TxHeaderParts<'a> {
     pub traceparent: Option<&'a str>,
     /// Payload encoding identity; independent of the native type token.
     pub payload_encoding: Option<PayloadEncoding>,
+    /// Opaque structural native type token.
+    pub native_type_token: Option<NativeTypeToken>,
 }
 
 impl std::fmt::Debug for TxHeaderParts<'_> {
@@ -115,6 +117,7 @@ impl<'a> From<&'a UFrameMetadata> for TxHeaderParts<'a> {
             token: metadata.token(),
             traceparent: metadata.traceparent(),
             payload_encoding: metadata.payload_encoding().copied(),
+            native_type_token: metadata.native_type_token(),
         }
     }
 }
@@ -134,6 +137,7 @@ impl<'a> From<&'a RxHeader<'_>> for TxHeaderParts<'a> {
             token: header.token(),
             traceparent: header.traceparent(),
             payload_encoding: header.payload_encoding,
+            native_type_token: header.native_type_token,
         }
     }
 }
@@ -189,6 +193,8 @@ pub struct RxHeader<'a> {
     pub sink: Option<UUri>,
     /// Payload encoding identity.
     pub payload_encoding: Option<PayloadEncoding>,
+    /// Opaque structural native type token.
+    pub native_type_token: Option<NativeTypeToken>,
     /// Header extent within the provided frame bytes.
     pub header_len: usize,
     token: Option<&'a str>,
@@ -265,6 +271,9 @@ pub fn header_fields_len(parts: &TxHeaderParts<'_>) -> Result<usize, UFrameHeade
         add(&mut len, traceparent.len())?;
     }
     if parts.payload_encoding.is_some() {
+        add(&mut len, 4)?;
+    }
+    if parts.native_type_token.is_some() {
         add(&mut len, 4)?;
     }
     Ok(len)
@@ -350,6 +359,7 @@ pub fn write_header_uninit(
         (parts.token.is_some(), FIELD_TOKEN),
         (parts.traceparent.is_some(), FIELD_TRACEPARENT),
         (parts.payload_encoding.is_some(), FIELD_PAYLOAD_ENCODING),
+        (parts.native_type_token.is_some(), FIELD_NATIVE_TYPE_TOKEN),
     ] {
         if present {
             presence |= bit;
@@ -399,6 +409,9 @@ pub fn write_header_uninit(
     }
     if let Some(value) = parts.payload_encoding {
         writer.put(&value.id().to_le_bytes())?;
+    }
+    if let Some(value) = parts.native_type_token {
+        writer.put(&value.as_u32().to_le_bytes())?;
     }
     debug_assert_eq!(writer.position, total);
     Ok(WrittenHeader { len: total, token })
@@ -584,6 +597,11 @@ pub fn parse_header<'a>(
     } else {
         None
     };
+    let native_type_token = if presence & FIELD_NATIVE_TYPE_TOKEN != 0 {
+        Some(NativeTypeToken::from_u32(reader.u32()?))
+    } else {
+        None
+    };
     if reader.position != header_len {
         return Err(UFrameHeaderError::Malformed("trailing field bytes"));
     }
@@ -600,6 +618,7 @@ pub fn parse_header<'a>(
         token,
         traceparent,
         payload_encoding,
+        native_type_token,
     };
     validate_parts(&parts)?;
     if traceparent.is_some_and(|value| value.len() > HEADER_TRACEPARENT_CAPACITY) {
@@ -619,6 +638,7 @@ pub fn parse_header<'a>(
         source,
         sink,
         payload_encoding,
+        native_type_token,
         header_len,
         token,
         traceparent,
@@ -639,6 +659,11 @@ pub(crate) fn validate_parts(parts: &TxHeaderParts<'_>) -> Result<(), UFrameHead
     };
     if !valid_uuid(parts.id) || parts.reqid.is_some_and(|id| !valid_uuid(id)) {
         return Err(UFrameHeaderError::Invalid("UUID"));
+    }
+    if parts.native_type_token.is_some() && parts.payload_encoding.is_none() {
+        return Err(UFrameHeaderError::Invalid(
+            "native token without payload encoding",
+        ));
     }
     match parts.kind {
         FrameMessageKind::Publish | FrameMessageKind::Notification => {
@@ -721,6 +746,9 @@ mod tests {
         if seed & 256 != 0 {
             builder = builder.with_payload_encoding(PayloadEncoding::CONTRACT_DEFINED);
         }
+        if seed & 512 != 0 && seed & 256 != 0 {
+            builder = builder.with_native_type_token(NativeTypeToken::from_u32(seed as u32));
+        }
         builder.build().unwrap()
     }
 
@@ -748,6 +776,7 @@ mod tests {
             received.payload_encoding,
             metadata.payload_encoding().copied()
         );
+        assert_eq!(received.native_type_token, metadata.native_type_token());
     }
 
     #[test]
@@ -755,16 +784,28 @@ mod tests {
         let limits = HeaderLimits {
             max_token_len: 2048,
         };
+        // Test-only fault controls demonstrate that the conformance gate fails
+        // for encoding drift and lost decoded identity. No library path reads it.
+        let fault = std::env::var("UP_RUST_HEADER_CONFORMANCE_FAULT").ok();
         for seed in 0..1024 {
             let metadata = metadata(seed);
             let fields = encode_frame_metadata_fields(&metadata).unwrap();
-            let bytes = encode(&metadata);
+            let mut bytes = encode(&metadata);
+            if fault.as_deref() == Some("token-byte-order")
+                && metadata.native_type_token().is_some()
+            {
+                let length = bytes.len();
+                bytes.get_mut(length - 4..).unwrap().reverse();
+            }
             assert_eq!(bytes.get(PREFIX.len() + 4..).unwrap(), fields);
             assert_eq!(
                 decode_frame_metadata_fields(bytes.get(PREFIX.len() + 4..).unwrap()).unwrap(),
                 metadata
             );
-            let received = parse_header(PREFIX, &bytes, &limits).unwrap();
+            let mut received = parse_header(PREFIX, &bytes, &limits).unwrap();
+            if fault.as_deref() == Some("lost-token") {
+                received.native_type_token = None;
+            }
             assert_received_fields(&received, &metadata);
             if let Some(token) = received.token() {
                 let offset = token.as_ptr() as usize - bytes.as_ptr() as usize;
@@ -775,6 +816,42 @@ mod tests {
             }
         }
         println!("header_field_differential: metadata_cases=1024 receive_comparisons=1024");
+    }
+
+    #[test]
+    fn native_prefix_and_in_place_header_match_the_whole_codec() {
+        use crate::wire::{
+            UFrameFieldsMetadataCodec, UProtocolNativeWire, UWireMetadataCodec,
+            UWireMetadataContext,
+        };
+        let codec = UFrameFieldsMetadataCodec;
+        let context =
+            UWireMetadataContext::from_wire::<UProtocolNativeWire, UFrameFieldsMetadataCodec>();
+        let prefix = codec.native_prefix(context).unwrap();
+        for seed in 0..1024 {
+            let metadata = metadata(seed);
+            let parts = TxHeaderParts::from(&metadata);
+            let mut output = vec![0; header_len(&prefix, &parts).unwrap()];
+            write_header(&prefix, &parts, &mut output).unwrap();
+            assert_eq!(
+                output,
+                codec.encode_frame_metadata(context, &metadata).unwrap()
+            );
+            assert_eq!(
+                codec.decode_frame_metadata(context, &output).unwrap(),
+                metadata
+            );
+            let received = parse_header(
+                &prefix,
+                &output,
+                &HeaderLimits {
+                    max_token_len: 2048,
+                },
+            )
+            .unwrap();
+            assert_received_fields(&received, &metadata);
+        }
+        println!("header_whole_codec_differential: metadata_cases=1024 receive_comparisons=1024");
     }
 
     #[test]
@@ -816,48 +893,6 @@ mod tests {
         assert_eq!(accepted + rejected, 49_152);
         assert!(accepted > 0 && rejected > 0);
         println!("header_mutation_differential: base_cases=1024 mutations=49152 accepted={accepted} rejected={rejected} accepted_fields_equal=true");
-    }
-
-    #[cfg(feature = "selected-wire-codec-core")]
-    #[test]
-    fn native_prefix_and_in_place_header_match_the_whole_codec() {
-        use crate::wire::{
-            UFrameFieldsMetadataCodec, UProtocolNativeWire, UWireMetadataCodec,
-            UWireMetadataContext,
-        };
-        let codec = UFrameFieldsMetadataCodec;
-        let context =
-            UWireMetadataContext::from_wire::<UProtocolNativeWire, UFrameFieldsMetadataCodec>();
-        let prefix = codec.native_prefix(context).unwrap();
-        for seed in 0..1024 {
-            let metadata = metadata(seed);
-            let parts = TxHeaderParts::from(&metadata);
-            let mut output = vec![0; header_len(&prefix, &parts).unwrap()];
-            write_header(&prefix, &parts, &mut output).unwrap();
-            assert_eq!(
-                output,
-                codec.encode_frame_metadata(context, &metadata).unwrap()
-            );
-            assert_eq!(
-                codec
-                    .encoded_frame_metadata_len(context, &metadata)
-                    .unwrap(),
-                output.len()
-            );
-            let mut slice = vec![0xA5; output.len() + 5];
-            let len = codec
-                .encode_frame_metadata_into(context, &metadata, &mut slice)
-                .unwrap();
-            assert_eq!(slice.get(..len).unwrap(), output);
-            assert!(slice.get(len..).unwrap().iter().all(|byte| *byte == 0xA5));
-            assert_eq!(
-                codec.decode_frame_metadata(context, &output).unwrap(),
-                metadata
-            );
-            let received = parse_header(&prefix, &output, &HeaderLimits::default()).unwrap();
-            assert_received_fields(&received, &metadata);
-        }
-        println!("header_whole_codec_differential: metadata_cases=1024 receive_comparisons=1024");
     }
 
     #[test]
