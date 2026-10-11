@@ -16,9 +16,23 @@
 | Consume push delivery | [`UListener`](crate::UListener) | applications and Communication Layer implementations | Receive messages selected by transport filters |
 | Identify the local uEntity | [`LocalUriProvider`](crate::LocalUriProvider) | application or deployment configuration | Supply source and response addresses |
 
-The Communication Layer depends on the Transport Layer. Its role APIs are
+The classic Communication Layer depends on the Transport Layer. Its role APIs are
 generic over [`UTransport`](crate::UTransport), so they can use an in-memory or
 protocol-backed implementation.
+
+## Communication families
+
+Use module-qualified role names when comparing the families:
+
+| Role namespace | Application receives | Configured carriage |
+| --- | --- | --- |
+| `communication` | `UMessage` or a decoded application result | Classic `UTransport` |
+| `communication::owned` | Messages through the owned role facade | Validated owned frames over an owned transport or selected-wire adapter |
+| `communication::zero_copy` | A retained typed receive lease with a checked stable borrow | Prepared `StableContainerWire` routes and registrations |
+
+The owned facade preserves message-oriented callbacks. Stable-native roles select
+their payload types and reserve capacity at creation. Other selected wires use
+the transport-layer adapters and their own representation contracts.
 
 ## Communication Layer implementations
 
@@ -83,9 +97,17 @@ the corresponding storage and lifetime contracts.
 | Stable-native roles | `communication::zero_copy::Endpoint` and publisher/notifier/RPC/subscriber facades | SDK over `StableContainerWire` | Initialize stable TX loans and receive checked leases |
 | Loan carriage | `PreparedTransportCore`, `PreparedTxStorage`, `Frame` | binding | Reserved physical storage, lifetime and synchronous delivery |
 | Typed receive | `StableRx<C, P>::payload` and `ZeroCopyHandler<P, F>` | SDK over a contiguous loan | Agreement, layout and field validity before a reference |
+| Prepared transmit | `TxTemplate<P>`, `TxRoute<C, P>`, `PayloadInit` | SDK over reserved binding routes/slots | Borrow message fields, initialize payload bytes and publish synchronously |
+| Borrowed metadata | `TxHeaderParts`, `RxHeader`, `HeaderLimits` | SDK/header caller | Validate and encode directly in caller or retained storage |
+| Opaque carriage | `HeaderAdmission`, `HeaderLease`, `OpaqueRoute` | SDK over a prepared core | Preserve carried identity and validate headers without creating a typed payload reference |
+| Registration lifetime | `WireRegistration` | SDK with a physical subscription handle | Close admission, detach and drain; retained frames keep their storage |
 
 Enable `up-l2-zero-copy`, plus `usubscription` for the subscriber. The
 [stable-native chapter](crate::guide::zero_copy) states setup and lifecycle limits.
+The raw `UTxLoanSpec`/`UUninitTxBuffer` and retained `UZeroCopyRxLease` interfaces
+describe storage capabilities. Prepared routes compose their own initialization,
+identity and lifetime checks above binding storage; a provenance label alone does
+not establish bit validity or authorize a typed borrow.
 
 ## Related guides
 

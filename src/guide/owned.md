@@ -9,6 +9,10 @@ and metadata layouts used by those adapters.
 
 ## Choose the API
 
+Use `communication::owned` to distinguish these facades from the classic roles
+and `communication::zero_copy`. The [trait map](crate::guide::trait_map) compares
+their callback values, storage responsibilities and selected-wire boundaries.
+
 For application roles, enable `owned-frame-transport` and `usubscription` (or
 `communication`, which includes subscription support). `communication::owned::Endpoint`
 constructs Publisher, Subscriber, Notifier, RpcClient and RpcServer facades.

@@ -43,6 +43,9 @@ cargo run -p up-native-profile -- admit --profile-root deployment \
 without URI/operation binding or an operation argument. A missing table allocation
 never falls back to it. `verify-inventory --expect-target ...`
 checks an export's target; it does not relabel or regenerate a host layout.
+Run cross-compiled exporters on their target or a compatible user-mode emulator.
+The [deployment guide](docs/deployment-agreement.md) explains single-target native
+profiles and coordinated remedies for token collisions and exhausted ID bands.
 
 ```text
 cargo run -p up-native-profile -- single-type --inventory inventory.json \

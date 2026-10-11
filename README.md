@@ -79,6 +79,9 @@ default message-only builds do not require the `sha2` runtime dependency. See th
 private-ID tables and explicit ID-zero single-type agreements under the provisional
 policy. `SingleType(NativeSingleType)` selects one exact representation for a
 deployment; it does not associate different types with operations or URI filters.
+Native profiles are single-target. The native identity guide explains target
+qualification; the deployment tool guide covers executed exporters and remedies
+for token collisions or an exhausted allocation band.
 The lightweight `NativeTypeToken` and metadata field remain available in default
 builds for opaque carriage. Classic projection of a carried token requires the
 agreement-aware APIs; ordinary projection refuses to silently remove it.

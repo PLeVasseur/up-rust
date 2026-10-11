@@ -30,6 +30,17 @@ validation. Exported data is target-specific: another target can legitimately ha
 a different descriptor even when scalar sizes happen to match. An imported target
 description is metadata, not proof that the data can be borrowed on this host.
 
+Native profiles in descriptor version 2 are single-target. Different compiler
+triples cannot agree the same native profile even when particular layouts happen
+to coincide. Pointer width, scalar alignment and field semantics remain part of
+the full qualification. Use a serialized representation for mixed-target routes
+instead of relabelling native descriptors.
+
+`usize` and `isize` are stable fields only within that target qualification. Prefer
+fixed-width integers for types mirrored by another language. Their widths are not
+portable, and a target-qualified descriptor does not authorize borrowing bytes
+that use a different ABI.
+
 ```rust
 use up_rust::{NativeByteOrder, NativeRepresentation, NativeTarget};
 

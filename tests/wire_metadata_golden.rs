@@ -392,7 +392,7 @@ fn explicit_zero_ttl_is_retained_natively_and_canonicalized_through_classic() {
             .write_to_protobuf_bytes()
             .unwrap()
     );
-    // Protobuf field6 is scalar TTL: explicitly encoded zero and its omitted
+    // Protobuf field 6 is scalar TTL: explicitly encoded zero and its omitted
     // default have the same Rust/native no-expiry meaning.
     let mut explicit_protobuf_zero = protobuf.clone();
     explicit_protobuf_zero.extend_from_slice(&[0x30, 0x00]);

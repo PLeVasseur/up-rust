@@ -13,7 +13,8 @@
 * [Implementing a transport](crate::guide::utransport): the
   relationship between [`UTransport`](crate::UTransport), L1 requirements, and
   protocol bindings, with links to published transport implementations.
-* [The trait map](crate::guide::trait_map): how the public traits fit together.
+* [The trait map](crate::guide::trait_map): how classic, owned and stable-native
+  roles relate to their transport and prepared-storage capabilities.
 * [Stable-native communication](crate::guide::zero_copy): loan initialization and
   receive leases for the native role family (`up-l2-zero-copy`).
 

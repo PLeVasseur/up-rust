@@ -50,6 +50,14 @@ Generate and run the exporter for the intended target. Different targets may hav
 different descriptors even when their layouts happen to coincide. No remote
 compiler attestation is claimed by these configuration files.
 
+For a cross-compiled target, execute the exporter on the device or a compatible
+user-mode emulator. For example, after building an application exporter for
+`aarch64-unknown-linux-gnu`, run its target executable under `qemu-aarch64` with
+that target's loader and libraries. Use `verify-inventory --expect-target` to check
+the emitted triple. A cross-compiler invocation alone is not an executed export.
+Native version-2 routes remain single-target; serialized codecs serve mixed-target
+routes without changing a native descriptor's target label.
+
 ## Append-only private allocations
 
 `generate` recommends Table mode. Its default F100-F7FF band is overridable within
@@ -70,6 +78,15 @@ actual previous content hash and retain every old reservation/descriptor. Duplic
 IDs/type keys, changed descriptors, short-token collisions and exhaustion fail.
 `verify --previous` checks the imported successor against the actual prior ledger.
 The full current generation is provisioned independently for runtime admission.
+
+Short-token collisions fail even when complete descriptors differ. Inspect the
+conflicting inventory and coordinate a revised application identity before
+regenerating; never change an assigned descriptor in place. Band exhaustion also
+fails. Format-1 successors cannot change their band, and tombstones are never
+recycled. Provision a separately coordinated new deployment profile with sufficient
+capacity, or design and version an explicit migration in a future format.
+`identities.private_payloads` reserves other payload IDs; it does not expand the
+native allocation band.
 
 The published shape contracts are in `schemas/native-inventory-v1.schema.json`,
 `schemas/deployment-agreement-v1.schema.json` and

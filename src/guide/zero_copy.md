@@ -6,6 +6,11 @@ its subscription-service client. Notification receive uses `Endpoint::listen`.
 The roles use `StableContainerWire`; other selected wires use
 the transport-layer API.
 
+The [trait map](crate::guide::trait_map) relates these roles to classic and owned
+communication. The [native identity guide](crate::guide::native_identity) explains
+target-qualified agreement before setup; this chapter follows the reserved route,
+initialization witness, checked receive lease and explicit registration lifetime.
+
 ## Configure an endpoint
 
 ### Prepared transmit routes
@@ -247,6 +252,12 @@ creation reserves SDK state; do not use a new client's first call as warmup. Cou
 initialization, header writing/parsing, handlers, pending waits and rejection on
 every participating thread. Observers and application handlers must honor their
 own allocation policy; their costs cannot be subtracted from a whole-process count.
+
+Measure the complete prepared operation, including URI/metadata construction,
+encoding, delivery, receive admission and rejection. A payload-only initializer
+measurement does not cover that operation. Binding documentation supplies its
+physical storage, native allocator and callback-thread setup requirements; shared
+SDK API tests cannot substitute for those backend measurements.
 
 ## Errors and unsafe boundaries
 
