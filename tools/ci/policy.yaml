@@ -265,3 +265,30 @@ checks:
     timeout: 1200
     completion: libtest
     command: [cargo, "+{toolchain}", test, --locked, -p, up-rust, --no-default-features, --features, "up-l2-zero-copy,usubscription", --lib, "communication::zero_copy"]
+  - name: prepared-allocation-debug
+    group: tests
+    roles: [current, msrv]
+    timeout: 1800
+    command: [python3, tools/ci/check_prepared_allocation.py, --toolchain, "{toolchain}", --profile, debug]
+  - name: prepared-allocation-release
+    group: tests
+    roles: [current, msrv]
+    timeout: 1800
+    command: [python3, tools/ci/check_prepared_allocation.py, --toolchain, "{toolchain}", --profile, release]
+  - name: prepared-benchmark
+    group: tests
+    roles: [current, msrv]
+    timeout: 1800
+    command: [python3, tools/ci/check_prepared_allocation.py, --toolchain, "{toolchain}", --profile, release, --bench]
+  - name: payload-fixture-core
+    group: tests
+    roles: [current, msrv]
+    timeout: 1200
+    completion: libtest
+    command: [cargo, "+{toolchain}", test, --locked, -p, up-rust, --no-default-features, --features, payload-contract-fixtures, --test, payload_contract, --test, payload_contract_vectors]
+  - name: payload-fixture-full
+    group: tests
+    roles: [current, msrv]
+    timeout: 1200
+    completion: libtest
+    command: [cargo, "+{toolchain}", test, --locked, -p, up-rust, --all-features, --test, payload_contract, --test, payload_contract_vectors]

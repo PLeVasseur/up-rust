@@ -17,6 +17,7 @@ description = "The Eclipse uProtocol Rust Language Library"
 edition = "2021"
 include = [
     "/abi/*",
+    "/benches/*",
     "/build.rs",
     "/Cargo.toml",
     "/examples/*",
@@ -24,6 +25,8 @@ include = [
     "/README.md",
     "/MIGRATION.md",
     "/src/*",
+    "/test-fixtures/proto/**",
+    "/tests/**",
     "/up-spec/up-core-api/uprotocol/*",
 ]
 keywords = ["uProtocol", "SDK", "communication"]
@@ -49,6 +52,9 @@ communication = [
     "up-l2-rpc-server",
 ]
 protobuf-support = ["dep:protobuf"]
+payload-contract-fixtures = ["protobuf-wire", "zero-copy-transport", "dep:serde", "serde/derive", "dep:serde_json"]
+payload-contract-large-fixtures = ["payload-contract-fixtures"]
+payload-contract-simulator-fixtures = ["payload-contract-large-fixtures"]
 symphony = ["up-l2-rpc-server", "dep:serde", "dep:serde_json", "dep:symphony"]
 test-util = ["dep:mockall"]
 # Generated core-service protobuf APIs and conversions.
@@ -123,6 +129,12 @@ tokio = { version = "1.53.1", default-features = false, features = [
     "sync",
     "time",
 ] }
+
+[[test]]
+name = "prepared_paths_zero_alloc"
+path = "tests/prepared_paths_zero_alloc.rs"
+harness = false
+required-features = ["payload-contract-fixtures", "transport-implementer-api", "test-util", "up-l2-zero-copy", "usubscription"]
 
 [profile.release]
 opt-level = 3
@@ -241,6 +253,19 @@ required-features = ["native-inventory"]
 [[test]]
 name = "selected_wire_payload_trybuild"
 required-features = ["zero-copy-transport", "transport-implementer-api", "selected-wire-user-api"]
+
+[[test]]
+name = "payload_contract"
+required-features = ["payload-contract-fixtures"]
+
+[[test]]
+name = "fake_external_wire"
+required-features = ["wire-implementer-api"]
+
+[[bench]]
+name = "payload_contract"
+harness = false
+required-features = ["payload-contract-fixtures", "up-l2-zero-copy", "wire-implementer-api", "test-util"]
 
 [lints]
 workspace = true

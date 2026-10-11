@@ -175,6 +175,21 @@ fi
 if [[ "$configuration" == current && ( "$group" == all || "$group" == tests ) ]]; then
   python3 tools/ci/run_check.py --log "$log_root/zero-copy-subscriber-minimal.log" --timeout 1200 --completion libtest -- cargo +1.95.0 test --locked -p up-rust --no-default-features --features up-l2-zero-copy,usubscription --lib communication::zero_copy
 fi
+if [[ "$configuration" == current && ( "$group" == all || "$group" == tests ) ]]; then
+  python3 tools/ci/run_check.py --log "$log_root/prepared-allocation-debug.log" --timeout 1800 --completion command -- python3 tools/ci/check_prepared_allocation.py --toolchain 1.95.0 --profile debug
+fi
+if [[ "$configuration" == current && ( "$group" == all || "$group" == tests ) ]]; then
+  python3 tools/ci/run_check.py --log "$log_root/prepared-allocation-release.log" --timeout 1800 --completion command -- python3 tools/ci/check_prepared_allocation.py --toolchain 1.95.0 --profile release
+fi
+if [[ "$configuration" == current && ( "$group" == all || "$group" == tests ) ]]; then
+  python3 tools/ci/run_check.py --log "$log_root/prepared-benchmark.log" --timeout 1800 --completion command -- python3 tools/ci/check_prepared_allocation.py --toolchain 1.95.0 --profile release --bench
+fi
+if [[ "$configuration" == current && ( "$group" == all || "$group" == tests ) ]]; then
+  python3 tools/ci/run_check.py --log "$log_root/payload-fixture-core.log" --timeout 1200 --completion libtest -- cargo +1.95.0 test --locked -p up-rust --no-default-features --features payload-contract-fixtures --test payload_contract --test payload_contract_vectors
+fi
+if [[ "$configuration" == current && ( "$group" == all || "$group" == tests ) ]]; then
+  python3 tools/ci/run_check.py --log "$log_root/payload-fixture-full.log" --timeout 1200 --completion libtest -- cargo +1.95.0 test --locked -p up-rust --all-features --test payload_contract --test payload_contract_vectors
+fi
 if [[ "$configuration" == msrv && ( "$group" == all || "$group" == check ) ]]; then
   python3 tools/ci/run_check.py --log "$log_root/check-all.log" --timeout 1200 --completion command -- cargo +1.88.0 check --locked --workspace --all-features --all-targets
 fi
@@ -285,4 +300,19 @@ if [[ "$configuration" == msrv && ( "$group" == all || "$group" == tests ) ]]; t
 fi
 if [[ "$configuration" == msrv && ( "$group" == all || "$group" == tests ) ]]; then
   python3 tools/ci/run_check.py --log "$log_root/zero-copy-subscriber-minimal.log" --timeout 1200 --completion libtest -- cargo +1.88.0 test --locked -p up-rust --no-default-features --features up-l2-zero-copy,usubscription --lib communication::zero_copy
+fi
+if [[ "$configuration" == msrv && ( "$group" == all || "$group" == tests ) ]]; then
+  python3 tools/ci/run_check.py --log "$log_root/prepared-allocation-debug.log" --timeout 1800 --completion command -- python3 tools/ci/check_prepared_allocation.py --toolchain 1.88.0 --profile debug
+fi
+if [[ "$configuration" == msrv && ( "$group" == all || "$group" == tests ) ]]; then
+  python3 tools/ci/run_check.py --log "$log_root/prepared-allocation-release.log" --timeout 1800 --completion command -- python3 tools/ci/check_prepared_allocation.py --toolchain 1.88.0 --profile release
+fi
+if [[ "$configuration" == msrv && ( "$group" == all || "$group" == tests ) ]]; then
+  python3 tools/ci/run_check.py --log "$log_root/prepared-benchmark.log" --timeout 1800 --completion command -- python3 tools/ci/check_prepared_allocation.py --toolchain 1.88.0 --profile release --bench
+fi
+if [[ "$configuration" == msrv && ( "$group" == all || "$group" == tests ) ]]; then
+  python3 tools/ci/run_check.py --log "$log_root/payload-fixture-core.log" --timeout 1200 --completion libtest -- cargo +1.88.0 test --locked -p up-rust --no-default-features --features payload-contract-fixtures --test payload_contract --test payload_contract_vectors
+fi
+if [[ "$configuration" == msrv && ( "$group" == all || "$group" == tests ) ]]; then
+  python3 tools/ci/run_check.py --log "$log_root/payload-fixture-full.log" --timeout 1200 --completion libtest -- cargo +1.88.0 test --locked -p up-rust --all-features --test payload_contract --test payload_contract_vectors
 fi

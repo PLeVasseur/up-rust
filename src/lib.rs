@@ -91,6 +91,10 @@ None of the following features are enabled by default, so you can pick and choos
 * `up-l2-rpc-server` Enables a default implementation of the `RpcServer` trait on top of the Transport Layer API.
 * `up-l2-zero-copy` Enables stable-native Publisher, Notifier and RPC facades;
   add `usubscription` for the Subscriber service interaction.
+* `payload-contract-fixtures` exposes representative payload schemas and fixtures
+  for conformance and diagnostics. `payload-contract-large-fixtures` adds the
+  specified LiDAR/camera cases; `payload-contract-simulator-fixtures` reserves
+  simulator-specific applicability without inventing an implemented stable case.
 * `udiscovery` Enables support for types required to interact with [uDiscovery service](https://github.com/eclipse-uprotocol/up-spec/blob/v1.6.0-alpha.7/up-l3/udiscovery/v3/README.adoc)
   implementations.
 * `usubscription` Enables support for types required to interact with [uSubscription service](https://github.com/eclipse-uprotocol/up-spec/blob/v1.6.0-alpha.7/up-l3/usubscription/v3/README.adoc)
@@ -133,6 +137,10 @@ pub use registration::{
     InboxPushError, OverflowPolicy, Registration, RegistrationConfig, RegistrationHandler,
     RegistrationInbox, RegistrationSetupError, RegistrationStats, RegistrationStopError,
 };
+
+/// Representative payload fixtures for conformance and allocation diagnostics.
+#[cfg(feature = "payload-contract-fixtures")]
+pub mod bench_fixtures;
 
 /// Audience-oriented examples and implementation guidance.
 pub mod guide {

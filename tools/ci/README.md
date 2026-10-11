@@ -89,6 +89,20 @@ The in-memory encoded core drives publish, notification and correlated RPC deliv
 tests check typed payloads and owned-lease provenance. These are SDK role contracts,
 with native storage/copy and worker acceptance remaining in the binding's gates.
 
+Both compiler roles also run the harness-free prepared allocation gate in debug and
+release. The auditor requires every named subject exactly once, all-thread counters,
+zero allocation calls and bytes, and final completion; a missing/duplicate row is a
+failure. The bounded release benchmark requires ten observations of all fourteen
+subjects, zeros for its seven prepared-path subjects, and a positive heap-allocation
+control. These include full header construction and encoding; no smoke override
+can satisfy acceptance. Setup warms every runtime/delivery thread, and a new RPC
+client's first contact stays inside the counting window.
+
+Core/full payload fixture checks pin the catalog digest, which includes the
+stored-vector manifest, verify all eight stored file hashes, and validate enabled
+fixture types against bytes read from disk. Large fixtures remain explicitly gated
+by their feature. The ignored vector updater is not a normal qualification check.
+
 Logs live in `${CARGO_TARGET_DIR:-target}/ci-logs/<configuration>/`. CI uploads the
 current test group's logs as `test-results`, preserving the artifact name and
 workflow output consumed by `release.yaml`. The artifact is readable command/test

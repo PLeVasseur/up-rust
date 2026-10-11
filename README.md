@@ -134,6 +134,13 @@ short output is rejected before mutation and canonical metadata bytes are preser
 Generated array initializers support bulk in-place repeated patterns, with a
 fixed-size empty-pattern error and no payload-sized temporary. Stable fields are
 duplicable plain data, excluding ownership-sensitive handles and uniqueness state.
+The payload-contract fixture features ship eight hash-bound stable byte vectors.
+Their core/full catalog digests include the stored-vector manifest; ordinary tests
+validate stored bytes, and regeneration requires an explicitly selected updater.
+LiDAR fixture geometry uses frozen coefficient bits so exact validation does not
+depend on platform-specific transcendental rounding.
+The local/CI policy runs prepared allocation checks on both compilers in debug and
+release, auditing every required result row and the benchmark's allocating control.
 The explicit `test-util` feature exposes `PoolCore` as an in-process conformance
 implementation, with owned-lease provenance rather than a claim of native SHM.
 Prepared RPC clients reserve pending slots and credential storage, and servers
