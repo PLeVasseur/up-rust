@@ -20,8 +20,9 @@
 //! in flight. Load matching peer configurations before activating a new route;
 //! changing a table requires a new version, with old routes drained separately.
 
-use std::collections::{BTreeMap, BTreeSet};
-use std::sync::Arc;
+use std::any::TypeId;
+use std::collections::{BTreeMap, BTreeSet, HashMap};
+use std::sync::{Arc, RwLock};
 
 use sha2::{Digest, Sha256};
 
@@ -581,11 +582,17 @@ impl NativeProfile {
 ///
 /// This is not a network handshake. Deployment tooling supplies the peer's
 /// configuration; a route must not substitute its own configuration for that
-/// evidence. Clones retain the same immutable generation for in-flight work.
+/// evidence. Clones retain the same immutable generation for in-flight work,
+/// and share one per-generation cache of resolved type identities so that the
+/// per-message path neither rebuilds descriptors nor hashes them.
 #[derive(Clone, Debug)]
 pub struct NativeProfileAgreement {
     profile: Arc<NativeProfile>,
     digest: [u8; 32],
+    // Read only by the stable-payload resolver, which is feature-gated; the
+    // field is kept unconditionally so the type has one shape per build.
+    #[cfg_attr(not(feature = "zero-copy-transport"), allow(dead_code))]
+    identities: Arc<RwLock<HashMap<TypeId, NativePayloadIdentity>>>,
 }
 
 impl NativeProfileAgreement {
@@ -606,6 +613,7 @@ impl NativeProfileAgreement {
         Ok(Self {
             profile: local,
             digest,
+            identities: Arc::new(RwLock::new(HashMap::new())),
         })
     }
 
@@ -627,6 +635,50 @@ impl NativeProfileAgreement {
     #[must_use]
     pub fn is_same_generation(&self, other: &Self) -> bool {
         Arc::ptr_eq(&self.profile, &other.profile) || self.digest == other.digest
+    }
+
+    /// Resolves the identity of the stable payload type `T` under this
+    /// generation, retaining a successful result for every later call.
+    ///
+    /// This is the only writer of the per-generation cache. The key is the
+    /// `TypeId` of `T` and the value is the identity that
+    /// [`Self::identity_for`] derives from the representation `represent`
+    /// builds for that same `T`; both come from crate code, so no caller can
+    /// associate one type's identity with another type. The cache is keyed by
+    /// `TypeId`, which is sound because a stable payload's descriptor is a
+    /// property of the type and the generation is immutable.
+    ///
+    /// Only successful resolutions are cached; an error is returned unchanged,
+    /// and the next call builds the representation again, so a misconfigured
+    /// type keeps reporting its reason until it is fixed.
+    ///
+    /// # Errors
+    ///
+    /// Returns the error from `represent` or from [`Self::identity_for`].
+    #[cfg(feature = "zero-copy-transport")]
+    pub(crate) fn resolve_type_identity<T: 'static, E>(
+        &self,
+        represent: impl FnOnce() -> Result<NativeRepresentation, E>,
+    ) -> Result<NativePayloadIdentity, E>
+    where
+        E: From<NativeProfileError>,
+    {
+        let key = TypeId::of::<T>();
+        if let Some(identity) = self
+            .identities
+            .read()
+            .unwrap_or_else(std::sync::PoisonError::into_inner)
+            .get(&key)
+        {
+            return Ok(*identity);
+        }
+        let representation = represent()?;
+        let identity = self.identity_for(&representation)?;
+        self.identities
+            .write()
+            .unwrap_or_else(std::sync::PoisonError::into_inner)
+            .insert(key, identity);
+        Ok(identity)
     }
 
     /// Prepares a matching, newer generation before the route owner activates it.

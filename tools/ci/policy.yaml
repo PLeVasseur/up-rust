@@ -190,7 +190,7 @@ checks:
     roles: [current, msrv]
     timeout: 1200
     completion: libtest
-    command: [cargo, "+{toolchain}", test, --locked, --no-default-features, --features, native-identity, --lib, "frame::native"]
+    command: [cargo, "+{toolchain}", test, --locked, --no-default-features, --features, native-identity, --lib]
   - name: native-identity-docs
     group: docs
     roles: [current, msrv]
@@ -202,3 +202,43 @@ checks:
     roles: [current, msrv]
     timeout: 600
     command: [python3, tools/ci/check_native_features.py, --toolchain, "{toolchain}"]
+  - name: zero-copy-minimal
+    group: check
+    roles: [current, msrv]
+    timeout: 1200
+    command: [cargo, "+{toolchain}", check, --locked, --no-default-features, --features, zero-copy-transport, --all-targets]
+  - name: native-inventory-minimal
+    group: check
+    roles: [current, msrv]
+    timeout: 1200
+    command: [cargo, "+{toolchain}", check, --locked, --no-default-features, --features, native-inventory, --all-targets]
+  - name: native-inventory
+    group: tests
+    roles: [current, msrv]
+    timeout: 1200
+    completion: libtest
+    command: [cargo, "+{toolchain}", test, --locked, --all-features, --test, native_inventory]
+  - name: native-inventory-duplicate
+    group: tests
+    roles: [current, msrv]
+    timeout: 1200
+    completion: libtest
+    command: [cargo, "+{toolchain}", test, --locked, --all-features, --test, native_inventory_duplicate]
+  - name: native-path-zero-alloc
+    group: tests
+    roles: [current, msrv]
+    timeout: 1200
+    completion: libtest
+    command: [cargo, "+{toolchain}", test, --locked, --all-features, --test, native_path_zero_alloc, --, --test-threads=8]
+  - name: stable-payload-ui
+    group: tests
+    roles: [current]
+    timeout: 1200
+    completion: libtest
+    command: [cargo, "+{toolchain}", test, --locked, --all-features, --test, stable_payload_trybuild]
+  - name: owned-frame-ui
+    group: tests
+    roles: [current]
+    timeout: 1200
+    completion: libtest
+    command: [cargo, "+{toolchain}", test, --locked, --all-features, --test, owned_frame_trybuild]

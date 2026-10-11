@@ -24,7 +24,9 @@ use std::io::Cursor;
 use std::io::Read;
 
 use crate::frame::metadata::{UFrameMetadata, UFrameMetadataError};
-use crate::payload::codec::{PayloadCodec, ReadDecodePayload};
+#[cfg(feature = "native-identity")]
+use crate::payload::codec::{PayloadCodec, PayloadDecodeLimit, ReadDecodePayload};
+#[cfg(feature = "native-identity")]
 use crate::payload::UWireError;
 #[cfg(feature = "owned-frame-transport")]
 use crate::UOwnedFrame;
@@ -79,6 +81,13 @@ pub trait UFrameView {
     /// Returns the native frame metadata.
     fn metadata(&self) -> &UFrameMetadata;
 
+    /// Returns the immutable route agreement retained by this view, if configured.
+    /// Recognizing an encoding ID does not establish an agreement for opaque frames.
+    #[cfg(feature = "native-identity")]
+    fn native_agreement(&self) -> Option<&crate::NativeProfileAgreement> {
+        None
+    }
+
     /// Returns the number of application payload bytes visible through this view.
     fn payload_len(&self) -> usize;
 
@@ -112,15 +121,19 @@ pub trait UFrameView {
     ///
     /// Returns an error if the frame has no payload, has missing or incompatible
     /// encoding metadata, or if the codec cannot decode the payload bytes.
-    fn decode_payload_from_reader_as<C, T>(&self) -> Result<T, UWireError>
+    #[cfg(feature = "native-identity")]
+    fn decode_payload_from_reader_as<C, T>(
+        &self,
+        limit: PayloadDecodeLimit,
+    ) -> Result<T, UWireError>
     where
         C: PayloadCodec + ReadDecodePayload<T>,
     {
-        C::verify_encoding(self.metadata().payload_encoding())?;
+        C::verify_metadata(self.metadata(), self.native_agreement())?;
         if !self.has_payload() {
             return Err(UWireError::MissingPayload);
         }
-        C::decode_payload_from_reader(self.payload_reader(), self.payload_len())
+        C::decode_payload_from_reader(self.payload_reader(), self.payload_len(), limit)
     }
 }
 

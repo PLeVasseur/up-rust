@@ -61,6 +61,15 @@ prove default message-only use excludes `sha2`, while explicit native identity
 and selected-wire codec capabilities include it. Dev-only fixture hashing does
 not count as a runtime dependency.
 
+The native-only library check includes the complete available codec and descriptor
+suite. Workspace library checks also execute the derive crate's error-branch tests.
+Both compilers run inventory/duplicate-registration tests and exactly one dedicated
+`native_path_zero_alloc` run with eight test threads; allocation is not included
+in a second integration battery. Counts cover alloc, alloc_zeroed and realloc.
+Minimal zero-copy/inventory checks qualify their feature closures. Current alone
+executes the stable-payload and owned-frame diagnostic batteries, including the
+tuple initializer pass case; MSRV explicitly omits current compiler diagnostics.
+
 Logs live in `${CARGO_TARGET_DIR:-target}/ci-logs/<configuration>/`. CI uploads the
 current test group's logs as `test-results`, preserving the artifact name and
 workflow output consumed by `release.yaml`. The artifact is readable command/test

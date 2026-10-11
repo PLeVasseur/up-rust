@@ -14,20 +14,20 @@
 
 use std::{future::Future, mem::MaybeUninit, sync::Arc};
 
-use crate::{RegistrationInbox, UFrameHeaderError, UUri, WrittenHeader};
+use crate::{Frame, RegistrationInbox, UFrameHeaderError, UUri, WrittenHeader};
 
 /// Synchronous encoded delivery into setup-owned receiver state.
 ///
 /// The sink may be a bounded registration inbox or an RPC pending table. Dynamic
 /// erasure happens at setup and does not create an async future per message.
-pub trait FrameSink<F: Send + 'static>: Send + Sync {
+pub trait FrameSink<F: Frame>: Send + Sync {
     /// Accepts or locally rejects one frame, releasing rejected storage.
     fn push(&self, frame: F);
     /// Closes admission and wakes any local waiters without revoking retained frames.
     fn close(&self);
 }
 
-impl<F: Send + 'static> FrameSink<F> for RegistrationInbox<F> {
+impl<F: Frame> FrameSink<F> for RegistrationInbox<F> {
     fn push(&self, frame: F) {
         let _ = RegistrationInbox::push(self, frame);
     }
@@ -167,17 +167,19 @@ pub unsafe trait PreparedTxStorage: Send {
     fn record_header(&mut self, header: WrittenHeader) -> Result<(), SendError>;
 }
 
-/// A loan whose visible header and payload were initialized and checked.
+/// A loan whose SDK-visible header and payload were initialized and checked.
 ///
-/// Producers must satisfy the explicit unsafe constructor contract after filling
-/// the exact extents and recording the header. A binding still owns initialization
-/// of native framing/padding outside those visible views.
+/// Ordinary construction is performed by the checked frame filler. Advanced
+/// producers must satisfy the explicit unsafe constructor contract. A binding
+/// still owns initialization of native framing/padding outside those visible views.
 pub struct InitializedTx<T> {
     pub(crate) storage: T,
 }
 
 impl<T> InitializedTx<T> {
     /// Wraps a loan initialized outside the checked SDK filler.
+    ///
+    /// Ordinary sends use the checked route initializer instead.
     ///
     /// # Safety
     /// Every SDK-visible metadata and present payload byte must be initialized;
@@ -217,7 +219,7 @@ pub trait PreparedTransportCore: Send + Sync + 'static {
     where
         Self: 'a;
     /// Receive storage retaining all physical owners independently.
-    type Rx: Send + 'static;
+    type Rx: Frame;
     /// Instance-bound detachment handle, created during registration setup.
     type Subscription: Send;
 

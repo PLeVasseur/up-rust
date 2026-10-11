@@ -42,6 +42,60 @@ assert_eq!(descriptor, restored);
 # Ok::<(), up_rust::NativeProfileError>(())
 ```
 
+## Stable payloads and borrowing
+
+`zero-copy-transport` enables `StablePayload` and `StablePayloadInit` derives,
+stable-container payload codecs and receive/transmit loan contracts. A stable
+layout needs `repr(C)` or `repr(transparent)`, explicit padding and no drop glue.
+The derive's field validators reject invalid bool and char representations;
+typed borrowing additionally checks the descriptor, exact size and alignment.
+An immutable agreement resolves the complete type separately from these memory
+checks. Bindings retain the backing storage for every outstanding lease.
+The in-memory transmit helpers return `ResourceExhausted` for impossible sizes
+or allocation failure; bindings define their own physical allocation policy.
+
+```rust
+# #[cfg(feature = "zero-copy-transport")]
+# {
+use std::mem::MaybeUninit;
+use up_rust::{StablePayload, StablePayloadInit};
+#[repr(C)]
+#[derive(Debug, StablePayload, StablePayloadInit)]
+#[stable_payload(type_name = "example.State", revision = 1)]
+struct State { value: u32 }
+#[repr(align(8))]
+struct Storage([MaybeUninit<u8>; 4]);
+let mut storage = Storage([MaybeUninit::uninit(); 4]);
+let state = State::init(&mut storage.0)?.value(42).finish();
+assert_eq!(state.value, 42);
+# }
+# Ok::<(), up_rust::UWireError>(())
+```
+
+## Linked inventory
+
+Enable `native-inventory` to register concrete application types for target-side
+descriptor export. Generic types use `register_native_type!(ConcreteInstantiation)`.
+The defining crates must be linked into the exporter; a Cargo dependency alone
+does not make an unlinked crate discoverable.
+
+```rust
+# #[cfg(feature = "native-inventory")]
+# {
+use up_rust::{native_inventory::registered_native_types, StablePayload};
+#[repr(C)]
+#[derive(StablePayload)]
+#[stable_payload(type_name = "example.InventoryState", inventory)]
+struct InventoryState { value: u32 }
+assert!(registered_native_types()?.iter().any(|value| value.name() == "example.InventoryState"));
+# }
+# Ok::<(), up_rust::NativeProfileError>(())
+```
+
+Enumeration sorts by stable name/revision and rejects duplicate registrations or
+callback target/identity disagreement. It constructs descriptors on demand,
+neither application values nor a runtime-global payload-ID allocation map.
+
 ## Prefer a private-ID table
 
 [`NativeProfileMode::Table`](crate::NativeProfileMode::Table) is the recommended

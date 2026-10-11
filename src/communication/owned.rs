@@ -630,9 +630,16 @@ where
     where
         T::Wire: UWireEncode<Request> + UWireDecodeOwned<Response>,
     {
+        let identity = <T::Wire as PayloadCodec>::payload_identity(None)
+            .map_err(|error| ServiceInvocationError::InvalidArgument(error.to_string()))?;
+        if identity.native_type_token().is_some() {
+            return Err(ServiceInvocationError::InvalidArgument(
+                "owned typed RPC requires a fixed payload encoding".into(),
+            ));
+        }
         let payload_bytes = <T::Wire as EncodePayload<Request>>::encode_payload_owned(request)
             .map_err(|error| ServiceInvocationError::InvalidArgument(error.to_string()))?;
-        let payload_encoding = <T::Wire as PayloadCodec>::payload_encoding();
+        let payload_encoding = identity.encoding();
         let response = self
             .invoke_method(
                 method,
@@ -641,6 +648,9 @@ where
             )
             .await?
             .ok_or_else(|| ServiceInvocationError::InvalidArgument("No payload".to_string()))?;
+        identity
+            .verify(Some(&response.payload_encoding()), None)
+            .map_err(|error| ServiceInvocationError::InvalidArgument(error.to_string()))?;
         <T::Wire as DecodePayload<'_, Response>>::decode_payload(response.payload())
             .map_err(|error| ServiceInvocationError::InvalidArgument(error.to_string()))
     }
@@ -983,9 +993,16 @@ where
     where
         T::Wire: UWireEncode<Payload>,
     {
+        let identity = <T::Wire as PayloadCodec>::payload_identity(None)
+            .map_err(|error| PubSubError::InvalidArgument(error.to_string()))?;
+        if identity.native_type_token().is_some() {
+            return Err(PubSubError::InvalidArgument(
+                "owned typed publish requires a fixed payload encoding".into(),
+            ));
+        }
         let payload_bytes = <T::Wire as EncodePayload<Payload>>::encode_payload_owned(payload)
             .map_err(|error| PubSubError::InvalidArgument(error.to_string()))?;
-        let payload_encoding = <T::Wire as PayloadCodec>::payload_encoding();
+        let payload_encoding = identity.encoding();
         self.publish(
             resource_id,
             call_options,

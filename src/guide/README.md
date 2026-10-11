@@ -3,6 +3,8 @@
 * [Migrating from 0.9 to 0.10](crate::guide::migration): source-level changes and examples.
 * [URI storage and validation](crate::guide::uris): bounded wire-part parsing and feature-selected storage.
 * [Bounded receive registrations](crate::guide::registrations): setup capacity, generic workers and lifecycle.
+* [Prepared stable-native transport](crate::guide::zero_copy): typed initialization,
+  checked receive admission, opaque forwarding and owned credential storage.
 * [Frame metadata](crate::guide::frame_metadata): validated metadata, representations and codec errors.
 * [Native identity](crate::guide::native_identity): target-qualified descriptors and
   explicit deployment agreement (`native-identity`).

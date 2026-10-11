@@ -35,9 +35,11 @@ rust-version = "1.88"
 version = "0.10.0-SNAPSHOT"
 resolver = "2"
 
+[workspace]
+members = ["macros"]
+
 [features]
 default = []
-zero-copy-transport = ["selected-wire-transport-core"]
 cloudevents = ["protobuf-support"]
 communication = [
     "up-l2-notifier",
@@ -60,7 +62,9 @@ selected-wire-user-api = ["selected-wire-transport-adapter", "up-core-api"]
 transport-implementer-api = ["selected-wire-transport-core", "tokio/sync", "tokio/rt", "tokio/time"]
 owned-frame-transport = ["selected-wire-transport-core", "up-core-api"]
 wire-implementer-api = ["selected-wire-codec-core"]
-protobuf-wire = ["up-core-api"]
+protobuf-wire = ["up-core-api", "selected-wire-codec-core"]
+zero-copy-transport = ["dep:up-rust-macros", "native-identity", "selected-wire-transport-core"]
+native-inventory = ["zero-copy-transport", "dep:inventory"]
 # Communication Layer traits, independently of their default implementations.
 communication-api = []
 up-l2-notifier = ["communication-api"]
@@ -78,6 +82,7 @@ bytes = { version = "1.12.1" }
 # prevent usage of yanked 0.10.1 version of chacha20
 chacha20 = { version = "0.10.2" }
 fluent-uri = { version = "0.4.1", features = ["net"] }
+inventory = { version = "=0.3.24", optional = true }
 mediatype = "0.23.0"
 mockall = { version = "0.15.0", optional = true }
 protobuf = { version = "3.7.2", features = ["with-bytes"], optional = true }
@@ -89,6 +94,7 @@ symphony = { version = "0.1.5", optional = true }
 thiserror = { version = "2.0.20" }
 tokio = { version = "1.53.1", default-features = false, optional = true }
 tracing = { version = "0.1.44", default-features = false, features = ["log", "std"] }
+up-rust-macros = { version = "0.10.0-SNAPSHOT", path = "macros", optional = true }
 uuid-simd = { version = "0.8.0", default-features = false, features = ["std", "detect"] }
 
 [build-dependencies]
@@ -211,13 +217,33 @@ required-features = ["owned-frame-transport"]
 name = "listener_admission_ui"
 required-features = ["transport-implementer-api"]
 
+[[test]]
+name = "owned_frame_trybuild"
+required-features = ["owned-frame-transport"]
+
+[[test]]
+name = "stable_payload_trybuild"
+required-features = ["native-inventory"]
+
+[[test]]
+name = "native_path_zero_alloc"
+required-features = ["zero-copy-transport"]
+
+[[test]]
+name = "native_inventory"
+required-features = ["native-inventory"]
+
+[[test]]
+name = "native_inventory_duplicate"
+required-features = ["native-inventory"]
+
 [lints.rust]
 # Every public item is documented and every public type is inspectable.
 # Copy is a per-type semver commitment, not a crate-wide hygiene default.
 missing_docs = "deny"
 missing_debug_implementations = "deny"
 # Accept code blocks excluded from tarpaulin coverage checks.
-unexpected_cfgs = { level = "warn", check-cfg = ['cfg(tarpaulin_include)', 'cfg(feature, values("zero-copy-transport"))'] }
+unexpected_cfgs = { level = "warn", check-cfg = ['cfg(tarpaulin_include)'] }
 
 [lints.clippy]
 # see https://corrode.dev/blog/defensive-programming/#clippy-lints-for-defensive-programming

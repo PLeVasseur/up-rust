@@ -821,12 +821,12 @@ mod tests {
     #[test]
     fn native_prefix_and_in_place_header_match_the_whole_codec() {
         use crate::wire::{
-            UFrameFieldsMetadataCodec, UProtocolNativeWire, UWireMetadataCodec,
+            StableContainerWire, UFrameFieldsMetadataCodec, UWireMetadataCodec,
             UWireMetadataContext,
         };
         let codec = UFrameFieldsMetadataCodec;
         let context =
-            UWireMetadataContext::from_wire::<UProtocolNativeWire, UFrameFieldsMetadataCodec>();
+            UWireMetadataContext::from_wire::<StableContainerWire, UFrameFieldsMetadataCodec>();
         let prefix = codec.native_prefix(context).unwrap();
         for seed in 0..1024 {
             let metadata = metadata(seed);

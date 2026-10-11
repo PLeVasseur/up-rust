@@ -14,8 +14,9 @@
 
 use super::pool::{PoolError, SlotLoan, SlotPool, SlotRef};
 use crate::{
-    FrameSink, InitializedTx, LoanError, PreparedTransportCore, PreparedTxStorage, RouteLimits,
-    SendError, SetupError, TxFrameLayout, UUri, WrittenHeader,
+    Frame, FrameSink, InitializedTx, LoanError, LoanedPayload, PayloadLoanProvenance,
+    PreparedTransportCore, PreparedTxStorage, RouteLimits, SendError, SetupError, TxFrameLayout,
+    UUri, WrittenHeader,
 };
 use std::{
     mem::MaybeUninit,
@@ -198,17 +199,17 @@ impl std::fmt::Debug for PoolFrame {
     }
 }
 
-impl PoolFrame {
-    /// Initialized metadata bytes retained by this pool owner.
-    #[must_use]
-    pub fn encoded_metadata(&self) -> &[u8] {
+impl Frame for PoolFrame {
+    fn encoded_metadata(&self) -> &[u8] {
         self.slot.header()
     }
-    /// Initialized payload bytes with absent and present-empty storage distinguished.
-    /// This in-process storage is owned heap memory, not a native SHM lease.
-    #[must_use]
-    pub fn payload_bytes(&self) -> Option<&[u8]> {
-        self.present.then(|| self.slot.payload())
+    fn payload(&self) -> Option<LoanedPayload<'_>> {
+        self.present.then(|| {
+            LoanedPayload::new(
+                self.slot.payload(),
+                PayloadLoanProvenance::OwnedReceiveLease,
+            )
+        })
     }
 }
 
@@ -690,7 +691,11 @@ mod tests {
         drop(route);
         drop(core);
         assert!(weak.upgrade().is_none());
-        assert_eq!(frame.payload_bytes().unwrap(), b"data");
+        assert_eq!(frame.payload().unwrap().bytes(), b"data");
+        assert_eq!(
+            frame.payload().unwrap().provenance(),
+            PayloadLoanProvenance::OwnedReceiveLease
+        );
         assert!(frame.encoded_metadata().starts_with(b"prefix"));
     }
 

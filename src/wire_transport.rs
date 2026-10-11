@@ -43,13 +43,19 @@
 //! Cores own storage and physical carriage; wires and codecs own representations.
 //! Identity admission precedes decoded frame exposure. The README provisional
 //! policy applies to these adapter contracts.
+//!
+//! Prepared native and opaque carriage uses `PreparedTransportCore` over a shared
+//! core. The adapter prepares route templates and generic receive registrations;
+//! each registration retains its own physical handle instead of an adapter-owned
+//! erased listener map. Native typed admission retains its explicit agreement.
 
+#[cfg(any(
+    all(feature = "zero-copy-transport", feature = "transport-implementer-api"),
+    feature = "owned-frame-transport"
+))]
+use std::sync::Arc;
 #[cfg(feature = "owned-frame-transport")]
-use std::{
-    any::Any,
-    collections::HashMap,
-    sync::{Arc, Mutex},
-};
+use std::{any::Any, collections::HashMap, sync::Mutex};
 use std::{io::Read, marker::PhantomData};
 
 #[cfg(feature = "owned-frame-transport")]
@@ -59,13 +65,27 @@ use bytes::Bytes;
 #[cfg(feature = "owned-frame-transport")]
 use tracing::warn;
 
-use crate::payload::{codec::ReadDecodePayload, UWireError};
+#[cfg(feature = "zero-copy-transport")]
+use crate::payload::loan::BorrowPayload;
+use crate::payload::{
+    codec::{PayloadDecodeLimit, ReadDecodePayload},
+    UWireError,
+};
 use crate::wire::ProtobufWire;
+#[cfg(feature = "zero-copy-transport")]
+use crate::wire::StableContainerWire;
 use crate::wire::UFrameFieldsMetadataCodec;
 use crate::wire::{UWire, UWireMetadataCodecFor, UWireMetadataContext, UWirePayload};
-use crate::{validate_frame_view_for_transport, UFrameMetadata, UFrameView, UStatus};
 #[cfg(feature = "owned-frame-transport")]
-use crate::{UCode, UUri};
+use crate::UCode;
+#[cfg(any(
+    all(feature = "zero-copy-transport", feature = "transport-implementer-api"),
+    feature = "owned-frame-transport"
+))]
+use crate::UUri;
+use crate::{validate_frame_view_for_transport, UFrameMetadata, UFrameView, UStatus};
+#[cfg(feature = "zero-copy-transport")]
+use crate::{LoanedPayload, ULoanedContiguousZeroCopyRxFrame, UZeroCopyRxLease};
 #[cfg(feature = "owned-frame-transport")]
 use crate::{UOwnedFrame, UOwnedListener, UOwnedTransportImpl};
 
@@ -78,6 +98,7 @@ where
     core: TCore,
     wire: W,
     metadata_codec: C,
+    native_agreement: Option<crate::NativeProfileAgreement>,
     #[cfg(feature = "owned-frame-transport")]
     owned_listeners: Mutex<HashMap<WireListenerKey, Arc<dyn Any + Send + Sync>>>,
 }
@@ -102,6 +123,7 @@ where
     /// Ordinary construction is available only for a wire that does not require
     /// a native agreement. That requirement is checked when the generic
     /// constructor is instantiated during code generation, not by `cargo check`.
+    /// Native wires use [`Self::with_native_agreement`].
     #[cfg_attr(
         all(
             feature = "wire-implementer-api",
@@ -135,19 +157,34 @@ is changed to true. Checking without code generation is not that proof.
                 "this wire requires an explicit native agreement constructor"
             );
         }
+        Self::build(core, wire, metadata_codec, None)
+    }
+
+    /// Constructs a new adapter with an already confirmed native route agreement.
+    /// The generation is immutable and is retained by listeners and receive views.
+    pub fn with_native_agreement(
+        core: TCore,
+        wire: W,
+        metadata_codec: C,
+        agreement: crate::NativeProfileAgreement,
+    ) -> Self {
+        Self::build(core, wire, metadata_codec, Some(agreement))
+    }
+
+    fn build(
+        core: TCore,
+        wire: W,
+        metadata_codec: C,
+        native_agreement: Option<crate::NativeProfileAgreement>,
+    ) -> Self {
         Self {
             core,
             wire,
             metadata_codec,
+            native_agreement,
             #[cfg(feature = "owned-frame-transport")]
             owned_listeners: Mutex::new(HashMap::new()),
         }
-    }
-
-    /// Creates an adapter with an explicit selected wire and metadata codec.
-    #[must_use]
-    pub fn with_wire_and_metadata_codec(core: TCore, wire: W, metadata_codec: C) -> Self {
-        Self::new(core, wire, metadata_codec)
     }
 
     /// Returns the wrapped physical transport core.
@@ -168,10 +205,139 @@ is changed to true. Checking without code generation is not that proof.
         &self.metadata_codec
     }
 
-    /// Consumes the adapter and returns the wrapped core, selected wire, and metadata codec.
+    /// Consumes the adapter and returns its core, wire, metadata codec and agreement.
     #[must_use]
-    pub fn into_parts(self) -> (TCore, W, C) {
-        (self.core, self.wire, self.metadata_codec)
+    pub fn into_parts(self) -> (TCore, W, C, Option<crate::NativeProfileAgreement>) {
+        (
+            self.core,
+            self.wire,
+            self.metadata_codec,
+            self.native_agreement,
+        )
+    }
+}
+
+#[cfg(all(feature = "zero-copy-transport", feature = "transport-implementer-api"))]
+impl<C: crate::PreparedTransportCore, W: UWire>
+    UWireTransport<Arc<C>, W, UFrameFieldsMetadataCodec>
+{
+    /// Prepares exact in-place metadata admission while leaving payload bytes opaque.
+    ///
+    /// # Errors
+    /// Rejects an invalid prefix or token limit. Custom wire alias callbacks are
+    /// not applied by this exact-identity admission API.
+    pub fn prepare_header_receiver(
+        &self,
+        limits: crate::HeaderLimits,
+    ) -> Result<crate::HeaderAdmission, UWireError> {
+        crate::HeaderAdmission::for_wire::<W>(limits)
+    }
+
+    /// Prepares the selected-wire prefix for bounded, explicitly copying opaque routes.
+    ///
+    /// # Errors
+    /// Rejects an invalid selected-wire prefix.
+    pub fn prepare_opaque_template(&self) -> Result<crate::OpaqueTemplate, crate::SetupError> {
+        crate::OpaqueTemplate::for_wire::<W>()
+    }
+
+    /// Attaches an exact-identity opaque handler with decoded source/sink filters.
+    ///
+    /// Each registration reserves one generic worker. Partial filters are retained
+    /// at the core boundary and rechecked after in-place decoding; None is sinkless.
+    ///
+    /// # Errors
+    /// Reports prefix/limit, worker reservation or physical subscription failure.
+    pub async fn register_header_handler<H: crate::HeaderHandler<C::Rx>>(
+        &self,
+        source: &UUri,
+        sink: Option<&UUri>,
+        limits: crate::HeaderLimits,
+        config: crate::RegistrationConfig,
+        handler: H,
+    ) -> Result<crate::WireRegistration<C>, crate::SetupError> {
+        let admission = self
+            .prepare_header_receiver(limits)
+            .map_err(|_| crate::SetupError::Prefix)?;
+        let worker = admission
+            .register_filtered(source.clone(), sink.cloned(), config, handler, || {})
+            .map_err(|_| crate::SetupError::Worker)?;
+        crate::WireRegistration::attach(Arc::clone(&self.core), source, sink, worker).await
+    }
+}
+
+#[cfg(all(feature = "zero-copy-transport", feature = "transport-implementer-api"))]
+impl<C> UWireTransport<Arc<C>, StableContainerWire, UFrameFieldsMetadataCodec>
+where
+    C: crate::PreparedTransportCore,
+{
+    /// Prepares a stable sender's identity and prefix for route creation.
+    ///
+    /// # Errors
+    /// Rejects a missing agreement or an invalid/unagreed payload representation.
+    pub fn prepare_stable_template<P: crate::StablePayload>(
+        &self,
+    ) -> Result<crate::TxTemplate<P>, crate::SetupError> {
+        let agreement = self
+            .native_agreement
+            .clone()
+            .ok_or(crate::SetupError::InvalidConfig(
+                "native agreement required",
+            ))?;
+        crate::TxTemplate::new(agreement)
+    }
+
+    /// Creates one fixed stable-native route from the core's reserved tables.
+    ///
+    /// # Errors
+    /// Returns representation, route/configuration or table-capacity failures.
+    pub fn prepare_stable_route<P: crate::StablePayload>(
+        &self,
+        definition: crate::RouteDefinition,
+        config: crate::RouteConfig,
+    ) -> Result<crate::TxRoute<C, P>, crate::SetupError> {
+        self.prepare_stable_template()?
+            .route(Arc::clone(&self.core), definition, config)
+    }
+
+    /// Prepares in-place stable receive admission using this adapter's agreement.
+    ///
+    /// # Errors
+    /// Rejects a missing agreement or incompatible stable representation.
+    pub fn prepare_stable_receiver<P: crate::StablePayload>(
+        &self,
+        limits: crate::HeaderLimits,
+    ) -> Result<crate::RxAdmission<P>, UWireError> {
+        let agreement = self
+            .native_agreement
+            .clone()
+            .ok_or_else(|| UWireError::invalid_payload("native agreement required"))?;
+        crate::RxAdmission::new(agreement, limits)
+    }
+
+    /// Attaches one typed worker with retained agreement and decoded URI filters.
+    ///
+    /// # Errors
+    /// Reports unagreed representation, worker setup or physical subscription failure.
+    pub async fn register_stable_handler<P, H>(
+        &self,
+        source: &UUri,
+        sink: Option<&UUri>,
+        limits: crate::HeaderLimits,
+        config: crate::RegistrationConfig,
+        handler: H,
+    ) -> Result<crate::WireRegistration<C>, crate::SetupError>
+    where
+        P: crate::StablePayload,
+        H: crate::ZeroCopyHandler<P, C::Rx>,
+    {
+        let admission = self
+            .prepare_stable_receiver::<P>(limits)
+            .map_err(|_| crate::SetupError::UnknownPayloadType)?;
+        let worker = admission
+            .register_filtered(source.clone(), sink.cloned(), config, handler, || {})
+            .map_err(|_| crate::SetupError::Worker)?;
+        crate::WireRegistration::attach(Arc::clone(&self.core), source, sink, worker).await
     }
 }
 
@@ -184,6 +350,11 @@ pub type UNativePrefixWireTransport<TCore, W> = UWireTransport<TCore, W, UFrameF
 /// Protocol Buffers selected-wire transport with canonical metadata.
 pub type ProtobufWireTransport<TCore> = UNativePrefixWireTransport<TCore, ProtobufWire>;
 
+/// Stable-container selected-wire transport with canonical metadata.
+#[cfg(feature = "zero-copy-transport")]
+pub type StableContainerWireTransport<TCore> =
+    UNativePrefixWireTransport<TCore, StableContainerWire>;
+
 /// Convenience constructors for canonical native-prefix selected-wire transports.
 pub trait UWithNativePrefixWire: Sized {
     /// Wraps this core with an external or deployment-specific selected wire using canonical metadata.
@@ -195,6 +366,14 @@ pub trait UWithNativePrefixWire: Sized {
     /// Wraps this core with the Protocol Buffers selected-wire profile.
     #[must_use]
     fn into_protobuf_transport(self) -> ProtobufWireTransport<Self>;
+
+    /// Wraps this core with the stable-container selected wire.
+    #[must_use]
+    #[cfg(feature = "zero-copy-transport")]
+    fn into_stable_container_transport(
+        self,
+        agreement: crate::NativeProfileAgreement,
+    ) -> StableContainerWireTransport<Self>;
 }
 
 impl<TCore> UWithNativePrefixWire for TCore {
@@ -208,6 +387,19 @@ impl<TCore> UWithNativePrefixWire for TCore {
     fn into_protobuf_transport(self) -> ProtobufWireTransport<Self> {
         self.into_native_prefix_wire_transport(ProtobufWire)
     }
+
+    #[cfg(feature = "zero-copy-transport")]
+    fn into_stable_container_transport(
+        self,
+        agreement: crate::NativeProfileAgreement,
+    ) -> StableContainerWireTransport<Self> {
+        UWireTransport::with_native_agreement(
+            self,
+            StableContainerWire,
+            UFrameFieldsMetadataCodec,
+            agreement,
+        )
+    }
 }
 
 /// Exposes the concrete selected wire of an adapter value.
@@ -218,6 +410,11 @@ pub trait UHasWire {
     /// Returns the selected wire marker/value.
     #[must_use]
     fn wire(&self) -> &Self::Wire;
+
+    /// Returns the explicitly configured native route agreement, if any.
+    fn native_agreement(&self) -> Option<&crate::NativeProfileAgreement> {
+        None
+    }
 }
 
 impl<TCore, W, C> UHasWire for UWireTransport<TCore, W, C>
@@ -229,6 +426,10 @@ where
 
     fn wire(&self) -> &Self::Wire {
         &self.wire
+    }
+
+    fn native_agreement(&self) -> Option<&crate::NativeProfileAgreement> {
+        self.native_agreement.as_ref()
     }
 }
 
@@ -270,12 +471,23 @@ pub trait UEncodedRxFrame {
     }
 }
 
+#[cfg(feature = "zero-copy-transport")]
+/// Raw encoded receive object that can prove its contiguous payload is loan-backed.
+pub trait UEncodedLoanedRxFrame: UEncodedRxFrame {
+    /// Returns one contiguous loan-backed application payload view.
+    ///
+    /// Implementations must not allocate, copy, or coalesce payload bytes to
+    /// satisfy this method.
+    fn loaned_contiguous_payload(&self) -> Result<LoanedPayload<'_>, UWireError>;
+}
+
 /// Public zero-copy receive lease after selected-wire metadata validation.
 pub struct UWireRx<Rx, W, C>
 where
     W: UWire,
 {
     metadata: UFrameMetadata,
+    native_agreement: Option<crate::NativeProfileAgreement>,
     raw: Rx,
     _wire: PhantomData<W>,
     _metadata_codec: PhantomData<C>,
@@ -303,12 +515,35 @@ where
     /// Returns an error if metadata bytes are malformed, selected-wire checks
     /// fail, or the resulting public frame view violates transport invariants.
     pub fn try_from_encoded(raw: Rx, codec: &C) -> Result<Self, UStatus> {
+        Self::from_encoded_in_context(raw, codec, None)
+    }
+
+    /// Decodes a view while retaining the confirmed agreement for its route.
+    /// Payload bytes remain opaque until an explicit typed operation is requested.
+    ///
+    /// # Errors
+    ///
+    /// Returns the same framing/metadata errors as [`Self::try_from_encoded`].
+    pub fn try_from_encoded_with_native_agreement(
+        raw: Rx,
+        codec: &C,
+        agreement: crate::NativeProfileAgreement,
+    ) -> Result<Self, UStatus> {
+        Self::from_encoded_in_context(raw, codec, Some(agreement))
+    }
+
+    fn from_encoded_in_context(
+        raw: Rx,
+        codec: &C,
+        native_agreement: Option<crate::NativeProfileAgreement>,
+    ) -> Result<Self, UStatus> {
         let metadata = codec.decode_frame_metadata(
             UWireMetadataContext::from_wire::<W, C>(),
             raw.encoded_metadata(),
         )?;
         let frame = Self {
             metadata,
+            native_agreement,
             raw,
             _wire: PhantomData,
             _metadata_codec: PhantomData,
@@ -334,19 +569,20 @@ where
     /// Prefer this selected-wire helper on receive values produced by
     /// explicit selected-wire adapter construction. Use
     /// [`UFrameView::decode_payload_from_reader_as`] only for
-    /// low-level codec escape hatches.
+    /// explicit low-level codec selection.
     ///
     /// # Errors
     ///
     /// Returns an error if the frame has missing or incompatible payload encoding,
     /// has no payload, or if the selected wire cannot decode the payload bytes.
-    pub fn decode_payload<T>(&self) -> Result<T, UWireError>
+    pub fn decode_payload<T>(&self, limit: PayloadDecodeLimit) -> Result<T, UWireError>
     where
         W: UWirePayload<T>,
         <W as UWirePayload<T>>::Codec: ReadDecodePayload<T>,
     {
-        <<W as UWirePayload<T>>::Codec as crate::payload::codec::PayloadCodec>::verify_encoding(
-            self.metadata.payload_encoding(),
+        <<W as UWirePayload<T>>::Codec as crate::payload::codec::PayloadCodec>::verify_metadata(
+            &self.metadata,
+            self.native_agreement.as_ref(),
         )?;
         if !self.has_payload() {
             return Err(UWireError::MissingPayload);
@@ -354,7 +590,73 @@ where
         <W as UWirePayload<T>>::Codec::decode_payload_from_reader(
             self.payload_reader(),
             self.payload_len(),
+            limit,
         )
+    }
+}
+
+#[cfg(feature = "zero-copy-transport")]
+impl<Rx, W, C> UWireRx<Rx, W, C>
+where
+    Rx: UEncodedLoanedRxFrame,
+    W: UWire,
+    C: UWireMetadataCodecFor<W>,
+{
+    /// Borrows this frame's payload through the selected wire mapping.
+    ///
+    /// # Errors
+    ///
+    /// Returns an error for missing or incompatible encoding, absent/non-loaned
+    /// payload storage, invalid size/alignment or invalid field bits.
+    pub fn borrow_payload<T>(&self) -> Result<&T, UWireError>
+    where
+        W: UWirePayload<T>,
+        <W as UWirePayload<T>>::Codec: BorrowPayload<T>,
+    {
+        <<W as UWirePayload<T>>::Codec as crate::PayloadCodec>::verify_metadata(
+            &self.metadata,
+            self.native_agreement.as_ref(),
+        )?;
+        if !self.has_payload() {
+            return Err(UWireError::MissingPayload);
+        }
+        let payload = self.raw.loaned_contiguous_payload()?;
+        <<W as UWirePayload<T>>::Codec as BorrowPayload<T>>::borrow_payload(payload.bytes())
+    }
+
+    /// Borrows this frame's payload through the selected wire's expert lane.
+    ///
+    /// Encoding, payload presence and loan-backed contiguity remain checked.
+    /// `unchecked` permits but does not guarantee bit-validation elision.
+    ///
+    /// # Safety
+    ///
+    /// The caller must prove closed producer provenance, typed construction of
+    /// the exact requested Rust representation and recursive bit validity for
+    /// `T`. Wire/profile identity, size, alignment and loan-backed contiguity
+    /// remain checked; only the recursive bit validator may be elided.
+    pub unsafe fn borrow_payload_unchecked<T>(&self) -> Result<&T, UWireError>
+    where
+        W: UWirePayload<T>,
+        <W as UWirePayload<T>>::Codec: BorrowPayload<T>,
+    {
+        <<W as UWirePayload<T>>::Codec as crate::PayloadCodec>::verify_metadata(
+            &self.metadata,
+            self.native_agreement.as_ref(),
+        )?;
+        if !self.has_payload() {
+            return Err(UWireError::MissingPayload);
+        }
+        let payload = self.raw.loaned_contiguous_payload()?;
+        // SAFETY: This function's caller must establish closed producer
+        // provenance, exact typed construction and recursive validity for T.
+        // Metadata, presence and loan-backed contiguity were checked above;
+        // the selected codec retains its size/alignment checks.
+        unsafe {
+            <<W as UWirePayload<T>>::Codec as BorrowPayload<T>>::borrow_payload_unchecked(
+                payload.bytes(),
+            )
+        }
     }
 }
 
@@ -377,6 +679,10 @@ where
         &self.metadata
     }
 
+    fn native_agreement(&self) -> Option<&crate::NativeProfileAgreement> {
+        self.native_agreement.as_ref()
+    }
+
     fn payload_len(&self) -> usize {
         self.raw.payload_len()
     }
@@ -395,6 +701,26 @@ where
 
     fn try_contiguous_payload(&self) -> Option<&[u8]> {
         self.raw.try_contiguous_payload()
+    }
+}
+
+#[cfg(feature = "zero-copy-transport")]
+impl<Rx, W, C> UZeroCopyRxLease for UWireRx<Rx, W, C>
+where
+    Rx: UEncodedRxFrame,
+    W: UWire,
+    C: UWireMetadataCodecFor<W>,
+{
+}
+
+#[cfg(feature = "zero-copy-transport")]
+impl<Rx, C> ULoanedContiguousZeroCopyRxFrame for UWireRx<Rx, StableContainerWire, C>
+where
+    Rx: UEncodedLoanedRxFrame,
+    C: UWireMetadataCodecFor<StableContainerWire>,
+{
+    fn loaned_contiguous_payload(&self) -> Result<LoanedPayload<'_>, UWireError> {
+        self.raw.loaned_contiguous_payload()
     }
 }
 
@@ -810,25 +1136,125 @@ fn invalid_metadata(error: crate::UFrameMetadataError) -> UStatus {
     UStatus::fail_with_code(UCode::InvalidArgument, error.to_string())
 }
 
+#[cfg(all(
+    test,
+    feature = "zero-copy-transport",
+    feature = "transport-implementer-api"
+))]
+mod prepared_tests;
+
 #[cfg(all(test, feature = "owned-frame-transport", feature = "up-core-api"))]
 mod tests {
-    use std::{collections::VecDeque, io::Cursor, sync::Mutex as StdMutex};
+    use crate::test_support::{RawRx, RecordingCore};
+    #[cfg(feature = "zero-copy-transport")]
+    use std::io::Cursor;
+    use std::sync::Mutex as StdMutex;
 
     use protobuf::well_known_types::wrappers::StringValue;
 
     use super::*;
-    use crate::payload::codec::{EncodePayload, ProtobufPayload};
-    use crate::wire::{ProtobufWire, UProtocolNativeWire, UWireMetadataCodec};
+    use crate::wire::{UProtocolNativeWire, UWireMetadataCodec};
+    #[cfg(feature = "zero-copy-transport")]
+    use crate::{
+        BorrowPayload, PayloadLoanProvenance, StableContainerPayload, StablePayloadField,
+        UVecRxLease,
+    };
+    #[cfg(feature = "protobuf-support")]
+    use crate::{EncodePayload, ProtobufPayload};
     use crate::{PayloadEncoding, UMessageBuilder};
     use test_case::test_case;
 
-    #[derive(Clone)]
-    struct RawRx {
-        encoded_metadata: Vec<u8>,
-        payload: Vec<u8>,
+    #[cfg(feature = "zero-copy-transport")]
+    #[repr(C)]
+    #[derive(Debug, Eq, PartialEq, crate::StablePayload, crate::StablePayloadInit)]
+    #[stable_payload(type_name = "uprotocol.test.WireStableBytes")]
+    struct WireStableBytes {
+        bytes: [u8; 4],
     }
 
-    impl UEncodedRxFrame for RawRx {
+    #[cfg(feature = "zero-copy-transport")]
+    #[repr(C)]
+    #[derive(Debug, Eq, PartialEq, crate::StablePayload)]
+    #[stable_payload(type_name = "uprotocol.test.WireBool")]
+    struct WireBool {
+        value: bool,
+    }
+
+    #[cfg(feature = "zero-copy-transport")]
+    #[repr(C)]
+    #[derive(Debug, Eq, PartialEq, crate::StablePayload)]
+    #[stable_payload(type_name = "uprotocol.test.WireNestedInner")]
+    struct WireNestedInner {
+        value: bool,
+    }
+
+    #[cfg(feature = "zero-copy-transport")]
+    #[repr(C)]
+    #[derive(Debug, Eq, PartialEq, crate::StablePayload)]
+    #[stable_payload(type_name = "uprotocol.test.WireNested")]
+    struct WireNested {
+        inner: WireNestedInner,
+        padding: [u8; 3],
+        letter: char,
+    }
+
+    #[cfg(feature = "zero-copy-transport")]
+    #[repr(C)]
+    #[derive(Debug, Eq, PartialEq, crate::StablePayload)]
+    #[stable_payload(type_name = "uprotocol.test.WireAligned")]
+    struct WireAligned {
+        value: u32,
+    }
+
+    #[cfg(feature = "zero-copy-transport")]
+    #[derive(Debug)]
+    struct CheckedDefaultCodec;
+
+    #[cfg(feature = "zero-copy-transport")]
+    impl crate::PayloadCodecIdentity for CheckedDefaultCodec {
+        fn name() -> &'static str {
+            "checked-default-test"
+        }
+
+        fn encoding() -> PayloadEncoding {
+            PayloadEncoding::RAW
+        }
+    }
+
+    // SAFETY: Both lanes check exact length and the bool bit pattern before the
+    // only cast; the unchecked lane is a test double that deliberately keeps
+    // the checks.
+    #[cfg(feature = "zero-copy-transport")]
+    unsafe impl BorrowPayload<WireBool> for CheckedDefaultCodec {
+        fn borrow_payload(src: &[u8]) -> Result<&WireBool, UWireError> {
+            if src.len() != core::mem::size_of::<WireBool>() || !WireBool::validate_field_bytes(src)
+            {
+                return Err(UWireError::invalid_payload("invalid checked-default bool"));
+            }
+            // SAFETY: WireBool has alignment one and its bool byte was checked.
+            Ok(unsafe { &*src.as_ptr().cast::<WireBool>() })
+        }
+    }
+
+    #[cfg(feature = "zero-copy-transport")]
+    #[repr(align(8))]
+    struct AlignedPayloadStorage([u8; 5]);
+
+    #[cfg(feature = "zero-copy-transport")]
+    struct MisalignedRawRx {
+        encoded_metadata: Vec<u8>,
+        storage: AlignedPayloadStorage,
+    }
+
+    #[cfg(feature = "zero-copy-transport")]
+    impl MisalignedRawRx {
+        fn payload(&self) -> &[u8] {
+            &self.storage.0[1..]
+        }
+    }
+
+    #[cfg(feature = "zero-copy-transport")]
+    impl UEncodedRxFrame for MisalignedRawRx {
         type PayloadReader<'a>
             = Cursor<&'a [u8]>
         where
@@ -843,88 +1269,30 @@ mod tests {
         }
 
         fn payload_len(&self) -> usize {
-            self.payload.len()
+            self.payload().len()
         }
 
         fn payload_reader(&self) -> Self::PayloadReader<'_> {
-            Cursor::new(&self.payload)
+            Cursor::new(self.payload())
         }
 
         fn payload_slices(&self) -> Self::PayloadSlices<'_> {
-            std::iter::once(self.payload.as_slice())
+            std::iter::once(self.payload())
         }
 
         fn try_contiguous_payload(&self) -> Option<&[u8]> {
-            Some(&self.payload)
+            Some(self.payload())
         }
     }
 
-    #[derive(Default)]
-    struct RecordingCore {
-        received: StdMutex<VecDeque<RawRx>>,
-        receive_filters: StdMutex<Vec<(UUri, Option<UUri>)>>,
-        listener_filters: StdMutex<Vec<(bool, UUri, Option<UUri>)>>,
-        #[cfg(feature = "owned-frame-transport")]
-        owned_listeners: StdMutex<Vec<Arc<dyn UEncodedOwnedListener>>>,
-    }
-
-    #[cfg(feature = "owned-frame-transport")]
-    #[async_trait]
-    impl UOwnedTransportCore for RecordingCore {
-        async fn register_encoded_owned_listener(
-            &self,
-            source_filter: &UUri,
-            sink_filter: Option<&UUri>,
-            listener: Arc<dyn UEncodedOwnedListener>,
-        ) -> Result<(), UStatus> {
-            self.listener_filters.lock().unwrap().push((
-                true,
-                source_filter.clone(),
-                sink_filter.cloned(),
-            ));
-            self.owned_listeners.lock().unwrap().push(listener);
-            Ok(())
-        }
-
-        async fn unregister_encoded_owned_listener(
-            &self,
-            source_filter: &UUri,
-            sink_filter: Option<&UUri>,
-            listener: Arc<dyn UEncodedOwnedListener>,
-        ) -> Result<(), UStatus> {
-            self.listener_filters.lock().unwrap().push((
-                false,
-                source_filter.clone(),
-                sink_filter.cloned(),
-            ));
-            self.owned_listeners
-                .lock()
-                .unwrap()
-                .retain(|registered| !Arc::ptr_eq(registered, &listener));
-            Ok(())
-        }
-
-        async fn send_prepared_owned(&self, _frame: PreparedOwnedFrame) -> Result<(), UStatus> {
-            Ok(())
-        }
-
-        async fn receive_encoded_owned(
-            &self,
-            source_filter: &UUri,
-            sink_filter: Option<&UUri>,
-        ) -> Result<EncodedOwnedFrame, UStatus> {
-            self.receive_filters
-                .lock()
-                .unwrap()
-                .push((source_filter.clone(), sink_filter.cloned()));
-            self.received
-                .lock()
-                .unwrap()
-                .pop_front()
-                .map(|raw| EncodedOwnedFrame::new(raw.encoded_metadata, Some(raw.payload.into())))
-                .ok_or_else(|| {
-                    UStatus::fail_with_code(UCode::NotFound, "no test owned frame available")
-                })
+    #[cfg(feature = "zero-copy-transport")]
+    impl UEncodedLoanedRxFrame for MisalignedRawRx {
+        fn loaned_contiguous_payload(&self) -> Result<LoanedPayload<'_>, UWireError> {
+            // The payload is borrowed directly from this raw receive object.
+            Ok(LoanedPayload::new(
+                self.payload(),
+                PayloadLoanProvenance::OpaqueTransportLoan,
+            ))
         }
     }
 
@@ -1047,6 +1415,53 @@ mod tests {
         metadata_with_topic_and_payload_encoding(0x9000, payload_encoding)
     }
 
+    #[cfg(feature = "zero-copy-transport")]
+    fn stable_metadata<T: crate::StablePayload>() -> UFrameMetadata {
+        let identity = StableContainerPayload::<T>::identity(&stable_profile()).unwrap();
+        metadata_with_payload_encoding(identity.encoding())
+            .with_native_payload_identity(identity)
+            .unwrap()
+    }
+
+    #[cfg(feature = "zero-copy-transport")]
+    fn stable_profile() -> crate::NativeProfileAgreement {
+        use crate::{NativeProfile, NativeProfileMode, NativeProfileTable, StablePayload};
+        static AGREEMENT: std::sync::OnceLock<crate::NativeProfileAgreement> =
+            std::sync::OnceLock::new();
+        AGREEMENT
+            .get_or_init(|| {
+                let entries = [
+                    (0xF101, WireStableBytes::native_representation()),
+                    (0xF102, WireBool::native_representation()),
+                    (0xF103, WireNested::native_representation()),
+                    (0xF104, WireAligned::native_representation()),
+                ]
+                .map(|(id, representation)| {
+                    (PayloadEncoding::from_id(id).unwrap(), representation)
+                });
+                let profile = NativeProfile::new(
+                    "wire-tests",
+                    1,
+                    NativeProfileMode::Table(NativeProfileTable::new(entries).unwrap()),
+                )
+                .unwrap();
+                crate::test_support::self_agreement(profile)
+            })
+            .clone()
+    }
+
+    #[cfg(feature = "zero-copy-transport")]
+    fn stable_rx<R: UEncodedRxFrame>(
+        raw: R,
+    ) -> UWireRx<R, StableContainerWire, UFrameFieldsMetadataCodec> {
+        UWireRx::try_from_encoded_with_native_agreement(
+            raw,
+            &UFrameFieldsMetadataCodec,
+            stable_profile(),
+        )
+        .unwrap()
+    }
+
     fn metadata_with_topic_and_payload_encoding(
         resource_id: u16,
         payload_encoding: PayloadEncoding,
@@ -1120,9 +1535,246 @@ mod tests {
             &UFrameFieldsMetadataCodec,
         )
         .unwrap();
-        let decoded: StringValue = rx.decode_payload().unwrap();
+        let decoded: StringValue = rx.decode_payload(PayloadDecodeLimit::new(1024)).unwrap();
 
         assert_eq!(decoded.value, "selected-wire");
+    }
+
+    #[cfg(feature = "zero-copy-transport")]
+    #[test]
+    fn selected_stable_wire_safe_borrow_validates_encoding_and_bits() {
+        let value = WireBool { value: true };
+        let metadata = stable_metadata::<WireBool>();
+        let valid = RawRx {
+            encoded_metadata: encode_metadata::<StableContainerWire>(&metadata),
+            payload: vec![1],
+        };
+        let valid = stable_rx(valid);
+        assert_eq!(valid.borrow_payload::<WireBool>().unwrap(), &value);
+
+        let invalid = RawRx {
+            encoded_metadata: encode_metadata::<StableContainerWire>(&metadata),
+            payload: vec![2],
+        };
+        let invalid = stable_rx(invalid);
+        assert!(
+            matches!(invalid.borrow_payload::<WireBool>(), Err(UWireError::InvalidPayload(reason)) if reason.contains("not valid"))
+        );
+
+        let wrong_metadata = metadata_with_payload_encoding(PayloadEncoding::RAW);
+        let wrong = RawRx {
+            encoded_metadata: encode_metadata::<StableContainerWire>(&wrong_metadata),
+            payload: vec![1],
+        };
+        let wrong = stable_rx(wrong);
+        assert!(matches!(
+            wrong.borrow_payload::<WireBool>(),
+            Err(UWireError::UnsupportedEncoding { .. })
+        ));
+    }
+
+    #[cfg(feature = "zero-copy-transport")]
+    #[test]
+    fn selected_stable_wire_rejects_nested_bool_and_char_bits() {
+        let metadata = stable_metadata::<WireNested>();
+        let mut nested_bool = vec![0; core::mem::size_of::<WireNested>()];
+        let bool_offset = core::mem::offset_of!(WireNested, inner)
+            + core::mem::offset_of!(WireNestedInner, value);
+        *nested_bool.get_mut(bool_offset).unwrap() = 2;
+        let raw = crate::test_support::AlignedRawFrame::new(
+            metadata.clone(),
+            encode_metadata::<StableContainerWire>(&metadata),
+            &nested_bool,
+            core::mem::align_of::<WireNested>(),
+        );
+        let rx = stable_rx(raw);
+        assert!(
+            matches!(rx.borrow_payload::<WireNested>(), Err(UWireError::InvalidPayload(reason)) if reason.contains("not valid"))
+        );
+
+        let mut invalid_char = vec![0; core::mem::size_of::<WireNested>()];
+        *invalid_char.get_mut(bool_offset).unwrap() = 1;
+        let char_offset = core::mem::offset_of!(WireNested, letter);
+        invalid_char
+            .get_mut(char_offset..char_offset + core::mem::size_of::<char>())
+            .unwrap()
+            .copy_from_slice(&0x0011_0000_u32.to_ne_bytes());
+        let raw = crate::test_support::AlignedRawFrame::new(
+            metadata.clone(),
+            encode_metadata::<StableContainerWire>(&metadata),
+            &invalid_char,
+            core::mem::align_of::<WireNested>(),
+        );
+        let rx = stable_rx(raw);
+        assert!(
+            matches!(rx.borrow_payload::<WireNested>(), Err(UWireError::InvalidPayload(reason)) if reason.contains("not valid"))
+        );
+    }
+
+    #[cfg(feature = "zero-copy-transport")]
+    #[test]
+    fn selected_stable_wire_rejects_truncated_and_misaligned_payloads() {
+        let metadata = stable_metadata::<WireAligned>();
+        let truncated = RawRx {
+            encoded_metadata: encode_metadata::<StableContainerWire>(&metadata),
+            payload: vec![0; core::mem::size_of::<WireAligned>() - 1],
+        };
+        let truncated = stable_rx(truncated);
+        assert!(
+            matches!(truncated.borrow_payload::<WireAligned>(), Err(UWireError::InvalidPayload(reason)) if reason.contains("length"))
+        );
+
+        let misaligned = MisalignedRawRx {
+            encoded_metadata: encode_metadata::<StableContainerWire>(&metadata),
+            storage: AlignedPayloadStorage([0; 5]),
+        };
+        assert_ne!(
+            (misaligned.payload().as_ptr() as usize) % core::mem::align_of::<WireAligned>(),
+            0
+        );
+        let misaligned = stable_rx(misaligned);
+        assert!(
+            matches!(misaligned.borrow_payload::<WireAligned>(), Err(UWireError::InvalidPayload(reason)) if reason.contains("not aligned"))
+        );
+    }
+
+    #[cfg(feature = "zero-copy-transport")]
+    #[test]
+    fn stable_loan_bridge_rejects_malformed_and_wrong_encoding() {
+        let metadata = stable_metadata::<WireBool>();
+        let malformed = RawRx {
+            encoded_metadata: encode_metadata::<StableContainerWire>(&metadata),
+            payload: vec![2],
+        };
+        let malformed = stable_rx(malformed);
+        assert!(
+            matches!(malformed.borrow_stable_payload::<WireBool>(&stable_profile()),
+            Err(UWireError::InvalidPayload(reason)) if reason.contains("not valid"))
+        );
+
+        let wrong_metadata = metadata_with_payload_encoding(PayloadEncoding::RAW);
+        let wrong = RawRx {
+            encoded_metadata: encode_metadata::<StableContainerWire>(&wrong_metadata),
+            payload: vec![1],
+        };
+        let wrong = stable_rx(wrong);
+        assert!(matches!(
+            wrong.borrow_stable_payload::<WireBool>(&stable_profile()),
+            Err(UWireError::UnsupportedEncoding { .. })
+        ));
+    }
+
+    #[cfg(feature = "zero-copy-transport")]
+    #[test]
+    fn inherited_unchecked_default_remains_checked() {
+        // SAFETY: The test codec's unchecked lane is the inherited checked
+        // path; the invalid bool pattern below must be rejected, not cast.
+        let result = unsafe {
+            <CheckedDefaultCodec as BorrowPayload<WireBool>>::borrow_payload_unchecked(&[2])
+        };
+        assert!(matches!(result, Err(UWireError::InvalidPayload(_))));
+    }
+
+    #[cfg(feature = "zero-copy-transport")]
+    #[test]
+    fn selected_stable_wire_unchecked_lane_accepts_caller_proven_payload() {
+        let metadata = stable_metadata::<WireBool>();
+        let raw = RawRx {
+            encoded_metadata: encode_metadata::<StableContainerWire>(&metadata),
+            payload: vec![1],
+        };
+        let rx = stable_rx(raw);
+
+        // SAFETY: This test constructed the single payload byte itself as a
+        // valid `bool`, so the caller-proven-validity obligation holds.
+        let borrowed = unsafe { rx.borrow_payload_unchecked::<WireBool>() }.unwrap();
+        assert!(borrowed.value);
+    }
+
+    #[cfg(feature = "zero-copy-transport")]
+    #[test_case::test_case(false, None; "checked missing token")]
+    #[test_case::test_case(false, Some(1); "checked wrong token")]
+    #[test_case::test_case(true, None; "unchecked missing token")]
+    #[test_case::test_case(true, Some(1); "unchecked wrong token")]
+    fn native_identity_is_checked_in_both_borrow_lanes(unchecked: bool, delta: Option<u32>) {
+        let original = stable_metadata::<WireBool>();
+        let encoding = *original.payload_encoding().unwrap();
+        let mut metadata = original
+            .clone()
+            .without_payload_encoding()
+            .with_payload_encoding(encoding)
+            .unwrap();
+        if let Some(delta) = delta {
+            metadata = metadata
+                .with_native_type_token(crate::NativeTypeToken::from_u32(
+                    original
+                        .native_type_token()
+                        .unwrap()
+                        .as_u32()
+                        .wrapping_add(delta),
+                ))
+                .unwrap();
+        }
+        let frame = stable_rx(RawRx {
+            encoded_metadata: encode_metadata::<StableContainerWire>(&metadata),
+            payload: vec![1],
+        });
+        let result = if unchecked {
+            // SAFETY: This producer supplies a valid WireBool byte and alignment.
+            // The intentionally wrong metadata is a checked precondition.
+            unsafe { frame.borrow_payload_unchecked::<WireBool>() }
+        } else {
+            frame.borrow_payload::<WireBool>()
+        };
+        assert!(matches!(
+            result,
+            Err(UWireError::UnsupportedNativeTypeToken { .. })
+        ));
+    }
+
+    #[cfg(feature = "zero-copy-transport")]
+    #[test_case::test_case(false; "checked missing profile")]
+    #[test_case::test_case(true; "unchecked missing profile")]
+    fn native_bytes_without_route_context_remain_opaque(unchecked: bool) {
+        let metadata = stable_metadata::<WireBool>();
+        let frame =
+            UWireRx::<RawRx, StableContainerWire, UFrameFieldsMetadataCodec>::try_from_encoded(
+                RawRx {
+                    encoded_metadata: encode_metadata::<StableContainerWire>(&metadata),
+                    payload: vec![1],
+                },
+                &UFrameFieldsMetadataCodec,
+            )
+            .unwrap();
+        assert_eq!(frame.try_contiguous_payload(), Some(&[1][..]));
+        let result = if unchecked {
+            // SAFETY: Known typed producer, exact WireBool representation and bits.
+            unsafe { frame.borrow_payload_unchecked::<WireBool>() }
+        } else {
+            frame.borrow_payload::<WireBool>()
+        };
+        assert!(matches!(result, Err(UWireError::NativeProfile(_))));
+    }
+
+    #[cfg(feature = "zero-copy-transport")]
+    #[test]
+    fn received_frame_keeps_its_generation_when_a_route_is_replaced() {
+        let metadata = stable_metadata::<WireBool>();
+        let frame = stable_rx(RawRx {
+            encoded_metadata: encode_metadata::<StableContainerWire>(&metadata),
+            payload: vec![1],
+        });
+        let old = stable_profile();
+        let next =
+            crate::NativeProfile::new("wire-tests", 2, old.profile().mode().clone()).unwrap();
+        let next = old.successor(Arc::new(next.clone()), &next).unwrap();
+        assert!(frame.borrow_payload::<WireBool>().unwrap().value);
+        assert!(matches!(
+            frame.borrow_stable_payload::<WireBool>(&next),
+            Err(UWireError::NativeProfile(
+                crate::NativeProfileError::ProfileMismatch
+            ))
+        ));
     }
 
     #[cfg(feature = "owned-frame-transport")]
@@ -1249,5 +1901,13 @@ mod tests {
         let transport = CompileCore.into_native_prefix_wire_transport(UProtocolNativeWire);
         let _: &UProtocolNativeWire = transport.wire();
         let _: &CompileCore = transport.core();
+    }
+
+    #[cfg(feature = "zero-copy-transport")]
+    #[test]
+    fn existing_public_rx_lease_still_compiles_independently() {
+        fn assert_public_rx<T: UZeroCopyRxLease>() {}
+
+        assert_public_rx::<UVecRxLease>();
     }
 }

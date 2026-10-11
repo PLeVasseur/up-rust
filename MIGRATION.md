@@ -262,3 +262,21 @@ projection variants require the feature, check identity before token removal and
 restore only identities known to the agreement. Unrelated unknown IDs stay opaque.
 The field-block/fixed-ABI profiles retain token-free bytes, size 928/alignment 8;
 peers must coordinate supported profile versions and reject unknown presence bits.
+
+## Stable payloads and typed codec context
+
+Typed payload codecs now require `native-identity` (implied by selected-wire features).
+`PayloadCodec::payload_identity(agreement)` replaces a context-free encoding method;
+fixed codecs return `PayloadIdentity::Fixed`, while native codecs require an agreed
+complete representation. `verify_metadata` checks encoding and native token together.
+Reader decoding and `UFrameView::decode_payload_from_reader_as` require an explicit
+`PayloadDecodeLimit`. Ordinary message/protobuf APIs and opaque frame/token carriage
+remain independent of descriptor hashing.
+
+Enable `zero-copy-transport` for stable payload derives, loan/lease traits and typed
+borrowing. Derives require `repr(C)` or `repr(transparent)`, explicit padding and no
+drop glue. Use `revision`/`REVISION` for descriptor revisions. Tuple initializers
+use `field_0`, `field_1`, etc.; array setters borrow or fill elements in place.
+Checked borrowing validates representation, exact length, alignment and field bits
+before returning a reference. The explicitly unsafe lane retains its caller contract.
+Enable `native-inventory` only when concrete linked types should be exported.

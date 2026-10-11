@@ -3,6 +3,8 @@
 A selected wire defines wire/family identities and payload codec associations.
 The metadata codec owns the metadata layout. Transport adapters compose those
 contracts with the binding's storage and delivery operations.
+Enable `wire-implementer-api`, which includes `native-identity`, for these typed
+codec contracts. Ordinary message and opaque frame carriage do not need it.
 The example below defines the identities and a codec for a little-endian `u32`.
 
 ## Why three traits?
@@ -43,7 +45,9 @@ impl UWire for DemoU32Wire {
 
 impl PayloadCodec for DemoU32Wire {
     fn codec_name() -> &'static str { "demo-u32-le" }
-    fn payload_encoding() -> PayloadEncoding { PayloadEncoding::RAW }
+    fn payload_identity(_agreement: Option<&up_rust::NativeProfileAgreement>) -> Result<up_rust::PayloadIdentity, UWireError> {
+        Ok(up_rust::PayloadIdentity::Fixed(PayloadEncoding::RAW))
+    }
 }
 
 impl EncodePayload<u32> for DemoU32Wire {
@@ -113,6 +117,8 @@ not override the trait contracts. In particular, a `ReadDecodePayload`
 implementation allocates only after applying a finite limit, consumes exactly
 the declared length, distinguishes early EOF, probes one additional byte to
 reject overlong input, and returns errors rather than panicking.
+Pass an explicit `PayloadDecodeLimit`; it has no default or implicit integer
+conversion. This bounds encoded input, not the decoded representation's allocations.
 
 `payload_layout` is a measurement operation. A variable-length codec may need a
 probe serialization or traversal and may do equivalent work again during

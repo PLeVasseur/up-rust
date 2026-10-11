@@ -80,6 +80,9 @@ None of the following features are enabled by default, so you can pick and choos
 
 */
 
+#[cfg(feature = "zero-copy-transport")]
+extern crate self as up_rust;
+
 #[cfg(feature = "cloudevents")]
 mod cloudevents;
 #[cfg(feature = "cloudevents")]
@@ -160,6 +163,16 @@ pub mod guide {
     pub mod owned {}
 
     #[cfg_attr(
+        all(feature = "zero-copy-transport", feature = "transport-implementer-api"),
+        doc = include_str!("guide/zero_copy.md")
+    )]
+    #[cfg_attr(
+        not(all(feature = "zero-copy-transport", feature = "transport-implementer-api")),
+        doc = "Enable `zero-copy-transport` and `transport-implementer-api` for the prepared stable-native guide."
+    )]
+    pub mod zero_copy {}
+
+    #[cfg_attr(
         feature = "communication",
         doc = include_str!("guide/trait_map.md")
     )]
@@ -170,7 +183,11 @@ pub mod guide {
     pub mod trait_map {}
     #[doc = include_str!("guide/wire_identity.md")]
     pub mod wire_identity {}
-    #[doc = include_str!("guide/wires.md")]
+    #[cfg_attr(feature = "native-identity", doc = include_str!("guide/wires.md"))]
+    #[cfg_attr(
+        not(feature = "native-identity"),
+        doc = "Enable `wire-implementer-api` for the wire and payload codec guide."
+    )]
     pub mod wires {}
     #[cfg_attr(feature = "native-identity", doc = include_str!("guide/native_identity.md"))]
     #[cfg_attr(
@@ -255,18 +272,70 @@ pub use frame::{validate_frame_view_for_transport, UFrameView};
 
 /// Payload codec contracts shared by the frame families.
 pub mod payload;
+#[cfg(feature = "native-identity")]
 pub use payload::codec::{
-    DecodePayload, EncodePayload, PayloadCodec, PayloadCodecIdentity, PayloadLayout,
-    ProtobufPayload, ReadDecodePayload,
+    DecodePayload, EncodePayload, PayloadCodec, PayloadCodecIdentity, PayloadDecodeLimit,
+    PayloadIdentity, PayloadLayout, ProtobufAnyPayload, ProtobufPayload, RawBytes,
+    ReadDecodePayload,
+};
+#[cfg(feature = "zero-copy-transport")]
+pub use payload::loan::BorrowPayload;
+#[cfg(feature = "zero-copy-transport")]
+pub use payload::stable::{
+    InitializedStablePayload, StableContainerPayload, StablePayload, StablePayloadField,
+    StablePayloadInit, StablePayloadInitSet, StablePayloadInitUnset, StablePayloadPatternError,
 };
 pub use payload::UWireError;
+#[cfg(feature = "zero-copy-transport")]
+pub use up_rust_macros::{StablePayload, StablePayloadInit};
 
 #[cfg(feature = "zero-copy-transport")]
 mod zero_copy;
+#[cfg(feature = "zero-copy-transport")]
+pub use zero_copy::{
+    AdmissionError, Frame, HeaderAdmission, HeaderAdmissionStats, HeaderHandler, HeaderLease,
+    LoanedPayload, PayloadAlignment, PayloadLoanProvenance, RxAdmission, RxLease, RxStats,
+    TokenBuffer, TokenBufferSetupError, TokenError, ULoanedContiguousZeroCopyRxFrame, UTxBuffer,
+    UTxLoanSpec, UTxPayloadSpec, UUninitTxBuffer, UVecRxLease, UVecTxBuffer, UVecUninitTxBuffer,
+    UZeroCopyRxLease, ZeroCopyHandler,
+};
+
+/// Linked native-type registration for target-side descriptor export.
+#[cfg(feature = "native-inventory")]
+pub mod native_inventory;
+
+/// Registers a concrete stable payload for target-side inventory export.
+///
+/// Enable `native-inventory` and link the defining crate into the exporter.
+/// Registration neither allocates payload IDs nor constructs application values.
+#[cfg(feature = "native-inventory")]
+#[macro_export]
+macro_rules! register_native_type {
+    ($ty:ty) => {
+        $crate::native_inventory::__inventory::submit! {
+            $crate::native_inventory::NativeTypeRegistration::of::<$ty>()
+        }
+    };
+}
+
+/// Requires `native-inventory` for concrete type registration.
+#[cfg(not(feature = "native-inventory"))]
+#[macro_export]
+macro_rules! register_native_type {
+    ($ty:ty) => {
+        compile_error!("native type registration requires the up-rust native-inventory feature");
+    };
+}
+
 #[cfg(all(feature = "zero-copy-transport", feature = "transport-implementer-api"))]
 pub use zero_copy::{
     FrameSink, InitializedTx, LoanError, PreparedTransportCore, PreparedTxStorage, RouteLimits,
-    SendError, SetupError, TxFrameLayout,
+    SendError, SetupError, TxFrameLayout, WireRegistration, WireRegistrationStopError,
+};
+#[cfg(all(feature = "zero-copy-transport", feature = "transport-implementer-api"))]
+pub use zero_copy::{
+    MessageFields, OpaqueRoute, OpaqueTemplate, PayloadInit, RouteConfig, RouteDefinition, TxRoute,
+    TxTemplate,
 };
 #[cfg(all(
     feature = "zero-copy-transport",
@@ -288,7 +357,7 @@ pub use utransport::{UOwnedListener, UOwnedTransport, UOwnedTransportImpl};
 
 #[cfg(feature = "wire-implementer-api")]
 pub mod wire;
-#[cfg(not(feature = "wire-implementer-api"))]
+#[cfg(all(feature = "native-identity", not(feature = "wire-implementer-api")))]
 mod wire;
 #[cfg(any(feature = "selected-wire-user-api", feature = "wire-implementer-api"))]
 pub use wire::{
@@ -297,6 +366,8 @@ pub use wire::{
     PROTOBUF_PAYLOAD_FAMILY_ID, PROTOBUF_WIRE_ID, UFRAME_FIELDS_METADATA_LAYOUT_ID,
     UPROTOCOL_NATIVE_WIRE_ID, XCDR_V2_PAYLOAD_FAMILY_ID, XCDR_V2_WIRE_ID,
 };
+#[cfg(feature = "zero-copy-transport")]
+pub use wire::{StableContainerWire, STABLE_CONTAINER_PAYLOAD_FAMILY_ID, STABLE_CONTAINER_WIRE_ID};
 #[cfg(feature = "wire-implementer-api")]
 pub use wire::{
     UWire, UWireDecode, UWireDecodeOwned, UWireEncode, UWireMetadataCodec, UWireMetadataCodecFor,
@@ -313,6 +384,10 @@ pub mod wire_transport;
     not(feature = "transport-implementer-api")
 ))]
 mod wire_transport;
+#[cfg(feature = "zero-copy-transport")]
+pub use wire_transport::StableContainerWireTransport;
+#[cfg(all(feature = "zero-copy-transport", feature = "transport-implementer-api"))]
+pub use wire_transport::UEncodedLoanedRxFrame;
 #[cfg(feature = "transport-implementer-api")]
 pub use wire_transport::UEncodedRxFrame;
 #[cfg(all(

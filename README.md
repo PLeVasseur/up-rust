@@ -104,6 +104,28 @@ against hash-bound manifests; normal tests do not regenerate them. Deliberate
 representation changes use the explicit ignored updater and include reviewed
 vector/manifest changes together.
 
+`zero-copy-transport` adds checked stable payload borrows and initialized/two-phase
+transmit loans, and implies `native-identity`. Typed codec APIs (including bounded
+reader decode) require `native-identity`, implied by selected-wire features.
+`StablePayload` derives fixed layouts with explicit padding and checked field bits;
+`StablePayloadInit` provides write-once initialization. Bindings still own storage,
+native lifetime and physical copy behavior. See the [native guide](src/guide/native_identity.md).
+`native-inventory` registers concrete linked types for target-side descriptor export.
+`TxTemplate` and `TxRoute` prepare identity and capacity once, fill a checked
+`PayloadInit` directly in a loan and publish synchronously. `RxAdmission` validates
+headers, complete identity, size, alignment and field bits before a retained
+`RxLease` exposes a typed reference. Generic registration handlers avoid a boxed
+future per frame. `HeaderAdmission` and `OpaqueRoute` preserve opaque carriage
+without requiring a native type agreement solely to forward bytes.
+Selected-wire receive views retain their agreement generation for codec context
+and reject a conflicting generation before checked borrowing.
+`TokenBuffer` reserves and wipes owned credential storage. Array initializers expose
+`*_fill_pattern` with a typed empty-pattern error and no payload-sized temporary.
+The [prepared stable-native guide](src/guide/zero_copy.md) covers these contracts,
+explicit agreement, caller-built metadata and registration teardown.
+In-memory TX constructors report impossible sizes/allocation failure as
+`ResourceExhausted`; backend capacity and allocation behavior belong to bindings.
+
 ## Building from Source
 
 With `zero-copy-transport`, `UUri` stores its bounded authority inline rather than

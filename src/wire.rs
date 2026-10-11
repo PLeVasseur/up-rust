@@ -33,7 +33,9 @@ use std::{error::Error, fmt::Display};
 
 use crate::payload::codec::{DecodePayload, EncodePayload, PayloadCodec, ReadDecodePayload};
 #[cfg(feature = "protobuf-support")]
-use crate::payload::codec::{PayloadCodecIdentity, PayloadLayout, ProtobufPayload};
+use crate::payload::codec::{
+    PayloadCodecIdentity, PayloadDecodeLimit, PayloadLayout, ProtobufPayload,
+};
 #[cfg(feature = "protobuf-support")]
 use crate::payload::UWireError;
 #[cfg(any(feature = "protobuf-support", feature = "up-core-api"))]
@@ -88,6 +90,16 @@ pub const XCDR_V2_WIRE_ID: WireIdentity =
 
 /// Payload-family identity reserved for external XCDRv2 payload bytes.
 pub const XCDR_V2_PAYLOAD_FAMILY_ID: WireIdentity = WireIdentity::new("xcdr-v2", 0x0003);
+
+/// Deployment-private stable-container selected-wire identity.
+#[cfg(feature = "zero-copy-transport")]
+pub const STABLE_CONTAINER_WIRE_ID: WireIdentity =
+    WireIdentity::new("org.eclipse.uprotocol.wire.stable-container", 0x8000);
+
+/// Deployment-private stable-container payload-family identity.
+#[cfg(feature = "zero-copy-transport")]
+pub const STABLE_CONTAINER_PAYLOAD_FAMILY_ID: WireIdentity =
+    WireIdentity::new("stable-container", 0x8001);
 
 // Compact metadata-layout value 1 is reserved by this SDK format policy and
 // has no decoder. This reservation does not apply to the other namespaces.
@@ -427,6 +439,24 @@ impl UWire for ProtobufWire {
     const FORMAT_VERSION: u16 = FORMAT_VERSION;
 }
 
+/// Selected wire for deployment-private stable in-memory payloads.
+#[cfg(feature = "zero-copy-transport")]
+#[derive(Clone, Copy, Debug, Default, Eq, PartialEq)]
+pub struct StableContainerWire;
+
+#[cfg(feature = "zero-copy-transport")]
+impl UWire for StableContainerWire {
+    const WIRE_ID: WireIdentity = STABLE_CONTAINER_WIRE_ID;
+    const PAYLOAD_FAMILY_ID: WireIdentity = STABLE_CONTAINER_PAYLOAD_FAMILY_ID;
+    const FORMAT_VERSION: u16 = FORMAT_VERSION;
+    const REQUIRES_NATIVE_AGREEMENT: bool = true;
+}
+
+#[cfg(feature = "zero-copy-transport")]
+impl<T: crate::StablePayload> UWirePayload<T> for StableContainerWire {
+    type Codec = crate::StableContainerPayload<T>;
+}
+
 #[cfg(feature = "protobuf-support")]
 impl PayloadCodecIdentity for ProtobufWire {
     fn name() -> &'static str {
@@ -467,8 +497,12 @@ impl<T> ReadDecodePayload<T> for ProtobufWire
 where
     T: ProtobufMappable,
 {
-    fn decode_payload_from_reader<R: Read>(reader: R, payload_len: usize) -> Result<T, UWireError> {
-        ProtobufPayload::decode_payload_from_reader(reader, payload_len)
+    fn decode_payload_from_reader<R: Read>(
+        reader: R,
+        payload_len: usize,
+        limit: PayloadDecodeLimit,
+    ) -> Result<T, UWireError> {
+        ProtobufPayload::decode_payload_from_reader(reader, payload_len, limit)
     }
 }
 
@@ -605,6 +639,106 @@ impl UFrameFieldsMetadataCodec {
         };
         write_native_prefix(&mut writer, context)?;
         Ok(writer.position)
+    }
+
+    #[cfg(feature = "zero-copy-transport")]
+    pub(crate) fn stable_prefix_len(
+        &self,
+        bytes: &[u8],
+    ) -> Result<usize, crate::UFrameHeaderError> {
+        self.exact_prefix_len(
+            UWireMetadataContext::from_wire::<StableContainerWire, Self>(),
+            bytes,
+        )
+    }
+
+    #[cfg(feature = "zero-copy-transport")]
+    pub(crate) fn exact_prefix_len(
+        &self,
+        context: UWireMetadataContext,
+        bytes: &[u8],
+    ) -> Result<usize, crate::UFrameHeaderError> {
+        use crate::UFrameHeaderError;
+        let context = context.with_metadata_layout(Self::METADATA_LAYOUT_ID);
+        let mut reader = BorrowedPrefixReader { bytes, position: 0 };
+        if reader.take(4)? != NATIVE_PREFIX_MAGIC {
+            return Err(UFrameHeaderError::WrongPrefix);
+        }
+        reader.identity(
+            context.metadata_layout_id,
+            WireIdentityNamespace::MetadataLayout,
+        )?;
+        if reader.u16()? != context.format_version {
+            return Err(UFrameHeaderError::WrongPrefix);
+        }
+        reader.identity(context.wire_id, WireIdentityNamespace::Wire)?;
+        reader.identity(
+            context.payload_family_id,
+            WireIdentityNamespace::PayloadFamily,
+        )?;
+        if reader.u16()? != 0 {
+            return Err(UFrameHeaderError::Malformed("native reserved flags"));
+        }
+        Ok(reader.position)
+    }
+}
+
+// StableContainerWire uses the SDK's default identity policy. Match borrowed
+// references directly, including valid literal spellings of registered pairs;
+// do not allocate a WireIdentityRef::Literal merely to validate received input.
+#[cfg(feature = "zero-copy-transport")]
+struct BorrowedPrefixReader<'a> {
+    bytes: &'a [u8],
+    position: usize,
+}
+
+#[cfg(feature = "zero-copy-transport")]
+impl<'a> BorrowedPrefixReader<'a> {
+    fn take(&mut self, len: usize) -> Result<&'a [u8], crate::UFrameHeaderError> {
+        let end = self
+            .position
+            .checked_add(len)
+            .ok_or(crate::UFrameHeaderError::Truncated)?;
+        let value = self
+            .bytes
+            .get(self.position..end)
+            .ok_or(crate::UFrameHeaderError::Truncated)?;
+        self.position = end;
+        Ok(value)
+    }
+    fn u16(&mut self) -> Result<u16, crate::UFrameHeaderError> {
+        let mut bytes = [0; 2];
+        bytes.copy_from_slice(self.take(2)?);
+        Ok(u16::from_le_bytes(bytes))
+    }
+    fn identity(
+        &mut self,
+        expected: WireIdentity,
+        namespace: WireIdentityNamespace,
+    ) -> Result<(), crate::UFrameHeaderError> {
+        use crate::UFrameHeaderError;
+        let tag = *self.take(1)?.first().expect("one identity tag");
+        let matches = match tag {
+            ID_REF_COMPACT => {
+                let actual = self.u16()?;
+                expected.registered_in(namespace) && actual == expected.compact_id()
+            }
+            ID_REF_LITERAL => {
+                let mut bytes = [0; 4];
+                bytes.copy_from_slice(self.take(4)?);
+                let len = usize::try_from(u32::from_le_bytes(bytes))
+                    .map_err(|_| UFrameHeaderError::Truncated)?;
+                let actual = std::str::from_utf8(self.take(len)?)
+                    .map_err(|_| UFrameHeaderError::Malformed("identity UTF-8"))?;
+                actual == expected.literal_id()
+            }
+            _ => return Err(UFrameHeaderError::Malformed("identity tag")),
+        };
+        if matches {
+            Ok(())
+        } else {
+            Err(UFrameHeaderError::WrongPrefix)
+        }
     }
 }
 
@@ -1164,7 +1298,7 @@ impl<'a> MetadataReader<'a> {
 /// # }
 /// # impl PayloadCodec for MyWire {
 /// #     fn codec_name() -> &'static str { "demo-self-codec" }
-/// #     fn payload_encoding() -> PayloadEncoding { PayloadEncoding::RAW }
+/// #     fn payload_identity(_agreement: Option<&up_rust::NativeProfileAgreement>) -> Result<up_rust::PayloadIdentity, up_rust::UWireError> { Ok(up_rust::PayloadIdentity::Fixed(PayloadEncoding::RAW)) }
 /// # }
 /// # impl EncodePayload<A> for MyWire {
 /// #     fn payload_layout(_: &A) -> Result<PayloadLayout, UWireError> { PayloadLayout::new(4, 4) }
@@ -1271,6 +1405,34 @@ mod tests {
         }
     }
 
+    #[cfg(feature = "zero-copy-transport")]
+    #[test]
+    fn stable_container_identity_and_payload_mapping() {
+        #[repr(C)]
+        #[derive(crate::StablePayload)]
+        #[stable_payload(type_name = "uprotocol.test.WireMapping")]
+        struct WireMapping {
+            value: u32,
+        }
+        fn mapping<
+            W: super::UWirePayload<WireMapping, Codec = crate::StableContainerPayload<WireMapping>>,
+        >() {
+        }
+        mapping::<super::StableContainerWire>();
+        assert_eq!(
+            super::STABLE_CONTAINER_WIRE_ID.literal_id(),
+            "org.eclipse.uprotocol.wire.stable-container"
+        );
+        assert_eq!(super::STABLE_CONTAINER_WIRE_ID.compact_id(), 0x8000);
+        assert_eq!(
+            super::STABLE_CONTAINER_PAYLOAD_FAMILY_ID.literal_id(),
+            "stable-container"
+        );
+        assert_eq!(
+            super::STABLE_CONTAINER_PAYLOAD_FAMILY_ID.compact_id(),
+            0x8001
+        );
+    }
     #[cfg(feature = "protobuf-support")]
     use protobuf::well_known_types::wrappers::StringValue;
 
@@ -1346,8 +1508,8 @@ mod tests {
             ProtobufWire::decode_payload(&encoded).expect("decode protobuf wire");
         assert_eq!(decoded.value, "wire");
         assert_eq!(
-            ProtobufWire::payload_encoding(),
-            ProtobufPayload::payload_encoding()
+            ProtobufWire::payload_encoding(None).unwrap(),
+            ProtobufPayload::payload_encoding(None).unwrap()
         );
     }
 }

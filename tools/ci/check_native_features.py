@@ -11,8 +11,9 @@ def main():
     parser.add_argument('--toolchain', required=True)
     args = parser.parse_args()
     for feature, expected in [(None, False), ('native-identity', True),
-                              ('selected-wire-codec-core', True)]:
-        command = ['cargo', '+' + args.toolchain, 'tree', '--locked',
+                              ('selected-wire-codec-core', True),
+                              ('zero-copy-transport', True), ('native-inventory', True)]:
+        command = ['cargo', '+' + args.toolchain, 'tree', '--locked', '-p', 'up-rust',
                    '--no-default-features', '--edges', 'normal,build',
                    '--prefix', 'none', '--format', '{p}']
         if feature:
