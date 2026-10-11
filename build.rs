@@ -78,6 +78,8 @@ fn cloudevents() -> Result<(), Box<dyn std::error::Error>> {
 }
 
 fn main() -> Result<(), Box<dyn std::error::Error>> {
+    let target = std::env::var("TARGET")?;
+    println!("cargo:rustc-env=UP_RUST_TARGET_TRIPLE={target}");
     #[cfg(feature = "up-core-api")]
     proto_api()?;
 

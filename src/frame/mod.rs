@@ -36,3 +36,5 @@ pub mod envelope;
 #[cfg(feature = "zero-copy-transport")]
 pub mod header;
 pub mod metadata;
+#[cfg(feature = "native-identity")]
+pub mod native;

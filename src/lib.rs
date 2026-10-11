@@ -172,6 +172,12 @@ pub mod guide {
     pub mod wire_identity {}
     #[doc = include_str!("guide/wires.md")]
     pub mod wires {}
+    #[cfg_attr(feature = "native-identity", doc = include_str!("guide/native_identity.md"))]
+    #[cfg_attr(
+        not(feature = "native-identity"),
+        doc = "Enable `native-identity` for target-qualified descriptors and deployment agreement."
+    )]
+    pub mod native_identity {}
 }
 
 #[cfg(feature = "symphony")]
@@ -236,6 +242,13 @@ pub use validation_state::{Unvalidated, Validated};
 /// the read-side frame view contract.
 pub mod frame;
 pub use frame::metadata::{FrameMessageKind, FramePriority, UFrameMetadata, UFrameMetadataError};
+#[cfg(feature = "native-identity")]
+pub use frame::native::{
+    NativeByteOrder, NativeContract, NativeField, NativePayloadIdentity, NativeProfile,
+    NativeProfileAgreement, NativeProfileError, NativeProfileMode, NativeProfileTable,
+    NativeRepresentation, NativeTarget, NativeTypeToken, MAX_NATIVE_DESCRIPTOR_BYTES,
+    NATIVE_DESCRIPTOR_VERSION, NATIVE_TOKEN_DERIVATION_VERSION,
+};
 pub use frame::{validate_frame_view_for_transport, UFrameView};
 
 /// Payload codec contracts shared by the frame families.

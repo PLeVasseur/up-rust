@@ -82,6 +82,12 @@ results or invoking application listeners.
 
 ### Selected-wire identity
 
+`native-identity` enables target-qualified descriptors, independent 32-bit type
+tokens and immutable deployment agreement. Selected-wire capabilities imply it;
+default message-only builds do not require the `sha2` runtime dependency. See the
+[native identity guide](src/guide/native_identity.md) for checked descriptors,
+private-ID tables and explicit ID-zero contracts under the provisional policy.
+
 Payload encoding, selected wire, payload family and metadata layout use separate
 namespaces. Private selected-wire identities require their agreed literals;
 compact-only matching is limited to registered first-wave SDK pairs. The metadata

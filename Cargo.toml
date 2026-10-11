@@ -51,7 +51,9 @@ symphony = ["up-l2-rpc-server", "dep:serde", "dep:serde_json", "dep:symphony"]
 test-util = ["dep:mockall"]
 # Generated core-service protobuf APIs and conversions.
 up-core-api = ["protobuf-support"]
-selected-wire-codec-core = []
+# Target-qualified native descriptors and deployment agreement.
+native-identity = ["dep:sha2"]
+selected-wire-codec-core = ["native-identity"]
 selected-wire-transport-core = ["selected-wire-codec-core"]
 selected-wire-transport-adapter = ["selected-wire-transport-core"]
 selected-wire-user-api = ["selected-wire-transport-adapter", "up-core-api"]
@@ -82,6 +84,7 @@ protobuf = { version = "3.7.2", features = ["with-bytes"], optional = true }
 rand = { version = "0.10.3" }
 serde = { version = "1.0.228", optional = true }
 serde_json = { version = "1.0.150", optional = true }
+sha2 = { version = "0.11.0", optional = true }
 symphony = { version = "0.1.5", optional = true }
 thiserror = { version = "2.0.20" }
 tokio = { version = "1.53.1", default-features = false, optional = true }

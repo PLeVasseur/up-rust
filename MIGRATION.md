@@ -237,3 +237,14 @@ and `usubscription`; the classic communication traits keep their APIs. Owned
 listeners project representable frames to `UMessage` before calling existing
 `UListener` handlers. Notification receive uses the notifier's listening methods.
 Typed selected-wire operations additionally require the adapter capability.
+
+## Native representation agreement
+
+Enable `native-identity` to use `NativeRepresentation`, `NativeTypeToken` and
+`NativeProfileAgreement`; selected-wire capabilities enable it automatically.
+Message-only default builds do not activate the runtime SHA-256 dependency.
+Native descriptors bind target, layout and field semantics. Their independent
+32-bit tokens do not allocate payload IDs or by themselves authorize typed access.
+Use a checked private-ID table or an explicit ID-zero contract, with independently
+supplied peer configuration. The native identity guide covers generation retention
+and canonical descriptor limits.

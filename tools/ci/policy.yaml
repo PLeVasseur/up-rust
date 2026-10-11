@@ -185,3 +185,20 @@ checks:
     roles: [current]
     timeout: 600
     command: [cargo, deny, --all-features, check]
+  - name: native-identity-minimal
+    group: tests
+    roles: [current, msrv]
+    timeout: 1200
+    completion: libtest
+    command: [cargo, "+{toolchain}", test, --locked, --no-default-features, --features, native-identity, --lib, "frame::native"]
+  - name: native-identity-docs
+    group: docs
+    roles: [current, msrv]
+    timeout: 1200
+    completion: libtest
+    command: [cargo, "+{toolchain}", test, --locked, --no-default-features, --features, native-identity, --doc]
+  - name: native-feature-dependencies
+    group: check
+    roles: [current, msrv]
+    timeout: 600
+    command: [python3, tools/ci/check_native_features.py, --toolchain, "{toolchain}"]

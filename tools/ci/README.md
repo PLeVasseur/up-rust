@@ -55,6 +55,12 @@ a native-required constructor fixture, requires the specific E0080 assertion,
 and builds/runs an otherwise identical control with the requirement false.
 `cargo check` alone does not evaluate this generic constructor assertion.
 
+Both compiler roles run native descriptor/agreement tests and doctests with only
+`native-identity`. The dependency check inspects Cargo's normal/build graph to
+prove default message-only use excludes `sha2`, while explicit native identity
+and selected-wire codec capabilities include it. Dev-only fixture hashing does
+not count as a runtime dependency.
+
 Logs live in `${CARGO_TARGET_DIR:-target}/ci-logs/<configuration>/`. CI uploads the
 current test group's logs as `test-results`, preserving the artifact name and
 workflow output consumed by `release.yaml`. The artifact is readable command/test

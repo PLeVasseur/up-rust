@@ -24,7 +24,7 @@ while (($#)); do
   esac
 done
 case "$configuration:$group" in
-  current:abi|current:check|current:dependency|current:docs|current:style|current:tests|current:all|msrv:abi|msrv:check|msrv:tests|msrv:all) ;;
+  current:abi|current:check|current:dependency|current:docs|current:style|current:tests|current:all|msrv:abi|msrv:check|msrv:docs|msrv:tests|msrv:all) ;;
   *) printf "Choose --configuration current|msrv and --all or --group NAME\n" >&2; exit 2 ;;
 esac
 if [[ "$configuration" == current && ${UP_RUST_SKIP_TRYBUILD+x} ]]; then
@@ -133,6 +133,15 @@ fi
 if [[ "$configuration" == current && ( "$group" == all || "$group" == dependency ) ]]; then
   python3 tools/ci/run_check.py --log "$log_root/dependency-policy.log" --timeout 600 --completion command -- cargo deny --all-features check
 fi
+if [[ "$configuration" == current && ( "$group" == all || "$group" == tests ) ]]; then
+  python3 tools/ci/run_check.py --log "$log_root/native-identity-minimal.log" --timeout 1200 --completion libtest -- cargo +1.95.0 test --locked --no-default-features --features native-identity --lib frame::native
+fi
+if [[ "$configuration" == current && ( "$group" == all || "$group" == docs ) ]]; then
+  python3 tools/ci/run_check.py --log "$log_root/native-identity-docs.log" --timeout 1200 --completion libtest -- cargo +1.95.0 test --locked --no-default-features --features native-identity --doc
+fi
+if [[ "$configuration" == current && ( "$group" == all || "$group" == check ) ]]; then
+  python3 tools/ci/run_check.py --log "$log_root/native-feature-dependencies.log" --timeout 600 --completion command -- python3 tools/ci/check_native_features.py --toolchain 1.95.0
+fi
 if [[ "$configuration" == msrv && ( "$group" == all || "$group" == check ) ]]; then
   python3 tools/ci/run_check.py --log "$log_root/check-all.log" --timeout 1200 --completion command -- cargo +1.88.0 check --locked --workspace --all-features --all-targets
 fi
@@ -210,4 +219,13 @@ if [[ "$configuration" == msrv && ( "$group" == all || "$group" == check ) ]]; t
 fi
 if [[ "$configuration" == msrv && ( "$group" == all || "$group" == check ) ]]; then
   python3 tools/ci/run_check.py --log "$log_root/owned-typed-role-minimal.log" --timeout 1200 --completion command -- cargo +1.88.0 check --locked --no-default-features --features owned-frame-transport,usubscription,selected-wire-transport-adapter --all-targets
+fi
+if [[ "$configuration" == msrv && ( "$group" == all || "$group" == tests ) ]]; then
+  python3 tools/ci/run_check.py --log "$log_root/native-identity-minimal.log" --timeout 1200 --completion libtest -- cargo +1.88.0 test --locked --no-default-features --features native-identity --lib frame::native
+fi
+if [[ "$configuration" == msrv && ( "$group" == all || "$group" == docs ) ]]; then
+  python3 tools/ci/run_check.py --log "$log_root/native-identity-docs.log" --timeout 1200 --completion libtest -- cargo +1.88.0 test --locked --no-default-features --features native-identity --doc
+fi
+if [[ "$configuration" == msrv && ( "$group" == all || "$group" == check ) ]]; then
+  python3 tools/ci/run_check.py --log "$log_root/native-feature-dependencies.log" --timeout 600 --completion command -- python3 tools/ci/check_native_features.py --toolchain 1.88.0
 fi

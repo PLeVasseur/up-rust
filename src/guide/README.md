@@ -4,6 +4,8 @@
 * [URI storage and validation](crate::guide::uris): bounded wire-part parsing and feature-selected storage.
 * [Bounded receive registrations](crate::guide::registrations): setup capacity, generic workers and lifecycle.
 * [Frame metadata](crate::guide::frame_metadata): validated metadata, representations and codec errors.
+* [Native identity](crate::guide::native_identity): target-qualified descriptors and
+  explicit deployment agreement (`native-identity`).
 
 * [Writing an application](crate::guide::applications): overview, with
   runnable Communication Layer role examples and examples that use
