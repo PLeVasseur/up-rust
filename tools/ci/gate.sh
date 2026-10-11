@@ -113,7 +113,7 @@ if [[ "$configuration" == current && ( "$group" == all || "$group" == check ) ]]
   python3 tools/ci/run_check.py --log "$log_root/util-minimal.log" --timeout 1200 --completion command -- cargo +1.95.0 check --locked --no-default-features --features util --all-targets
 fi
 if [[ "$configuration" == current && ( "$group" == all || "$group" == tests ) ]]; then
-  python3 tools/ci/run_check.py --log "$log_root/native-callback-ui.log" --timeout 1200 --completion libtest -- cargo +1.95.0 test --locked --all-features --test listener_admission_ui
+  python3 tools/ci/run_check.py --log "$log_root/native-callback-ui.log" --timeout 1200 --completion trybuild -- cargo +1.95.0 test --locked --all-features --test listener_admission_ui
 fi
 if [[ "$configuration" == current && ( "$group" == all || "$group" == check ) ]]; then
   python3 tools/ci/run_check.py --log "$log_root/adapter-minimal.log" --timeout 1200 --completion command -- cargo +1.95.0 check --locked --no-default-features --features selected-wire-transport-adapter --all-targets
@@ -131,7 +131,7 @@ if [[ "$configuration" == current && ( "$group" == all || "$group" == check ) ]]
   python3 tools/ci/run_check.py --log "$log_root/owned-typed-role-minimal.log" --timeout 1200 --completion command -- cargo +1.95.0 check --locked --no-default-features --features owned-frame-transport,usubscription,selected-wire-transport-adapter --all-targets
 fi
 if [[ "$configuration" == current && ( "$group" == all || "$group" == dependency ) ]]; then
-  python3 tools/ci/run_check.py --log "$log_root/dependency-policy.log" --timeout 600 --completion command -- cargo deny --all-features check
+  python3 tools/ci/run_check.py --log "$log_root/dependency-policy.log" --timeout 600 --completion command -- cargo deny --offline --locked --all-features check
 fi
 if [[ "$configuration" == current && ( "$group" == all || "$group" == tests ) ]]; then
   python3 tools/ci/run_check.py --log "$log_root/native-identity-minimal.log" --timeout 1200 --completion libtest -- cargo +1.95.0 test --locked --no-default-features --features native-identity --lib
@@ -149,6 +149,15 @@ if [[ "$configuration" == current && ( "$group" == all || "$group" == check ) ]]
   python3 tools/ci/run_check.py --log "$log_root/native-inventory-minimal.log" --timeout 1200 --completion command -- cargo +1.95.0 check --locked --no-default-features --features native-inventory --all-targets
 fi
 if [[ "$configuration" == current && ( "$group" == all || "$group" == tests ) ]]; then
+  python3 tools/ci/run_check.py --log "$log_root/prepared-core-runtime-minimal.log" --timeout 1800 --completion libtest -- cargo +1.95.0 test --locked -p up-rust --no-default-features --features zero-copy-transport,transport-implementer-api --lib
+fi
+if [[ "$configuration" == current && ( "$group" == all || "$group" == tests ) ]]; then
+  python3 tools/ci/run_check.py --log "$log_root/external-wire-consumer.log" --timeout 1200 --completion libtest -- cargo +1.95.0 test --locked -p up-rust --no-default-features --features wire-implementer-api,owned-frame-transport --test fake_external_wire
+fi
+if [[ "$configuration" == current && ( "$group" == all || "$group" == docs ) ]]; then
+  python3 tools/ci/run_check.py --log "$log_root/native-role-guide-minimal.log" --timeout 1800 --completion libtest -- cargo +1.95.0 test --locked -p up-rust --no-default-features --features up-l2-zero-copy --doc
+fi
+if [[ "$configuration" == current && ( "$group" == all || "$group" == tests ) ]]; then
   python3 tools/ci/run_check.py --log "$log_root/native-inventory.log" --timeout 1200 --completion libtest -- cargo +1.95.0 test --locked --all-features --test native_inventory
 fi
 if [[ "$configuration" == current && ( "$group" == all || "$group" == tests ) ]]; then
@@ -158,13 +167,13 @@ if [[ "$configuration" == current && ( "$group" == all || "$group" == tests ) ]]
   python3 tools/ci/run_check.py --log "$log_root/native-path-zero-alloc.log" --timeout 1200 --completion libtest -- cargo +1.95.0 test --locked --all-features --test native_path_zero_alloc -- --test-threads=8
 fi
 if [[ "$configuration" == current && ( "$group" == all || "$group" == tests ) ]]; then
-  python3 tools/ci/run_check.py --log "$log_root/stable-payload-ui.log" --timeout 1200 --completion libtest -- cargo +1.95.0 test --locked --all-features --test stable_payload_trybuild
+  python3 tools/ci/run_check.py --log "$log_root/stable-payload-ui.log" --timeout 1200 --completion trybuild -- cargo +1.95.0 test --locked --all-features --test stable_payload_trybuild
 fi
 if [[ "$configuration" == current && ( "$group" == all || "$group" == tests ) ]]; then
-  python3 tools/ci/run_check.py --log "$log_root/owned-frame-ui.log" --timeout 1200 --completion libtest -- cargo +1.95.0 test --locked --all-features --test owned_frame_trybuild
+  python3 tools/ci/run_check.py --log "$log_root/owned-frame-ui.log" --timeout 1200 --completion trybuild -- cargo +1.95.0 test --locked --all-features --test owned_frame_trybuild
 fi
 if [[ "$configuration" == current && ( "$group" == all || "$group" == tests ) ]]; then
-  python3 tools/ci/run_check.py --log "$log_root/selected-wire-ui.log" --timeout 1200 --completion libtest -- cargo +1.95.0 test --locked --all-features --test selected_wire_payload_trybuild
+  python3 tools/ci/run_check.py --log "$log_root/selected-wire-ui.log" --timeout 1200 --completion trybuild -- cargo +1.95.0 test --locked --all-features --test selected_wire_payload_trybuild
 fi
 if [[ "$configuration" == current && ( "$group" == all || "$group" == tests ) ]]; then
   python3 tools/ci/run_check.py --log "$log_root/native-tool-cli.log" --timeout 1200 --completion command -- python3 tools/ci/check_native_tool.py --toolchain 1.95.0
@@ -282,6 +291,15 @@ if [[ "$configuration" == msrv && ( "$group" == all || "$group" == check ) ]]; t
 fi
 if [[ "$configuration" == msrv && ( "$group" == all || "$group" == check ) ]]; then
   python3 tools/ci/run_check.py --log "$log_root/native-inventory-minimal.log" --timeout 1200 --completion command -- cargo +1.88.0 check --locked --no-default-features --features native-inventory --all-targets
+fi
+if [[ "$configuration" == msrv && ( "$group" == all || "$group" == tests ) ]]; then
+  python3 tools/ci/run_check.py --log "$log_root/prepared-core-runtime-minimal.log" --timeout 1800 --completion libtest -- cargo +1.88.0 test --locked -p up-rust --no-default-features --features zero-copy-transport,transport-implementer-api --lib
+fi
+if [[ "$configuration" == msrv && ( "$group" == all || "$group" == tests ) ]]; then
+  python3 tools/ci/run_check.py --log "$log_root/external-wire-consumer.log" --timeout 1200 --completion libtest -- cargo +1.88.0 test --locked -p up-rust --no-default-features --features wire-implementer-api,owned-frame-transport --test fake_external_wire
+fi
+if [[ "$configuration" == msrv && ( "$group" == all || "$group" == docs ) ]]; then
+  python3 tools/ci/run_check.py --log "$log_root/native-role-guide-minimal.log" --timeout 1800 --completion libtest -- cargo +1.88.0 test --locked -p up-rust --no-default-features --features up-l2-zero-copy --doc
 fi
 if [[ "$configuration" == msrv && ( "$group" == all || "$group" == tests ) ]]; then
   python3 tools/ci/run_check.py --log "$log_root/native-inventory.log" --timeout 1200 --completion libtest -- cargo +1.88.0 test --locked --all-features --test native_inventory

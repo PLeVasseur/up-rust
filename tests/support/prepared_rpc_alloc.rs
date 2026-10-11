@@ -67,7 +67,7 @@ use std::{
     future::Future,
     sync::{atomic::Ordering, Arc},
     task::{Context, Waker},
-    time::Duration,
+    time::{Duration, Instant},
 };
 use tokio::runtime::Runtime;
 use up_rust::bench_fixtures::payload_contract::{init_streamer_4k, StreamChunk4kV1};
@@ -236,6 +236,20 @@ async fn calls(client: &Client, count: u32, tokens: [&str; 2]) {
     assert_eq!(client.in_flight(), 0);
 }
 
+fn wait_for_response_accounting(server: &PreparedRpcServer<PoolCore, Reply>, expected: u64) {
+    let deadline = Instant::now() + Duration::from_secs(2);
+    while server.stats().responded.load(Ordering::Relaxed) < expected {
+        assert!(
+            Instant::now() < deadline,
+            "response accounting did not complete"
+        );
+        // This harness uses two warmed runtime workers. Yield the caller's OS
+        // thread so publication can finish without adding a Tokio deferred waker.
+        std::thread::yield_now();
+    }
+    assert_eq!(server.stats().responded.load(Ordering::Relaxed), expected);
+}
+
 fn first_contact(runtime: &Runtime) {
     let (core, agreement, method) = setup(32);
     let server = server(runtime, &core, &agreement, &method, 8);
@@ -255,6 +269,9 @@ fn first_contact(runtime: &Runtime) {
             for client in &clients {
                 calls(client, 100, tokens).await;
             }
+            // A validated reply can reach this thread before the publishing
+            // worker increments its telemetry. Keep that completion counted.
+            wait_for_response_accounting(&server, 800);
         })
     });
     assert_eq!(server.stats().responded.load(Ordering::Relaxed), 800);
@@ -271,7 +288,10 @@ fn first_contact(runtime: &Runtime) {
     });
     assert_eq!(server.stats().refused.load(Ordering::Relaxed), 1);
     measure("rpc_token_multi_thread", || {
-        runtime.block_on(calls(clients.first().unwrap(), 5000, tokens))
+        runtime.block_on(async {
+            calls(clients.first().unwrap(), 5000, tokens).await;
+            wait_for_response_accounting(&server, 5800);
+        })
     });
     drop((refused, clients));
     runtime.block_on(server.stop()).unwrap();

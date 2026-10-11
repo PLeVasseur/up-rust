@@ -53,6 +53,8 @@ def load_policy(path):
             raise ValueError('missing command or invalid role')
         if type(check['timeout']) is not int or check['timeout'] <= 0:
             raise ValueError('invalid timeout')
+        if check.get('completion', 'command') not in {'command', 'libtest', 'trybuild', 'cucumber'}:
+            raise ValueError('invalid completion format')
     return policy
 
 
@@ -98,6 +100,8 @@ def render(policy):
                      {'uses': SETUP, 'with': {'toolchain': policy['toolchains'][role], 'components': 'rustfmt, clippy'}}]
             if group == 'dependency':
                 steps.append({'run': 'cargo install --locked cargo-deny --version 0.19.0'})
+                steps.append({'name': 'Prepare locked dependency and advisory caches',
+                              'run': 'cargo fetch --locked\ncargo deny --locked fetch'})
             steps.append({'run': f'bash tools/ci/gate.sh --configuration {role} --group {group}'})
             job = {'runs-on': 'ubuntu-latest', 'steps': steps}
             if role == 'current' and group == 'tests':

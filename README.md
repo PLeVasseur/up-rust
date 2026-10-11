@@ -248,6 +248,10 @@ The [CI guide](tools/ci/README.md) lists the required tool versions, generated
 policy workflow, separate link/feature jobs and test-log artifact contract.
 Checks reject missing targets and incomplete test summaries. Timeout cleanup
 terminates the command's remaining process group even when its leader exits first.
+The independent feature gate uses an isolated source snapshot and an audited
+derived lock; the CI guide documents its offline setup and retained check results.
+Dependency validation is explicitly locked/offline, with cache preparation kept
+separate from the validation command.
 
 ## License
 

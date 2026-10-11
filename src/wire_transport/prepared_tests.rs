@@ -3,12 +3,14 @@
 
 use super::*;
 use crate::wire::{UProtocolNativeWire, UWireMetadataCodec};
+#[cfg(feature = "protobuf-support")]
+use crate::TxHeaderParts;
 use crate::{
     Frame, FrameSink, HeaderHandler, HeaderLease, HeaderLimits, InitializedTx, LoanError,
     NativeProfile, NativeProfileAgreement, NativeProfileMode, NativeProfileTable, OverflowPolicy,
     PayloadEncoding, PayloadLoanProvenance, PoolCore, PoolCoreConfig, PoolFrame,
     PreparedTransportCore, RegistrationConfig, RegistrationInbox, RouteConfig, RouteDefinition,
-    RouteLimits, RxLease, SendError, SetupError, StablePayload, TxFrameLayout, TxHeaderParts, UUri,
+    RouteLimits, RxLease, SendError, SetupError, StablePayload, TxFrameLayout, UUri,
     WireRegistrationStopError, ZeroCopyHandler,
 };
 use std::sync::{
@@ -600,6 +602,7 @@ async fn typed_filter_rejects_foreign_topic_even_after_broad_physical_delivery()
     );
 }
 
+#[cfg(feature = "protobuf-support")]
 #[tokio::test]
 async fn opaque_bytes_roundtrip_uses_prepared_codec_and_actual_pool() {
     let core = Core::new();

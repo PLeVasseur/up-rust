@@ -4,6 +4,9 @@
 # SPDX-License-Identifier: Apache-2.0
 """Behavioral checks for generated gates, policy validation and command outcomes."""
 import copy
+import contextlib
+import io
+import json
 import os
 from pathlib import Path
 import subprocess
@@ -42,6 +45,17 @@ class GateTests(unittest.TestCase):
         names = {check['name'] for check in policy['checks']}
         self.assertTrue({'lib-core', 'lib-default', 'lib-all', 'doctests-core', 'doctests-default', 'doctests-all'} <= names)
 
+    def test_dependency_gate_is_locked_offline_after_explicit_cache_setup(self):
+        policy = load_policy(ROOT / 'tools/ci/policy.yaml')
+        _, workflow = render(policy)
+        dependency = next(check for check in policy['checks'] if check['name'] == 'dependency-policy')
+        self.assertEqual(dependency['command'], ['cargo', 'deny', '--offline', '--locked', '--all-features', 'check'])
+        steps = yaml.safe_load(workflow)['jobs']['current-dependency']['steps']
+        commands = [step['run'] for step in steps if 'run' in step]
+        setup = commands.index('cargo fetch --locked\ncargo deny --locked fetch')
+        gate = commands.index('bash tools/ci/gate.sh --configuration current --group dependency')
+        self.assertLess(setup, gate)
+
     def test_duplicate_policy_check_fails(self):
         policy = load_policy(ROOT / 'tools/ci/policy.yaml')
         policy['checks'].append(copy.deepcopy(policy['checks'][0]))
@@ -54,9 +68,35 @@ class GateTests(unittest.TestCase):
     def test_missing_or_zero_test_completion_fails(self):
         self.assertFalse(completed('running 12 tests\n', 'libtest'))
         self.assertFalse(completed('test result: ok. 0 passed; 0 failed;', 'libtest'))
-        self.assertTrue(completed('test result: ok. 12 passed; 0 failed;', 'libtest'))
+        self.assertTrue(completed('running 12 tests\ntest result: ok. 12 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out;\n', 'libtest'))
         self.assertFalse(completed('4 scenarios (1 failed)', 'cucumber'))
         self.assertTrue(completed('4 scenarios (4 passed)', 'cucumber'))
+
+    def test_every_announced_binary_requires_its_own_complete_summary(self):
+        one = 'running 1 test\ntest result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out;\n'
+        empty = 'running 0 tests\ntest result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out;\n'
+        self.assertTrue(completed(one + empty, 'libtest'))
+        self.assertFalse(completed(empty, 'libtest'))
+        self.assertFalse(completed(one + 'running 2 tests\n', 'libtest'))
+        self.assertFalse(completed('Running tests/first.rs (target/first)\n' + one + 'Running tests/second.rs (target/second)\n', 'libtest'))
+        self.assertFalse(completed(one.replace('running 1 test', 'running 2 tests'), 'libtest'))
+        self.assertTrue(completed('running 3 tests\ntest result: ok. 1 passed; 0 failed; 2 ignored; 0 measured; 5 filtered out;\n', 'libtest'))
+
+    def test_current_ui_requires_actual_case_execution(self):
+        summary = 'running 1 test\ntest result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out;\n'
+        self.assertFalse(completed(summary, 'trybuild'))
+        self.assertTrue(completed(summary + 'test tests/ui/example.rs [should fail to compile] ... ok\n', 'trybuild'))
+        self.assertFalse(completed(summary + 'test tests/ui/example.rs ... ignored\n', 'trybuild'))
+
+    def test_per_check_timing_is_emitted_with_the_actual_outcome(self):
+        with tempfile.TemporaryDirectory() as directory:
+            output = io.StringIO()
+            with contextlib.redirect_stdout(output):
+                code = execute([sys.executable, '-c', 'pass'], Path(directory) / 'timed.log', 5, 'command')
+            timing, = [json.loads(line.removeprefix('CI_CHECK ')) for line in output.getvalue().splitlines() if line.startswith('CI_CHECK ')]
+            self.assertEqual((code, timing['exit_code'], timing['name']), (0, 0, 'timed'))
+            self.assertGreater(timing['seconds'], 0)
+            self.assertLess(timing['seconds'], timing['timeout_seconds'])
 
     def test_nonzero_exit_and_timeout_are_preserved(self):
         with tempfile.TemporaryDirectory() as directory:

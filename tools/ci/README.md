@@ -29,6 +29,19 @@ project checks use the existing lock; configure Cargo offline when the dependenc
 cache is already populated. Neither build jobs nor workspace test threads are
 capped by product policy.
 
+The dependency check explicitly uses `cargo deny --offline --locked --all-features
+check`; cargo-deny's advisory fetching does not follow CARGO_NET_OFFLINE. Prepare
+the project and advisory caches separately when network access is available:
+
+```sh
+cargo fetch --locked
+cargo deny --locked fetch
+```
+
+The hosted dependency job performs this setup before invoking the same offline
+gate. Local runs can reuse their existing caches; a missing cache fails rather
+than fetching during validation or changing the owning lock.
+
 Each example is also checked with its exact declared feature set on both compiler
 roles. This catches a missing `required-features` entry that an all-feature build
 would hide, including the notification example's `protobuf-support` dependency.
@@ -42,6 +55,11 @@ MSRV sets that variable explicitly for version-sensitive compiler diagnostics.
 `RUSTC_BOOTSTRAP` is rejected for either compiler. Checks do not silently skip
 missing targets; add new targets and their applicability to the policy when their
 implementation is introduced. Empty or incomplete test summaries are failures.
+Every announced test binary/block must have its own successful summary and matching
+test count; an earlier successful binary cannot hide a later incomplete one.
+Current UI checks additionally require actual `tests/ui/` case output. Each command
+reports its elapsed time, timeout and exit status in a `CI_CHECK` line so local
+cold-run timings can be compared with the configured per-check limits.
 
 Each command owns a separate POSIX process group. On timeout, `run_check.py` sends
 TERM to that group, allows at most five seconds for it to exit, then sends KILL to
@@ -86,7 +104,7 @@ agreement constructor on both compilers.
 
 `native-tool-cli` prebuilds the real exporter and tool, captures Cargo's executable
 paths/hashes, then runs the Rust `CARGO_BIN_EXE` CLI test through all six subcommands.
-Its unique proof directory retains commands, output streams and the nine generated
+Its unique result directory retains commands, output streams and the nine generated
 artifact inputs/outputs. Direct CLI-test invocation without the prebuilt exporter
 uses an isolated Cargo target directory to avoid waiting on the parent's target lock.
 
@@ -104,6 +122,15 @@ subjects, zeros for its seven prepared-path subjects, and a positive heap-alloca
 control. These include full header construction and encoding; no smoke override
 can satisfy acceptance. Setup warms every runtime/delivery thread, and a new RPC
 client's first contact stays inside the counting window.
+RPC windows also wait for bounded publication-accounting completion inside the
+measurement. A received reply can precede the server's final telemetry update on
+another worker; all exact reply/count assertions remain required.
+
+The `prepared-core-runtime-minimal` check selects the SDK package with only
+`zero-copy-transport,transport-implementer-api`. Protobuf-only fixture tests are
+explicitly gated and are exercised by the all-feature library check. The external
+wire consumer and minimal native-role doctests are also canonical checks on both
+compilers; workspace feature unification cannot supply their missing capabilities.
 
 Core/full payload fixture checks pin the catalog digest, which includes the
 stored-vector manifest, verify all eight stored file hashes, and validate enabled
@@ -113,4 +140,30 @@ by their feature. The ignored vector updater is not a normal qualification check
 Logs live in `${CARGO_TARGET_DIR:-target}/ci-logs/<configuration>/`. CI uploads the
 current test group's logs as `test-results`, preserving the artifact name and
 workflow output consumed by `release.yaml`. The artifact is readable command/test
-output, not JUnit XML. Local command logs are not a source-provenance database.
+output, not JUnit XML.
+
+## Isolated feature combinations
+
+The independent feature job uses cargo-hack 0.6.45 and the policy's current Rust.
+For an offline local run with dependencies already cached:
+
+```sh
+python3 tools/ci/feature_gate.py --root "$PWD" --toolchain 1.95.0 \
+  --target "$PWD/../up-rust-feature-target" \
+  --result "$PWD/../up-rust-feature-results"
+```
+
+Use a fresh result directory outside the checkout, separate from the reusable
+target cache. The runner exports the exact source index and clean specification
+gitlink, then removes dev-dependencies only in that snapshot. The owning lock seeds
+an explicit offline setup resolution there. Every resulting package name, version,
+source and checksum must already exist in the owning lock. Subsequent powerset
+checks are locked and offline, and both the derived lock and owning source remain
+unchanged. Staged local candidates are supported when worktree bytes match the index.
+
+The complete ordered progress inventory determines the actual combination count;
+missing, duplicate or inconsistent cases fail. The result directory retains the
+compiler/environment details, tested case count, isolated sources, derived lock
+and command output for diagnosing failures. No product build-job or test-thread cap is added.
+The shared bounded process-group cleanup also applies to feature commands. CI
+uploads these records as `feature-results`, independently of `test-results`.

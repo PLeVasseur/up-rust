@@ -22,6 +22,13 @@ Generate and verify both shell/YAML outputs with the commands in the
 and command timeouts fail. Timeout cleanup includes descendants that survive the
 leader's exit. The independent dependency-policy workflow, link checking and
 feature-powerset jobs retain their separate responsibilities.
+The dependency job prepares locked project dependencies and its advisory cache
+before running the same explicitly offline/locked dependency gate used locally.
+
+The feature job checks an isolated source/specification snapshot, prunes only its
+dev-dependencies and audits the derived offline lock against the owning lock.
+Every powerset check then runs locked/offline. Its actual case count, logs,
+snapshot and lock audit are retained as `feature-results`; the checkout is unchanged.
 
 The current test job publishes readable command logs as `test-results`, preserving
 the artifact name consumed by [`release.yaml`](release.yaml); these are not JUnit

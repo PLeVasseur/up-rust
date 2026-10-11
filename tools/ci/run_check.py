@@ -5,6 +5,7 @@
 # SPDX-License-Identifier: Apache-2.0
 """Execute one CI command with a bounded lifetime and nonempty test completion."""
 import argparse
+import json
 import os
 from pathlib import Path
 import re
@@ -18,9 +19,22 @@ def completed(text, kind):
     text = re.sub(r'\x1b\[[0-9;]*[A-Za-z]', '', text)
     if kind == 'command':
         return True
-    if kind == 'libtest':
-        counts = re.findall(r'test result: ok\. (\d+) passed; (\d+) failed;', text)
-        return bool(counts) and sum(int(passed) for passed, _ in counts) > 0 and all(int(failed) == 0 for _, failed in counts)
+    if kind in {'libtest', 'trybuild'}:
+        announced = [int(count) for count in re.findall(r'^\s*running (\d+) tests?\s*$', text, re.M)]
+        summaries = [tuple(map(int, row)) for row in re.findall(
+            r'^\s*test result: ok\. (\d+) passed; (\d+) failed; (\d+) ignored; (\d+) measured;', text, re.M)]
+        if not announced or len(announced) != len(summaries):
+            return False
+        if any(expected != sum(counts) or counts[1] for expected, counts in zip(announced, summaries)):
+            return False
+        if not any(counts[0] for counts in summaries):
+            return False
+        binaries = re.findall(r'^\s*Running (?:unittests |tests[/\\]).+$', text, re.M)
+        if binaries and len(binaries) != len(summaries):
+            return False
+        if kind == 'trybuild':
+            return bool(re.search(r'^test tests/ui/\S+(?: \[[^\]]+\])? \.\.\. ok\s*$', text, re.M))
+        return True
     if kind == 'cucumber':
         return bool(re.search(r'\b[1-9]\d* scenarios?\b', text)) and not re.search(r'\b[1-9]\d* failed\b', text)
     raise ValueError('unknown completion format')
@@ -51,6 +65,7 @@ def terminate_group(child):
 
 def execute(command, log, timeout, completion):
     """Preserve command status, return 124 on timeout, and reject empty test passes."""
+    started = time.monotonic()
     log.parent.mkdir(parents=True, exist_ok=True)
     with log.open('wb') as output:
         child = subprocess.Popen(command, stdout=output, stderr=subprocess.STDOUT, start_new_session=True)
@@ -63,7 +78,9 @@ def execute(command, log, timeout, completion):
     print(text, end='')
     if code == 0 and not completed(text, completion):
         print(f'Expected nonempty {completion} completion in {log}', file=sys.stderr)
-        return 1
+        code = 1
+    print('CI_CHECK ' + json.dumps(dict(name=log.stem, seconds=time.monotonic() - started,
+        timeout_seconds=timeout, exit_code=code, completion=completion)), flush=True)
     return code
 
 
@@ -71,7 +88,7 @@ def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument('--log', type=Path, required=True)
     parser.add_argument('--timeout', type=int, required=True)
-    parser.add_argument('--completion', choices=['command', 'libtest', 'cucumber'], default='command')
+    parser.add_argument('--completion', choices=['command', 'libtest', 'trybuild', 'cucumber'], default='command')
     parser.add_argument('command', nargs=argparse.REMAINDER)
     args = parser.parse_args()
     command = args.command[1:] if args.command[:1] == ['--'] else args.command

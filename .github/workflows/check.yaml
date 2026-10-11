@@ -78,6 +78,10 @@ jobs:
           toolchain: 1.95.0
           components: rustfmt, clippy
       - run: cargo install --locked cargo-deny --version 0.19.0
+      - name: Prepare locked dependency and advisory caches
+        run: |-
+          cargo fetch --locked
+          cargo deny --locked fetch
       - run: bash tools/ci/gate.sh --configuration current --group dependency
   # [impl->req~up-language-ci-api-docs~1]
   current-docs:
@@ -213,10 +217,17 @@ jobs:
           gh attestation verify --repo taiki-e/cargo-hack --signer-workflow taiki-e/github-actions/.github/workflows/rust-release.yml cargo-hack.tar.gz
           tar xf cargo-hack.tar.gz -C "${CARGO_HOME:-"$HOME/.cargo"}"/bin
           rm cargo-hack.tar.gz
-      - name: Run cargo hack powerset
+      - name: Run isolated locked feature powerset
         run: |
-          cargo hack check \
-            --no-dev-deps \
-            --feature-powerset \
-            --group-features communication,usubscription,udiscovery,symphony \
-            --depth 2
+          python3 tools/ci/feature_gate.py \
+            --root "$GITHUB_WORKSPACE" \
+            --toolchain 1.95.0 \
+            --target "$RUNNER_TEMP/up-rust-feature-target" \
+            --result "$RUNNER_TEMP/up-rust-feature-results"
+      - name: Preserve feature snapshot, logs and lock audit
+        if: always()
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a
+        with:
+          name: feature-results
+          path: ${{ runner.temp }}/up-rust-feature-results/
+          if-no-files-found: error
