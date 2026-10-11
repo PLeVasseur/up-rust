@@ -1,19 +1,20 @@
-# Prepared stable-native transport
+# Stable-native communication
 
-Enable `zero-copy-transport` for stable payloads and checked receive admission.
-Add `transport-implementer-api` for prepared routes and generic registrations.
-Typed `StableContainerWire` access uses explicit native agreement; opaque
-selected-wire carriage retains its independent validation boundary.
+Enable `up-l2-zero-copy` for `communication::zero_copy::{Endpoint, Publisher,
+Notifier, RpcClient, RpcServer}`. Add `usubscription` for `Subscriber` and supply
+its subscription-service client. Notification receive uses `Endpoint::listen`.
+The roles use `StableContainerWire`; other selected wires use
+the transport-layer API.
 
-## Configure prepared transport
+## Configure an endpoint
 
 ### Prepared transmit routes
 
 `TxTemplate<P>` resolves representation, complete identity and the selected prefix
 once. It creates `TxRoute<C, P>` values from a fixed `RouteDefinition` and
 `RouteConfig` over a `PreparedTransportCore`. New route entries come from the
-core's reserved tables, allowing additional fixed-layout routes to reuse the
-descriptor and prefix. The default token capacity
+core's reserved tables, allowing bounded RPC reply caches to prepare first-contact
+routes without allocating another descriptor or prefix. The default token capacity
 is 2048 bytes, matching `HeaderLimits::default`; traceparent is opt-in.
 
 `MessageFields` borrows per-message token/traceparent and correlation overrides.
@@ -116,6 +117,27 @@ one generic `ZeroCopyHandler<P, F>` worker and a bounded registration inbox.
 Rejected frames increment the receiver's rejection counter and never reach the
 application handler. No per-frame handler future is boxed by this path.
 
+### Prepared RPC state
+
+`PreparedRpcClient<C, Req, Resp>` reserves its request route, pending table and
+token storage at creation. A synchronous response sink validates addressing and
+correlation and parks the frame directly in its reserved pending entry. A call
+arms that entry before publishing, releases its token read lock before physical
+publication, and holds no TX loan across the response await. Cancellation returns
+the entry; late/unknown responses are counted. Timeout, capacity, status and
+admission outcomes use Copy `CallError` values.
+
+`PreparedRpcServer<C, Resp>` reserves a fixed response-route cache and one generic
+request worker. First contact fills an existing cache/table slot using a prepared
+`TxTemplate`, without constructing another descriptor or prefix. Its
+`RequestHandler` consumes the request lease in `handle`, allowing Send-only binding
+frames to move with the future, and writes a reply afterward through `write_reply`.
+No response TX loan or cache lock spans the asynchronous handler. Request and
+response types may differ. Cache exhaustion refuses a new client without evicting
+an existing route; handler status errors produce correlated status-only replies.
+The server rechecks the decoded request destination before using its reply cache
+or invoking user code; physical delivery filters are not metadata authority.
+
 ### Fixed-capacity token storage
 
 `TokenBuffer` reserves credential storage at creation. Updates and clear do not
@@ -141,36 +163,45 @@ clear removes its presence. Capacity counts UTF-8 bytes. A route or registration
 can impose a separate admission policy. Received tokens borrow their frame bytes
 through `RxHeader`; they are not copied into an owned token buffer automatically.
 
+### Adapter and URI provider
+
+An `Endpoint<C, U>` pairs an explicitly agreed stable-container adapter over
+`Arc<C>` with the application's URI provider. Construct the adapter with
+`UWireTransport::with_native_agreement`, after checking independently provisioned
+peer configuration and required local types.
+The [native identity guide](crate::guide::native_identity) covers those contracts.
+
+The binding implements `PreparedTransportCore`. Payload data is initialized in
+its loan; received `StableRx<C, P>` values retain their agreement and storage.
+Heap-backed leases and physical native loans have distinct provenance; these role
+APIs alone do not prove end-to-end no-copy delivery. `SendConfig` fixes TTL,
+priority and route capacities at creation. `MessageFields` borrows each send's
+ID, token, traceparent and other permitted overrides.
+
 ## Publish and borrow stable values
 
 ```rust,no_run
-use std::sync::Arc;
-use up_rust::{AdmissionError, Frame, FrameMessageKind, MessageFields,
-    NativeProfileAgreement, PreparedTransportCore, RouteConfig, RouteDefinition,
-    RxLease, SendError, SetupError, StablePayload, StablePayloadInit, TxRoute,
-    TxTemplate, UUri};
+use up_rust::{AdmissionError, LocalUriProvider, MessageFields, PreparedTransportCore,
+    SendError, SetupError, StablePayload, StablePayloadInit};
+use up_rust::communication::zero_copy::{Endpoint, Publisher, SendConfig, StableRx};
 
 #[repr(C)]
 #[derive(Debug, StablePayload, StablePayloadInit)]
 #[stable_payload(type_name = "example.Reading", revision = 1)]
 struct Reading { value: u32 }
 
-fn prepare<C: PreparedTransportCore>(
-    core: Arc<C>, agreement: NativeProfileAgreement, source: UUri,
-) -> Result<TxRoute<C, Reading>, SetupError> {
-    TxTemplate::<Reading>::new(agreement)?.route(core, RouteDefinition {
-        kind: FrameMessageKind::Publish, source, sink: None, priority: None,
-        ttl: None, permission_level: None,
-    }, RouteConfig::default())
+fn prepare<C, U>(endpoint: &Endpoint<C, U>) -> Result<Publisher<C, Reading>, SetupError>
+where C: PreparedTransportCore, U: LocalUriProvider + ?Sized {
+    endpoint.publisher(0x8001, SendConfig::default())
 }
 
-fn publish<C: PreparedTransportCore>(route: &TxRoute<C, Reading>) -> Result<(), SendError> {
-    route.send(MessageFields::default(), |init| {
+fn publish<C: PreparedTransportCore>(publisher: &Publisher<C, Reading>) -> Result<(), SendError> {
+    publisher.publish_stable(MessageFields::default(), |init| {
         init.into_initializer().value(42).finish()
     })
 }
 
-fn read<F: Frame>(frame: &RxLease<Reading, F>) -> Result<&Reading, AdmissionError> {
+fn read<C: PreparedTransportCore>(frame: &StableRx<C, Reading>) -> Result<&Reading, AdmissionError> {
     frame.payload()
 }
 ```
@@ -181,14 +212,39 @@ stable layout and explicit padding. Large arrays use borrowed input, `*_fill` or
 Initialized/default buffers can zero or copy the whole payload; bindings document
 their physical behavior.
 
+## Receive events and notifications
+
+`Subscriber::subscribe` contacts the subscription service before creating a generic
+`ZeroCopyHandler` worker with `ReceiveConfig`. Local setup failure attempts to roll
+back the service subscription and reports a failed rollback as well as its original
+cause. The returned `Subscription::unsubscribe` attempts both service removal and
+local drain, retaining both errors. Drop and cancellation close local delivery;
+asynchronous service cleanup requires an explicit unsubscribe/reconciliation.
+
+`Endpoint::listen` creates a notification `Receiver` for the local source URI.
+`Receiver::stop` closes admission, detaches physical delivery and drains accepted
+frames. Drop aborts instead. Publish and notification workers check decoded kind,
+source and sink before user code, independently of physical routing hints. A
+retained lease remains valid after listener or endpoint destruction. A publisher
+can also consume a checked Publish route using `Publisher::from_route`, reusing
+an existing template's reserved state.
+
+## Request and response
+
+`Endpoint::rpc_client<Req, Resp>` reserves a client for an exact method before any
+call. Its `call` returns a checked response of the separately selected `Resp` type.
+`Endpoint::rpc_server<Req, Resp, H>` starts a `RequestHandler` worker for a local
+method resource in `0x0001..=0x7FFF`, with a bounded first-contact reply cache.
+These use the prepared RPC state and status-only handling described above.
+
 ## Runtime setup and allocation measurements
 
 Initialize each runtime worker's UUID generator and deferred-waker storage before
 counting traffic, and do the same for every binding delivery thread. On a
 current-thread Tokio runtime, deferred-waker storage belongs to a `block_on`
-scheduler entry: warmup and measurement must remain in that same entry. Route and
-registration creation reserve SDK state. Count initialization, header
-writing/parsing, handlers, waits and rejection on
+scheduler entry: warmup and measurement must remain in that same entry. Endpoint
+creation reserves SDK state; do not use a new client's first call as warmup. Count
+initialization, header writing/parsing, handlers, pending waits and rejection on
 every participating thread. Observers and application handlers must honor their
 own allocation policy; their costs cannot be subtracted from a whole-process count.
 
@@ -196,6 +252,6 @@ own allocation policy; their costs cannot be subtracted from a whole-process cou
 
 Invalid metadata, absent agreement, wrong identity and invalid method filters return
 typed SDK errors. Borrowing checks identity, representation, length, alignment and
-field bits. Prepared paths use those checked operations. The separate expert transport
+field bits. Role paths use those checked operations. The separate expert transport
 borrow API requires its explicit per-call safety proof; a provenance label is not
 a safe attestation witness.

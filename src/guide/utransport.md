@@ -197,36 +197,6 @@ transport does not support pull.
 The implementation decides how to buffer native messages, but it must preserve
 the L1 selection and expiry behavior at the method boundary.
 
-## Prepared synchronous cores
-
-Enable `zero-copy-transport` with `transport-implementer-api` for
-`PreparedTransportCore`. The binding reserves route, registration, fan-out and
-storage capacities before sending. `prepare_route` fixes addressing and layout
-limits; `loan` and `publish` are synchronous and use fixed-size rejection errors.
-The remaining asynchronous attachment operation returns a concrete future.
-
-`PreparedTxStorage` is an unsafe implementation contract: metadata and payload
-views are disjoint, exclusively owned and immobile, and recording the header
-preserves every byte initialized through them. A producer initializes the exact
-visible extents, records the header/token range, and satisfies
-`InitializedTx::from_initialized` before publication. Bindings still initialize
-any physical fields outside those logical views. Payload presence is independent
-of length, so present-empty storage remains distinct from absence.
-
-`FrameSink` delivers opaque receive owners synchronously into setup-owned state,
-such as `RegistrationInbox`. A `None` sink filter means sinkless messages. Closing
-or detaching a registration does not revoke retained frames. A blocking inbox
-policy can block delivery; no registry lock may be held across user delivery or
-waits that need that registry to make progress.
-
-With explicit `test-util`, `PoolCore` reserves fixed slots, route/fan-out tables
-and per-slot recipient scratch. Its handles are instance- and generation-bound;
-table/slot exhaustion and foreign handles are errors. `PoolFrame` retains immutable
-raw byte storage across core destruction without copying payload bytes. This is
-owned heap-backed conformance storage, not native shared-memory evidence. The last
-reader reclaims the slot and wipes its owned token range; that does not establish
-a native middleware's wiping behavior.
-
 ## Map errors by operation
 
 ### Selected-wire cores and adapters

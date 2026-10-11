@@ -1,10 +1,8 @@
 # Guide
 
 * [Migrating from 0.9 to 0.10](crate::guide::migration): source-level changes and examples.
-* [URI storage and validation](crate::guide::uris): bounded wire-part parsing and feature-selected storage.
-* [Bounded receive registrations](crate::guide::registrations): setup capacity, generic workers and lifecycle.
-* [Prepared stable-native transport](crate::guide::zero_copy): typed initialization,
-  checked receive admission, opaque forwarding and owned credential storage.
+* [URI storage and received parts](crate::guide::uris): feature-selected storage and typed rejection.
+* [Bounded registrations](crate::guide::registrations): generic workers, overflow and lifecycle.
 * [Frame metadata](crate::guide::frame_metadata): validated metadata, representations and codec errors.
 * [Native identity](crate::guide::native_identity): target-qualified descriptors and
   explicit deployment agreement (`native-identity`).
@@ -16,6 +14,8 @@
   relationship between [`UTransport`](crate::UTransport), L1 requirements, and
   protocol bindings, with links to published transport implementations.
 * [The trait map](crate::guide::trait_map): how the public traits fit together.
+* [Stable-native communication](crate::guide::zero_copy): loan initialization and
+  receive leases for the native role family (`up-l2-zero-copy`).
 
 Start with [applications](crate::guide::applications) to use uProtocol, or the
 [trait map](crate::guide::trait_map) for an API overview.

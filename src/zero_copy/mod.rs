@@ -37,11 +37,18 @@ mod registered;
 pub use registered::{WireRegistration, WireRegistrationStopError};
 #[cfg(feature = "transport-implementer-api")]
 mod route;
+#[cfg(feature = "transport-implementer-api")]
+mod rpc;
 #[cfg(all(
     any(test, feature = "test-util"),
     feature = "transport-implementer-api"
 ))]
 pub use pool_core::{PoolCore, PoolCoreConfig, PoolFrame};
+#[cfg(feature = "transport-implementer-api")]
+pub use rpc::{
+    CallError, PreparedRpcClient, PreparedRpcServer, RequestHandler, RpcClientConfig,
+    RpcClientStats, RpcServerConfig, RpcServerStats,
+};
 mod rx;
 mod token;
 mod tx;

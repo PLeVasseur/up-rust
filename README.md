@@ -36,13 +36,6 @@ explicit versions and require peer agreement; a version change requires coordina
 endpoint updates and regeneration of affected artifacts. These local SDK formats
 do not establish normative registry assignments. See the
 [frame metadata guide](src/guide/frame_metadata.md) for contracts and examples.
-The canonical field block supports caller-slice output. In-place zero-copy headers
-borrow token/traceparent, reject malformed input with fixed-size errors and report
-their initialized extents. Header/token storage policies remain distinct from
-payload interpretation and binding-owned physical storage.
-Selected-wire metadata codecs expose exact-length and caller-slice encoding,
-including a setup prefix writer. These reproduce the same canonical metadata
-bytes while keeping wire/family/layout identities independent of payload encoding.
 
 `owned-frame-transport` provides `UOwnedFrame`, `UOwnedTransport` and
 `UOwnedListener`. Frames are validated before entering the public send/receive
@@ -56,22 +49,11 @@ are created at setup; synchronous pushes use an explicit overflow policy. Stop
 drains earlier admissions, while Drop cancels queued work. The
 [registration guide](src/guide/registrations.md) explains lifecycle and blocking.
 
-With `zero-copy-transport` and `transport-implementer-api`, `PreparedTransportCore`
-reserves physical routes and uses synchronous loan/publication operations.
-`FrameSink` pushes receive owners into setup-owned state. `PreparedTxStorage` has
-an unsafe disjoint-storage and initialization-preservation contract; binding
-authors retain native owners and account for every bounded resource at setup.
-The explicit `test-util` feature exposes `PoolCore` as an owned-memory conformance
-core, without claiming native shared-memory provenance. See the prepared-core
-section of the [transport guide](src/guide/utransport.md).
-
 For application facades, enable `owned-frame-transport` with `usubscription`.
 `communication::owned::Endpoint` creates Publisher, Subscriber, Notifier,
 RpcClient and RpcServer values with the existing role semantics. The
 [owned guide](src/guide/owned.md) covers setup, validated frames, notification
 receive, RPC and error handling; the subscriber needs a subscription service.
-Owned RPC listeners use weak transport references to avoid registry cycles;
-entered callbacks retain the sender only through handler and reply completion.
 
 Selected-wire adapters compose an encoded transport core with a wire marker and
 metadata codec. Enable `selected-wire-user-api` for application construction and
@@ -111,18 +93,54 @@ reader decode) require `native-identity`, implied by selected-wire features.
 `StablePayloadInit` provides write-once initialization. Bindings still own storage,
 native lifetime and physical copy behavior. See the [native guide](src/guide/native_identity.md).
 `native-inventory` registers concrete linked types for target-side descriptor export.
-`TxTemplate` and `TxRoute` prepare identity and capacity once, fill a checked
-`PayloadInit` directly in a loan and publish synchronously. `RxAdmission` validates
-headers, complete identity, size, alignment and field bits before a retained
-`RxLease` exposes a typed reference. Generic registration handlers avoid a boxed
-future per frame. `HeaderAdmission` and `OpaqueRoute` preserve opaque carriage
-without requiring a native type agreement solely to forward bytes.
-Selected-wire receive views retain their agreement generation for codec context
-and reject a conflicting generation before checked borrowing.
-`TokenBuffer` reserves and wipes owned credential storage. Array initializers expose
-`*_fill_pattern` with a typed empty-pattern error and no payload-sized temporary.
-The [prepared stable-native guide](src/guide/zero_copy.md) covers these contracts,
-explicit agreement, caller-built metadata and registration teardown.
+The zero-copy feature also stores URI authority bytes inline. The
+[URI guide](src/guide/uris.md) explains the typed, allocation-free rejection API
+and the default build's retained `String` storage. Every build rejects IPvFuture
+authorities and authority arguments with trailing paths, queries or fragments.
+The same feature exposes `TxHeaderParts`, caller-buffer header writers and
+`parse_header` for allocation-free in-place metadata validation. `RxHeader`
+borrows token/traceparent bytes from the validated input; payload admission remains
+a separate check. See the [frame metadata guide](src/guide/frame_metadata.md).
+`UFrameFieldsMetadataCodec::native_prefix` obtains the agreed framing prefix at
+setup using the same registered/private identity encoding as the whole codec.
+`TokenBuffer` provides setup-reserved token storage with allocation-free updates,
+oversize rejection that retains the previous value, redacted Debug and owned-byte
+wiping on overwrite/clear/drop. The [stable-native guide](src/guide/zero_copy.md)
+distinguishes that owned storage from tokens borrowed from received frames.
+`RxAdmission<P>` prepares a stable type's representation, complete identity and
+agreement once. Its `RxLease<P, F>` retains the binding's `Frame`, checks header
+and payload presence/identity before typed access, and validates length, alignment
+and field bits without allocating error strings. Generic `ZeroCopyHandler` workers
+receive only admitted leases; storage provenance remains descriptive evidence.
+Prepared transmit uses `TxTemplate<P>` and `TxRoute<C, P>` over a
+`PreparedTransportCore`. Route/fan-out/storage capacities are reserved at setup;
+synchronous sends encode headers and initialize payloads directly in the loan.
+Routes can also check and encode caller-built semantic metadata using
+`prepare_metadata`/`send_metadata`, borrowing its strings without cloning them.
+`HeaderAdmission`/`HeaderLease` support in-place opaque carriage without imposing
+a native type agreement. Bounded `OpaqueRoute` forwarding preserves payload IDs
+and tokens under the same wire/family/layout identities with one explicit egress
+payload copy; originating reserved IDs is rejected separately.
+Asynchronous callback admission tracks nested context on the polling stack;
+registration workers own their concrete handler futures and bounded inboxes.
+Selected-wire `WireRegistration` handles combine decoded filtering with physical
+detachment, retain failed detach handles for retry, and drain on explicit stop.
+Implementing `PreparedTxStorage` requires an explicit unsafe ownership contract:
+stable disjoint storage and preservation of every byte initialized by the SDK.
+Owned RPC listeners use weak transport references to avoid registry cycles;
+entered callbacks retain the sender only through handler and reply completion.
+Field-block and selected-wire codecs also offer exact-length, caller-slice writers;
+short output is rejected before mutation and canonical metadata bytes are preserved.
+Generated array initializers support bulk in-place repeated patterns, with a
+fixed-size empty-pattern error and no payload-sized temporary. Stable fields are
+duplicable plain data, excluding ownership-sensitive handles and uniqueness state.
+The explicit `test-util` feature exposes `PoolCore` as an in-process conformance
+implementation, with owned-lease provenance rather than a claim of native SHM.
+Prepared RPC clients reserve pending slots and credential storage, and servers
+reserve their reply-route caches. They arm correlation before publication and
+separate asynchronous request handling from synchronous reply initialization.
+Status-only responses retain payload absence and request correlation.
+Server dispatch checks the decoded destination before admitting a client route.
 In-memory TX constructors report impossible sizes/allocation failure as
 `ResourceExhausted`; backend capacity and allocation behavior belong to bindings.
 
@@ -133,15 +151,19 @@ unsafe producer/bit-validity obligations for the expert receive path.
 The [up-native-profile tool](tools/up-native-profile/README.md) owns versioned
 deployment artifacts, append-only allocation and independently provisioned admission.
 
+`up-l2-zero-copy` adds stable-native Publisher, Notifier and RPC facades under
+`communication::zero_copy`; add `usubscription` for Subscriber. An endpoint uses an
+explicitly agreed `StableContainerWire` adapter and URI provider. The
+publisher/notifier hold typed routes and send synchronously; listeners own generic
+workers. Subscription setup rollback and unsubscribe preserve local/service errors,
+and received values remain valid after the registration is removed. RPC clients
+select request and response types separately and reserve their pending capacity.
+`Publisher::from_route` reuses a template-prepared Publish route. The
+[stable-native guide](src/guide/zero_copy.md) covers loan initialization, receive
+leases, response correlation, method filters, checked borrowing and runtime warmup.
+
 ## Building from Source
 
-With `zero-copy-transport`, `UUri` stores its bounded authority inline rather than
-allocating on URI construction/cloning. Default builds retain String storage.
-`UUri::try_from_wire_parts` returns Copy `UUriPartsError` diagnostics; both forms
-reject IPvFuture hosts and trailing authority components. The [URI guide](src/guide/uris.md)
-explains layout, UTF-8 bounds and legacy conversion behavior.
-`UUID::is_valid_u64_pair` and `UCode::from_i32` provide fixed-size scalar validation
-without constructing error strings.
 For source-level feature and accessor changes, see the
 [0.9 to 0.10 migration guide](MIGRATION.md).
 

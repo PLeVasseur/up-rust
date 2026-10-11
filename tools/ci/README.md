@@ -83,6 +83,12 @@ Its unique proof directory retains commands, output streams and the nine generat
 artifact inputs/outputs. Direct CLI-test invocation without the prebuilt exporter
 uses an isolated Cargo target directory to avoid waiting on the parent's target lock.
 
+Both roles execute stable-native communication tests with the minimal
+`up-l2-zero-copy` feature and again with `usubscription` for subscriber interaction.
+The in-memory encoded core drives publish, notification and correlated RPC delivery;
+tests check typed payloads and owned-lease provenance. These are SDK role contracts,
+with native storage/copy and worker acceptance remaining in the binding's gates.
+
 Logs live in `${CARGO_TARGET_DIR:-target}/ci-logs/<configuration>/`. CI uploads the
 current test group's logs as `test-results`, preserving the artifact name and
 workflow output consumed by `release.yaml`. The artifact is readable command/test

@@ -24,42 +24,69 @@ variable-length; the opt-in `UFrameMetadataAbiV1` representation is a fixed
 Fixed capacities are representation limits, not limits of the semantic model.
 Conversions fail instead of truncating. These SDK-defined representation formats
 are provisional; they are not normative native-profile registry assignments.
+`encode_frame_metadata_fields_into` appends the same bytes to an existing vector,
+preserving its prefix and avoiding an intermediate field vector in an outer codec.
+If encoding fails, discard the appended region before reusing that buffer.
 
-`frame_metadata_fields_len` computes the exact field-block length;
-`encode_frame_metadata_fields_to` writes it directly into a caller-owned slice.
-Short output returns a typed error before mutation and bytes beyond the encoded
-extent are unchanged. `encode_frame_metadata_fields_into` appends to an existing
-vector, while `encode_frame_metadata_fields` creates an owned vector.
-
+For fixed caller-owned storage, use `frame_metadata_fields_len` followed by
+`encode_frame_metadata_fields_to`. It produces the identical field block without
+allocating output. Short storage returns `UFrameFieldsError::OutputTooShort`
+before writing and the bytes after the encoded extent remain unchanged.
 At the selected-wire boundary, `UWireMetadataCodec::encoded_frame_metadata_len`
-and `encode_frame_metadata_into` include the wire/family/layout prefix in that
-caller-storage operation. `UFrameFieldsMetadataCodec::native_prefix` prepares
-the prefix at setup without encoding a probe message; `native_prefix_into` writes
-only that prefix to fixed setup storage. Private identities retain their agreed
-literal, while registered identities can use their compact representation.
+and `encode_frame_metadata_into` provide the same operation including the prefix.
+`UFrameFieldsMetadataCodec::native_prefix_into` writes only that prefix into a
+caller-owned setup buffer. The owned-vector codec remains available for owned
+carriage; its output has the same bytes and independent wire/family/layout IDs.
 
-## In-place headers
+## In-place zero-copy headers
 
 With `zero-copy-transport`, `TxHeaderParts` borrows URI, token and traceparent
-inputs. `header_len` computes a caller-agreed prefix/length/field-block extent;
-`write_header_uninit` initializes it directly in existing storage. The writer
-does not touch payload bytes or the surrounding alignment gap. `write_header`
-accepts initialized output with the same checked semantics.
+inputs instead of constructing per-message owned strings. `header_len` determines
+the required prefix/length/field-block extent, and `write_header_uninit` initializes
+that extent in caller-owned storage. `write_header` accepts an initialized slice.
+The caller obtains the selected-wire prefix at setup through
+`UFrameFieldsMetadataCodec::native_prefix(context)`, which includes the codec's
+layout and the selected wire/family identities without encoding a probe message. The underlying
+field bytes match the existing canonical codec; payload placement remains with
+the frame carrier.
 
-`parse_header` checks prefix, bounds, presence bits, UTF-8, scalar values and
-message-role invariants before applying `HeaderLimits::max_token_len`. `RxHeader`
-borrows token/traceparent from that same input. In-place rejection uses Copy
-`UFrameHeaderError`, including invalid received authorities. Legacy owned decoders
-may allocate their diagnostic strings. The prepared header token limit defaults
-to 2048 bytes; explicit zero admits absent/empty tokens. Traceparent is capped at
-63 bytes. Those capacities are independent of the fixed ABI's token storage.
+`parse_header` validates the prefix, lengths, UTF-8, scalar values and message-role
+invariants before applying `HeaderLimits::max_token_len`. Its `RxHeader` borrows
+token and traceparent from that same immutable input. This avoids a separately
+allocated string and keeps the view's lifetime tied to the received bytes.
+Headers retain the independent native type token and distinguish an absent token
+from a present empty token. Debug output reports access-token length, not contents.
 
-Debug output redacts access-token content. The writer reports its initialized
-header and token extents for the owning buffer's reclamation policy. Parsing
-metadata does not establish payload type, byte validity or physical ownership.
+`UFrameHeaderError` is a Copy error on success and rejection paths. The zero-copy
+header profile caps traceparent at 63 bytes. An owned semantic model or another
+representation may have different capacities. The writer returns the token range
+so an owner can wipe its own reusable buffer; that range does not grant permission
+to mutate shared native storage while another receiver retains it.
 
-The zero-copy URI's scalar/inline authority layout is checked against `UUriAbi`;
-default String storage remains a separate representation.
+These functions validate metadata only. The carrier must still validate payload
+presence/length, and typed admission must validate identity, alignment and field
+bits before borrowing a payload.
+
+## Reproducible payload fixtures
+
+The opt-in `payload-contract-fixtures` module has six core stable fixtures;
+`payload-contract-large-fixtures` adds the LiDAR and camera fixtures. Their complete
+sequence-17, little-endian `.bin` representations are stored under
+`tests/golden/payload-contract/`. `vectors.json` binds all eight file hashes,
+lengths, alignments and type names. The canonical core/full fixture catalogs include
+that manifest's SHA-256, so `fixture_manifest_sha256_hex()` also commits to the
+stored bytes. Normal tests check the stored data rather than treating regenerated
+bytes as the oracle. An explicit ignored updater is documented in the corpus README.
+
+The digest identifies this fixture corpus and enabled catalog, not a payload
+encoding assignment or a peer's native agreement. The stored byte order is an
+explicit test profile; it does not make native representations portable across
+unagreed targets.
+
+LiDAR geometry uses frozen trigonometric coefficient bits, preserving the stored
+fixture while avoiding per-call platform-dependent transcendental rounding. The
+corpus README documents its separate explicit native-host updater; stored vectors
+and digest pins must still verify without silently regenerating them.
 
 ## Preserve opaque native tokens
 

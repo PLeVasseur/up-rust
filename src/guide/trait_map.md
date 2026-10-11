@@ -76,6 +76,17 @@ See [the owned-frame guide](crate::guide::owned) for boundary validation and
 composition. A transport offers these capabilities when its technology supports
 the corresponding storage and lifetime contracts.
 
+## Stable-native capabilities
+
+| Layer | Main API | Implemented by | Use |
+| --- | --- | --- | --- |
+| Stable-native roles | `communication::zero_copy::Endpoint` and publisher/notifier/RPC/subscriber facades | SDK over `StableContainerWire` | Initialize stable TX loans and receive checked leases |
+| Loan carriage | `PreparedTransportCore`, `PreparedTxStorage`, `Frame` | binding | Reserved physical storage, lifetime and synchronous delivery |
+| Typed receive | `StableRx<C, P>::payload` and `ZeroCopyHandler<P, F>` | SDK over a contiguous loan | Agreement, layout and field validity before a reference |
+
+Enable `up-l2-zero-copy`, plus `usubscription` for the subscriber. The
+[stable-native chapter](crate::guide::zero_copy) states setup and lifecycle limits.
+
 ## Related guides
 
 Applications: [the application tutorial](crate::guide::applications). Transport

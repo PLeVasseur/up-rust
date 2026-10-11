@@ -19,6 +19,8 @@ The classic role implementations use `UTransport` and `UMessage`. With
 Publisher, Subscriber, Notifier, RpcClient and RpcServer semantics over validated
 owned frames. The application supplies its transport and URI provider; subscribers
 also require a subscription service. Public mock helpers require `test-util`.
+With `up-l2-zero-copy`, stable-native roles initialize transmit loans and expose
+receive leases; the subscriber additionally requires `usubscription`.
 */
 
 use bytes::Bytes;
@@ -463,9 +465,9 @@ impl UPayload {
 }
 
 #[cfg(all(
-    feature = "owned-frame-transport",
     feature = "usubscription",
-    feature = "selected-wire-transport-core"
+    feature = "selected-wire-transport-core",
+    feature = "owned-frame-transport"
 ))]
 pub(crate) fn validate_listener_topic(topic: &crate::UUri) -> Result<(), RegistrationError> {
     topic
@@ -483,3 +485,9 @@ pub(crate) fn validate_listener_topic(topic: &crate::UUri) -> Result<(), Registr
 /// These facades implement the classic role traits over `UOwnedTransport`; the
 /// caller supplies URI identity and, for subscription, a uSubscription service.
 pub mod owned;
+
+/// Stable-native publisher, subscriber, notifier and RPC roles over receive leases.
+///
+/// Enable `up-l2-zero-copy`; the subscriber also requires `usubscription`.
+#[cfg(feature = "up-l2-zero-copy")]
+pub mod zero_copy;

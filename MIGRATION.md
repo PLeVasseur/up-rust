@@ -2,13 +2,52 @@
 
 ## URI storage and rejection
 
-`zero-copy-transport` enables inline authority storage in `UUri`; default builds
-retain String. Use `try_from_wire_parts` for allocation-free URI construction and
-Copy `UUriPartsError` failures on that feature. Legacy constructors retain their
-owned error-string conversion. IPvFuture hosts and authority suffixes containing
-a path, query or fragment are rejected in every build, including protobuf source
-and sink conversion. `UUID::is_valid_u64_pair` and `UCode::from_i32` support
-allocation-free scalar rejection. See the URI guide for storage and layout details.
+`zero-copy-transport` selects inline URI authority storage; default builds retain
+`String`. Use `UUri::try_from_wire_parts` and its Copy `UUriPartsError` for received
+parts that must reject without allocating. `try_from_parts` retains its owned
+validation errors. Every build now rejects IPvFuture authorities and authority
+arguments followed by a path, query or fragment. See the URI guide for examples.
+`UCode::from_i32` and `UUID::is_valid_u64_pair` provide allocation-free wire-value
+checks; their legacy error-returning counterparts remain available.
+
+With `zero-copy-transport`, `TokenBuffer` reserves an explicit byte capacity at
+setup and preserves the prior token on an oversized update. It redacts Debug and
+wipes owned bytes on overwrite, clear and Drop. `RxHeader` instead borrows received
+token bytes; its lifetime is tied to the received slice.
+Prepared native receive uses `RxAdmission<P>` and `RxLease<P, F>` over a binding's
+retained `Frame`. The generic `ZeroCopyHandler` receives only frames that passed
+identity and representation admission. Manual unsafe stable-payload implementations
+must also exclude interior mutability; a typed borrow cannot permit writes through
+the immutable source bytes.
+
+Prepared native RPC uses `PreparedRpcClient<C, Req, Resp>` and
+`PreparedRpcServer<C, Resp>` with explicit pending-call and reply-cache capacities.
+Implement `RequestHandler` to handle the retained request asynchronously and then
+initialize the response synchronously. Correlation is armed before publication;
+request and response types may differ. Cancellation releases the pending slot,
+and errors use fixed-size `CallError` values. See the stable-native communication
+guide for token, first-contact and status-only response behavior.
+
+The `communication::zero_copy` roles now require `PreparedTransportCore`. Its
+`Endpoint` uses an adapter over `Arc<C>`. Choose the payload type, topic/destination,
+TTL and capacities when creating a publisher or notifier; `publish_stable` and
+`notify_stable` are synchronous and take borrowed `MessageFields`. Replace the old
+per-message `CallOptions`/resource arguments with `SendConfig` at creation.
+`StableRx<C, P>::payload` returns the checked type selected at registration.
+Replace dynamic zero-copy role listeners with generic `ZeroCopyHandler` values;
+keep the returned `Receiver` or `Subscription` and stop/unsubscribe it explicitly.
+RPC creation selects both request and response types and uses `RequestHandler`
+instead of a request-listener facade. Service rollback/teardown failures remain
+explicit, and dropping a subscription only closes its local worker.
+
+Opaque prepared receive uses `HeaderAdmission` and `HeaderHandler` rather than
+allocating an owned metadata view per callback. `HeaderLease` retains byte storage,
+borrows token/traceparent, and exposes no typed payload reference. Its filtered
+registration preserves partial source filters and sinkless-only `None` behavior.
+`OpaqueTemplate` prepares bounded exact-address routes; `forward` preserves an
+admitted payload identity, including reserved values, and refuses wire/family/layout
+relabeling. `send_bytes` is the separate originating operation and rejects reserved
+payload IDs. Both explicitly copy the opaque payload to the egress loan once.
 
 ## Feature and accessor names
 
@@ -147,13 +186,6 @@ Bindings with a smaller carrier range must report unrepresentability.
 
 ## Frame metadata and payload codec interfaces
 
-For caller-owned metadata storage, use `frame_metadata_fields_len` and
-`encode_frame_metadata_fields_to`. Zero-copy builds expose borrowed
-`TxHeaderParts`/`RxHeader`, `header_len`, `write_header_uninit`, `write_header`
-and `parse_header` with fixed-size `UFrameHeaderError` failures. The default
-receive token limit is 2048 bytes and traceparent is bounded at 63; fixed ABI
-capacities remain separate. Received authority validation runs before typed access.
-
 Frame carriers use `UFrameMetadata` for semantic metadata and implement
 `UFrameView::has_payload` explicitly; an empty byte slice is not sufficient to
 determine absence. The metadata builder validates message structure, and metadata
@@ -167,12 +199,6 @@ space and structured `SchemaMismatch` diagnostics. The new
 [frame metadata guide](src/guide/frame_metadata.md) contains compile-tested examples.
 
 ## Selected-wire API ownership
-
-Metadata codec implementations provide `encoded_frame_metadata_len` and
-`encode_frame_metadata_into`; owned encoding has a default implementation using
-them. The canonical codec also exposes setup `native_prefix` and
-`native_prefix_into` APIs. Short caller output rejects before writing, preserving
-bytes beyond the encoded extent and all wire/family/layout identities.
 
 Wire contracts use crate-root imports under `wire-implementer-api`; there is no
 redundant `wire_implementer_api` compatibility module. `UFrameFieldsMetadataCodec`
@@ -189,6 +215,14 @@ value 1 remains an internal SDK reservation with no decoder, not a public consta
 or a payload-registry assignment.
 
 ## Metadata conformance fixtures
+
+Metadata codec implementations provide `encoded_frame_metadata_len` and
+`encode_frame_metadata_into`; the owned `encode_frame_metadata` now has a default
+implementation using them. The canonical codec keeps its direct vector writer and
+offers an allocation-free output path into caller storage. Field-block users can
+use `frame_metadata_fields_len` and `encode_frame_metadata_fields_to`; short output
+is a typed error and does not partially overwrite the destination. The native
+prefix also has a caller-buffer setup writer, `native_prefix_into`.
 
 Metadata vector manifests are required and bind both the decoded bytes and exact
 hex files with SHA-256. Verification decodes the stored vectors. Setting
@@ -211,6 +245,26 @@ native teardown. A timeout never revokes retained storage. Native callback guard
 must stay on their entering thread and are not `Send`.
 
 ## Selected-wire transport adapters
+
+The asynchronous `UZeroCopyTransportCore`/`UZeroCopyUninitTransportCore` and public
+`UZeroCopyTransportImpl`/extension family are replaced by `PreparedTransportCore`.
+Prepare physical addresses and limits once, implement synchronous `loan` and
+`publish`, and attach a synchronous `FrameSink` to setup-owned receive state.
+`PreparedTxLoanSpec` is replaced by a prepared route plus per-message
+`TxHeaderParts`/`TxFrameLayout`; metadata is written directly into storage.
+`PreparedTxStorage` implementations are unsafe: document exclusive, disjoint,
+stable backing storage and preservation of initialized bytes across all methods.
+These are distinct obligations from checked lengths, allocation policy and callback
+quiescence, and let the SDK safely construct the initialized-loan proof.
+
+Replace `UZeroCopyListener` and `UEncodedZeroCopyListener` trait objects with
+generic `ZeroCopyHandler` or `HeaderHandler` workers. Adapter registration returns
+an owned `WireRegistration`; retain it for detachment retry and explicit draining.
+Pull-style consumers can attach a preallocated inbox and admit each received frame
+through `RxAdmission` or `HeaderAdmission`. A selected wire is still chosen by
+`UWireTransport`; use its preparation/registration methods instead of the removed
+`USelectedWireZeroCopyTransport` marker. `PayloadInit` replaces the former
+`USelectedWireStablePayloadInit` argument on typed sends.
 
 `selected-wire-user-api` supplies adapter construction and receive views;
 `transport-implementer-api` supplies encoded-core contracts. Enable the owning
@@ -265,6 +319,13 @@ peers must coordinate supported profile versions and reject unknown presence bit
 
 ## Stable payloads and typed codec context
 
+Generated array setters additionally expose `<field>_fill_pattern`, which repeats
+borrowed stable object representations in place without invoking Clone. Empty
+patterns on nonempty arrays return `StablePayloadPatternError::EmptyPattern`.
+Manual stable-field implementations must permit plain-data representation
+duplication; ownership-sensitive handles and uniqueness-dependent state are
+excluded. This is the same copyability needed for serialized stable carriage.
+
 Typed payload codecs now require `native-identity` (implied by selected-wire features).
 `PayloadCodec::payload_identity(agreement)` replaces a context-free encoding method;
 fixed codecs return `PayloadIdentity::Fixed`, while native codecs require an agreed
@@ -300,3 +361,18 @@ The `up-native-profile` workspace tool creates and verifies deployment artifacts
 Its I/O errors retain the failing path and source; CLI exit codes are documented in
 the tool README. Default/core SDK checks select the SDK package independently so
 tool dependencies cannot conceal missing feature requirements.
+
+## Stable-native communication roles
+
+Enable `up-l2-zero-copy` for the module-qualified Publisher, Notifier, RpcClient and
+RpcServer facades; add `usubscription` for Subscriber. `Endpoint` pairs the stable
+adapter and URI provider. These roles use `StableContainerWire`, checked receive
+leases and generated TX initialization; other wires use the transport API.
+Notification receive belongs to Notifier. RPC server register/unregister rejects
+non-method resources before calling the core. A response listener sends through
+the existing adapter and preserves request correlation.
+
+`encode_frame_metadata_fields_into` appends into caller-owned metadata storage;
+it preserves the existing prefix. On failure the appended region may be partial,
+so callers must restore their original length before reusing the buffer. The
+representation bytes remain identical to standalone encoding.

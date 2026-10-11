@@ -169,6 +169,12 @@ fi
 if [[ "$configuration" == current && ( "$group" == all || "$group" == tests ) ]]; then
   python3 tools/ci/run_check.py --log "$log_root/native-tool-cli.log" --timeout 1200 --completion command -- python3 tools/ci/check_native_tool.py --toolchain 1.95.0
 fi
+if [[ "$configuration" == current && ( "$group" == all || "$group" == tests ) ]]; then
+  python3 tools/ci/run_check.py --log "$log_root/zero-copy-roles-minimal.log" --timeout 1200 --completion libtest -- cargo +1.95.0 test --locked -p up-rust --no-default-features --features up-l2-zero-copy --lib communication::zero_copy
+fi
+if [[ "$configuration" == current && ( "$group" == all || "$group" == tests ) ]]; then
+  python3 tools/ci/run_check.py --log "$log_root/zero-copy-subscriber-minimal.log" --timeout 1200 --completion libtest -- cargo +1.95.0 test --locked -p up-rust --no-default-features --features up-l2-zero-copy,usubscription --lib communication::zero_copy
+fi
 if [[ "$configuration" == msrv && ( "$group" == all || "$group" == check ) ]]; then
   python3 tools/ci/run_check.py --log "$log_root/check-all.log" --timeout 1200 --completion command -- cargo +1.88.0 check --locked --workspace --all-features --all-targets
 fi
@@ -273,4 +279,10 @@ if [[ "$configuration" == msrv && ( "$group" == all || "$group" == tests ) ]]; t
 fi
 if [[ "$configuration" == msrv && ( "$group" == all || "$group" == tests ) ]]; then
   python3 tools/ci/run_check.py --log "$log_root/native-tool-cli.log" --timeout 1200 --completion command -- python3 tools/ci/check_native_tool.py --toolchain 1.88.0
+fi
+if [[ "$configuration" == msrv && ( "$group" == all || "$group" == tests ) ]]; then
+  python3 tools/ci/run_check.py --log "$log_root/zero-copy-roles-minimal.log" --timeout 1200 --completion libtest -- cargo +1.88.0 test --locked -p up-rust --no-default-features --features up-l2-zero-copy --lib communication::zero_copy
+fi
+if [[ "$configuration" == msrv && ( "$group" == all || "$group" == tests ) ]]; then
+  python3 tools/ci/run_check.py --log "$log_root/zero-copy-subscriber-minimal.log" --timeout 1200 --completion libtest -- cargo +1.88.0 test --locked -p up-rust --no-default-features --features up-l2-zero-copy,usubscription --lib communication::zero_copy
 fi

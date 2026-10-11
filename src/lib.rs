@@ -23,7 +23,8 @@ messages across an IPC or network boundary. Applications can use five
 * `Notifier` targets a one-way message;
 * `RpcClient` invokes a service, while `RpcServer` serves it.
 
-Each role is an API over a [`UTransport`]. Applications can instead call
+Classic role implementations use [`UTransport`]. Owned-frame and stable-native
+roles use their corresponding frame carriage. Applications can instead call
 [`UTransport::send`] directly and receive messages through registered
 listeners for push, [`UTransport::receive`] for pull, or both. A transport maps
 the contract to its broker, bus, or peer-to-peer protocol.
@@ -51,6 +52,26 @@ The [`guide`] provides:
 * [transport implementation guidance](crate::guide::utransport), and
 * [a public trait map](crate::guide::trait_map).
 
+## Vocabulary
+
+* **Role**: application-facing publish, subscribe, notify or RPC behavior.
+* **Message**: the classic owned metadata-and-payload value, `UMessage`.
+* **Frame**: shared semantic metadata plus a payload view.
+  * **Family**: the message, owned-frame or loan/lease carriage contract.
+* **Wire**: the selected payload codec and its identity.
+* **Codec**: the metadata layout used to carry frame fields; its layout identity
+  belongs to the codec rather than the wire.
+  * **Agreement**: immutable deployment context for interpreting native identity.
+* **Transport**: physical carriage, storage and delivery; encoded cores carry
+  prepared bytes while the shared adapter validates their representation.
+
+## Module map
+
+`communication` contains enabled role traits and implementations; `frame` owns
+metadata and read-side views; `payload` owns codecs and typed borrowing; `wire`
+owns selected identities and metadata codecs. The [`guide`] supplies audience-
+oriented examples and exact feature recipes.
+
 ## Features
 
 None of the following features are enabled by default, so you can pick and choose which parts of the library you want to use by enabling the corresponding features. Note that some features depend on each other, so enabling one feature might automatically enable other features as well. For example, enabling `up-core-api` will also enable `protobuf-support` since the generated types require that.
@@ -68,6 +89,8 @@ None of the following features are enabled by default, so you can pick and choos
 * `up-l2-subscriber` Enables a default implementation of the `Subscriber` trait on top of the Transport Layer API.
 * `up-l2-rpc-client` Enables a default implementation of the `RpcClient` trait on top of the Transport Layer API.
 * `up-l2-rpc-server` Enables a default implementation of the `RpcServer` trait on top of the Transport Layer API.
+* `up-l2-zero-copy` Enables stable-native Publisher, Notifier and RPC facades;
+  add `usubscription` for the Subscriber service interaction.
 * `udiscovery` Enables support for types required to interact with [uDiscovery service](https://github.com/eclipse-uprotocol/up-spec/blob/v1.6.0-alpha.7/up-l3/udiscovery/v3/README.adoc)
   implementations.
 * `usubscription` Enables support for types required to interact with [uSubscription service](https://github.com/eclipse-uprotocol/up-spec/blob/v1.6.0-alpha.7/up-l3/usubscription/v3/README.adoc)
@@ -162,13 +185,10 @@ pub mod guide {
     )]
     pub mod owned {}
 
+    #[cfg_attr(feature = "up-l2-zero-copy", doc = include_str!("guide/zero_copy.md"))]
     #[cfg_attr(
-        all(feature = "zero-copy-transport", feature = "transport-implementer-api"),
-        doc = include_str!("guide/zero_copy.md")
-    )]
-    #[cfg_attr(
-        not(all(feature = "zero-copy-transport", feature = "transport-implementer-api")),
-        doc = "Enable `zero-copy-transport` and `transport-implementer-api` for the prepared stable-native guide."
+        not(feature = "up-l2-zero-copy"),
+        doc = "Enable `up-l2-zero-copy` for the stable-native communication guide."
     )]
     pub mod zero_copy {}
 
@@ -299,6 +319,28 @@ pub use zero_copy::{
     UTxLoanSpec, UTxPayloadSpec, UUninitTxBuffer, UVecRxLease, UVecTxBuffer, UVecUninitTxBuffer,
     UZeroCopyRxLease, ZeroCopyHandler,
 };
+#[cfg(all(feature = "zero-copy-transport", feature = "transport-implementer-api"))]
+pub use zero_copy::{
+    FrameSink, InitializedTx, LoanError, PreparedTransportCore, PreparedTxStorage, RouteLimits,
+    SendError, SetupError, TxFrameLayout, WireRegistration, WireRegistrationStopError,
+};
+#[cfg(all(feature = "zero-copy-transport", feature = "transport-implementer-api"))]
+pub use zero_copy::{
+    MessageFields, OpaqueRoute, OpaqueTemplate, PayloadInit, RouteConfig, RouteDefinition, TxRoute,
+    TxTemplate,
+};
+#[cfg(all(
+    feature = "zero-copy-transport",
+    feature = "transport-implementer-api",
+    any(test, feature = "test-util")
+))]
+pub use zero_copy::{PoolCore, PoolCoreConfig, PoolFrame};
+
+#[cfg(all(feature = "zero-copy-transport", feature = "transport-implementer-api"))]
+pub use zero_copy::{
+    CallError, PreparedRpcClient, PreparedRpcServer, RequestHandler, RpcClientConfig,
+    RpcClientStats, RpcServerConfig, RpcServerStats,
+};
 
 /// Linked native-type registration for target-side descriptor export.
 #[cfg(feature = "native-inventory")]
@@ -326,23 +368,6 @@ macro_rules! register_native_type {
         compile_error!("native type registration requires the up-rust native-inventory feature");
     };
 }
-
-#[cfg(all(feature = "zero-copy-transport", feature = "transport-implementer-api"))]
-pub use zero_copy::{
-    FrameSink, InitializedTx, LoanError, PreparedTransportCore, PreparedTxStorage, RouteLimits,
-    SendError, SetupError, TxFrameLayout, WireRegistration, WireRegistrationStopError,
-};
-#[cfg(all(feature = "zero-copy-transport", feature = "transport-implementer-api"))]
-pub use zero_copy::{
-    MessageFields, OpaqueRoute, OpaqueTemplate, PayloadInit, RouteConfig, RouteDefinition, TxRoute,
-    TxTemplate,
-};
-#[cfg(all(
-    feature = "zero-copy-transport",
-    feature = "transport-implementer-api",
-    any(test, feature = "test-util")
-))]
-pub use zero_copy::{PoolCore, PoolCoreConfig, PoolFrame};
 
 #[cfg(feature = "owned-frame-transport")]
 pub use frame::envelope::{UFrameEnvelope, UFrameWireError};
