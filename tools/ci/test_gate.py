@@ -9,6 +9,7 @@ from pathlib import Path
 import subprocess
 import sys
 import tempfile
+import time
 import unittest
 import yaml
 
@@ -66,6 +67,45 @@ class GateTests(unittest.TestCase):
     def test_empty_success_is_not_a_test_pass(self):
         with tempfile.TemporaryDirectory() as directory:
             self.assertEqual(execute([sys.executable, '-c', 'pass'], Path(directory) / 'empty.log', 5, 'libtest'), 1)
+
+    def test_missing_required_script_is_not_skipped(self):
+        with tempfile.TemporaryDirectory() as directory:
+            absent = Path(directory) / 'required-check.py'
+            self.assertEqual(execute([sys.executable, str(absent)], Path(directory) / 'missing.log', 5, 'command'), 2)
+
+    @unittest.skipUnless(sys.platform == 'linux', 'Linux descendant state inspection')
+    def test_timeout_kills_descendant_after_leader_exits(self):
+        with tempfile.TemporaryDirectory() as directory:
+            pid_file = Path(directory) / 'descendant.pid'
+            child = ('import os,signal,time; from pathlib import Path; '
+                     'signal.signal(signal.SIGTERM,signal.SIG_IGN); '
+                     f'Path({str(pid_file)!r}).write_text(str(os.getpid())); time.sleep(60)')
+            leader = ('import subprocess,sys,time; '
+                      f'subprocess.Popen([sys.executable,"-c",{child!r}]); time.sleep(60)')
+            try:
+                started = time.monotonic()
+                self.assertEqual(execute([sys.executable, '-c', leader], Path(directory) / 'timeout.log', 2, 'command'), 124)
+                self.assertLess(time.monotonic() - started, 20, 'timeout cleanup must be bounded')
+                pid = int(pid_file.read_text())
+                stat = Path(f'/proc/{pid}/stat')
+                # SIGKILL delivery and orphan reaping need not finish in the same
+                # scheduler tick. A zombie has terminated and cannot keep working.
+                def running():
+                    try:
+                        return stat.read_text().split()[2] != 'Z'
+                    except FileNotFoundError:
+                        return False
+                deadline = time.monotonic() + 1
+                while running() and time.monotonic() < deadline:
+                    time.sleep(0.02)
+                self.assertFalse(running(), 'TERM-resistant descendant survived its leader')
+            finally:
+                # Also clean up the deliberate parent-code negative control.
+                if pid_file.exists():
+                    try:
+                        os.kill(int(pid_file.read_text()), 9)
+                    except ProcessLookupError:
+                        pass
 
     def test_current_skip_and_bad_options_fail_before_cargo(self):
         env = os.environ | {'UP_RUST_SKIP_TRYBUILD': '0'}

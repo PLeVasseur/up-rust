@@ -5,11 +5,13 @@
 # SPDX-License-Identifier: Apache-2.0
 """Execute one CI command with a bounded lifetime and nonempty test completion."""
 import argparse
+import os
 from pathlib import Path
 import re
 import signal
 import subprocess
 import sys
+import time
 
 
 def completed(text, kind):
@@ -24,20 +26,38 @@ def completed(text, kind):
     raise ValueError('unknown completion format')
 
 
+def signal_group(group, sig):
+    """Signal only the session created for this check; tolerate concurrent exit."""
+    try:
+        os.killpg(group, sig)
+        return True
+    except ProcessLookupError:
+        return False
+
+
+def terminate_group(child):
+    """Bound TERM grace for the whole group, even after its leader has exited."""
+    signal_group(child.pid, signal.SIGTERM)
+    deadline = time.monotonic() + 5
+    while signal_group(child.pid, 0):
+        child.poll()  # Reap the leader without treating its exit as group completion.
+        remaining = deadline - time.monotonic()
+        if remaining <= 0:
+            signal_group(child.pid, signal.SIGKILL)
+            break
+        time.sleep(min(0.05, remaining))
+    child.wait(timeout=5)
+
+
 def execute(command, log, timeout, completion):
+    """Preserve command status, return 124 on timeout, and reject empty test passes."""
     log.parent.mkdir(parents=True, exist_ok=True)
     with log.open('wb') as output:
         child = subprocess.Popen(command, stdout=output, stderr=subprocess.STDOUT, start_new_session=True)
         try:
             code = child.wait(timeout=timeout)
         except subprocess.TimeoutExpired:
-            import os
-            os.killpg(child.pid, signal.SIGTERM)
-            try:
-                child.wait(timeout=5)
-            except subprocess.TimeoutExpired:
-                os.killpg(child.pid, signal.SIGKILL)
-                child.wait()
+            terminate_group(child)
             code = 124
     text = log.read_text(errors='replace')
     print(text, end='')

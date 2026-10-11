@@ -43,6 +43,13 @@ MSRV sets that variable explicitly for version-sensitive compiler diagnostics.
 missing targets; add new targets and their applicability to the policy when their
 implementation is introduced. Empty or incomplete test summaries are failures.
 
+Each command owns a separate POSIX process group. On timeout, `run_check.py` sends
+TERM to that group, allows at most five seconds for it to exit, then sends KILL to
+remaining members even if the original leader has already exited. Reaping the
+leader is separately bounded. Timeout returns 124; a cleanup failure also fails
+the check. The regression suite includes a real TERM-resistant descendant and
+missing-script, nonzero-exit and empty-test controls.
+
 The `native-callback-ui` check runs on the current compiler only and verifies the
 checked-in diagnostic showing that a native callback guard is not `Send`. MSRV's
 policy explicitly omits this current diagnostic; its runtime/admission tests still

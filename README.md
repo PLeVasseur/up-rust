@@ -243,6 +243,8 @@ Run the checked-in gates locally with
 `bash tools/ci/gate.sh --configuration msrv --all`.
 The [CI guide](tools/ci/README.md) lists the required tool versions, generated
 policy workflow, separate link/feature jobs and test-log artifact contract.
+Checks reject missing targets and incomplete test summaries. Timeout cleanup
+terminates the command's remaining process group even when its leader exits first.
 
 ## License
 
