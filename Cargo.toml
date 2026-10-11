@@ -53,6 +53,8 @@ test-util = ["dep:mockall"]
 up-core-api = ["protobuf-support"]
 selected-wire-codec-core = []
 selected-wire-transport-core = ["selected-wire-codec-core"]
+selected-wire-transport-adapter = ["selected-wire-transport-core"]
+selected-wire-user-api = ["selected-wire-transport-adapter", "up-core-api"]
 transport-implementer-api = ["selected-wire-transport-core", "tokio/sync", "tokio/rt", "tokio/time"]
 owned-frame-transport = ["selected-wire-transport-core", "up-core-api"]
 wire-implementer-api = ["selected-wire-codec-core"]
@@ -212,7 +214,7 @@ required-features = ["transport-implementer-api"]
 missing_docs = "deny"
 missing_debug_implementations = "deny"
 # Accept code blocks excluded from tarpaulin coverage checks.
-unexpected_cfgs = { level = "warn", check-cfg = ['cfg(tarpaulin_include)', 'cfg(feature, values("owned-frame-transport", "selected-wire-user-api"))'] }
+unexpected_cfgs = { level = "warn", check-cfg = ['cfg(tarpaulin_include)', 'cfg(feature, values("zero-copy-transport"))'] }
 
 [lints.clippy]
 # see https://corrode.dev/blog/defensive-programming/#clippy-lints-for-defensive-programming

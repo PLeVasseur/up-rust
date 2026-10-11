@@ -115,6 +115,15 @@ fi
 if [[ "$configuration" == current && ( "$group" == all || "$group" == tests ) ]]; then
   python3 tools/ci/run_check.py --log "$log_root/native-callback-ui.log" --timeout 1200 --completion libtest -- cargo +1.95.0 test --locked --all-features --test listener_admission_ui
 fi
+if [[ "$configuration" == current && ( "$group" == all || "$group" == check ) ]]; then
+  python3 tools/ci/run_check.py --log "$log_root/adapter-minimal.log" --timeout 1200 --completion command -- cargo +1.95.0 check --locked --no-default-features --features selected-wire-transport-adapter --all-targets
+fi
+if [[ "$configuration" == current && ( "$group" == all || "$group" == check ) ]]; then
+  python3 tools/ci/run_check.py --log "$log_root/wire-user-minimal.log" --timeout 1200 --completion command -- cargo +1.95.0 check --locked --no-default-features --features selected-wire-user-api --all-targets
+fi
+if [[ "$configuration" == current && ( "$group" == all || "$group" == tests ) ]]; then
+  python3 tools/ci/run_check.py --log "$log_root/wire-constructor-codegen.log" --timeout 1200 --completion command -- python3 tools/ci/check_wire_constructor.py --toolchain 1.95.0
+fi
 if [[ "$configuration" == current && ( "$group" == all || "$group" == dependency ) ]]; then
   python3 tools/ci/run_check.py --log "$log_root/dependency-policy.log" --timeout 600 --completion command -- cargo deny --all-features check
 fi
@@ -180,4 +189,13 @@ if [[ "$configuration" == msrv && ( "$group" == all || "$group" == check ) ]]; t
 fi
 if [[ "$configuration" == msrv && ( "$group" == all || "$group" == check ) ]]; then
   python3 tools/ci/run_check.py --log "$log_root/util-minimal.log" --timeout 1200 --completion command -- cargo +1.88.0 check --locked --no-default-features --features util --all-targets
+fi
+if [[ "$configuration" == msrv && ( "$group" == all || "$group" == check ) ]]; then
+  python3 tools/ci/run_check.py --log "$log_root/adapter-minimal.log" --timeout 1200 --completion command -- cargo +1.88.0 check --locked --no-default-features --features selected-wire-transport-adapter --all-targets
+fi
+if [[ "$configuration" == msrv && ( "$group" == all || "$group" == check ) ]]; then
+  python3 tools/ci/run_check.py --log "$log_root/wire-user-minimal.log" --timeout 1200 --completion command -- cargo +1.88.0 check --locked --no-default-features --features selected-wire-user-api --all-targets
+fi
+if [[ "$configuration" == msrv && ( "$group" == all || "$group" == tests ) ]]; then
+  python3 tools/ci/run_check.py --log "$log_root/wire-constructor-codegen.log" --timeout 1200 --completion command -- python3 tools/ci/check_wire_constructor.py --toolchain 1.88.0
 fi

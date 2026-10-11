@@ -237,6 +237,20 @@ pub use payload::codec::{
 };
 pub use payload::UWireError;
 
+#[cfg(feature = "zero-copy-transport")]
+mod zero_copy;
+#[cfg(all(feature = "zero-copy-transport", feature = "transport-implementer-api"))]
+pub use zero_copy::{
+    FrameSink, InitializedTx, LoanError, PreparedTransportCore, PreparedTxStorage, RouteLimits,
+    SendError, SetupError, TxFrameLayout,
+};
+#[cfg(all(
+    feature = "zero-copy-transport",
+    feature = "transport-implementer-api",
+    any(test, feature = "test-util")
+))]
+pub use zero_copy::{PoolCore, PoolCoreConfig, PoolFrame};
+
 #[cfg(feature = "owned-frame-transport")]
 pub use frame::envelope::{UFrameEnvelope, UFrameWireError};
 #[cfg(feature = "owned-frame-transport")]
@@ -264,3 +278,39 @@ pub use wire::{
     UWire, UWireDecode, UWireDecodeOwned, UWireEncode, UWireMetadataCodec, UWireMetadataCodecFor,
     UWireMetadataContext, UWireMetadataError, UWirePayload, UWireReadDecode,
 };
+
+#[cfg(all(
+    feature = "selected-wire-transport-core",
+    feature = "transport-implementer-api"
+))]
+pub mod wire_transport;
+#[cfg(all(
+    feature = "selected-wire-transport-core",
+    not(feature = "transport-implementer-api")
+))]
+mod wire_transport;
+#[cfg(feature = "transport-implementer-api")]
+pub use wire_transport::UEncodedRxFrame;
+#[cfg(all(
+    feature = "selected-wire-transport-core",
+    any(
+        feature = "transport-implementer-api",
+        feature = "wire-implementer-api",
+        feature = "selected-wire-user-api"
+    )
+))]
+pub use wire_transport::UWireTransport;
+#[cfg(all(
+    feature = "owned-frame-transport",
+    feature = "transport-implementer-api"
+))]
+pub use wire_transport::{
+    EncodedOwnedFrame, PreparedOwnedFrame, UEncodedOwnedListener, UOwnedTransportCore,
+};
+#[cfg(feature = "selected-wire-user-api")]
+pub use wire_transport::{
+    ProtobufWireTransport, UHasWire, UNativePrefixWireTransport, UWireRx, UWithNativePrefixWire,
+};
+
+#[cfg(test)]
+mod test_support;

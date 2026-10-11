@@ -49,6 +49,12 @@ policy explicitly omits this current diagnostic; its runtime/admission tests sti
 run. Direct invocation with the skip variable verifies the actual MSRV version and
 prints a named skipped-diagnostic message rather than consuming current stderr.
 
+The `wire-constructor-codegen` probe runs on both compiler roles. It obtains the
+exact SDK rlib from Cargo JSON build output, invokes rustc with code generation on
+a native-required constructor fixture, requires the specific E0080 assertion,
+and builds/runs an otherwise identical control with the requirement false.
+`cargo check` alone does not evaluate this generic constructor assertion.
+
 Logs live in `${CARGO_TARGET_DIR:-target}/ci-logs/<configuration>/`. CI uploads the
 current test group's logs as `test-results`, preserving the artifact name and
 workflow output consumed by `release.yaml`. The artifact is readable command/test

@@ -56,6 +56,22 @@ are created at setup; synchronous pushes use an explicit overflow policy. Stop
 drains earlier admissions, while Drop cancels queued work. The
 [registration guide](src/guide/registrations.md) explains lifecycle and blocking.
 
+With `zero-copy-transport` and `transport-implementer-api`, `PreparedTransportCore`
+reserves physical routes and uses synchronous loan/publication operations.
+`FrameSink` pushes receive owners into setup-owned state. `PreparedTxStorage` has
+an unsafe disjoint-storage and initialization-preservation contract; binding
+authors retain native owners and account for every bounded resource at setup.
+The explicit `test-util` feature exposes `PoolCore` as an owned-memory conformance
+core, without claiming native shared-memory provenance. See the prepared-core
+section of the [transport guide](src/guide/utransport.md).
+
+Selected-wire adapters compose an encoded transport core with a wire marker and
+metadata codec. Enable `selected-wire-user-api` for application construction and
+`transport-implementer-api` for encoded-core contracts, with the required frame
+family. Use crate-root imports; no compatibility import modules are needed.
+The adapter checks identities and decoded frame validity before exposing receive
+results or invoking application listeners.
+
 ### Selected-wire identity
 
 Payload encoding, selected wire, payload family and metadata layout use separate

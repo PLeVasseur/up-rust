@@ -209,3 +209,17 @@ and `ListenerQuiesceError`; `util` implies this feature for existing utility use
 `stop` closes callback admission, while `cancel` plus `quiesce` supports bounded
 native teardown. A timeout never revokes retained storage. Native callback guards
 must stay on their entering thread and are not `Send`.
+
+## Selected-wire transport adapters
+
+`selected-wire-user-api` supplies adapter construction and receive views;
+`transport-implementer-api` supplies encoded-core contracts. Enable the owning
+frame family as well. Public imports are canonical at the crate root; the
+`selected_wire_user_api` and `transport_implementer_api` compatibility modules are
+not provided. Public exports do not change under cfg(test).
+
+`UWireTransport::new` and ordinary convenience constructors accept wires without
+a native-agreement requirement. A marker setting `REQUIRES_NATIVE_AGREEMENT` cannot
+bypass that requirement through an ordinary constructor. Received metadata must
+match wire, family and layout before an owned frame is returned or a listener is
+called. Registration wrappers are scoped to the adapter instance.
