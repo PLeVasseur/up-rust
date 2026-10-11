@@ -936,12 +936,10 @@ mod owned_transport_tests {
     }
 
     fn metadata_with_encoding() -> UFrameMetadata {
-        let message = UMessageBuilder::publish(topic()).build().expect("message");
-        crate::frame::metadata::try_project_attributes_to_frame_metadata(
-            message.attributes(),
-            Some(PayloadEncoding::RAW),
-        )
-        .expect("metadata")
+        let message = UMessageBuilder::publish(topic())
+            .build_with_payload(Bytes::new(), PayloadEncoding::RAW)
+            .expect("message");
+        crate::frame::metadata::try_project_umessage_to_frame_metadata(&message).expect("metadata")
     }
 
     fn valid_frame() -> UOwnedFrame {

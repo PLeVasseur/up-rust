@@ -73,15 +73,8 @@ fn reply_to() -> UUri {
     UUri::try_from_parts("cloud", 0x0042, 0x01, 0x0000).expect("reply-to")
 }
 
-fn project(
-    message: &up_rust::UMessage,
-    payload_encoding: Option<PayloadEncoding>,
-) -> UFrameMetadata {
-    up_rust::frame::metadata::try_project_attributes_to_frame_metadata(
-        message.attributes(),
-        payload_encoding,
-    )
-    .expect("metadata")
+fn project(message: &up_rust::UMessage) -> UFrameMetadata {
+    up_rust::frame::metadata::try_project_umessage_to_frame_metadata(message).expect("metadata")
 }
 
 /// The deterministic fixture set. Names are stable file names; extend by
@@ -92,45 +85,45 @@ fn fixtures() -> Vec<(&'static str, &'static str, UFrameMetadata)> {
             .with_message_id(fixed_uuid(1))
             .build()
             .expect("message");
-        project(&m, None)
+        project(&m)
     };
     let publish_raw_payload = {
         let m = UMessageBuilder::publish(topic())
             .with_message_id(fixed_uuid(2))
             .build_with_payload(Bytes::from_static(b"payload"), PayloadEncoding::RAW)
             .expect("message");
-        project(&m, Some(PayloadEncoding::RAW))
+        project(&m)
     };
     let publish_private_use_payload = {
         let m = UMessageBuilder::publish(topic())
             .with_message_id(fixed_uuid(3))
-            .build()
+            .build_with_payload(
+                Bytes::new(),
+                PayloadEncoding::from_id(0xFF0F).expect("private-use id"),
+            )
             .expect("message");
-        project(
-            &m,
-            Some(PayloadEncoding::from_id(0xFF0F).expect("private-use id")),
-        )
+        project(&m)
     };
     let notification = {
         let m = UMessageBuilder::notification(topic(), reply_to())
             .with_message_id(fixed_uuid(4))
             .build()
             .expect("message");
-        project(&m, None)
+        project(&m)
     };
     let request = {
         let m = UMessageBuilder::request(method(), reply_to(), 5000)
             .with_message_id(fixed_uuid(5))
             .build()
             .expect("message");
-        project(&m, None)
+        project(&m)
     };
     let response = {
         let m = UMessageBuilder::response(reply_to(), fixed_uuid(5), method())
             .with_message_id(fixed_uuid(6))
             .build()
             .expect("message");
-        project(&m, None)
+        project(&m)
     };
     vec![
         (
@@ -406,9 +399,7 @@ fn explicit_zero_ttl_is_retained_natively_and_canonicalized_through_classic() {
     for wire in [protobuf, explicit_protobuf_zero] {
         let parsed = UAttributes::parse_from_protobuf_bytes(&wire).unwrap();
         assert_eq!(parsed.ttl(), None);
-        let projected =
-            up_rust::frame::metadata::try_project_attributes_to_frame_metadata(&parsed, None)
-                .unwrap();
+        let projected = parsed.try_project_to_frame_metadata().unwrap();
         assert_eq!(projected, canonical);
         assert_ne!(
             projected, native,

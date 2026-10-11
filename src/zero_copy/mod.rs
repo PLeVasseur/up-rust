@@ -182,11 +182,8 @@ mod tests {
     fn loan_spec_rejects_metadata_payload_mismatch() {
         let topic = UUri::try_from_parts("vehicle", 0x4210, 0x01, 0x9000).unwrap();
         let message = UMessageBuilder::publish(topic).build().unwrap();
-        let no_payload = crate::frame::metadata::try_project_attributes_to_frame_metadata(
-            message.attributes(),
-            None,
-        )
-        .unwrap();
+        let no_payload =
+            crate::frame::metadata::try_project_umessage_to_frame_metadata(&message).unwrap();
         let error = UTxLoanSpec::new(
             no_payload,
             UTxPayloadSpec::Present {

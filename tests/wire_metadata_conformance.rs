@@ -16,6 +16,7 @@
 use bytes::Bytes;
 use pretty_assertions::assert_eq;
 use test_case::test_case;
+use up_rust::frame::metadata::try_project_umessage_to_frame_metadata;
 use up_rust::{
     PayloadEncoding, UFrameFieldsMetadataCodec, UFrameMetadata, UMessageBuilder,
     UProtocolNativeWire, UUri, UWire, UWireMetadataCodec, UWireMetadataContext, UWireMetadataError,
@@ -54,7 +55,7 @@ fn topic() -> UUri {
 
 fn metadata_without_payload() -> UFrameMetadata {
     let message = UMessageBuilder::publish(topic()).build().expect("message");
-    message.to_frame_metadata_unencoded().expect("metadata")
+    try_project_umessage_to_frame_metadata(&message).expect("metadata")
 }
 
 #[cfg(feature = "owned-frame-transport")]
@@ -79,18 +80,15 @@ fn metadata_with_standard_payload() -> UFrameMetadata {
     let message = UMessageBuilder::publish(topic())
         .build_with_payload(Bytes::from_static(b"payload"), PayloadEncoding::RAW)
         .expect("message");
-    message
-        .to_frame_metadata(PayloadEncoding::RAW)
-        .expect("metadata")
+    try_project_umessage_to_frame_metadata(&message).expect("metadata")
 }
 
 fn metadata_with_private_use_payload() -> UFrameMetadata {
-    let message = UMessageBuilder::publish(topic()).build().expect("message");
     let encoding = PayloadEncoding::from_id(0xFABC).expect("private-use encoding");
-    message
-        .attributes()
-        .to_frame_metadata(encoding)
-        .expect("metadata")
+    let message = UMessageBuilder::publish(topic())
+        .build_with_payload(Bytes::new(), encoding)
+        .expect("message");
+    try_project_umessage_to_frame_metadata(&message).expect("metadata")
 }
 
 fn encode<W>(metadata: &UFrameMetadata) -> Vec<u8>
@@ -380,7 +378,7 @@ fn private_use_encoding_rides_message_surface_losslessly() {
     let restored = up_rust::UAttributes::parse_from_protobuf_bytes(&bytes).expect("deserialize");
     assert_eq!(restored.payload_encoding(), attributes.payload_encoding());
 
-    let metadata = message.to_frame_metadata(encoding).expect("projection");
+    let metadata = try_project_umessage_to_frame_metadata(&message).expect("projection");
     assert_eq!(metadata.payload_encoding(), Some(&encoding));
     let back = metadata.try_project_to_attributes().expect("projection");
     assert_eq!(back.payload_encoding(), attributes.payload_encoding());

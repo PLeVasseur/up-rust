@@ -50,17 +50,26 @@ Frame constructors validate metadata and payload presence before returning:
 
 ```rust
 use up_rust::{PayloadEncoding, UMessageBuilder, UOwnedFrame, UUri};
+use up_rust::frame::metadata::try_project_umessage_to_frame_metadata;
 
 let topic = UUri::try_from_parts("demo", 0x1_0001, 1, 0x8001)?;
-let message = UMessageBuilder::publish(topic).build()?;
+let message = UMessageBuilder::publish(topic)
+    .build_with_payload(b"reading".to_vec(), PayloadEncoding::RAW)?;
 
 // Frame metadata is a projection of the same attributes a UMessage carries:
-let metadata = message.attributes().to_frame_metadata(PayloadEncoding::RAW)?;
+let metadata = try_project_umessage_to_frame_metadata(&message)?;
 let frame = UOwnedFrame::with_payload(metadata, b"reading".to_vec())?;
 
 assert_eq!(frame.payload_bytes(), b"reading");
 # Ok::<(), Box<dyn std::error::Error>>(())
 ```
+
+Message-to-frame projection reads the message's own encoding and checks payload
+presence, including present-empty payloads. Use the `_with_native_agreement` variant
+when reconstructing an agreed native token. For separately decoded attributes,
+`UAttributes::try_project_to_frame_metadata()` preserves their optional encoding;
+it cannot check payload storage. Reverse projection uses
+`try_project_frame_to_umessage` or its agreement-aware variant and never truncates TTL.
 
 Raw receive code can construct `UOwnedFrame<`[`Unvalidated`](crate::Unvalidated)`>`.
 [`UOwnedFrame::validate`](crate::UOwnedFrame::validate) checks it and either returns

@@ -376,3 +376,26 @@ the existing adapter and preserves request correlation.
 it preserves the existing prefix. On failure the appended region may be partial,
 so callers must restore their original length before reusing the buffer. The
 representation bytes remain identical to standalone encoding.
+
+## Checked message and attribute projections
+
+Replace `UMessage::to_frame_metadata(encoding)` and
+`UMessage::to_frame_metadata_unencoded()` with
+`frame::metadata::try_project_umessage_to_frame_metadata(&message)`.
+The message already carries its optional encoding; the projection checks it
+against actual payload presence without an override or separate empty-message path.
+Use the `_with_native_agreement` variant to reconstruct native identity through an
+explicit deployment agreement.
+
+Replace attribute `to_frame_metadata` methods and the public
+`try_project_attributes_to_frame_metadata` function with
+`UAttributes::try_project_to_frame_metadata()`. This attribute-only entry cannot
+validate payload storage; use the complete-message function whenever available.
+Frames without payload keep absent encoding; present-empty payloads keep their
+encoding. Opaque IDs and bytes remain unchanged.
+
+The reverse functions `try_project_frame_to_umessage` and its agreement-aware
+variant, and `UFrameMetadata::try_project_to_attributes` and its agreement-aware
+variant, retain their checked contracts. Fractional/overflowing TTLs still fail
+rather than truncate. Wire bytes, canonical metadata layouts and the fixed ABI
+are unchanged.

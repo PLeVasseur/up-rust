@@ -310,8 +310,6 @@ impl UFrameEnvelope for NativeUFrameEnvelope {
 #[cfg(test)]
 mod tests {
     use super::*;
-    #[cfg(feature = "protobuf-support")]
-    use crate::payload::codec::RawBytes;
     use crate::UMessageBuilder;
     use crate::{PayloadEncoding, UFrameMetadata, UUri};
 
@@ -323,11 +321,7 @@ mod tests {
         let message = UMessageBuilder::publish(topic())
             .build_with_payload(Bytes::new(), PayloadEncoding::RAW)
             .expect("message");
-        crate::frame::metadata::try_project_attributes_to_frame_metadata(
-            message.attributes(),
-            Some(RawBytes::encoding()),
-        )
-        .expect("metadata")
+        crate::frame::metadata::try_project_umessage_to_frame_metadata(&message).expect("metadata")
     }
 
     #[test]
@@ -350,13 +344,14 @@ mod tests {
     #[test_case::test_case(0xEFFF; "reserved")]
     #[test_case::test_case(0xFBEE; "private")]
     fn protobuf_umessage_frame_round_trips_opaque_encoding(id: u32) {
-        let message = UMessageBuilder::publish(topic()).build().expect("message");
         let encoding = PayloadEncoding::from_id(id).expect("structural identifier");
-        let metadata = crate::frame::metadata::try_project_attributes_to_frame_metadata(
-            message.attributes(),
-            Some(encoding),
-        )
-        .expect("metadata");
+        let message = UMessageBuilder::publish(topic())
+            .build_with_payload(Bytes::from_static(b"native payload"), PayloadEncoding::RAW)
+            .expect("message")
+            .with_declared_payload_encoding(encoding)
+            .expect("carried encoding");
+        let metadata = crate::frame::metadata::try_project_umessage_to_frame_metadata(&message)
+            .expect("metadata");
         let frame = UOwnedFrame::with_payload(metadata, Bytes::from_static(b"native payload"))
             .expect("frame");
 
@@ -389,11 +384,8 @@ mod tests {
     #[test]
     fn protobuf_umessage_frame_round_trips_unspecified_absent_payload() {
         let message = UMessageBuilder::publish(topic()).build().expect("message");
-        let metadata = crate::frame::metadata::try_project_attributes_to_frame_metadata(
-            message.attributes(),
-            None,
-        )
-        .expect("metadata");
+        let metadata = crate::frame::metadata::try_project_umessage_to_frame_metadata(&message)
+            .expect("metadata");
         let frame = UOwnedFrame::without_payload(metadata).expect("frame");
 
         let encoded = ProtobufUMessageFrame::serialize_frame(&frame).expect("serialize frame");

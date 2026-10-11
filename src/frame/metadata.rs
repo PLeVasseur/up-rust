@@ -23,7 +23,7 @@
 //!
 //! * [`try_project_umessage_to_frame_metadata`] / [`try_project_frame_to_umessage`]
 //!   convert between `UMessage` and native frames.
-//! * [`try_project_attributes_to_frame_metadata`] /
+//! * [`UAttributes::try_project_to_frame_metadata`] /
 //!   [`UFrameMetadata::try_project_to_attributes`] convert between
 //!   `UAttributes` and native frame metadata.
 //!
@@ -871,105 +871,29 @@ impl UFrameMetadataBuilder {
 }
 
 // ---------------------------------------------------------------------------
-// Legacy projections
+// Message-model projections
 // ---------------------------------------------------------------------------
 
-impl crate::UMessage {
-    /// Projects this message to frame metadata carrying the given payload
-    /// encoding.
-    ///
-    /// # Errors
-    ///
-    /// Returns an error if the message attributes and encoding disagree or
-    /// the resulting metadata is invalid.
-    pub fn to_frame_metadata(
-        &self,
-        payload_encoding: PayloadEncoding,
-    ) -> Result<UFrameMetadata, UFrameMetadataError> {
-        if self.payload().is_none() {
-            return Err(UFrameMetadataError::EncodingWithoutPayload);
-        }
-        self.attributes().to_frame_metadata(payload_encoding)
-    }
-
-    /// Projects this message to frame metadata for a payload-free message.
-    ///
-    /// # Errors
-    ///
-    /// Returns an error if the message carries payload information or the
-    /// resulting metadata is invalid.
-    pub fn to_frame_metadata_unencoded(&self) -> Result<UFrameMetadata, UFrameMetadataError> {
-        if self.payload().is_some() {
-            return Err(UFrameMetadataError::PayloadWithoutEncoding);
-        }
-        self.attributes().to_frame_metadata_unencoded()
-    }
-}
-
 impl crate::UAttributes {
-    /// Projects these attributes to frame metadata carrying the given
-    /// payload encoding.
+    /// Projects these attributes using their own optional payload encoding.
     ///
-    /// Convenience for [`try_project_attributes_to_frame_metadata`]; use
-    /// [`Self::to_frame_metadata_unencoded`] when the message carries no
-    /// payload.
-    ///
-    /// # Errors
-    ///
-    /// Returns an error if the attributes and encoding disagree or the
-    /// resulting metadata is invalid.
-    pub fn to_frame_metadata(
-        &self,
-        payload_encoding: PayloadEncoding,
-    ) -> Result<UFrameMetadata, UFrameMetadataError> {
-        try_project_attributes_to_frame_metadata(self, Some(payload_encoding))
-    }
-
-    /// Projects these attributes to frame metadata for a payload-free
-    /// message.
+    /// This attribute-only projection has no payload storage to check. When a
+    /// complete message is available, use [`try_project_umessage_to_frame_metadata`]
+    /// to check payload presence as well. Native token reconstruction additionally
+    /// requires `native-identity` and
+    /// `try_project_umessage_to_frame_metadata_with_native_agreement`.
     ///
     /// # Errors
     ///
-    /// Returns an error if the attributes carry payload information or the
-    /// resulting metadata is invalid.
-    pub fn to_frame_metadata_unencoded(&self) -> Result<UFrameMetadata, UFrameMetadataError> {
-        let metadata = try_project_attributes_to_frame_metadata(self, None)?;
-        if metadata.payload_encoding().is_some() {
-            return Err(UFrameMetadataError::EncodingWithoutPayload);
-        }
-        Ok(metadata)
+    /// Returns an error if the resulting frame metadata is invalid.
+    pub fn try_project_to_frame_metadata(&self) -> Result<UFrameMetadata, UFrameMetadataError> {
+        try_project_attributes_to_frame_metadata(self)
     }
 }
 
-/// Projects `UAttributes` (plus an optional payload encoding)
-/// into native frame metadata.
-///
-/// When `payload_encoding` is `None`, the frame takes the attributes' own
-/// `payload_encoding_id` (which may itself be absent). When both an explicit
-/// encoding and an attribute-carried encoding are present they must agree.
-///
-/// # Errors
-///
-/// Returns an error if the attributes and encoding disagree or the resulting
-/// metadata is invalid.
-pub fn try_project_attributes_to_frame_metadata(
+pub(crate) fn try_project_attributes_to_frame_metadata(
     attributes: &UAttributes,
-    payload_encoding: Option<PayloadEncoding>,
 ) -> Result<UFrameMetadata, UFrameMetadataError> {
-    let attributes_encoding = attributes.payload_encoding();
-    let payload_encoding = match (payload_encoding, attributes_encoding) {
-        (Some(explicit), Some(from_attributes)) => {
-            if explicit != from_attributes {
-                return Err(UFrameMetadataError::InvalidMetadata(format!(
-                    "attribute payload encoding `{from_attributes}` does not match the explicit payload encoding `{explicit}`"
-                )));
-            }
-            Some(explicit)
-        }
-        (Some(explicit), None) => Some(explicit),
-        (None, from_attributes) => from_attributes,
-    };
-
     let metadata = UFrameMetadata {
         kind: FrameMessageKind::from_legacy_type(attributes.type_),
         id: attributes.id.clone(),
@@ -986,7 +910,7 @@ pub fn try_project_attributes_to_frame_metadata(
         permission_level: attributes.permission_level,
         token: attributes.token.clone(),
         traceparent: attributes.traceparent.clone(),
-        payload_encoding,
+        payload_encoding: attributes.payload_encoding(),
         native_type_token: None,
     };
     metadata.validate()?;
@@ -1012,7 +936,7 @@ pub fn try_project_umessage_to_frame_metadata(
         }
         _ => {}
     }
-    try_project_attributes_to_frame_metadata(message.attributes(), None)
+    try_project_attributes_to_frame_metadata(message.attributes())
 }
 
 /// Projects native frame metadata and optional payload bytes into a
@@ -1251,9 +1175,7 @@ mod tests {
         let attributes = metadata.try_project_to_attributes().unwrap();
         assert_eq!(attributes.ttl(), None);
         assert_eq!(
-            try_project_attributes_to_frame_metadata(&attributes, None)
-                .unwrap()
-                .ttl(),
+            attributes.try_project_to_frame_metadata().unwrap().ttl(),
             None
         );
     }
@@ -1350,36 +1272,37 @@ mod tests {
     }
 
     #[test]
-    fn message_method_without_payload_projects_to_metadata_without_encoding() {
+    fn attribute_projection_without_payload_encoding_keeps_it_absent() {
         let message = UMessageBuilder::publish(topic()).build().expect("message");
 
-        let metadata = message.to_frame_metadata_unencoded().expect("metadata");
+        let metadata = message
+            .attributes()
+            .try_project_to_frame_metadata()
+            .expect("metadata");
 
         assert!(metadata.payload_encoding().is_none());
     }
 
     #[test]
-    fn message_method_rejects_encoding_without_payload() {
-        let message = UMessageBuilder::publish(topic()).build().expect("message");
+    fn frame_projection_rejects_encoding_without_payload() {
+        let metadata = UFrameMetadata::publish(topic())
+            .with_payload_encoding(PayloadEncoding::RAW)
+            .build()
+            .unwrap();
 
         assert_eq!(
-            message.to_frame_metadata(PayloadEncoding::RAW).unwrap_err(),
+            try_project_frame_to_umessage(metadata, None).unwrap_err(),
             UFrameMetadataError::EncodingWithoutPayload
         );
     }
 
     #[test]
-    fn attributes_unencoded_method_rejects_declared_encoding() {
-        let message = UMessageBuilder::publish(topic())
-            .build_with_payload(Bytes::new(), PayloadEncoding::RAW)
-            .expect("message");
+    fn frame_projection_rejects_payload_without_encoding() {
+        let metadata = UFrameMetadata::publish(topic()).build().unwrap();
 
         assert_eq!(
-            message
-                .attributes()
-                .to_frame_metadata_unencoded()
-                .unwrap_err(),
-            UFrameMetadataError::EncodingWithoutPayload
+            try_project_frame_to_umessage(metadata, Some(Bytes::new())).unwrap_err(),
+            UFrameMetadataError::PayloadWithoutEncoding
         );
     }
 
@@ -1440,18 +1363,20 @@ mod tests {
     }
 
     #[test]
-    fn attribute_projection_rejects_payload_encoding_mismatch() {
+    fn attribute_projection_uses_the_declared_encoding_without_an_override() {
         let message = UMessageBuilder::publish(topic())
             .build_with_payload(Bytes::from_static(b"payload"), PayloadEncoding::RAW)
             .expect("message");
 
-        let error = try_project_attributes_to_frame_metadata(
-            message.attributes(),
-            Some(PayloadEncoding::JSON),
-        )
-        .unwrap_err();
-
-        assert!(matches!(error, UFrameMetadataError::InvalidMetadata(_)));
+        let metadata = message
+            .attributes()
+            .try_project_to_frame_metadata()
+            .unwrap();
+        assert_eq!(metadata.payload_encoding(), Some(&PayloadEncoding::RAW));
+        assert_eq!(
+            metadata,
+            try_project_umessage_to_frame_metadata(&message).unwrap()
+        );
     }
 
     #[test]
@@ -1510,12 +1435,8 @@ mod projection_round_trip_properties {
                     .expect("valid publish message with payload")
             };
 
-            let metadata = if message.payload().is_some() {
-                message.to_frame_metadata(PayloadEncoding::RAW)
-            } else {
-                message.to_frame_metadata_unencoded()
-            }
-            .expect("valid message must project");
+            let metadata = super::try_project_umessage_to_frame_metadata(&message)
+                .expect("valid message must project");
 
             let encoded = crate::frame::codec::encode_frame_metadata_fields(&metadata)
                 .expect("projected metadata must encode");

@@ -55,6 +55,12 @@ RpcClient and RpcServer values with the existing role semantics. The
 [owned guide](src/guide/owned.md) covers setup, validated frames, notification
 receive, RPC and error handling; the subscriber needs a subscription service.
 
+Convert complete messages with `frame::metadata::try_project_umessage_to_frame_metadata`
+and `try_project_frame_to_umessage`, using their `_with_native_agreement` variants
+for native identity. These check payload presence and the carried encoding together.
+Attribute-only conversion uses `UAttributes::try_project_to_frame_metadata()`;
+there is no separate encoding override. See the owned-frame guide for migration.
+
 Selected-wire adapters compose an encoded transport core with a wire marker and
 metadata codec. Enable `selected-wire-user-api` for application construction and
 `transport-implementer-api` for encoded-core contracts, with the required frame

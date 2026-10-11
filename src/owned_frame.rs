@@ -217,17 +217,14 @@ mod tests {
 
     fn metadata_without_encoding() -> UFrameMetadata {
         let message = UMessageBuilder::publish(topic()).build().expect("message");
-        crate::frame::metadata::try_project_attributes_to_frame_metadata(message.attributes(), None)
-            .expect("metadata")
+        crate::frame::metadata::try_project_umessage_to_frame_metadata(&message).expect("metadata")
     }
 
     fn metadata_with_encoding() -> UFrameMetadata {
-        let message = UMessageBuilder::publish(topic()).build().expect("message");
-        crate::frame::metadata::try_project_attributes_to_frame_metadata(
-            message.attributes(),
-            Some(PayloadEncoding::RAW),
-        )
-        .expect("metadata")
+        let message = UMessageBuilder::publish(topic())
+            .build_with_payload(Bytes::new(), PayloadEncoding::RAW)
+            .expect("message");
+        crate::frame::metadata::try_project_umessage_to_frame_metadata(&message).expect("metadata")
     }
 
     #[test]
@@ -381,13 +378,10 @@ mod in_memory_owned_transport_tests {
 
     fn frame(topic: &UUri) -> UOwnedFrame {
         let message = UMessageBuilder::publish(topic.clone())
-            .build()
+            .build_with_payload(Bytes::from_static(b"x"), crate::PayloadEncoding::RAW)
             .expect("failed to build message");
-        let metadata = crate::frame::metadata::try_project_attributes_to_frame_metadata(
-            message.attributes(),
-            Some(crate::PayloadEncoding::RAW),
-        )
-        .expect("failed to project metadata");
+        let metadata = crate::frame::metadata::try_project_umessage_to_frame_metadata(&message)
+            .expect("failed to project metadata");
         UOwnedFrame::with_payload(metadata, b"x".to_vec()).expect("failed to build frame")
     }
 

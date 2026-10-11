@@ -1467,12 +1467,12 @@ mod tests {
         payload_encoding: PayloadEncoding,
     ) -> UFrameMetadata {
         let topic = crate::test_support::topic(resource_id);
-        let message = UMessageBuilder::publish(topic).build().expect("message");
-        crate::frame::metadata::try_project_attributes_to_frame_metadata(
-            message.attributes(),
-            Some(payload_encoding),
-        )
-        .expect("metadata")
+        let message = UMessageBuilder::publish(topic)
+            .build_with_payload(Vec::new(), PayloadEncoding::RAW)
+            .expect("message")
+            .with_declared_payload_encoding(payload_encoding)
+            .expect("carried encoding");
+        crate::frame::metadata::try_project_umessage_to_frame_metadata(&message).expect("metadata")
     }
 
     fn raw_frame_for_topic(resource_id: u16, payload: &[u8]) -> RawRx {
