@@ -832,6 +832,7 @@ mod tests {
     #[test_case(8; "unassigned ID is not a native allocation")]
     #[test_case(0xDFFF; "registry range is not private")]
     #[test_case(0xEFFF; "reserved range is not private")]
+    #[test_case(0xFFFF; "future reserved value is not a native allocation")]
     fn table_rejects_non_private_allocations(id: u32) {
         assert_eq!(
             NativeProfileTable::new([(encoding(id), scalar("u32"))]),
@@ -840,7 +841,7 @@ mod tests {
     }
 
     #[test_case(0xF000; "first private ID")]
-    #[test_case(0xFFFF; "last private ID")]
+    #[test_case(0xFFFE; "last private ID")]
     fn table_keeps_encoding_separate_from_token(id: u32) {
         let profile = profile(id, "u32");
         let agreement = NativeProfileAgreement::new(Arc::new(profile.clone()), &profile).unwrap();

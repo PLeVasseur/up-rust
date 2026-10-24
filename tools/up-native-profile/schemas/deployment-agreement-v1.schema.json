@@ -30,9 +30,9 @@
   },
   "$defs": {
     "band": {"type": "object", "additionalProperties": false, "required": ["first", "last"],
-      "properties": {"first": {"type": "integer", "minimum": 61440, "maximum": 65535}, "last": {"type": "integer", "minimum": 61440, "maximum": 65535}}},
+      "properties": {"first": {"type": "integer", "minimum": 61440, "maximum": 65534}, "last": {"type": "integer", "minimum": 61440, "maximum": 65534}}},
     "allocation": {"type": "object", "additionalProperties": false, "required": ["encoding_id", "state", "descriptor"],
-      "properties": {"encoding_id": {"type": "integer", "minimum": 61440, "maximum": 65535}, "state": {"enum": ["active", "retired"]},
+      "properties": {"encoding_id": {"type": "integer", "minimum": 61440, "maximum": 65534}, "state": {"enum": ["active", "retired"]},
         "descriptor": {"$ref": "urn:uprotocol:native-inventory:provisional:1#/$defs/descriptor"}}},
     "identities": {"type": "object", "additionalProperties": false,
       "properties": {
@@ -40,7 +40,7 @@
         "wires": {"type": "array", "maxItems": 4096, "items": {"$ref": "#/$defs/wire"}}
       }},
     "private_payload": {"type": "object", "additionalProperties": false, "required": ["encoding_id", "meaning", "owner", "version"],
-      "properties": {"encoding_id": {"type": "integer", "minimum": 61440, "maximum": 65535}, "meaning": {"type": "string", "minLength": 1},
+      "properties": {"encoding_id": {"type": "integer", "minimum": 61440, "maximum": 65534}, "meaning": {"type": "string", "minLength": 1},
         "owner": {"type": "string", "minLength": 1}, "version": {"type": "integer", "minimum": 1, "maximum": 4294967295}}},
     "wire": {"type": "object", "additionalProperties": false, "required": ["namespace", "literal", "compact_id", "owner", "version", "reference"],
       "properties": {"namespace": {"enum": ["wire", "payload_family", "metadata_layout"]}, "literal": {"type": "string", "minLength": 1, "maxLength": 65535},

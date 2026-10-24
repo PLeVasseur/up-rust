@@ -381,3 +381,95 @@ fn genesis_allows_an_absent_optional_previous_hash() {
     restored.validate().unwrap();
     assert_eq!(restored, artifact);
 }
+
+#[test]
+fn future_reserved_id_is_rejected_before_profile_construction() {
+    let inventory = inventory();
+    let key = inventory
+        .types
+        .first()
+        .expect("one inventoried type")
+        .key
+        .clone();
+    for last in [0xFFFE, 0xFFFF] {
+        let band = AllocationBand {
+            first: 0xF000,
+            last,
+        };
+        let result = AgreementArtifact::generate_table(
+            &inventory,
+            "example".into(),
+            1,
+            band,
+            None,
+            &[SeedAllocation {
+                key: key.clone(),
+                encoding_id: 0xFFFF,
+            }],
+            IdentityDeclarations::default(),
+        );
+        assert!(matches!(result, Err(ProfileToolError::Invalid(_))));
+    }
+    let mut artifact = table(IdentityDeclarations::default());
+    if let NativeMode::Table {
+        allocation_band,
+        allocations,
+    } = &mut artifact.native
+    {
+        allocation_band.last = 0xFFFF;
+        // An old full band is invalid even without an allocation at its last ID.
+        assert!(allocations.iter().all(|entry| entry.encoding_id != 0xFFFF));
+    }
+    artifact.content_sha256 = content_hash(&artifact).unwrap();
+    assert!(matches!(
+        artifact.profile(),
+        Err(ProfileToolError::Invalid(_))
+    ));
+    let declarations = IdentityDeclarations {
+        private_payloads: vec![PrivatePayloadDeclaration {
+            encoding_id: 0xFFFF,
+            meaning: "old.private".into(),
+            owner: "example".into(),
+            version: 1,
+        }],
+        ..Default::default()
+    };
+    assert!(matches!(
+        declarations.validate(),
+        Err(ProfileToolError::Invalid(_))
+    ));
+}
+
+#[test]
+fn last_private_id_is_valid_and_default_band_is_unchanged() {
+    let inventory = inventory();
+    assert_eq!(
+        AllocationBand::default(),
+        AllocationBand {
+            first: 0xF100,
+            last: 0xF7FF
+        }
+    );
+    let artifact = AgreementArtifact::generate_table(
+        &inventory,
+        "example".into(),
+        1,
+        AllocationBand {
+            first: 0xF000,
+            last: 0xFFFE,
+        },
+        None,
+        &[SeedAllocation {
+            key: inventory
+                .types
+                .first()
+                .expect("one inventoried type")
+                .key
+                .clone(),
+            encoding_id: 0xFFFE,
+        }],
+        IdentityDeclarations::default(),
+    )
+    .unwrap();
+    assert!(artifact.profile().is_ok());
+}

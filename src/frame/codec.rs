@@ -895,7 +895,7 @@ mod tests {
     #[test_case::test_case(2; "protobuf")]
     #[test_case::test_case(8; "unassigned")]
     #[test_case::test_case(0xE000; "reserved")]
-    #[test_case::test_case(0xFFFF; "private maximum")]
+    #[test_case::test_case(0xFFFF; "future reserved maximum")]
     fn encoding_round_trips(id: u32) {
         let encoding = PayloadEncoding::from_id(id).unwrap();
         // Carriage test: stamped after building, as a carrier would.

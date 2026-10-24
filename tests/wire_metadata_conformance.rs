@@ -292,7 +292,7 @@ fn malformed_length_is_rejected() {
 #[test_case(0 => matches Ok(0); "explicit zero is preserved")]
 #[test_case(8 => matches Ok(8); "unassigned is preserved")]
 #[test_case(0xEFFF => matches Ok(0xEFFF); "reserved is preserved")]
-#[test_case(0xFFFF => matches Ok(0xFFFF); "private is preserved")]
+#[test_case(0xFFFF => matches Ok(0xFFFF); "future reserved is preserved")]
 #[test_case(65536 => matches Err(UWireMetadataError::MalformedMetadata(_)); "above sixteen bits")]
 #[test_case(u32::MAX => matches Err(UWireMetadataError::MalformedMetadata(_)); "maximum storage integer")]
 fn identifier_range_is_checked_without_losing_presence(id: u32) -> Result<u32, UWireMetadataError> {

@@ -421,26 +421,11 @@ impl TryFrom<CloudEvent> for UMessage {
 
         let payload = if event.has_binary_data() {
             Some(Bytes::copy_from_slice(event.binary_data()))
-        } else if event.has_text_data() {
-            if !matches!(
-                attributes.payload_encoding(),
-                Some(PayloadEncoding::TEXT | PayloadEncoding::JSON)
-            ) {
-                return Err(UMessageError::PayloadError(
-                    "legacy text_data requires TEXT or JSON encoding".to_owned(),
-                ));
-            }
-            Some(event.text_data().to_owned().into())
-        } else if event.has_proto_data() {
-            if !matches!(
-                attributes.payload_encoding(),
-                Some(PayloadEncoding::PROTOBUF | PayloadEncoding::PROTOBUF_WRAPPED_IN_ANY)
-            ) {
-                return Err(UMessageError::PayloadError(
-                    "legacy proto_data requires a protobuf encoding".to_owned(),
-                ));
-            }
-            Some(event.proto_data().value.to_vec().into())
+        } else if event.has_text_data() || event.has_proto_data() {
+            return Err(UMessageError::PayloadError(
+                "typed CloudEvents text_data and proto_data are unsupported; use opaque binary_data"
+                    .to_owned(),
+            ));
         } else {
             None
         };
@@ -719,8 +704,8 @@ mod tests {
     #[test_case(8, b"\xff\0\x80{"; "unassigned arbitrary octets")]
     #[test_case(0xE000, b""; "reserved empty")]
     #[test_case(0xE000, b"\xff\0\x80{"; "reserved arbitrary octets")]
-    #[test_case(0xFFFF, b""; "private empty")]
-    #[test_case(0xFFFF, b"\xff\0\x80{"; "private arbitrary octets")]
+    #[test_case(0xFFFF, b""; "future reserved empty")]
+    #[test_case(0xFFFF, b"\xff\0\x80{"; "future reserved arbitrary octets")]
     fn opaque_round_trip_preserves_octets_and_presence(id: u32, payload: &[u8]) {
         let encoding = PayloadEncoding::from_id(id).unwrap();
         // Carriage test: the message is built with a registered encoding and
@@ -790,7 +775,7 @@ mod tests {
 
     #[test_case(false; "text data cannot declare RAW")]
     #[test_case(true; "protobuf data cannot declare RAW")]
-    fn legacy_typed_input_requires_its_defined_encoding(proto: bool) {
+    fn typed_input_with_raw_encoding_is_rejected(proto: bool) {
         let message = UMessageBuilder::publish(UUri::from_str(TOPIC).unwrap())
             .build_with_payload(Bytes::new(), PayloadEncoding::RAW)
             .unwrap();
@@ -804,6 +789,35 @@ mod tests {
             UMessage::try_from(event),
             Err(UMessageError::PayloadError(_))
         ));
+    }
+
+    #[test_case(PayloadEncoding::TEXT, false; "valid text encoding")]
+    #[test_case(PayloadEncoding::JSON, false; "valid JSON encoding")]
+    #[test_case(PayloadEncoding::PROTOBUF, true; "valid protobuf encoding")]
+    #[test_case(PayloadEncoding::PROTOBUF_WRAPPED_IN_ANY, true; "valid Any encoding")]
+    fn typed_input_is_rejected_even_with_valid_metadata(encoding: PayloadEncoding, proto: bool) {
+        let message = UMessageBuilder::publish(UUri::from_str(TOPIC).unwrap())
+            .build_with_payload(Bytes::new(), encoding)
+            .unwrap();
+        for empty in [false, true] {
+            let mut event = CloudEvent::try_from(message.clone()).unwrap();
+            if proto {
+                event.set_proto_data(Any {
+                    value: if empty { vec![] } else { vec![0xff, 0] },
+                    ..Default::default()
+                });
+            } else {
+                event.set_text_data(if empty {
+                    String::new()
+                } else {
+                    "valid text".into()
+                });
+            }
+            assert!(
+                matches!(UMessage::try_from(event), Err(UMessageError::PayloadError(message))
+                if message.contains("typed CloudEvents"))
+            );
+        }
     }
 
     //
@@ -855,7 +869,7 @@ mod tests {
         event
             .set_payload_encoding(PayloadEncoding::TEXT)
             .expect("valid payload encoding");
-        event.set_text_data("test".to_string());
+        event.set_binary_data(b"test".to_vec());
 
         let umessage =
             UMessage::try_from(event).expect("failed to create UMessage from CloudEvent");
@@ -879,7 +893,7 @@ mod tests {
         event
             .set_payload_encoding(PayloadEncoding::JSON)
             .expect("valid payload encoding");
-        event.set_text_data("{\"count\": 5}".to_string());
+        event.set_binary_data(b"{\"count\": 5}".to_vec());
 
         let umessage =
             UMessage::try_from(event).expect("failed to create UMessage from CloudEvent");
@@ -919,10 +933,7 @@ mod tests {
         let serialized_payload = payload_wrapped_in_any
             .write_to_bytes()
             .expect("failed to serialize payload");
-        event.set_proto_data(Any {
-            value: serialized_payload.clone(),
-            ..Default::default()
-        });
+        event.set_binary_data(serialized_payload.clone());
 
         let umessage =
             UMessage::try_from(event).expect("failed to create UMessage from CloudEvent");
@@ -962,10 +973,7 @@ mod tests {
         event
             .set_payload_encoding(PayloadEncoding::PROTOBUF)
             .expect("valid payload encoding");
-        event.set_proto_data(Any {
-            value: DATA.to_vec(),
-            ..Default::default()
-        });
+        event.set_binary_data(DATA.to_vec());
 
         let umessage =
             UMessage::try_from(event).expect("failed to create UMessage from CloudEvent");

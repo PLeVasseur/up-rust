@@ -145,7 +145,7 @@ an instruction to guess an encoding. `from_id` preserves every structurally vali
 `from_registry_entry` checks the assignment range; `private_use` checks the private
 range. Neither constructor establishes an allocation or decoding agreement.
 
-Builders reject origination of reserved IDs (`0xE000..=0xEFFF`) with
+Builders reject origination of reserved IDs (`0xE000..=0xEFFF` and `0xFFFF`) with
 `UMessageError::AttributesValidationError`. Received/forwarded reserved identities
 remain valid opaque carriage. `with_declared_payload_encoding` is the explicit
 carrier/decorator operation for existing payload bytes; it does not turn an
@@ -177,8 +177,9 @@ Format, and `data_base64` rather than parsed `data` in JSON Event Format. `pform
 preserves the identifier and the carriage media type is `application/octet-stream`.
 JSON consumers must decode `data_base64` before parsing the application JSON, or
 apply an explicit application-aware projection. Any present data property without
-`pformat` is rejected regardless of its type. Legacy typed input remains a closed
-set, not media-type inference or generic payload decoding.
+`pformat` is rejected regardless of its type. Consumers reject `text_data` and
+`proto_data`, including empty values with otherwise valid metadata. Use opaque
+`binary_data` or structured JSON `data_base64`; no typed-input fallback remains.
 
 TTL zero now consistently means no expiration (`None`); positive u32 millisecond
 values are preserved without clamping. Requests still require a positive TTL.
@@ -434,3 +435,16 @@ regenerate inputs together with this API. Payload ID zero retains its independen
 
 The tool's exact dependency states compatible SDK `0.10.0-SNAPSHOT`; publishing stays disabled.
 Provisional version/mode changes have no compatibility window and fail closed.
+
+## Refreshed payload encoding contract
+
+Private allocations end at `0xFFFE`. `0xFFFF` remains structurally valid for
+opaque receipt and forwarding, but is reserved for future use and cannot be
+originated or installed in a native profile. Existing explicit full-band
+allocation artifacts must migrate to a new coordinated deployment profile;
+see the native profile tool's deployment agreement guide. The default band
+`0xF100..=0xF7FF`, wire bytes, ABI and native descriptor/token versions are unchanged.
+
+CloudEvents consumers now reject `text_data` and `proto_data`, including empty
+values with otherwise valid metadata. Producers must carry opaque bytes in
+`binary_data` (or structured JSON `data_base64`) with the explicit `pformat`.

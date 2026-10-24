@@ -34,6 +34,9 @@ pub struct PayloadEncoding(u16);
 /// First private-use identifier; allocations require deployment agreement.
 pub const PAYLOAD_ENCODING_PRIVATE_USE_MIN: u32 = 0xF000;
 
+/// Last private-use identifier; `0xFFFF` remains reserved for future use.
+pub const PAYLOAD_ENCODING_PRIVATE_USE_MAX: u32 = 0xFFFE;
+
 /// First identifier of the registry's reserved range (`0xE000..=0xEFFF`).
 ///
 /// Reserved identifiers are structurally valid and are preserved by every
@@ -97,11 +100,11 @@ impl PayloadEncoding {
     /// structural acceptance of unknown identifiers.
     ///
     /// # Panics
-    /// Panics when `id` is outside `0xF000..=0xFFFF`.
+    /// Panics when `id` is outside `0xF000..=0xFFFE`.
     #[must_use]
     pub const fn private_use(id: u32) -> Self {
         assert!(
-            id >= PAYLOAD_ENCODING_PRIVATE_USE_MIN && id <= u16::MAX as u32,
+            id >= PAYLOAD_ENCODING_PRIVATE_USE_MIN && id <= PAYLOAD_ENCODING_PRIVATE_USE_MAX,
             "payload-encoding identifier is outside the private-use range"
         );
         Self(id as u16)
@@ -119,6 +122,7 @@ impl PayloadEncoding {
     #[must_use]
     pub const fn is_private_use(self) -> bool {
         self.id() >= PAYLOAD_ENCODING_PRIVATE_USE_MIN
+            && self.id() <= PAYLOAD_ENCODING_PRIVATE_USE_MAX
     }
 
     /// Whether the identifier is in the registry's reserved range.
@@ -126,7 +130,8 @@ impl PayloadEncoding {
     /// Reserved identifiers may be carried and preserved but not originated.
     #[must_use]
     pub const fn is_reserved(self) -> bool {
-        self.id() >= PAYLOAD_ENCODING_RESERVED_MIN && self.id() < PAYLOAD_ENCODING_PRIVATE_USE_MIN
+        (self.id() >= PAYLOAD_ENCODING_RESERVED_MIN && self.id() < PAYLOAD_ENCODING_PRIVATE_USE_MIN)
+            || self.id() == 0xFFFF
     }
 
     /// Checks that a producer may put this identifier on the wire.
@@ -138,7 +143,7 @@ impl PayloadEncoding {
     ///
     /// # Errors
     ///
-    /// Returns an error for an identifier in `0xE000..=0xEFFF`.
+    /// Returns an error for an identifier in `0xE000..=0xEFFF` or `0xFFFF`.
     pub fn check_originable(self) -> Result<(), UAttributesError> {
         if self.is_reserved() {
             return Err(UAttributesError::validation_error(format!(
@@ -239,7 +244,8 @@ mod tests {
     #[test_case(0xE000; "reserved lower bound")]
     #[test_case(0xEFFF; "reserved upper bound")]
     #[test_case(0xF000; "private lower bound")]
-    #[test_case(0xFFFF; "private upper bound")]
+    #[test_case(0xFFFE; "private upper bound")]
+    #[test_case(0xFFFF; "future reserved value remains structurally valid")]
     fn identifier_is_structurally_valid(id: u32) {
         assert_eq!(PayloadEncoding::from_id(id).unwrap().id(), id);
     }
@@ -260,7 +266,7 @@ mod tests {
     }
 
     #[test_case(0xF000; "first private value")]
-    #[test_case(0xFFFF; "last private value")]
+    #[test_case(0xFFFE; "last private value")]
     fn private_constructor_accepts_contract_identifiers(id: u32) {
         assert_eq!(PayloadEncoding::private_use(id).id(), id);
     }
@@ -268,6 +274,7 @@ mod tests {
     #[test_case(0; "contract-defined is not private")]
     #[test_case(2; "registered is not private")]
     #[test_case(0xEFFF; "reserved is not private")]
+    #[test_case(0xFFFF; "reserved future value is not private")]
     #[test_case(65536; "oversized is not private")]
     #[should_panic(expected = "outside the private-use range")]
     fn private_constructor_rejects_other_allocation_classes(id: u32) {
@@ -295,7 +302,8 @@ mod tests {
 
     #[test_case(0xEFFF => false; "reserved is not private")]
     #[test_case(0xF000 => true; "private lower bound")]
-    #[test_case(0xFFFF => true; "private upper bound")]
+    #[test_case(0xFFFE => true; "private upper bound")]
+    #[test_case(0xFFFF => false; "future reserved value")]
     fn private_range_classification(id: u32) -> bool {
         PayloadEncoding::from_id(id).unwrap().is_private_use()
     }
@@ -304,6 +312,7 @@ mod tests {
     #[test_case(0xE000 => true; "reserved lower bound")]
     #[test_case(0xEFFF => true; "reserved upper bound")]
     #[test_case(0xF000 => false; "private is not reserved")]
+    #[test_case(0xFFFF => true; "future reserved value")]
     fn reserved_range_classification(id: u32) -> bool {
         PayloadEncoding::from_id(id).unwrap().is_reserved()
     }
@@ -321,6 +330,7 @@ mod tests {
 
     #[test_case(0xE000; "reserved lower bound")]
     #[test_case(0xEFFF; "reserved upper bound")]
+    #[test_case(0xFFFF; "future reserved value")]
     fn reserved_identifiers_fail_the_origination_check(id: u32) {
         assert!(matches!(
             PayloadEncoding::from_id(id).unwrap().check_originable(),

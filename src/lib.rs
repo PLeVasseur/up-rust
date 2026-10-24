@@ -232,7 +232,8 @@ mod uattributes;
 pub use uattributes::{
     NotificationValidator, PayloadEncoding, PublishValidator, RequestValidator, ResponseValidator,
     UAttributes, UAttributesError, UAttributesValidator, UAttributesValidators, UMessageType,
-    UPriority, PAYLOAD_ENCODING_PRIVATE_USE_MIN, PAYLOAD_ENCODING_RESERVED_MIN,
+    UPriority, PAYLOAD_ENCODING_PRIVATE_USE_MAX, PAYLOAD_ENCODING_PRIVATE_USE_MIN,
+    PAYLOAD_ENCODING_RESERVED_MIN,
 };
 
 mod umessage;

@@ -1180,7 +1180,7 @@ mod tests {
     #[test_case::test_case(7; "text")]
     #[test_case::test_case(8; "unassigned")]
     #[test_case::test_case(0xE000; "reserved")]
-    #[test_case::test_case(0xFFFF; "private")]
+    #[test_case::test_case(0xFFFF; "future reserved")]
     fn payload_encoding_is_preserved_without_lookup(id: u32) {
         let expected_encoding = PayloadEncoding::from_id(id).unwrap();
         // Carriage test: re-stamped as a carrier would.

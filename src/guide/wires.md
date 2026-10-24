@@ -144,7 +144,7 @@ fail before the metadata body is parsed. Compatibility callbacks cannot bypass
 the compact-only restriction. Any allowed literal aliases must be explicitly
 defined by the configured wire's deployment agreement.
 
-Payload encoding IDs (including normative private payload use in `0xF000..=0xFFFF`)
+Payload encoding IDs (including normative private payload use in `0xF000..=0xFFFE`)
 are a separate namespace. Their partition does not allocate wire IDs. Both kinds
 of private identity belong in the same deployment agreement artifact, with their
 namespaces, owners and versions recorded explicitly. The endpoint's selected

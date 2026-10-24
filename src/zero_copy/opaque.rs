@@ -532,7 +532,7 @@ mod tests {
     #[test_case::test_case(0; "contract defined zero")]
     #[test_case::test_case(8; "unassigned registry value")]
     #[test_case::test_case(0xE000; "reserved incoming value")]
-    #[test_case::test_case(0xFFFF; "maximum private value")]
+    #[test_case::test_case(0xFFFF; "future reserved incoming value")]
     fn opaque_receive_keeps_unknown_identity_bytes_and_storage(encoding: u32) {
         let admission =
             HeaderAdmission::for_wire::<UProtocolNativeWire>(HeaderLimits::default()).unwrap();

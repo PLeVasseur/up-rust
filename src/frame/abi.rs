@@ -752,7 +752,7 @@ mod tests {
     #[test_case::test_case(0; "explicit contract defined zero")]
     #[test_case::test_case(8; "unassigned identifier")]
     #[test_case::test_case(0xE000; "reserved identifier")]
-    #[test_case::test_case(0xFFFF; "private maximum")]
+    #[test_case::test_case(0xFFFF; "future reserved maximum")]
     fn identifier_and_empty_presence_survive_fixed_profile(id: u32) {
         let encoding = PayloadEncoding::from_id(id).unwrap();
         // Carriage test: stamped after building, as a carrier would, because

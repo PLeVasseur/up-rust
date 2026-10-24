@@ -1109,15 +1109,15 @@ mod core_types_support {
         #[test_case::test_case(0, 0; "unlimited contract defined")]
         #[test_case::test_case(0, 8; "unlimited unassigned")]
         #[test_case::test_case(0, 0xEFFF; "unlimited reserved")]
-        #[test_case::test_case(0, 0xFFFF; "unlimited private")]
+        #[test_case::test_case(0, 0xFFFF; "unlimited future reserved")]
         #[test_case::test_case(1, 0; "minimum lifetime contract defined")]
         #[test_case::test_case(1, 8; "minimum lifetime unassigned")]
         #[test_case::test_case(1, 0xEFFF; "minimum lifetime reserved")]
-        #[test_case::test_case(1, 0xFFFF; "minimum lifetime private")]
+        #[test_case::test_case(1, 0xFFFF; "minimum lifetime future reserved")]
         #[test_case::test_case(u32::MAX, 0; "maximum lifetime contract defined")]
         #[test_case::test_case(u32::MAX, 8; "maximum lifetime unassigned")]
         #[test_case::test_case(u32::MAX, 0xEFFF; "maximum lifetime reserved")]
-        #[test_case::test_case(u32::MAX, 0xFFFF; "maximum lifetime private")]
+        #[test_case::test_case(u32::MAX, 0xFFFF; "maximum lifetime future reserved")]
         fn protobuf_preserves_empty_payload_and_scalar_ttl_semantics(ttl: u32, id: u32) {
             let encoding = PayloadEncoding::from_id(id).unwrap();
             // Carriage test: re-stamped as a carrier would, since the builder

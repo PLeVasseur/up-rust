@@ -19,7 +19,8 @@ mod upriority;
 use thiserror::Error;
 
 pub use payloadencoding::{
-    PayloadEncoding, PAYLOAD_ENCODING_PRIVATE_USE_MIN, PAYLOAD_ENCODING_RESERVED_MIN,
+    PayloadEncoding, PAYLOAD_ENCODING_PRIVATE_USE_MAX, PAYLOAD_ENCODING_PRIVATE_USE_MIN,
+    PAYLOAD_ENCODING_RESERVED_MIN,
 };
 pub use uattributesvalidator::*;
 pub use umessagetype::UMessageType;

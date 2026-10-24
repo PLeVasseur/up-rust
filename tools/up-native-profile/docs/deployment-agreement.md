@@ -61,7 +61,7 @@ routes without changing a native descriptor's target label.
 ## Append-only private allocations
 
 `generate` recommends Table mode. Its default F100-F7FF band is overridable within
-F000-FFFF. It is an allocation policy for one deployment, not a numeric wire-ID
+F000-FFFE. `0xFFFF` is reserved for future use and cannot be allocated. It is an allocation policy for one deployment, not a numeric wire-ID
 partition. Explicit seeds can preserve already coordinated F101/F102 assignments.
 Seeds are allowed only at genesis and must name actual inventory types.
 
@@ -159,3 +159,11 @@ name the concrete file/directory and preserve the underlying source. Collision
 errors identify both type names/revisions and their short token. A successor must
 retain its allocation band; changing bands requires a new deployment profile.
 Genesis seeds and `--previous` cannot be supplied together.
+
+An older explicit band ending at `0xFFFF` is rejected even when it has no
+assignment at that value. Do not silently clamp the band or rewrite an existing
+ledger. Regenerate a new deployment profile from the actual inventory with an
+explicit valid band and coordinated seeds for assignments that remain valid.
+A band change cannot be an append-only successor of the old profile. Any prior
+`0xFFFF` assignment requires a new private ID and coordinated peer migration.
+The default `0xF100..=0xF7FF`, artifact, descriptor and token versions are unchanged.

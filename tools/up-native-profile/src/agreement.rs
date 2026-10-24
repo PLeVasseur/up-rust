@@ -33,7 +33,7 @@ impl Default for AllocationBand {
 
 impl AllocationBand {
     fn validate(self) -> Result<(), ProfileToolError> {
-        if self.first < 0xF000 || self.first > self.last {
+        if self.first < 0xF000 || self.last > 0xFFFE || self.first > self.last {
             return Err(invalid("invalid private allocation band"));
         }
         Ok(())
@@ -166,7 +166,7 @@ impl IdentityDeclarations {
         }
         let mut payload_ids = BTreeSet::new();
         for value in &self.private_payloads {
-            if value.encoding_id < 0xF000
+            if !(0xF000..=0xFFFE).contains(&value.encoding_id)
                 || value.meaning.is_empty()
                 || value.owner.is_empty()
                 || value.version == 0
