@@ -177,8 +177,33 @@ if !gate.is_current_callback() {
 
 The entered counter is per registration and its guard releases on completion,
 cancellation or panic. Async dispatch scopes task-local context through the future's
-polls, including thread migration. Synchronous native workers use
+polls, including thread migration. Synchronous native callbacks use
 `enter_native_callback()` and keep its thread-bound guard through the callback.
+Native admission never blocks or waits, so it may run on any callback thread,
+including one that drives an async runtime. An attempt racing with `cancel()` is
+either counted for `quiesce` or rejected. Up to eight live guards per thread need
+no allocation.
+
+```rust
+# #[cfg(feature = "transport-implementer-api")]
+# {
+use up_rust::ListenerAdmission;
+
+// Invoked on whichever thread the middleware chooses.
+fn on_native_sample(gate: &ListenerAdmission) -> bool {
+    let Some(_entered) = gate.enter_native_callback() else {
+        return false; // closed: release the sample without delivery
+    };
+    true // deliver while the guard is live
+}
+
+let gate = ListenerAdmission::new();
+assert!(on_native_sample(&gate));
+gate.cancel();
+assert!(!on_native_sample(&gate));
+# }
+```
+
 An unrelated registration or spawned task does not become re-entrant because it
 shares a thread. Arbitrary child tasks do not inherit a parent callback's context;
 applications must avoid cleanup dependency cycles across separately spawned work.

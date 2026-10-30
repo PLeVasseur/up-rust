@@ -180,6 +180,9 @@ apply an explicit application-aware projection. Any present data property withou
 `pformat` is rejected regardless of its type. Consumers reject `text_data` and
 `proto_data`, including empty values with otherwise valid metadata. Use opaque
 `binary_data` or structured JSON `data_base64`; no typed-input fallback remains.
+`CloudEventAttributeValue` and the nested `cloud_event` module (`Data` and
+`cloud_event_attribute_value::Attr`) are exported beside `CloudEvent`, so
+consumer signatures can name the event's attribute and data field types.
 
 TTL zero now consistently means no expiration (`None`); positive u32 millisecond
 values are preserved without clamping. Requests still require a positive TTL.
@@ -243,7 +246,9 @@ Enable `transport-implementer-api` for `ListenerAdmission`, `NativeCallbackGuard
 and `ListenerQuiesceError`; `util` implies this feature for existing utility users.
 `stop` closes callback admission, while `cancel` plus `quiesce` supports bounded
 native teardown. A timeout never revokes retained storage. Native callback guards
-must stay on their entering thread and are not `Send`.
+must stay on their entering thread and are not `Send`. `enter_native_callback`
+never blocks, so it no longer panics on a thread that drives a Tokio runtime, and
+up to eight live guards per thread need no allocation.
 
 ## Selected-wire transport adapters
 

@@ -34,11 +34,68 @@ use tokio::{
 
 static NEXT_REGISTRATION: AtomicU64 = AtomicU64::new(1);
 
+/// Live native guards one thread holds before context storage needs the heap.
+const NATIVE_CONTEXT_SLOTS: usize = 8;
+
 thread_local! {
     // Nodes exist only during a synchronous poll and are never stored in a
     // future, moved across threads, or exposed to user code.
     static ASYNC_CALLBACKS: Cell<*const CallbackScope> = const { Cell::new(std::ptr::null()) };
-    static NATIVE_CALLBACKS: RefCell<Vec<u64>> = const { RefCell::new(Vec::new()) };
+    // Registration keys of this thread's live native guards; keys start at one,
+    // so zero marks a free slot. This storage is const-initialized and needs no
+    // destructor, so native entry neither allocates nor registers thread cleanup.
+    static NATIVE_CALLBACKS: [Cell<u64>; NATIVE_CONTEXT_SLOTS] =
+        const { [const { Cell::new(0) }; NATIVE_CONTEXT_SLOTS] };
+    // Keys of guards nested beyond the inline slots, touched only while non-empty.
+    static NATIVE_OVERFLOW_LEN: Cell<usize> = const { Cell::new(0) };
+    static NATIVE_OVERFLOW: RefCell<Vec<u64>> = const { RefCell::new(Vec::new()) };
+}
+
+// Native context is a multiset of keys: guards may drop in any order, and only
+// membership is observed.
+fn enter_native_context(id: u64) {
+    let stored = NATIVE_CALLBACKS.with(|slots| {
+        slots
+            .iter()
+            .find(|slot| slot.get() == 0)
+            .map(|slot| slot.set(id))
+            .is_some()
+    });
+    if !stored {
+        NATIVE_OVERFLOW.with(|overflow| {
+            let mut overflow = overflow.borrow_mut();
+            overflow.push(id);
+            NATIVE_OVERFLOW_LEN.with(|len| len.set(overflow.len()));
+        });
+    }
+}
+
+fn leave_native_context(id: u64) {
+    let cleared = NATIVE_CALLBACKS.with(|slots| {
+        slots
+            .iter()
+            .find(|slot| slot.get() == id)
+            .map(|slot| slot.set(0))
+            .is_some()
+    });
+    if !cleared && NATIVE_OVERFLOW_LEN.with(Cell::get) > 0 {
+        // The overflow storage may already be gone during thread teardown.
+        let _ = NATIVE_OVERFLOW.try_with(|overflow| {
+            let mut overflow = overflow.borrow_mut();
+            if let Some(index) = overflow.iter().position(|key| *key == id) {
+                overflow.swap_remove(index);
+            }
+            NATIVE_OVERFLOW_LEN.with(|len| len.set(overflow.len()));
+        });
+    }
+}
+
+fn in_native_context(id: u64) -> bool {
+    NATIVE_CALLBACKS.with(|slots| slots.iter().any(|slot| slot.get() == id))
+        || (NATIVE_OVERFLOW_LEN.with(Cell::get) > 0
+            && NATIVE_OVERFLOW
+                .try_with(|overflow| overflow.borrow().contains(&id))
+                .unwrap_or(false))
 }
 
 struct CallbackScope {
@@ -94,7 +151,7 @@ pub enum ListenerQuiesceError {
 /// [`Self::quiesce`]. Entered work is counted per registration until completion,
 /// cancellation or panic. Quiescence never revokes a retained payload/storage
 /// owner. Async context is installed on the current stack during each callback poll;
-/// native worker callbacks use [`Self::enter_native_callback`].
+/// native worker callbacks use [`Self::enter_native_callback`], which never blocks.
 #[derive(Debug)]
 pub struct ListenerAdmission {
     id: u64,
@@ -135,12 +192,7 @@ pub struct NativeCallbackGuard<'a> {
 
 impl Drop for NativeCallbackGuard<'_> {
     fn drop(&mut self) {
-        NATIVE_CALLBACKS.with(|callbacks| {
-            let mut callbacks = callbacks.borrow_mut();
-            if let Some(index) = callbacks.iter().rposition(|id| *id == self.entered.0.id) {
-                callbacks.remove(index);
-            }
-        });
+        leave_native_context(self.entered.0.id);
     }
 }
 
@@ -178,7 +230,8 @@ impl ListenerAdmission {
     /// [`Self::quiesce`], which includes that barrier in the bounded wait.
     pub fn cancel(&self) {
         self.closed_at.get_or_init(Instant::now);
-        self.active.store(false, Ordering::Release);
+        // Sequentially consistent with native admission's count-then-check.
+        self.active.store(false, Ordering::SeqCst);
     }
 
     /// Returns the recorded admission-close instant, or `None` while open.
@@ -189,10 +242,12 @@ impl ListenerAdmission {
 
     /// Returns the number of admitted async/native callback entries still live.
     ///
-    /// Queue length and retained payload/loan owners are separate quantities.
+    /// Queue length and retained payload/loan owners are separate quantities. A
+    /// native admission attempt racing with closure is counted only until it
+    /// observes the closure and is rejected.
     #[must_use]
     pub fn entered_count(&self) -> usize {
-        self.entered.load(Ordering::Acquire)
+        self.entered.load(Ordering::SeqCst)
     }
 
     /// Whether this registration is in the current callback's enclosing context.
@@ -219,14 +274,13 @@ impl ListenerAdmission {
                 }
                 pointer = scope.parent;
             }
-            task.is_none()
-                && NATIVE_CALLBACKS.with(|callbacks| callbacks.borrow().contains(&self.id))
+            task.is_none() && in_native_context(self.id)
         })
     }
 
     fn entered(&self) -> EnteredCallback<'_> {
         self.entered
-            .fetch_update(Ordering::AcqRel, Ordering::Acquire, |count| {
+            .fetch_update(Ordering::SeqCst, Ordering::SeqCst, |count| {
                 count.checked_add(1)
             })
             .expect("listener entered callback count overflow");
@@ -239,17 +293,29 @@ impl ListenerAdmission {
     /// may finish after admission closes. Native teardown uses quiescence unless
     /// it is re-entrant, retaining all live callback/storage owners in either case.
     ///
+    /// Admission never blocks or waits, so it may run on any callback thread,
+    /// including one that drives an async runtime. An attempt racing with closure
+    /// is either counted before [`Self::quiesce`] observes the count, or observes
+    /// the closure and is rejected. Up to eight live guards per thread need no
+    /// allocation; deeper nesting keeps its context on the heap. The guard's
+    /// re-entrancy context applies outside Tokio tasks; asynchronous callbacks
+    /// use [`Self::dispatch`].
+    ///
     /// # Panics
     ///
-    /// Panics if called in asynchronous execution (use [`Self::dispatch`] there),
-    /// or if the per-registration entered count cannot be incremented.
+    /// Panics if the per-registration entered count cannot be incremented.
     pub fn enter_native_callback(&self) -> Option<NativeCallbackGuard<'_>> {
-        let _entry = self.entry.blocking_lock();
         if !self.active.load(Ordering::Acquire) {
             return None;
         }
+        // Count, then re-check. With cancel's store and quiesce's count load,
+        // all sequentially consistent, quiesce observes this entry unless this
+        // check observes the closure; a rejected entry is released on return.
         let entered = self.entered();
-        NATIVE_CALLBACKS.with(|callbacks| callbacks.borrow_mut().push(self.id));
+        if !self.active.load(Ordering::SeqCst) {
+            return None;
+        }
+        enter_native_context(self.id);
         Some(NativeCallbackGuard {
             entered,
             thread_bound: PhantomData,
@@ -278,11 +344,12 @@ impl ListenerAdmission {
         if self.is_current_callback() {
             return Err(ListenerQuiesceError::Reentrant);
         }
-        if self.active.load(Ordering::Acquire) {
+        if self.active.load(Ordering::SeqCst) {
             return Err(ListenerQuiesceError::AdmissionOpen);
         }
-        // A racing first poll/native admission may have observed active before
-        // cancel. Include that serialization barrier in the same deadline.
+        // A racing first poll may have observed active before cancel. Include
+        // that serialization barrier in the same deadline. Native admission
+        // takes no barrier; its count-then-check pairs with the count load below.
         let entry = timeout_at(deadline, self.entry.lock())
             .await
             .map_err(|_| ListenerQuiesceError::QuiesceTimedOut)?;
@@ -306,6 +373,7 @@ impl ListenerAdmission {
     /// from `stop` does not mean that previously entered callbacks have completed.
     /// Callbacks that have already yielded may finish. As with other async code,
     /// their first poll must yield promptly rather than block the executor.
+    /// Native admission never waits for this barrier; it observes the closure.
     pub async fn stop(&self) {
         let _entry = self.entry.lock().await;
         self.cancel();
@@ -719,5 +787,115 @@ mod tests {
             .quiesce(Instant::now() + Duration::from_secs(5))
             .await
             .unwrap();
+    }
+
+    #[tokio::test]
+    async fn native_entry_never_waits_for_the_async_entry_barrier() {
+        // The first poll holds the async entry barrier on this runtime thread.
+        let admission = ListenerAdmission::new();
+        admission
+            .dispatch(|| async {
+                let guard = admission.enter_native_callback().unwrap();
+                assert_eq!(admission.entered_count(), 2);
+                drop(guard);
+            })
+            .await;
+        assert_eq!(admission.entered_count(), 0);
+        assert!(!admission.is_current_callback());
+    }
+
+    #[test]
+    fn native_context_is_exact_beyond_inline_slots_in_any_drop_order() {
+        let admissions: Vec<_> = (0..NATIVE_CONTEXT_SLOTS + 3)
+            .map(|_| ListenerAdmission::new())
+            .collect();
+        let mut guards: Vec<_> = admissions
+            .iter()
+            .map(ListenerAdmission::enter_native_callback)
+            .collect();
+        let first = admissions.first().unwrap();
+        let repeated = first.enter_native_callback().unwrap();
+        assert!(NATIVE_OVERFLOW_LEN.with(Cell::get) > 0);
+        assert!(admissions
+            .iter()
+            .all(ListenerAdmission::is_current_callback));
+        // Release every other guard first, from inline and overflow storage alike.
+        for guard in guards.iter_mut().step_by(2) {
+            drop(guard.take().unwrap());
+        }
+        for (index, admission) in admissions.iter().enumerate() {
+            let live = index == 0 || index % 2 == 1;
+            assert_eq!(
+                admission.is_current_callback(),
+                live,
+                "registration {index}"
+            );
+            assert_eq!(admission.entered_count(), usize::from(live));
+        }
+        drop(repeated);
+        assert!(!first.is_current_callback());
+        guards.clear();
+        assert!(!admissions
+            .iter()
+            .any(ListenerAdmission::is_current_callback));
+        assert!(admissions
+            .iter()
+            .all(|admission| admission.entered_count() == 0));
+        assert_eq!(NATIVE_OVERFLOW_LEN.with(Cell::get), 0);
+        NATIVE_CALLBACKS.with(|slots| assert!(slots.iter().all(|slot| slot.get() == 0)));
+    }
+
+    // Wall-clock stress test: under Miri the virtual clock and scheduler make its
+    // deadlines meaningless, while the other admission tests still run there.
+    #[cfg(not(miri))]
+    #[test]
+    fn racing_closure_either_counts_or_rejects_native_admission() {
+        let runtime = tokio::runtime::Builder::new_current_thread()
+            .enable_time()
+            .build()
+            .unwrap();
+        for _ in 0..64 {
+            let admission = Arc::new(ListenerAdmission::new());
+            let started = Arc::new(AtomicUsize::new(0));
+            let finished = Arc::new(AtomicUsize::new(0));
+            let halt = Arc::new(AtomicBool::new(false));
+            let workers: Vec<_> = (0..3)
+                .map(|_| {
+                    let admission = Arc::clone(&admission);
+                    let started = Arc::clone(&started);
+                    let finished = Arc::clone(&finished);
+                    let halt = Arc::clone(&halt);
+                    std::thread::spawn(move || {
+                        while !halt.load(Ordering::Acquire) {
+                            if let Some(guard) = admission.enter_native_callback() {
+                                started.fetch_add(1, Ordering::SeqCst);
+                                std::hint::spin_loop();
+                                finished.fetch_add(1, Ordering::SeqCst);
+                                drop(guard);
+                            }
+                        }
+                    })
+                })
+                .collect();
+            let limit = std::time::Instant::now() + Duration::from_secs(5);
+            while started.load(Ordering::SeqCst) == 0 {
+                assert!(std::time::Instant::now() < limit, "no native entry");
+                std::thread::yield_now();
+            }
+            admission.cancel();
+            runtime
+                .block_on(admission.quiesce(Instant::now() + Duration::from_secs(5)))
+                .unwrap();
+            let admitted = started.load(Ordering::SeqCst);
+            assert_eq!(finished.load(Ordering::SeqCst), admitted);
+            // Attempts keep racing after quiescence; every one must be rejected.
+            std::thread::sleep(Duration::from_millis(1));
+            halt.store(true, Ordering::Release);
+            for worker in workers {
+                worker.join().unwrap();
+            }
+            assert_eq!(started.load(Ordering::SeqCst), admitted);
+            assert_eq!(admission.entered_count(), 0);
+        }
     }
 }

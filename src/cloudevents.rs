@@ -25,7 +25,7 @@ use crate::{
 };
 use bytes::Bytes;
 
-pub use cloudevents::{cloud_event::CloudEventAttributeValue, CloudEvent};
+pub use cloudevents::{cloud_event, cloud_event::CloudEventAttributeValue, CloudEvent};
 
 include!(concat!(env!("OUT_DIR"), "/cloudevents/mod.rs"));
 

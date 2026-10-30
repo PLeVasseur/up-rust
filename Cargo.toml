@@ -233,6 +233,14 @@ name = "listener_admission_ui"
 required-features = ["transport-implementer-api"]
 
 [[test]]
+name = "listener_admission_native"
+required-features = ["transport-implementer-api"]
+
+[[test]]
+name = "cloudevents_public_api"
+required-features = ["cloudevents"]
+
+[[test]]
 name = "owned_frame_trybuild"
 required-features = ["owned-frame-transport"]
 

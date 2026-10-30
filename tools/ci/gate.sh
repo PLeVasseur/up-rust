@@ -115,6 +115,12 @@ fi
 if [[ "$configuration" == current && ( "$group" == all || "$group" == tests ) ]]; then
   python3 tools/ci/run_check.py --log "$log_root/native-callback-ui.log" --timeout 1200 --completion trybuild -- cargo +1.95.0 test --locked --all-features --test listener_admission_ui
 fi
+if [[ "$configuration" == current && ( "$group" == all || "$group" == tests ) ]]; then
+  python3 tools/ci/run_check.py --log "$log_root/native-callback-admission.log" --timeout 1200 --completion libtest -- cargo +1.95.0 test --locked --all-features --test listener_admission_native
+fi
+if [[ "$configuration" == current && ( "$group" == all || "$group" == tests ) ]]; then
+  python3 tools/ci/run_check.py --log "$log_root/cloudevents-public-api.log" --timeout 1200 --completion libtest -- cargo +1.95.0 test --locked -p up-rust --no-default-features --features cloudevents --test cloudevents_public_api
+fi
 if [[ "$configuration" == current && ( "$group" == all || "$group" == check ) ]]; then
   python3 tools/ci/run_check.py --log "$log_root/adapter-minimal.log" --timeout 1200 --completion command -- cargo +1.95.0 check --locked --no-default-features --features selected-wire-transport-adapter --all-targets
 fi
@@ -261,6 +267,12 @@ if [[ "$configuration" == msrv && ( "$group" == all || "$group" == check ) ]]; t
 fi
 if [[ "$configuration" == msrv && ( "$group" == all || "$group" == check ) ]]; then
   python3 tools/ci/run_check.py --log "$log_root/util-minimal.log" --timeout 1200 --completion command -- cargo +1.88.0 check --locked --no-default-features --features util --all-targets
+fi
+if [[ "$configuration" == msrv && ( "$group" == all || "$group" == tests ) ]]; then
+  python3 tools/ci/run_check.py --log "$log_root/native-callback-admission.log" --timeout 1200 --completion libtest -- cargo +1.88.0 test --locked --all-features --test listener_admission_native
+fi
+if [[ "$configuration" == msrv && ( "$group" == all || "$group" == tests ) ]]; then
+  python3 tools/ci/run_check.py --log "$log_root/cloudevents-public-api.log" --timeout 1200 --completion libtest -- cargo +1.88.0 test --locked -p up-rust --no-default-features --features cloudevents --test cloudevents_public_api
 fi
 if [[ "$configuration" == msrv && ( "$group" == all || "$group" == check ) ]]; then
   python3 tools/ci/run_check.py --log "$log_root/adapter-minimal.log" --timeout 1200 --completion command -- cargo +1.88.0 check --locked --no-default-features --features selected-wire-transport-adapter --all-targets

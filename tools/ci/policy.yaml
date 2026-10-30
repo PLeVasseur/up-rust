@@ -155,6 +155,18 @@ checks:
     timeout: 1200
     completion: trybuild
     command: [cargo, "+{toolchain}", test, --locked, --all-features, --test, listener_admission_ui]
+  - name: native-callback-admission
+    group: tests
+    roles: [current, msrv]
+    timeout: 1200
+    completion: libtest
+    command: [cargo, "+{toolchain}", test, --locked, --all-features, --test, listener_admission_native]
+  - name: cloudevents-public-api
+    group: tests
+    roles: [current, msrv]
+    timeout: 1200
+    completion: libtest
+    command: [cargo, "+{toolchain}", test, --locked, -p, up-rust, --no-default-features, --features, cloudevents, --test, cloudevents_public_api]
   - name: adapter-minimal
     group: check
     roles: [current, msrv]

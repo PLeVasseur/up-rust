@@ -28,6 +28,10 @@ revision or local dependency; it is not supplied by the 0.9 dependency above.
 
 Most developers will want to use the Communication Level API and its default implementation which are provided by the `communication` module. Please refer to the [examples](./examples/) for inspiration how to use this crate.
 
+The `cloudevents` feature maps messages to and from Protobuf Event Format
+`CloudEvent`s. Its `CloudEventAttributeValue` and nested `cloud_event` types are
+exported beside `CloudEvent` for use in consumer signatures.
+
 ## Provisional Interfaces
 
 Frame APIs, metadata field codecs and the opt-in fixed ABI are provisional while
@@ -43,6 +47,7 @@ surface; test transports require the explicit `test-util` feature.
 `transport-implementer-api` provides listener admission and bounded quiescence,
 also enabled by `util`. Admission closure, callback completion and retained storage
 remain separate contracts, described in the transport implementation guide.
+Native callback admission never blocks and may run on any callback thread.
 The same implementer feature provides a bounded `RegistrationInbox` and one
 generic async `RegistrationHandler` worker per `Registration`. Storage and tasks
 are created at setup; synchronous pushes use an explicit overflow policy. Stop
