@@ -145,7 +145,7 @@ fn assert_stable_fixture(kind: PayloadContractCaseKind) {
     let agreement = NativeProfileAgreement::new(Arc::new(profile.clone()), &profile).unwrap();
     let fixture = fixtures::stable_owned_fixture_for(case, 17, &agreement).unwrap();
     let metadata =
-        UFrameMetadata::publish(UUri::try_from_parts("fixture", 0x4210, 1, 0x9000).unwrap())
+        UFrameMetadata::publish(UUri::try_from_parts("fixture", 0x0001_4210, 1, 0x9000).unwrap())
             .with_native_payload_identity(fixture.identity)
             .build()
             .unwrap();

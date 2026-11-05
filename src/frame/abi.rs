@@ -159,7 +159,7 @@ pub struct UUriAbi {
 impl Default for UUriAbi {
     fn default() -> Self {
         Self {
-            ue_id: 0,
+            ue_id: 0x0001_0000,
             resource_id: 0,
             ue_version_major: 0,
             authority_name_len: 0,
@@ -689,15 +689,15 @@ mod tests {
     use super::*;
 
     fn topic() -> UUri {
-        UUri::try_from_parts("vehicle", 0x4210, 0x01, 0x9000).expect("topic")
+        UUri::try_from_parts("vehicle", 0x0001_4210, 0x01, 0x9000).expect("topic")
     }
 
     fn method() -> UUri {
-        UUri::try_from_parts("vehicle", 0x4210, 0x01, 0x00b1).expect("method")
+        UUri::try_from_parts("vehicle", 0x0001_4210, 0x01, 0x00b1).expect("method")
     }
 
     fn reply_to() -> UUri {
-        UUri::try_from_parts("cloud", 0x10ab, 0x02, 0x0000).expect("reply-to")
+        UUri::try_from_parts("cloud", 0x0001_10AB, 0x02, 0x0000).expect("reply-to")
     }
 
     #[test]

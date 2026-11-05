@@ -162,7 +162,7 @@ fn agreement() -> NativeProfileAgreement {
 fn definition() -> RouteDefinition {
     RouteDefinition {
         kind: UMessageType::Publish,
-        source: UUri::try_from_wire_parts("allocation", 1, 1, 0x8001).unwrap(),
+        source: UUri::try_from_wire_parts("allocation", 0x0001_0001, 1, 0x8001).unwrap(),
         sink: None,
         priority: None,
         ttl: None,
@@ -292,10 +292,12 @@ fn main() {
     measure("direct_metadata_builder", || {
         for _ in 0..128 {
             std::hint::black_box(
-                UFrameMetadata::publish(UUri::try_from_parts("allocation", 1, 1, 0x8001).unwrap())
-                    .with_native_payload_identity(admission.identity())
-                    .build()
-                    .unwrap(),
+                UFrameMetadata::publish(
+                    UUri::try_from_parts("allocation", 0x0001_0001, 1, 0x8001).unwrap(),
+                )
+                .with_native_payload_identity(admission.identity())
+                .build()
+                .unwrap(),
             );
         }
     });

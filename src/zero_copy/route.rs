@@ -568,7 +568,7 @@ mod tests {
     fn definition(kind: UMessageType) -> RouteDefinition {
         let source = UUri::try_from_wire_parts(
             "sender",
-            1,
+            0x0001_0001,
             1,
             if kind == UMessageType::Response {
                 1
@@ -578,7 +578,7 @@ mod tests {
         )
         .unwrap();
         let sink = (kind == UMessageType::Response)
-            .then(|| UUri::try_from_wire_parts("client", 2, 1, 0).unwrap());
+            .then(|| UUri::try_from_wire_parts("client", 0x0001_0002, 1, 0).unwrap());
         RouteDefinition {
             kind,
             source,
@@ -743,7 +743,7 @@ mod tests {
             ))
             .unwrap();
         let other_route = crate::UFrameMetadata::publish(
-            UUri::try_from_wire_parts("other", 1, 1, 0x8001).unwrap(),
+            UUri::try_from_wire_parts("other", 0x0001_0001, 1, 0x8001).unwrap(),
         )
         .with_native_payload_identity(admission.identity())
         .build()

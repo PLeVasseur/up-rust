@@ -212,7 +212,7 @@ mod tests {
     use crate::{PayloadEncoding, UMessageBuilder, UUri};
 
     fn topic() -> UUri {
-        UUri::try_from_parts("vehicle", 0x4210, 0x01, 0x9000).expect("failed to create topic")
+        UUri::try_from_parts("vehicle", 0x0001_4210, 0x01, 0x9000).expect("failed to create topic")
     }
 
     fn metadata_without_encoding() -> UFrameMetadata {

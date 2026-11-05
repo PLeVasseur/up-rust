@@ -94,7 +94,7 @@ mod tests {
     }
 
     fn metadata() -> UFrameMetadata {
-        let topic = UUri::try_from_parts("vehicle", 0x4210, 0x01, 0x9000).unwrap();
+        let topic = UUri::try_from_parts("vehicle", 0x0001_4210, 0x01, 0x9000).unwrap();
         UFrameMetadata::publish(topic)
             .with_native_payload_identity(
                 StableContainerPayload::<ZeroCopyValue>::identity(&profile()).unwrap(),
@@ -177,7 +177,7 @@ mod tests {
 
     #[test]
     fn loan_spec_rejects_metadata_payload_mismatch() {
-        let topic = UUri::try_from_parts("vehicle", 0x4210, 0x01, 0x9000).unwrap();
+        let topic = UUri::try_from_parts("vehicle", 0x0001_4210, 0x01, 0x9000).unwrap();
         let message = UMessageBuilder::publish(topic).build().unwrap();
         let no_payload =
             crate::frame::metadata::try_project_umessage_to_frame_metadata(&message).unwrap();

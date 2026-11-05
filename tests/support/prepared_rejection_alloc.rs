@@ -196,8 +196,8 @@ fn send_fields() {
             Arc::clone(&core),
             RouteDefinition {
                 kind: UMessageType::Response,
-                source: UUri::try_from_wire_parts("server", 1, 1, 1).unwrap(),
-                sink: Some(UUri::try_from_wire_parts("client", 2, 1, 0).unwrap()),
+                source: UUri::try_from_wire_parts("server", 0x0001_0001, 1, 1).unwrap(),
+                sink: Some(UUri::try_from_wire_parts("client", 0x0001_0002, 1, 0).unwrap()),
                 priority: Some(UPriority::CS4),
                 ttl: None,
                 permission_level: None,
@@ -455,7 +455,10 @@ fn authority_rejections() {
             ("INVALID", UUriPartsError::InvalidAuthorityCharacters),
             ("[v1.xy]", UUriPartsError::UnsupportedHost),
         ] {
-            assert_eq!(UUri::try_from_wire_parts(authority, 1, 1, 0), Err(expected));
+            assert_eq!(
+                UUri::try_from_wire_parts(authority, 0x0001_0001, 1, 0),
+                Err(expected)
+            );
         }
     });
     let invalid: Vec<_> = ["[v1.xy]", "vin/x", "vin?x", "vin#x"]

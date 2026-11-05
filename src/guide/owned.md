@@ -121,7 +121,7 @@ impl UListener for Capture {
 
 tokio::runtime::Builder::new_current_thread().enable_all().build()?.block_on(async {
     let transport = Arc::new(InMemoryOwnedTransport::default());
-    let provider = Arc::new(StaticUriProvider::new("vehicle", 0x1234, 1)?);
+    let provider = Arc::new(StaticUriProvider::new("vehicle", 0x0001_1234, 1)?);
     let endpoint = Endpoint::new(transport, provider.clone());
     let notifier = endpoint.notifier();
     let source = provider.get_resource_uri(0x8001);

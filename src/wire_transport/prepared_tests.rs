@@ -164,7 +164,7 @@ impl PreparedTransportCore for Core {
 }
 
 fn topic(resource: u16) -> UUri {
-    UUri::try_from_wire_parts("vehicle", 0x4210, 1, resource).unwrap()
+    UUri::try_from_wire_parts("vehicle", 0x0001_4210, 1, resource).unwrap()
 }
 fn config() -> RegistrationConfig {
     RegistrationConfig {
@@ -216,11 +216,12 @@ async fn decoded_filter_and_retained_storage_survive_adapter_lifecycle(resource:
         )
         .await
         .unwrap();
-    let wrong =
-        UFrameMetadata::publish(UUri::try_from_wire_parts("other", 0x4210, 1, 0x9000).unwrap())
-            .with_payload_encoding(PayloadEncoding::RAW)
-            .build()
-            .unwrap();
+    let wrong = UFrameMetadata::publish(
+        UUri::try_from_wire_parts("other", 0x0001_4210, 1, 0x9000).unwrap(),
+    )
+    .with_payload_encoding(PayloadEncoding::RAW)
+    .build()
+    .unwrap();
     core.inject(
         &encode::<UProtocolNativeWire>(&wrong),
         Some(b"other authority"),
@@ -255,7 +256,7 @@ async fn sinkless_and_directed_workers_do_not_duplicate_notifications() {
     let publishes = Arc::new(Mutex::new(Vec::new()));
     let notifications = Arc::new(Mutex::new(Vec::new()));
     let source = topic(0x9000);
-    let sink = UUri::try_from_wire_parts("sink", 2, 1, 0).unwrap();
+    let sink = UUri::try_from_wire_parts("sink", 0x0001_0002, 1, 0).unwrap();
     let pubsub = adapter
         .register_header_handler(
             &source,

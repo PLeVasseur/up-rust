@@ -495,7 +495,7 @@ mod tests {
 
     #[tokio::test]
     async fn test_subscribe_invokes_rpc_client() {
-        let topic = UUri::try_from_parts("other", 0xd5a3, 0x01, 0xd3fe).unwrap();
+        let topic = UUri::try_from_parts("other", 0x0001_D5A3, 0x01, 0xd3fe).unwrap();
         let expected_request = SubscriptionRequest {
             topic: Some((&topic).into()).into(),
             ..Default::default()
@@ -550,7 +550,7 @@ mod tests {
 
     #[tokio::test]
     async fn test_unsubscribe_invokes_rpc_client() {
-        let topic = UUri::try_from_parts("other", 0xd5a3, 0x01, 0xd3fe).unwrap();
+        let topic = UUri::try_from_parts("other", 0x0001_D5A3, 0x01, 0xd3fe).unwrap();
         let expected_request = UnsubscribeRequest {
             topic: Some((&topic).into()).into(),
             ..Default::default()
@@ -597,7 +597,7 @@ mod tests {
 
     #[tokio::test]
     async fn test_fetch_subscriptions_invokes_rpc_client() {
-        let topic = UUri::try_from_parts("other", 0xd5a3, 0x01, 0xd3fe).unwrap();
+        let topic = UUri::try_from_parts("other", 0x0001_D5A3, 0x01, 0xd3fe).unwrap();
         let expected_request = FetchSubscriptionsRequest {
             request: Some(Request::Topic((&topic).into())),
             ..Default::default()
@@ -649,7 +649,7 @@ mod tests {
 
     #[tokio::test]
     async fn test_fetch_subscribers_invokes_rpc_client() {
-        let topic = UUri::try_from_parts("other", 0xd5a3, 0x01, 0xd3fe).unwrap();
+        let topic = UUri::try_from_parts("other", 0x0001_D5A3, 0x01, 0xd3fe).unwrap();
         let expected_request = FetchSubscribersRequest {
             topic: Some((&topic).into()).into(),
             ..Default::default()
@@ -698,7 +698,7 @@ mod tests {
 
     #[tokio::test]
     async fn test_register_for_notifications_invokes_rpc_client() {
-        let topic = UUri::try_from_parts("other", 0xd5a3, 0x01, 0xd3fe).unwrap();
+        let topic = UUri::try_from_parts("other", 0x0001_D5A3, 0x01, 0xd3fe).unwrap();
         let expected_request = NotificationsRequest {
             topic: Some((&topic).into()).into(),
             ..Default::default()
@@ -751,7 +751,7 @@ mod tests {
 
     #[tokio::test]
     async fn test_unregister_for_notifications_invokes_rpc_client() {
-        let topic = UUri::try_from_parts("other", 0xd5a3, 0x01, 0xd3fe).unwrap();
+        let topic = UUri::try_from_parts("other", 0x0001_D5A3, 0x01, 0xd3fe).unwrap();
         let expected_request = NotificationsRequest {
             topic: Some((&topic).into()).into(),
             ..Default::default()

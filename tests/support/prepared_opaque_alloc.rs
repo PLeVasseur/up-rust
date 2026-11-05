@@ -52,7 +52,7 @@ impl HeaderHandler<PoolFrame> for Count {
 }
 
 pub(super) fn run(runtime: &Runtime) {
-    let source = UUri::try_from_wire_parts("opaque", 1, 1, 0x8001).unwrap();
+    let source = UUri::try_from_wire_parts("opaque", 0x0001_0001, 1, 0x8001).unwrap();
     let metadata = UFrameMetadata::publish(source.clone())
         .with_payload_encoding(PayloadEncoding::CONTRACT_DEFINED)
         .with_native_type_token(NativeTypeToken::from_u32(0))

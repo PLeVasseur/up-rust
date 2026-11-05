@@ -1126,7 +1126,7 @@ where
 
 fn fixture_metadata(identity: NativePayloadIdentity) -> UFrameMetadata {
     UFrameMetadata::publish(
-        crate::UUri::try_from_parts("payload-contract-fixture", 0x4210, 1, 0x9000)
+        crate::UUri::try_from_parts("payload-contract-fixture", 0x0001_4210, 1, 0x9000)
             .expect("fixture URI is valid"),
     )
     .with_native_payload_identity(identity)

@@ -321,7 +321,7 @@ mod tests {
     #[test_case::test_case(usize::MAX, 8; "alignment addition overflow")]
     fn impossible_allocation_sizes_return_resource_exhausted(length: usize, alignment: usize) {
         let metadata = UFrameMetadata::publish(
-            crate::UUri::try_from_parts("vehicle", 0x4210, 1, 0x9000).unwrap(),
+            crate::UUri::try_from_parts("vehicle", 0x0001_4210, 1, 0x9000).unwrap(),
         )
         .with_payload_encoding(crate::PayloadEncoding::RAW)
         .build()

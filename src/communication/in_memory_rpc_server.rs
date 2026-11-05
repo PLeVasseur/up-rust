@@ -260,14 +260,14 @@ mod tests {
 
     fn new_uri_provider() -> Arc<StaticUriProvider> {
         Arc::new(
-            StaticUriProvider::new("", 0x0005, 0x02)
+            StaticUriProvider::new("", 0x0001_0005, 0x02)
                 .expect("should have been able to create URI provider"),
         )
     }
 
     #[test_case(None, 0x4A10; "for empty origin filter")]
-    #[test_case(Some(UUri::try_from_parts("authority", 0xBF1A, 0x01, 0x0000).unwrap()), 0x4A10; "for specific origin filter")]
-    #[test_case(Some(UUri::try_from_parts("*", 0xFFFF, 0x01, 0x0000).unwrap()), 0x7091; "for wildcard origin filter")]
+    #[test_case(Some(UUri::try_from_parts("authority", 0x0001_BF1A, 0x01, 0x0000).unwrap()), 0x4A10; "for specific origin filter")]
+    #[test_case(Some(UUri::try_from_parts("*", 0x0001_FFFF, 0x01, 0x0000).unwrap()), 0x7091; "for wildcard origin filter")]
     #[tokio::test]
     async fn test_register_endpoint_succeeds(origin_filter: Option<UUri>, resource_id: u16) {
         // GIVEN an RpcServer for a transport
@@ -314,7 +314,7 @@ mod tests {
 
     #[test_case(None, 0x0000; "for resource ID 0")]
     #[test_case(None, 0x8000; "for resource ID out of range")]
-    #[test_case(Some(UUri::try_from_parts("*", 0xFFFF, 0xFF, 0x0001).unwrap()), 0x4A10; "for source filter with invalid resource ID")]
+    #[test_case(Some(UUri::try_from_parts("*", 0x0001_FFFF, 0xFF, 0x0001).unwrap()), 0x4A10; "for source filter with invalid resource ID")]
     #[tokio::test]
     async fn test_register_endpoint_fails(origin_filter: Option<UUri>, resource_id: u16) {
         // GIVEN an RpcServer for a transport
@@ -398,7 +398,7 @@ mod tests {
         let value = b"Hello";
         let message_id = UUID::build();
         let message_id_clone = message_id.clone();
-        let message_source = UUri::try_from("up://localhost/A100/1/0").unwrap();
+        let message_source = UUri::try_from("up://localhost/A100/1/1/0").unwrap();
         let message_source_clone = message_source.clone();
 
         request_handler
@@ -432,7 +432,7 @@ mod tests {
                 Ok(())
             });
         let request_message = UMessageBuilder::request(
-            UUri::try_from("up://localhost/A200/1/7000").unwrap(),
+            UUri::try_from("up://localhost/A200/1/1/7000").unwrap(),
             message_source,
             5_000,
         )
@@ -482,8 +482,8 @@ mod tests {
                 Ok(())
             });
         let request_message = UMessageBuilder::request(
-            UUri::try_from("up://localhost/A200/1/7000").unwrap(),
-            UUri::try_from("up://localhost/A100/1/0").unwrap(),
+            UUri::try_from("up://localhost/A200/1/1/7000").unwrap(),
+            UUri::try_from("up://localhost/A100/1/1/0").unwrap(),
             5_000,
         )
         .with_message_id(message_id)
@@ -544,8 +544,8 @@ mod tests {
                 Ok(())
             });
         let request_message = UMessageBuilder::request(
-            UUri::try_from("up://localhost/A200/1/7000").unwrap(),
-            UUri::try_from("up://localhost/A100/1/0").unwrap(),
+            UUri::try_from("up://localhost/A200/1/1/7000").unwrap(),
+            UUri::try_from("up://localhost/A100/1/1/0").unwrap(),
             // make sure this request times out very quickly
             100,
         )

@@ -177,7 +177,7 @@ fn publish(
         UFrameFieldsMetadataCodec,
         super::agreement(),
     ));
-    let provider = Arc::new(StaticUriProvider::new("allocation", 1, 1).unwrap());
+    let provider = Arc::new(StaticUriProvider::new("allocation", 0x0001_0001, 1).unwrap());
     let topic = provider.get_resource_uri(0x8001);
     let endpoint = Endpoint::new(transport, provider);
     let publisher = endpoint
@@ -258,7 +258,7 @@ fn notify(runtime: &Runtime) {
         UFrameFieldsMetadataCodec,
         super::agreement(),
     ));
-    let provider = Arc::new(StaticUriProvider::new("allocation", 1, 1).unwrap());
+    let provider = Arc::new(StaticUriProvider::new("allocation", 0x0001_0001, 1).unwrap());
     let source = provider.get_resource_uri(0x8002);
     let destination = provider.get_source_uri();
     let endpoint = Endpoint::new(transport, provider);

@@ -127,8 +127,8 @@ impl SubscriptionInfo {
     /// use up_rust::core::usubscription::SubscriptionInfo;
     ///
     /// let subscription_info = SubscriptionInfo::new(
-    ///     UUri::try_from("/A100/1/9000").unwrap(),
-    ///     UUri::try_from("//subscriber/ABCD/1/0").unwrap(),
+    ///     UUri::try_from("/A100/1/1/9000").unwrap(),
+    ///     UUri::try_from("//subscriber/ABCD/1/1/0").unwrap(),
     ///     SubscriptionStatus::Subscribed,
     ///     None,
     ///     None,
@@ -168,7 +168,7 @@ pub enum ResetReason {
 pub fn usubscription_uri(resource_id: u16) -> UUri {
     UUri::try_from_parts(
         "",
-        USUBSCRIPTION_TYPE_ID,
+        0x0001_0000 | USUBSCRIPTION_TYPE_ID,
         USUBSCRIPTION_VERSION_MAJOR,
         resource_id,
     )

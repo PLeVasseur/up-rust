@@ -749,8 +749,8 @@ mod tests {
         (
             core,
             agreement,
-            UUri::try_from_wire_parts("service", 1, 1, 0x42).unwrap(),
-            UUri::try_from_wire_parts("client", 2, 1, 0).unwrap(),
+            UUri::try_from_wire_parts("service", 0x0001_0001, 1, 0x42).unwrap(),
+            UUri::try_from_wire_parts("client", 0x0001_0002, 1, 0).unwrap(),
         )
     }
 
@@ -806,7 +806,7 @@ mod tests {
         assert_eq!(client.in_flight(), 0);
         assert_eq!(server.stats().responded.load(Ordering::Relaxed), 1);
         assert!(server.prepare_client(&reply_to).is_ok());
-        let other = UUri::try_from_wire_parts("other", 3, 1, 0).unwrap();
+        let other = UUri::try_from_wire_parts("other", 0x0001_0003, 1, 0).unwrap();
         assert_eq!(server.prepare_client(&other), Err(SetupError::TableFull));
         drop(client);
         server.stop().await.unwrap();
@@ -949,7 +949,7 @@ mod tests {
     #[tokio::test]
     async fn decoded_destination_is_checked_before_cache_or_handler() {
         let (core, agreement, method, reply_to) = setup();
-        let other_method = UUri::try_from_wire_parts("other", 3, 1, 0x42).unwrap();
+        let other_method = UUri::try_from_wire_parts("other", 0x0001_0003, 1, 0x42).unwrap();
         let requests = Arc::new(
             RegistrationInbox::new(RegistrationConfig {
                 capacity: 1,

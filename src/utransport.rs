@@ -106,7 +106,7 @@ impl StaticUriProvider {
     /// ```rust
     /// use up_rust::{LocalUriProvider, StaticUriProvider};
     ///
-    /// let provider = StaticUriProvider::new("my-vehicle", 0x4210, 0x05).unwrap();
+    /// let provider = StaticUriProvider::new("my-vehicle", 0x0001_4210, 0x05).unwrap();
     /// assert_eq!(provider.get_authority(), "my-vehicle");
     /// ```
     pub fn new(
@@ -152,7 +152,7 @@ impl From<&UUri> for StaticUriProvider {
     /// ```rust
     /// use up_rust::{LocalUriProvider, StaticUriProvider, UUri};
     ///
-    /// let source_uri = UUri::try_from("//my-vehicle/4210/5/1000").unwrap();
+    /// let source_uri = UUri::try_from("//my-vehicle/4210/1/5/1000").unwrap();
     /// let provider = StaticUriProvider::from(&source_uri);
     /// assert_eq!(provider.get_authority(), "my-vehicle");
     /// assert_eq!(provider.get_source_uri(), source_uri.clone_with_resource_id(0x0000));
@@ -692,7 +692,7 @@ mod tests {
 
     #[test]
     fn test_static_uri_provider_get_source() {
-        let provider = StaticUriProvider::new("my-vehicle", 0x4210, 0x05)
+        let provider = StaticUriProvider::new("my-vehicle", 0x0001_4210, 0x05)
             .expect("failed to create URI provider");
         let source_uri = provider.get_source_uri();
         assert_eq!(source_uri.authority_name(), "my-vehicle");
@@ -703,7 +703,7 @@ mod tests {
 
     #[test]
     fn test_static_uri_provider_get_resource() {
-        let provider = StaticUriProvider::new("my-vehicle", 0x4210, 0x05)
+        let provider = StaticUriProvider::new("my-vehicle", 0x0001_4210, 0x05)
             .expect("failed to create URI provider");
         let resource_uri = provider.get_resource_uri(0x1234);
         assert_eq!(resource_uri.authority_name(), "my-vehicle");
@@ -715,7 +715,7 @@ mod tests {
     #[tokio::test]
     async fn test_deref_returns_wrapped_listener() {
         let empty_message = UMessageBuilder::publish(
-            UUri::try_from_parts("my-vehicle", 0x4210, 0x05, 0x9000)
+            UUri::try_from_parts("my-vehicle", 0x0001_4210, 0x05, 0x9000)
                 .expect("failed to create topic"),
         )
         .build()
@@ -733,7 +733,7 @@ mod tests {
     #[tokio::test]
     async fn test_to_inner_returns_reference_to_wrapped_listener() {
         let empty_message = UMessageBuilder::publish(
-            UUri::try_from_parts("my-vehicle", 0x4210, 0x05, 0x9000)
+            UUri::try_from_parts("my-vehicle", 0x0001_4210, 0x05, 0x9000)
                 .expect("failed to create topic"),
         )
         .build()
@@ -751,7 +751,7 @@ mod tests {
     #[tokio::test]
     async fn test_eq_and_hash_are_consistent_for_comparable_listeners_wrapping_same_listener() {
         let empty_message = UMessageBuilder::publish(
-            UUri::try_from_parts("my-vehicle", 0x4210, 0x05, 0x9000)
+            UUri::try_from_parts("my-vehicle", 0x0001_4210, 0x05, 0x9000)
                 .expect("failed to create topic"),
         )
         .build()
@@ -779,7 +779,7 @@ mod tests {
     async fn test_eq_and_hash_are_consistent_for_comparable_listeners_wrapping_different_listeners()
     {
         let empty_message = UMessageBuilder::publish(
-            UUri::try_from_parts("my-vehicle", 0x4210, 0x05, 0x9000)
+            UUri::try_from_parts("my-vehicle", 0x0001_4210, 0x05, 0x9000)
                 .expect("failed to create topic"),
         )
         .build()
@@ -865,31 +865,31 @@ mod tests {
     }
 
     #[test_case::test_case(
-        "//vehicle1/AA/1/FFFF",
-        Some("//vehicle2/BB/1/FFFF");
+        "//vehicle1/AA/1/1/FFFF",
+        Some("//vehicle2/BB/1/1/FFFF");
         "source and sink both having wildcard resource ID")]
     #[test_case::test_case(
-        "//vehicle1/AA/1/9000",
-        Some("//vehicle2/BB/1/0");
+        "//vehicle1/AA/1/1/9000",
+        Some("//vehicle2/BB/1/1/0");
         "sending notification")]
     #[test_case::test_case(
-        "//vehicle1/AA/1/0",
-        Some("//vehicle2/BB/1/1");
+        "//vehicle1/AA/1/1/0",
+        Some("//vehicle2/BB/1/1/1");
         "RPC method invocation")]
     #[test_case::test_case(
-        "//vehicle1/AA/1/FFFF",
-        Some("//vehicle2/BB/1/1");
+        "//vehicle1/AA/1/1/FFFF",
+        Some("//vehicle2/BB/1/1/1");
         "receiving RPC requests using wildcard resource ID")]
     #[test_case::test_case(
-        "//vehicle1/AA/1/0",
-        Some("//vehicle2/BB/1/1");
+        "//vehicle1/AA/1/1/0",
+        Some("//vehicle2/BB/1/1/1");
         "receiving RPC requests using default resource ID")]
     #[test_case::test_case(
-        "//vehicle1/AA/1/9000",
+        "//vehicle1/AA/1/1/9000",
         None;
         "receiving events published to specific topic")]
     #[test_case::test_case(
-        "//vehicle1/AA/1/FFFF",
+        "//vehicle1/AA/1/1/FFFF",
         None;
         "receiving events published to any topic")]
     fn test_verify_filter_criteria_succeeds_for(source: &str, sink: Option<&str>) {
@@ -899,15 +899,15 @@ mod tests {
     }
 
     #[test_case::test_case(
-        UUri::from_str("//vehicle1/AA/1/0").unwrap(),
-        Some(UUri::from_str("//vehicle2/BB/1/0").unwrap());
+        UUri::from_str("//vehicle1/AA/1/1/0").unwrap(),
+        Some(UUri::from_str("//vehicle2/BB/1/1/0").unwrap());
         "source and sink both having resource ID 0")]
     #[test_case::test_case(
-        UUri::from_str("//vehicle1/AA/1/CC").unwrap(),
-        Some(UUri::from_str("//vehicle2/BB/1/1A").unwrap());
+        UUri::from_str("//vehicle1/AA/1/1/CC").unwrap(),
+        Some(UUri::from_str("//vehicle2/BB/1/1/1A").unwrap());
         "sink is RPC but source has invalid resource ID")]
     #[test_case::test_case(
-        UUri::from_str("//vehicle1/AA/1/CC").unwrap(),
+        UUri::from_str("//vehicle1/AA/1/1/CC").unwrap(),
         None;
         "sink is empty but source has non-topic resource ID")]
     fn test_verify_filter_criteria_fails_for(source_filter: UUri, sink_filter: Option<UUri>) {
@@ -928,11 +928,11 @@ mod owned_transport_tests {
     use crate::{PayloadEncoding, UFrameMetadata, UMessageBuilder};
 
     fn topic() -> UUri {
-        UUri::try_from_parts("vehicle", 0x4210, 0x01, 0x9000).expect("failed to create topic")
+        UUri::try_from_parts("vehicle", 0x0001_4210, 0x01, 0x9000).expect("failed to create topic")
     }
 
     fn invalid_source_filter() -> UUri {
-        UUri::from_str("//vehicle/4210/1/10").expect("invalid test URI")
+        UUri::from_str("//vehicle/4210/1/1/10").expect("invalid test URI")
     }
 
     fn metadata_with_encoding() -> UFrameMetadata {

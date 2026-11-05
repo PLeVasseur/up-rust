@@ -9,7 +9,7 @@ empty payload, and the carrier checks it against the declared encoding.
 use up_rust::{PayloadEncoding, UFrameMetadata, UUri};
 use up_rust::frame::codec::{encode_frame_metadata_fields, decode_frame_metadata_fields};
 
-let topic = UUri::try_from_parts("vehicle", 0x1234, 1, 0x8001)?;
+let topic = UUri::try_from_parts("vehicle", 0x0001_1234, 1, 0x8001)?;
 let metadata = UFrameMetadata::publish(topic)
     .with_payload_encoding(PayloadEncoding::RAW)
     .build()?;
@@ -98,7 +98,7 @@ Presence is separate from its numeric value. A token requires a payload encoding
 use up_rust::{NativeTypeToken, PayloadEncoding, UFrameMetadata, UFrameMetadataError, UUri};
 use up_rust::frame::codec::{decode_frame_metadata_fields, encode_frame_metadata_fields};
 
-let topic = UUri::try_from_parts("vehicle", 0x1234, 1, 0x8001)?;
+let topic = UUri::try_from_parts("vehicle", 0x0001_1234, 1, 0x8001)?;
 let metadata = UFrameMetadata::publish(topic)
     .with_payload_encoding(PayloadEncoding::CONTRACT_DEFINED)
     .with_native_type_token(NativeTypeToken::from_u32(u32::MAX)).build()?;

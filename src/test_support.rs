@@ -4,7 +4,7 @@
 
 #[cfg(feature = "owned-frame-transport")]
 pub(crate) fn topic(resource: u16) -> crate::UUri {
-    crate::UUri::try_from_parts("vehicle", 0x4210, 1, resource).expect("fixture topic")
+    crate::UUri::try_from_parts("vehicle", 0x0001_4210, 1, resource).expect("fixture topic")
 }
 
 #[cfg(feature = "zero-copy-transport")]

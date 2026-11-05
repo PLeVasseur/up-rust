@@ -115,6 +115,10 @@ The zero-copy feature also stores URI authority bytes inline. The
 [URI guide](src/guide/uris.md) explains the typed, allocation-free rejection API
 and the default build's retained `String` storage. Every build rejects IPvFuture
 authorities and authority arguments with trailing paths, queries or fragments.
+Upstream protobuf type/instance identifiers are checked separately on receipt;
+the existing packed Rust parts API and inline layout remain unchanged.
+URI text now uses `/type/instance/version/resource`; migrate legacy three-segment
+configuration strings and zero-instance defaults as described in the URI guide.
 The same feature exposes `TxHeaderParts`, caller-buffer header writers and
 `parse_header` for allocation-free in-place metadata validation. `RxHeader`
 borrows token/traceparent bytes from the validated input; payload admission remains

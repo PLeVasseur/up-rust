@@ -2,17 +2,17 @@
   {
     "file": "classic-publish-raw-payload.uattributes-classic.hex",
     "fixture": "classic-publish-raw-payload",
-    "hex_sha256": "f45399fdab206886c0bde7cb0a3d0276f0096f9d19738ece7aa6ee32e1c7340e",
-    "len": 45,
+    "hex_sha256": "29d7e6c67226cb951870599a7294a695bd90710d2364dc2a91b968808af963b9",
+    "len": 47,
     "profile": "uattributes-classic",
-    "sha256": "c6ee6338a14edf233c52d5569756b081bbaf82c40eb09aefe5cfb56349cb1bce"
+    "sha256": "dbbca1858e687b1895ccf9660814e8b0cf064fd004eeb4758a2b6e3a93c977ed"
   },
   {
     "file": "classic-publish-private-use-xcdr2-payload.uattributes-classic.hex",
     "fixture": "classic-publish-private-use-xcdr2-payload",
-    "hex_sha256": "eba8a37e540e1b0b9a775688dc10ed65bb3cdfbe638c6f1a3775eeffd6eb1c6c",
-    "len": 47,
+    "hex_sha256": "26a520e15eb05c0c4995e0acbac65fbfbbc8251446b3c6ea8095d24172e59161",
+    "len": 49,
     "profile": "uattributes-classic",
-    "sha256": "edf44a0224ec5fb60192e2965777f5694288b1d14b48e550cb26e493d68d7021"
+    "sha256": "45cb913e0c80ced792b1f9df1c3637517464e84d9d8a89535d8994528bf6328b"
   }
 ]

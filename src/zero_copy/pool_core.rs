@@ -635,7 +635,7 @@ mod tests {
     }
 
     fn source() -> UUri {
-        UUri::try_from_wire_parts("pool-core", 1, 1, 0x8001).unwrap()
+        UUri::try_from_wire_parts("pool-core", 0x0001_0001, 1, 0x8001).unwrap()
     }
     fn limits() -> RouteLimits {
         RouteLimits {

@@ -494,14 +494,14 @@ mod tests {
         }
     }
     fn source(resource: u16) -> UUri {
-        UUri::try_from_wire_parts("sender", 1, 1, resource).unwrap()
+        UUri::try_from_wire_parts("sender", 0x0001_0001, 1, resource).unwrap()
     }
     fn raw(encoding: Option<u32>, payload: Option<&[u8]>, resource: u16, sink: bool) -> Raw {
         let admission =
             HeaderAdmission::for_wire::<UProtocolNativeWire>(HeaderLimits::default()).unwrap();
         let id = UUID::build();
         let source = source(resource);
-        let sink = sink.then(|| UUri::try_from_wire_parts("receiver", 2, 1, 0).unwrap());
+        let sink = sink.then(|| UUri::try_from_wire_parts("receiver", 0x0001_0002, 1, 0).unwrap());
         let fields = TxHeaderParts {
             kind: if sink.is_some() {
                 UMessageType::Notification

@@ -225,8 +225,8 @@ async fn owned_receive_and_listener_reject_identity_mismatch(
 async fn sinkless_owned_listener_does_not_duplicate_notifications() {
     use crate::UOwnedTransport;
     let transport = RecordingCore::default().into_protobuf_transport();
-    let source = UUri::try_from_parts("source", 0x4210, 1, 0x8001).unwrap();
-    let sink = UUri::try_from_parts("sink", 0x4210, 1, 0).unwrap();
+    let source = UUri::try_from_parts("source", 0x0001_4210, 1, 0x8001).unwrap();
+    let sink = UUri::try_from_parts("sink", 0x0001_4210, 1, 0).unwrap();
     let publishes = Arc::new(RecordingOwnedListener::default());
     let notifications = Arc::new(RecordingOwnedListener::default());
     transport
@@ -646,7 +646,7 @@ async fn owned_receive_uses_exact_core_filter_for_exact_source_filter() {
         .unwrap()
         .push_back(raw_frame_for_topic(0x9000, b"owned"));
     let transport = core.into_native_prefix_wire_transport(UProtocolNativeWire);
-    let source_filter = UUri::try_from_parts("vehicle", 0x4210, 0x01, 0x9000).unwrap();
+    let source_filter = UUri::try_from_parts("vehicle", 0x0001_4210, 0x01, 0x9000).unwrap();
 
     let frame = transport
         .receive_validated_owned(&source_filter, None)
@@ -670,7 +670,7 @@ async fn owned_receive_preserves_partial_core_source_filter() {
         .unwrap()
         .push_back(raw_frame_for_topic(0x9000, b"owned"));
     let transport = core.into_native_prefix_wire_transport(UProtocolNativeWire);
-    let source_filter = UUri::try_from_parts("vehicle", 0x4210, 0x01, u16::MAX).unwrap();
+    let source_filter = UUri::try_from_parts("vehicle", 0x0001_4210, 0x01, u16::MAX).unwrap();
 
     let frame = transport
         .receive_validated_owned(&source_filter, None)
@@ -687,8 +687,8 @@ async fn owned_receive_preserves_partial_core_source_filter() {
 
 #[test]
 fn selected_wire_core_source_filter_preserves_exact_and_partial_patterns() {
-    let exact = UUri::try_from_parts("vehicle", 0x4210, 0x01, 0x9000).unwrap();
-    let wildcard = UUri::try_from_parts("vehicle", 0x4210, 0x01, u16::MAX).unwrap();
+    let exact = UUri::try_from_parts("vehicle", 0x0001_4210, 0x01, 0x9000).unwrap();
+    let wildcard = UUri::try_from_parts("vehicle", 0x0001_4210, 0x01, u16::MAX).unwrap();
 
     assert_eq!(selected_wire_core_source_filter_for(&exact), exact);
     assert_eq!(selected_wire_core_source_filter_for(&wildcard), wildcard);
@@ -700,7 +700,7 @@ fn selected_wire_core_source_filter_preserves_exact_and_partial_patterns() {
 #[tokio::test]
 async fn owned_listener_registration_and_removal_use_the_same_core_filter(resource: u16) {
     let transport = RecordingCore::default().into_native_prefix_wire_transport(UProtocolNativeWire);
-    let source = UUri::try_from_parts("vehicle", 0x4210, 1, resource).unwrap();
+    let source = UUri::try_from_parts("vehicle", 0x0001_4210, 1, resource).unwrap();
     let listener = Arc::new(RecordingOwnedListener::default());
     transport
         .register_validated_owned_listener(&source, None, listener.clone())

@@ -156,7 +156,7 @@ presence produces `UMessageError::PayloadError`.
 ```rust
 use up_rust::{PayloadEncoding, UAttributesError, UMessageBuilder, UMessageError, UUri};
 
-let topic = UUri::try_from_parts("vehicle", 0x1234, 1, 0x8001)?;
+let topic = UUri::try_from_parts("vehicle", 0x0001_1234, 1, 0x8001)?;
 let present = UMessageBuilder::publish(topic.clone())
     .build_with_payload(Vec::new(), PayloadEncoding::CONTRACT_DEFINED)?;
 assert_eq!(present.payload_encoding(), Some(PayloadEncoding::CONTRACT_DEFINED));

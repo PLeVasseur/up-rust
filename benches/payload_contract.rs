@@ -171,7 +171,7 @@ fn stable_encoding(profile: &NativeProfileAgreement) -> PayloadEncoding {
 
 fn payload_metadata(profile: &NativeProfileAgreement) -> UFrameMetadata {
     UFrameMetadata::publish(
-        UUri::try_from_parts("payload-contract-bench", 0x4210, 1, 0x9000)
+        UUri::try_from_parts("payload-contract-bench", 0x0001_4210, 1, 0x9000)
             .expect("benchmark URI is valid"),
     )
     .with_native_payload_identity(
@@ -288,7 +288,7 @@ fn main() {
     );
     let definition = RouteDefinition {
         kind: UMessageType::Publish,
-        source: UUri::try_from_parts("payload-contract-bench", 0x4210, 1, 0x9000).unwrap(),
+        source: UUri::try_from_parts("payload-contract-bench", 0x0001_4210, 1, 0x9000).unwrap(),
         sink: None,
         priority: None,
         ttl: None,
@@ -380,7 +380,7 @@ fn main() {
         });
         measure("umessage_projection", 0, 2, || {
             let mut builder = UMessageBuilder::publish(
-                UUri::try_from_parts("payload-contract-bench", 0x4210, 1, 0x9000)
+                UUri::try_from_parts("payload-contract-bench", 0x0001_4210, 1, 0x9000)
                     .expect("benchmark URI is valid"),
             );
             let message = builder

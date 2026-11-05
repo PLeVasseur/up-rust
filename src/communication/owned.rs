@@ -1137,7 +1137,7 @@ mod tests {
     }
 
     fn uri_provider() -> Arc<StaticUriProvider> {
-        Arc::new(StaticUriProvider::new("", 0x0005, 0x02).expect("uri provider"))
+        Arc::new(StaticUriProvider::new("", 0x0001_0005, 0x02).expect("uri provider"))
     }
 
     fn method_uri() -> UUri {
@@ -1573,7 +1573,7 @@ mod selected_wire_tests {
     }
 
     fn uri_provider() -> Arc<crate::StaticUriProvider> {
-        Arc::new(crate::StaticUriProvider::new("", 0x0005, 0x02).expect("uri provider"))
+        Arc::new(crate::StaticUriProvider::new("", 0x0001_0005, 0x02).expect("uri provider"))
     }
 
     #[tokio::test]

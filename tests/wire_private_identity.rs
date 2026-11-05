@@ -13,7 +13,7 @@ const VENDOR_A: WireIdentity = WireIdentity::new("vendor-a.production.frame", 0x
 const VENDOR_B: WireIdentity = WireIdentity::new("vendor-b.production.frame", 0x8A00);
 
 fn metadata() -> UFrameMetadata {
-    UFrameMetadata::publish(UUri::try_from_parts("vehicle", 0x4210, 1, 0x9000).unwrap())
+    UFrameMetadata::publish(UUri::try_from_parts("vehicle", 0x0001_4210, 1, 0x9000).unwrap())
         .build()
         .unwrap()
 }

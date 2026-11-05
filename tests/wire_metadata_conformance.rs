@@ -50,7 +50,7 @@ impl UWire for WrongPayloadFamily {
 }
 
 fn topic() -> UUri {
-    UUri::try_from_parts("vehicle", 0x4210, 0x01, 0x9000).expect("topic")
+    UUri::try_from_parts("vehicle", 0x0001_4210, 0x01, 0x9000).expect("topic")
 }
 
 fn metadata_without_payload() -> UFrameMetadata {

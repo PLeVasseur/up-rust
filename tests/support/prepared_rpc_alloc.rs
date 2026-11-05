@@ -160,25 +160,25 @@ fn setup(slots: usize) -> (Arc<PoolCore>, NativeProfileAgreement, UUri) {
     (
         core,
         agreement,
-        UUri::try_from_wire_parts("service", 1, 1, 0x42).unwrap(),
+        UUri::try_from_wire_parts("service", 0x0001_0001, 1, 0x42).unwrap(),
     )
 }
 
-fn reply_to(id: u32) -> UUri {
-    UUri::try_from_wire_parts("client", id, 1, 0).unwrap()
+fn reply_to(entity_type_id: u16) -> UUri {
+    UUri::try_from_wire_parts("client", 0x0001_0000 | u32::from(entity_type_id), 1, 0).unwrap()
 }
 
 fn client(
     core: &Arc<PoolCore>,
     agreement: &NativeProfileAgreement,
     method: &UUri,
-    id: u32,
+    entity_type_id: u16,
     ttl: Duration,
 ) -> Client {
     ready(Client::new(
         Arc::clone(core),
         agreement.clone(),
-        reply_to(id),
+        reply_to(entity_type_id),
         method.clone(),
         RpcClientConfig {
             max_in_flight: 1,

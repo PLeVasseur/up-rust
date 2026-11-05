@@ -97,7 +97,7 @@ fn stored_vectors_are_complete_hash_bound_and_semantically_valid() {
                 .identity_for_encoding(PayloadEncoding::private_use(0xF001))
                 .unwrap();
             let metadata = UFrameMetadata::publish(
-                UUri::try_from_parts("fixture", 0x4210, 1, 0x9000).unwrap(),
+                UUri::try_from_parts("fixture", 0x0001_4210, 1, 0x9000).unwrap(),
             )
             .with_native_payload_identity(identity)
             .build()

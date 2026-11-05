@@ -293,11 +293,14 @@ mod tests {
     use crate::{utransport::MockTransport, StaticUriProvider, UMessageBuilder, UPriority, UUri};
 
     fn new_uri_provider() -> Arc<StaticUriProvider> {
-        Arc::new(StaticUriProvider::new("", 0x0005, 0x02).expect("failed to create URI provider"))
+        Arc::new(
+            StaticUriProvider::new("", 0x0001_0005, 0x02).expect("failed to create URI provider"),
+        )
     }
 
     fn service_method_uri() -> UUri {
-        UUri::try_from_parts("", 0x0001, 0x01, 0x1000).expect("failed to create service method URI")
+        UUri::try_from_parts("", 0x0001_0001, 0x01, 0x1000)
+            .expect("failed to create service method URI")
     }
 
     #[tokio::test]

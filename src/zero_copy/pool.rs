@@ -359,7 +359,7 @@ mod tests {
     use crate::{parse_header, HeaderLimits, PayloadEncoding, UFrameMetadata, UUri};
 
     fn metadata() -> UFrameMetadata {
-        UFrameMetadata::publish(UUri::try_from_wire_parts("pool", 1, 1, 0x8001).unwrap())
+        UFrameMetadata::publish(UUri::try_from_wire_parts("pool", 0x0001_0001, 1, 0x8001).unwrap())
             .with_token("secret-token")
             .with_payload_encoding(PayloadEncoding::RAW)
             .build()

@@ -137,7 +137,7 @@ mod tests {
         let mut listener = MockUListener::new();
         listener.expect_on_receive().once().return_const(());
         let listener_ref = Arc::new(listener);
-        let uri_provider = StaticUriProvider::new("my-vehicle", 0x100d, 0x02)
+        let uri_provider = StaticUriProvider::new("my-vehicle", 0x0001_100D, 0x02)
             .expect("failed to create URI provider");
         let transport = LocalTransport::default();
 
@@ -180,7 +180,7 @@ mod tests {
         let mut listener = MockUListener::new();
         listener.expect_on_receive().never().return_const(());
         let listener_ref = Arc::new(listener);
-        let uri_provider = StaticUriProvider::new("my-vehicle", 0x100d, 0x02)
+        let uri_provider = StaticUriProvider::new("my-vehicle", 0x0001_100D, 0x02)
             .expect("failed to create URI provider");
         let transport = LocalTransport::default();
 
@@ -223,7 +223,7 @@ mod tests {
         let mut listener = MockUListener::new();
         listener.expect_on_receive().once().return_const(());
         let listener_ref = Arc::new(listener);
-        let uri_provider = StaticUriProvider::new("my-vehicle", 0x100d, 0x02)
+        let uri_provider = StaticUriProvider::new("my-vehicle", 0x0001_100D, 0x02)
             .expect("failed to create URI provider");
         let topic = uri_provider.get_resource_uri(RESOURCE_ID);
         let transport = LocalTransport::default();
@@ -250,7 +250,7 @@ mod tests {
     #[tokio::test]
     async fn test_register_listener_rejects_invalid_filters() {
         let listener = Arc::new(MockUListener::new());
-        let uri_provider = StaticUriProvider::new("my-vehicle", 0x100d, 0x02)
+        let uri_provider = StaticUriProvider::new("my-vehicle", 0x0001_100D, 0x02)
             .expect("failed to create URI provider");
         let invalid_source_filter = uri_provider.get_resource_uri(0x0001);
         let transport = LocalTransport::default();
@@ -266,7 +266,7 @@ mod tests {
     #[tokio::test]
     async fn test_unregister_listener_rejects_invalid_filters() {
         let listener = Arc::new(MockUListener::new());
-        let uri_provider = StaticUriProvider::new("my-vehicle", 0x100d, 0x02)
+        let uri_provider = StaticUriProvider::new("my-vehicle", 0x0001_100D, 0x02)
             .expect("failed to create URI provider");
         let invalid_source_filter = uri_provider.get_resource_uri(0x0001);
         let transport = LocalTransport::default();

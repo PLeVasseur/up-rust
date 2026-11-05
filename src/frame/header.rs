@@ -712,9 +712,9 @@ mod tests {
     const PREFIX: &[u8] = b"agreed-prefix";
 
     fn metadata(seed: usize) -> UFrameMetadata {
-        let topic = UUri::try_from_wire_parts("sensor", 0x1234, 1, 0x8001).unwrap();
-        let method = UUri::try_from_wire_parts("service", 0x4567, 2, 0x42).unwrap();
-        let reply = UUri::try_from_wire_parts("client", 0x6789, 3, 0).unwrap();
+        let topic = UUri::try_from_wire_parts("sensor", 0x0001_1234, 1, 0x8001).unwrap();
+        let method = UUri::try_from_wire_parts("service", 0x0001_4567, 2, 0x42).unwrap();
+        let reply = UUri::try_from_wire_parts("client", 0x0001_6789, 3, 0).unwrap();
         let mut builder = match seed % 4 {
             0 => UFrameMetadata::publish(topic),
             1 => UFrameMetadata::notification(topic, reply),

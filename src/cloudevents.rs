@@ -449,10 +449,10 @@ mod tests {
     use super::*;
 
     const MESSAGE_ID: &str = "00000000-0001-7000-8010-101010101a1a";
-    const TOPIC: &str = "//my-vehicle/A81B/1/A9BA";
-    const METHOD: &str = "//my-vehicle/A000/2/1";
-    const REPLY_TO: &str = "//my-vehicle/A81B/1/0";
-    const DESTINATION: &str = "//my-vehicle/A000/2/0";
+    const TOPIC: &str = "//my-vehicle/A81B/1/1/A9BA";
+    const METHOD: &str = "//my-vehicle/A000/1/2/1";
+    const REPLY_TO: &str = "//my-vehicle/A81B/1/1/0";
+    const DESTINATION: &str = "//my-vehicle/A000/1/2/0";
     const PERMISSION_LEVEL: u32 = 5;
     const PRIORITY: UPriority = UPriority::CS4;
     const TTL: u32 = 15_000;

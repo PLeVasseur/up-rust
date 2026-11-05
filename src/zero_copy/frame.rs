@@ -435,12 +435,13 @@ mod tests {
     }
 
     fn frame(admission: &RxAdmission<Value>, identity: NativePayloadIdentity) -> TestFrame {
-        let metadata =
-            UFrameMetadata::publish(UUri::try_from_wire_parts("source", 1, 1, 0x8001).unwrap())
-                .with_native_payload_identity(identity)
-                .with_token("borrowed-token")
-                .build()
-                .unwrap();
+        let metadata = UFrameMetadata::publish(
+            UUri::try_from_wire_parts("source", 0x0001_0001, 1, 0x8001).unwrap(),
+        )
+        .with_native_payload_identity(identity)
+        .with_token("borrowed-token")
+        .build()
+        .unwrap();
         let context =
             UWireMetadataContext::from_wire::<StableContainerWire, UFrameFieldsMetadataCodec>();
         let metadata = UFrameFieldsMetadataCodec

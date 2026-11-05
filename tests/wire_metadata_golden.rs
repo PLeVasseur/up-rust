@@ -62,15 +62,15 @@ fn fixed_uuid(seq: u64) -> UUID {
 }
 
 fn topic() -> UUri {
-    UUri::try_from_parts("vehicle", 0x4210, 0x01, 0x9000).expect("topic")
+    UUri::try_from_parts("vehicle", 0x0001_4210, 0x01, 0x9000).expect("topic")
 }
 
 fn method() -> UUri {
-    UUri::try_from_parts("vehicle", 0x4210, 0x01, 0x0007).expect("method")
+    UUri::try_from_parts("vehicle", 0x0001_4210, 0x01, 0x0007).expect("method")
 }
 
 fn reply_to() -> UUri {
-    UUri::try_from_parts("cloud", 0x0042, 0x01, 0x0000).expect("reply-to")
+    UUri::try_from_parts("cloud", 0x0001_0042, 0x01, 0x0000).expect("reply-to")
 }
 
 fn project(message: &up_rust::UMessage) -> UFrameMetadata {

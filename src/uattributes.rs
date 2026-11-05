@@ -105,7 +105,7 @@ impl UAttributes {
     /// use up_rust::{UMessageBuilder, UMessageType, UUri};
     ///
     /// # fn main() -> Result<(), Box<dyn std::error::Error>> {
-    /// let topic = UUri::try_from("//my-vehicle/D45/23/A001")?;
+    /// let topic = UUri::try_from("//my-vehicle/D45/1/23/A001")?;
     /// let msg = UMessageBuilder::publish(topic).build()?;
     /// let attribs = msg.attributes();
     /// assert_eq!(attribs.type_(), UMessageType::Publish);
@@ -125,7 +125,7 @@ impl UAttributes {
     /// use up_rust::{UMessageBuilder, UMessageType, UUri, UUID};
     ///
     /// # fn main() -> Result<(), Box<dyn std::error::Error>> {
-    /// let topic = UUri::try_from("//my-vehicle/D45/23/A001")?;
+    /// let topic = UUri::try_from("//my-vehicle/D45/1/23/A001")?;
     /// let msg_id = UUID::build();
     /// let msg = UMessageBuilder::publish(topic).with_message_id(msg_id.clone()).build()?;
     /// let attribs = msg.attributes();
@@ -146,7 +146,7 @@ impl UAttributes {
     /// use up_rust::{UMessageBuilder, UMessageType, UUri};
     ///
     /// # fn main() -> Result<(), Box<dyn std::error::Error>> {
-    /// let topic = UUri::try_from("//my-vehicle/D45/23/A001")?;
+    /// let topic = UUri::try_from("//my-vehicle/D45/1/23/A001")?;
     /// let msg = UMessageBuilder::publish(topic.clone()).build()?;
     /// let attribs = msg.attributes();
     /// assert_eq!(attribs.source(), &topic);
@@ -166,8 +166,8 @@ impl UAttributes {
     /// use up_rust::{UMessageBuilder, UMessageType, UUri};
     ///
     /// # fn main() -> Result<(), Box<dyn std::error::Error>> {
-    /// let origin = UUri::try_from("//my-vehicle/D45/23/A001")?;
-    /// let dest = UUri::try_from("//other-vehicle/D10/3/0")?;
+    /// let origin = UUri::try_from("//my-vehicle/D45/1/23/A001")?;
+    /// let dest = UUri::try_from("//other-vehicle/D10/1/3/0")?;
     /// let msg = UMessageBuilder::notification(origin, dest.clone()).build()?;
     /// let attribs = msg.attributes();
     /// assert_eq!(attribs.sink(), Some(&dest));
@@ -191,8 +191,8 @@ impl UAttributes {
     /// use up_rust::{UMessageBuilder, UMessageType, UUri};
     ///
     /// # fn main() -> Result<(), Box<dyn std::error::Error>> {
-    /// let origin = UUri::try_from("//my-vehicle/D45/23/A001")?;
-    /// let dest = UUri::try_from("//other-vehicle/D10/3/0")?;
+    /// let origin = UUri::try_from("//my-vehicle/D45/1/23/A001")?;
+    /// let dest = UUri::try_from("//other-vehicle/D10/1/3/0")?;
     /// let msg = UMessageBuilder::notification(origin, dest.clone()).build()?;
     /// let attribs = msg.attributes();
     /// assert_eq!(attribs.sink_unchecked(), &dest);
@@ -212,7 +212,7 @@ impl UAttributes {
     /// use up_rust::{UMessageBuilder, UMessageType, UPriority, UUri};
     ///
     /// # fn main() -> Result<(), Box<dyn std::error::Error>> {
-    /// let topic = UUri::try_from("//my-vehicle/D45/23/A001")?;
+    /// let topic = UUri::try_from("//my-vehicle/D45/1/23/A001")?;
     /// let msg = UMessageBuilder::publish(topic).with_priority(UPriority::CS3).build()?;
     /// let attribs = msg.attributes();
     /// assert_eq!(attribs.priority(), Some(UPriority::CS3));
@@ -236,7 +236,7 @@ impl UAttributes {
     /// use up_rust::{UMessageBuilder, UMessageType, UPriority, UUri};
     ///
     /// # fn main() -> Result<(), Box<dyn std::error::Error>> {
-    /// let topic = UUri::try_from("//my-vehicle/D45/23/A001")?;
+    /// let topic = UUri::try_from("//my-vehicle/D45/1/23/A001")?;
     /// let msg = UMessageBuilder::publish(topic).with_priority(UPriority::CS3).build()?;
     /// let attribs = msg.attributes();
     /// assert_eq!(attribs.priority_unchecked(), UPriority::CS3);
@@ -256,8 +256,8 @@ impl UAttributes {
     /// use up_rust::{UCode, UMessageBuilder, UMessageType, UUID, UUri};
     ///
     /// # fn main() -> Result<(), Box<dyn std::error::Error>> {
-    /// let invoked_method = UUri::try_from("//my-vehicle/D45/2/101")?;
-    /// let reply_to = UUri::try_from("//other-vehicle/D10/3/0")?;
+    /// let invoked_method = UUri::try_from("//my-vehicle/D45/1/2/101")?;
+    /// let reply_to = UUri::try_from("//other-vehicle/D10/1/3/0")?;
     /// let msg = UMessageBuilder::response(reply_to, UUID::build(), invoked_method)
     ///   .with_comm_status(UCode::Ok)
     ///   .build()?;
@@ -283,8 +283,8 @@ impl UAttributes {
     /// use up_rust::{UCode, UMessageBuilder, UMessageType, UUID, UUri};
     ///
     /// # fn main() -> Result<(), Box<dyn std::error::Error>> {
-    /// let invoked_method = UUri::try_from("//my-vehicle/D45/2/101")?;
-    /// let reply_to = UUri::try_from("//other-vehicle/D10/3/0")?;
+    /// let invoked_method = UUri::try_from("//my-vehicle/D45/1/2/101")?;
+    /// let reply_to = UUri::try_from("//other-vehicle/D10/1/3/0")?;
     /// let msg = UMessageBuilder::response(reply_to, UUID::build(), invoked_method)
     ///   .with_comm_status(UCode::Internal)
     ///   .build()?;
@@ -310,8 +310,8 @@ impl UAttributes {
     /// use up_rust::{UMessageBuilder, UUri};
     ///
     /// # fn main() -> Result<(), Box<dyn std::error::Error>> {
-    /// let invoked_method = UUri::try_from("//my-vehicle/D45/2/101")?;
-    /// let reply_to = UUri::try_from("//other-vehicle/D10/3/0")?;
+    /// let invoked_method = UUri::try_from("//my-vehicle/D45/1/2/101")?;
+    /// let reply_to = UUri::try_from("//other-vehicle/D10/1/3/0")?;
     /// let msg = UMessageBuilder::request(invoked_method, reply_to, 5000)
     ///   .build()?;
     /// let attribs = msg.attributes();
@@ -340,8 +340,8 @@ impl UAttributes {
     /// use up_rust::{UMessageBuilder, UUri};
     ///
     /// # fn main() -> Result<(), Box<dyn std::error::Error>> {
-    /// let invoked_method = UUri::try_from("//my-vehicle/D45/2/101")?;
-    /// let reply_to = UUri::try_from("//other-vehicle/D10/3/0")?;
+    /// let invoked_method = UUri::try_from("//my-vehicle/D45/1/2/101")?;
+    /// let reply_to = UUri::try_from("//other-vehicle/D10/1/3/0")?;
     /// let msg = UMessageBuilder::request(invoked_method, reply_to, 5000)
     ///   .build()?;
     /// let attribs = msg.attributes();
@@ -362,8 +362,8 @@ impl UAttributes {
     /// use up_rust::{UMessageBuilder, UUri};
     ///
     /// # fn main() -> Result<(), Box<dyn std::error::Error>> {
-    /// let invoked_method = UUri::try_from("//my-vehicle/D45/2/101")?;
-    /// let reply_to = UUri::try_from("//other-vehicle/D10/3/0")?;
+    /// let invoked_method = UUri::try_from("//my-vehicle/D45/1/2/101")?;
+    /// let reply_to = UUri::try_from("//other-vehicle/D10/1/3/0")?;
     /// let msg = UMessageBuilder::request(invoked_method, reply_to, 5000)
     ///   .with_permission_level(3)
     ///   .build()?;
@@ -386,8 +386,8 @@ impl UAttributes {
     ///
     /// # fn main() -> Result<(), Box<dyn std::error::Error>> {
     /// let token = "my_token";
-    /// let invoked_method = UUri::try_from("//my-vehicle/D45/2/101")?;
-    /// let reply_to = UUri::try_from("//other-vehicle/D10/3/0")?;
+    /// let invoked_method = UUri::try_from("//my-vehicle/D45/1/2/101")?;
+    /// let reply_to = UUri::try_from("//other-vehicle/D10/1/3/0")?;
     /// let msg = UMessageBuilder::request(invoked_method, reply_to, 5000)
     ///   .with_token(token)
     ///   .build()?;
@@ -410,8 +410,8 @@ impl UAttributes {
     ///
     /// # fn main() -> Result<(), Box<dyn std::error::Error>> {
     /// let traceparent = "my_traceparent";
-    /// let invoked_method = UUri::try_from("//my-vehicle/D45/2/101")?;
-    /// let reply_to = UUri::try_from("//other-vehicle/D10/3/0")?;
+    /// let invoked_method = UUri::try_from("//my-vehicle/D45/1/2/101")?;
+    /// let reply_to = UUri::try_from("//other-vehicle/D10/1/3/0")?;
     /// let msg = UMessageBuilder::request(invoked_method, reply_to, 5000)
     ///   .with_traceparent(traceparent)
     ///   .build()?;
@@ -434,8 +434,8 @@ impl UAttributes {
     ///
     /// # fn main() -> Result<(), Box<dyn std::error::Error>> {
     /// let request_id = UUID::build();
-    /// let invoked_method = UUri::try_from("//my-vehicle/D45/2/101")?;
-    /// let reply_to = UUri::try_from("//other-vehicle/D10/3/0")?;
+    /// let invoked_method = UUri::try_from("//my-vehicle/D45/1/2/101")?;
+    /// let reply_to = UUri::try_from("//other-vehicle/D10/1/3/0")?;
     /// let msg = UMessageBuilder::response(reply_to, request_id.clone(), invoked_method)
     ///   .build()?;
     /// let attribs = msg.attributes();
@@ -461,8 +461,8 @@ impl UAttributes {
     ///
     /// # fn main() -> Result<(), Box<dyn std::error::Error>> {
     /// let request_id = UUID::build();
-    /// let invoked_method = UUri::try_from("//my-vehicle/D45/2/101")?;
-    /// let reply_to = UUri::try_from("//other-vehicle/D10/3/0")?;
+    /// let invoked_method = UUri::try_from("//my-vehicle/D45/1/2/101")?;
+    /// let reply_to = UUri::try_from("//other-vehicle/D10/1/3/0")?;
     /// let msg = UMessageBuilder::response(reply_to, request_id.clone(), invoked_method)
     ///   .build()?;
     /// let attribs = msg.attributes();
@@ -484,7 +484,7 @@ impl UAttributes {
     /// use up_rust::{PayloadEncoding, UMessageBuilder, UUri};
     ///
     /// # fn main() -> Result<(), Box<dyn std::error::Error>> {
-    /// let topic = UUri::try_from("//my-vehicle/D45/23/A001")?;
+    /// let topic = UUri::try_from("//my-vehicle/D45/1/23/A001")?;
     /// let msg = UMessageBuilder::publish(topic)
     ///   .build_with_payload("hello".as_bytes(), PayloadEncoding::TEXT)?;
     /// let attribs = msg.attributes();
@@ -513,7 +513,7 @@ impl UAttributes {
     /// use up_rust::{UMessageBuilder, UUri};
     ///
     /// # fn main() -> Result<(), Box<dyn std::error::Error>> {
-    /// let topic = UUri::try_from("//my-vehicle/D45/23/A001")?;
+    /// let topic = UUri::try_from("//my-vehicle/D45/1/23/A001")?;
     /// let msg = UMessageBuilder::publish(topic).build()?;
     /// let attribs = msg.attributes();
     /// assert!(attribs.is_publish());
@@ -533,8 +533,8 @@ impl UAttributes {
     /// use up_rust::{UMessageBuilder, UUri};
     ///
     /// # fn main() -> Result<(), Box<dyn std::error::Error>> {
-    /// let invoked_method = UUri::try_from("//my-vehicle/D45/2/101")?;
-    /// let reply_to = UUri::try_from("//other-vehicle/D10/3/0")?;
+    /// let invoked_method = UUri::try_from("//my-vehicle/D45/1/2/101")?;
+    /// let reply_to = UUri::try_from("//other-vehicle/D10/1/3/0")?;
     /// let msg = UMessageBuilder::request(invoked_method, reply_to, 5000)
     ///   .build()?;
     /// let attribs = msg.attributes();
@@ -555,8 +555,8 @@ impl UAttributes {
     /// use up_rust::{UCode, UMessageBuilder, UUID, UUri};
     ///
     /// # fn main() -> Result<(), Box<dyn std::error::Error>> {
-    /// let invoked_method = UUri::try_from("//my-vehicle/D45/2/101")?;
-    /// let reply_to = UUri::try_from("//other-vehicle/D10/3/0")?;
+    /// let invoked_method = UUri::try_from("//my-vehicle/D45/1/2/101")?;
+    /// let reply_to = UUri::try_from("//other-vehicle/D10/1/3/0")?;
     /// let msg = UMessageBuilder::response(reply_to, UUID::build(), invoked_method)
     ///   .build()?;
     /// let attribs = msg.attributes();
@@ -577,8 +577,8 @@ impl UAttributes {
     /// use up_rust::{UMessageBuilder, UUri};
     ///
     /// # fn main() -> Result<(), Box<dyn std::error::Error>> {
-    /// let origin = UUri::try_from("//my-vehicle/D45/23/A001")?;
-    /// let dest = UUri::try_from("//other-vehicle/D10/3/0")?;
+    /// let origin = UUri::try_from("//my-vehicle/D45/1/23/A001")?;
+    /// let dest = UUri::try_from("//other-vehicle/D10/1/3/0")?;
     /// let msg = UMessageBuilder::notification(origin, dest).build()?;
     /// let attribs = msg.attributes();
     /// assert!(attribs.is_notification());
@@ -602,7 +602,7 @@ impl UAttributes {
     /// ```
     /// # fn main() -> Result<(), Box<dyn std::error::Error>> {
     /// use up_rust::{UMessageBuilder, UUri};
-    /// let publish_msg = UMessageBuilder::publish(UUri::try_from("//my-vehicle/D45/1/A001")?)
+    /// let publish_msg = UMessageBuilder::publish(UUri::try_from("//my-vehicle/D45/1/1/A001")?)
     ///     .build()?;
     /// assert!(publish_msg.attributes().check_expired().is_ok());
     /// # Ok(())
@@ -638,7 +638,7 @@ impl UAttributes {
     ///     .as_millis();
     ///
     /// let reference_time = now + 300_000; // 5 minutes from now
-    /// let publish_msg = UMessageBuilder::publish(UUri::try_from("//my-vehicle/D45/1/A001")?)
+    /// let publish_msg = UMessageBuilder::publish(UUri::try_from("//my-vehicle/D45/1/1/A001")?)
     ///     .with_ttl(5_000) // Set a TTL of 5 seconds
     ///     .build()?;
     /// assert!(publish_msg.attributes().check_expired_for_reference(reference_time).is_err());
@@ -835,14 +835,16 @@ mod core_types_support {
                 .into(),
                 source: Some(crate::up_core_api::uri::UUri {
                     authority_name: "source".to_string(),
-                    ue_id: 0x0001,
+                    ue_type_id: 0x0001,
+                    ue_instance_id: 1,
                     ue_version_major: 0x01,
                     resource_id: 0x0001,
                     ..Default::default()
                 })
                 .into(),
                 sink: Some(crate::up_core_api::uri::UUri {
-                    ue_id: 0x1000,
+                    ue_type_id: 0x1000,
+                    ue_instance_id: 1,
                     ue_version_major: 0x01,
                     resource_id: 0x0000,
                     ..Default::default()

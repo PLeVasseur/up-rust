@@ -1028,7 +1028,7 @@ mod tests {
         resource: u16,
         valid: bool,
     ) {
-        let source = UUri::try_from_parts(authority, 0x4210, 1, resource).unwrap();
+        let source = UUri::try_from_parts(authority, 0x0001_4210, 1, resource).unwrap();
         let native = UFrameMetadata::notification(source.clone(), reply_to()).build();
         let classic = UMessageBuilder::notification(source, reply_to()).build();
         assert_eq!(native.is_ok(), valid);
@@ -1036,15 +1036,18 @@ mod tests {
     }
 
     fn topic() -> UUri {
-        UUri::try_from_parts("vehicle", 0x4210, 0x01, 0x9000).expect("failed to create test URI")
+        UUri::try_from_parts("vehicle", 0x0001_4210, 0x01, 0x9000)
+            .expect("failed to create test URI")
     }
 
     fn method() -> UUri {
-        UUri::try_from_parts("vehicle", 0x4210, 0x01, 0x00b1).expect("failed to create method URI")
+        UUri::try_from_parts("vehicle", 0x0001_4210, 0x01, 0x00b1)
+            .expect("failed to create method URI")
     }
 
     fn reply_to() -> UUri {
-        UUri::try_from_parts("cloud", 0x10ab, 0x02, 0x0000).expect("failed to create reply URI")
+        UUri::try_from_parts("cloud", 0x0001_10AB, 0x02, 0x0000)
+            .expect("failed to create reply URI")
     }
 
     #[test]
@@ -1159,9 +1162,9 @@ mod tests {
         assert_eq!(projected.payload_encoding(), Some(PayloadEncoding::RAW));
     }
 
-    #[test_case::test_case("*", 1, 1; "wildcard authority")]
+    #[test_case::test_case("*", 0x0001_0001, 1; "wildcard authority")]
     #[test_case::test_case("vehicle", 0xFFFF0001, 1; "wildcard instance")]
-    #[test_case::test_case("vehicle", 1, 0xFF; "wildcard version")]
+    #[test_case::test_case("vehicle", 0x0001_0001, 0xFF; "wildcard version")]
     fn message_source_wildcards_are_rejected(authority: &str, entity: u32, version: u8) {
         let source = UUri::try_from_parts(authority, entity, version, 0x8001).unwrap();
         assert!(matches!(
@@ -1256,7 +1259,7 @@ mod projection_round_trip_properties {
         #[test]
         fn projected_metadata_survives_field_block_round_trip(
             authority in "[a-z][a-z0-9]{0,11}",
-            ue_id in 1u32..0xFFFF,
+            ue_id in 0x0001_0001u32..0x0001_FFFF,
             version in 1u8..=0xFE,
             resource in 0x8000u16..0xFFFE,
             payload in proptest::collection::vec(any::<u8>(), 0..64),

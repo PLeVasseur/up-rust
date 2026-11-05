@@ -115,7 +115,7 @@ impl UAttributesValidators {
     /// use up_rust::{UAttributesValidators, UMessageBuilder, UUri};
     ///
     /// # fn main() -> Result<(), Box<dyn std::error::Error>> {
-    /// let topic = UUri::try_from("//my-vehicle/D45/23/A001")?;
+    /// let topic = UUri::try_from("//my-vehicle/D45/1/23/A001")?;
     /// let msg = UMessageBuilder::publish(topic).build()?;
     /// let validator = UAttributesValidators::Publish.validator();
     /// assert!(validator.validate(msg.attributes()).is_ok());
@@ -140,7 +140,7 @@ impl UAttributesValidators {
     /// use up_rust::{UAttributesValidators, UMessageBuilder, UMessageType, UUri};
     ///
     /// # fn main() -> Result<(), Box<dyn std::error::Error>> {
-    /// let topic = UUri::try_from("//my-vehicle/D45/23/A001")?;
+    /// let topic = UUri::try_from("//my-vehicle/D45/1/23/A001")?;
     /// let msg = UMessageBuilder::publish(topic).build()?;
     /// let validator = UAttributesValidators::validator_for_attributes(msg.attributes());
     /// assert!(validator.validate(msg.attributes()).is_ok());
@@ -160,7 +160,7 @@ impl UAttributesValidators {
     /// use up_rust::{UAttributesValidators, UMessageBuilder, UMessageType, UUri};
     ///
     /// # fn main() -> Result<(), Box<dyn std::error::Error>> {
-    /// let topic = UUri::try_from("//my-vehicle/D45/23/A001")?;
+    /// let topic = UUri::try_from("//my-vehicle/D45/1/23/A001")?;
     /// let msg = UMessageBuilder::publish(topic).build()?;
     /// let validator = UAttributesValidators::validator_for(UMessageType::Publish);
     /// assert!(validator.validate(msg.attributes()).is_ok());
@@ -536,11 +536,11 @@ mod tests {
     #[test_case(publish_topic(), Some(destination()), None, false; "fails for message containing destination")]
     #[test_case(publish_topic(), None, Some(100), true; "succeeds for valid attributes")]
     // [utest->dsn~up-attributes-publish-source~1]
-    #[test_case(uuri(0x0000_abcd, 0x0000), None, None, false; "fails for source with resource ID 0")]
+    #[test_case(uuri(0x0001_abcd, 0x0000), None, None, false; "fails for source with resource ID 0")]
     // [utest->dsn~up-attributes-publish-source~1]
-    #[test_case(uuri(0x0000_abcd, 0x7999), None, None, false; "fails for source with RPC method resource ID")]
+    #[test_case(uuri(0x0001_abcd, 0x7999), None, None, false; "fails for source with RPC method resource ID")]
     // [utest->dsn~up-attributes-publish-source~1]
-    #[test_case(uuri(0x0000_abcd, 0xFFFF), None, None, false; "fails for source with wildcard resource ID")]
+    #[test_case(uuri(0x0001_abcd, 0xFFFF), None, None, false; "fails for source with wildcard resource ID")]
     fn test_validate_attributes_for_publish_message(
         source: UUri,
         sink: Option<UUri>,
@@ -585,17 +585,17 @@ mod tests {
     #[test_case(origin(), Some(destination()), None, true; "succeeds for both origin and destination")]
     #[test_case(origin(), Some(destination()), Some(100), true; "succeeds for valid attributes")]
     // [utest->dsn~up-attributes-notification-source~1]
-    #[test_case(uuri(0x0000_abcd, 0x0000), Some(destination()), None, false; "fails for origin with resource ID 0")]
+    #[test_case(uuri(0x0001_abcd, 0x0000), Some(destination()), None, false; "fails for origin with resource ID 0")]
     // [utest->dsn~up-attributes-notification-source~1]
-    #[test_case(uuri(0x0000_abcd, 0x7999), Some(destination()), None, false; "fails for origin with non-topic resource ID")]
+    #[test_case(uuri(0x0001_abcd, 0x7999), Some(destination()), None, false; "fails for origin with non-topic resource ID")]
     // [utest->dsn~up-attributes-notification-source~1]
-    #[test_case(uuri(0x0000_abcd, 0xFFFF), Some(destination()), None, false; "fails for origin with wildcard resource ID")]
+    #[test_case(uuri(0x0001_abcd, 0xFFFF), Some(destination()), None, false; "fails for origin with wildcard resource ID")]
     // [utest->dsn~up-attributes-notification-sink~1]
-    #[test_case(origin(), Some(uuri(0x0000_abcd, 0x7999)), None, false; "fails for destination with RPC method resource ID")]
+    #[test_case(origin(), Some(uuri(0x0001_abcd, 0x7999)), None, false; "fails for destination with RPC method resource ID")]
     // [utest->dsn~up-attributes-notification-sink~1]
-    #[test_case(origin(), Some(uuri(0x0000_abcd, 0x8000)), None, false; "fails for destination with topic resource ID")]
+    #[test_case(origin(), Some(uuri(0x0001_abcd, 0x8000)), None, false; "fails for destination with topic resource ID")]
     // [utest->dsn~up-attributes-notification-sink~1]
-    #[test_case(origin(), Some(uuri(0x0000_abcd, 0xFFFF)), None, false; "fails for destination with wildcard resource ID")]
+    #[test_case(origin(), Some(uuri(0x0001_abcd, 0xFFFF)), None, false; "fails for destination with wildcard resource ID")]
     fn test_validate_attributes_for_notification_message(
         source: UUri,
         sink: Option<UUri>,
@@ -638,17 +638,17 @@ mod tests {
     #[test_case(Some(method_to_invoke()), reply_to_address(), None, Some(2000), Some(UPriority::CS4), None, true; "succeeds for mandatory attributes")]
     #[test_case(Some(method_to_invoke()), reply_to_address(), Some(1), Some(2000), Some(UPriority::CS4), Some("token"), true; "succeeds for valid attributes")]
     // [utest->dsn~up-attributes-request-source~1]
-    #[test_case(Some(method_to_invoke()), uuri(0x0000_abcd, 0x0001), None, Some(2000), Some(UPriority::CS4), None, false; "fails for reply-to-address with resource ID other than 0")]
+    #[test_case(Some(method_to_invoke()), uuri(0x0001_abcd, 0x0001), None, Some(2000), Some(UPriority::CS4), None, false; "fails for reply-to-address with resource ID other than 0")]
     // [utest->dsn~up-attributes-request-source~1]
-    #[test_case(Some(method_to_invoke()), uuri(0x0000_abcd, 0xFFFF), None, Some(2000), Some(UPriority::CS4), None, false; "fails for reply-to-address with wildcard resource ID")]
+    #[test_case(Some(method_to_invoke()), uuri(0x0001_abcd, 0xFFFF), None, Some(2000), Some(UPriority::CS4), None, false; "fails for reply-to-address with wildcard resource ID")]
     // [utest->dsn~up-attributes-request-sink~1]
     #[test_case(None, reply_to_address(), None, Some(2000), Some(UPriority::CS4), None, false; "fails for missing method-to-invoke")]
     // [utest->dsn~up-attributes-request-sink~1]
-    #[test_case(Some(uuri(0x0000_abcd, 0x0000)), reply_to_address(), None, Some(2000), Some(UPriority::CS4), None, false; "fails for method-to-invoke with resource ID 0")]
+    #[test_case(Some(uuri(0x0001_abcd, 0x0000)), reply_to_address(), None, Some(2000), Some(UPriority::CS4), None, false; "fails for method-to-invoke with resource ID 0")]
     // [utest->dsn~up-attributes-request-sink~1]
-    #[test_case(Some(uuri(0x0000_abcd, 0x8000)), reply_to_address(), None, Some(2000), Some(UPriority::CS4), None, false; "fails for method-to-invoke with topic resource ID")]
+    #[test_case(Some(uuri(0x0001_abcd, 0x8000)), reply_to_address(), None, Some(2000), Some(UPriority::CS4), None, false; "fails for method-to-invoke with topic resource ID")]
     // [utest->dsn~up-attributes-request-sink~1]
-    #[test_case(Some(uuri(0x0000_abcd, 0xFFFF)), reply_to_address(), None, Some(2000), Some(UPriority::CS4), None, false; "fails for method-to-invoke with wildcard resource ID")]
+    #[test_case(Some(uuri(0x0001_abcd, 0xFFFF)), reply_to_address(), None, Some(2000), Some(UPriority::CS4), None, false; "fails for method-to-invoke with wildcard resource ID")]
     #[test_case(Some(method_to_invoke()), reply_to_address(), Some(1), Some(2000), None, None, false; "fails for missing priority")]
     #[test_case(Some(method_to_invoke()), reply_to_address(), Some(1), Some(2000), Some(UPriority::CS3), None, false; "fails for invalid priority")]
     // [utest->dsn~up-attributes-request-ttl~1]
@@ -705,15 +705,15 @@ mod tests {
     // [utest->dsn~up-attributes-response-sink~1]
     #[test_case(None, method_to_invoke(), Some(UUID::build()), None, None, Some(UPriority::CS4), false; "fails for missing reply-to-address")]
     // [utest->dsn~up-attributes-response-sink~1]
-    #[test_case(Some(uuri(0x0000_abcd, 0x0001)), method_to_invoke(), Some(UUID::build()), None, None, Some(UPriority::CS4), false; "fails for reply-to-address with resource ID other than 0")]
+    #[test_case(Some(uuri(0x0001_abcd, 0x0001)), method_to_invoke(), Some(UUID::build()), None, None, Some(UPriority::CS4), false; "fails for reply-to-address with resource ID other than 0")]
     // [utest->dsn~up-attributes-response-sink~1]
-    #[test_case(Some(uuri(0x0000_abcd, 0xFFFF)), method_to_invoke(), Some(UUID::build()), None, None, Some(UPriority::CS4), false; "fails for reply-to-address with wildcard resource ID")]
+    #[test_case(Some(uuri(0x0001_abcd, 0xFFFF)), method_to_invoke(), Some(UUID::build()), None, None, Some(UPriority::CS4), false; "fails for reply-to-address with wildcard resource ID")]
     // [utest->dsn~up-attributes-response-source~1]
-    #[test_case(Some(reply_to_address()), uuri(0x0000_abcd, 0x0000), Some(UUID::build()), None, None, Some(UPriority::CS4), false; "fails for invoked-method with resource ID 0")]
+    #[test_case(Some(reply_to_address()), uuri(0x0001_abcd, 0x0000), Some(UUID::build()), None, None, Some(UPriority::CS4), false; "fails for invoked-method with resource ID 0")]
     // [utest->dsn~up-attributes-response-source~1]
-    #[test_case(Some(reply_to_address()), uuri(0x0000_abcd, 0x8000), Some(UUID::build()), None, None, Some(UPriority::CS4), false; "fails for invoked-method with topic resource ID")]
+    #[test_case(Some(reply_to_address()), uuri(0x0001_abcd, 0x8000), Some(UUID::build()), None, None, Some(UPriority::CS4), false; "fails for invoked-method with topic resource ID")]
     // [utest->dsn~up-attributes-response-source~1]
-    #[test_case(Some(reply_to_address()), uuri(0x0000_abcd, 0xFFFF), Some(UUID::build()), None, None, Some(UPriority::CS4), false; "fails for invoked-method with wildcard resource ID")]
+    #[test_case(Some(reply_to_address()), uuri(0x0001_abcd, 0xFFFF), Some(UUID::build()), None, None, Some(UPriority::CS4), false; "fails for invoked-method with wildcard resource ID")]
     #[test_case(Some(reply_to_address()), method_to_invoke(), Some(UUID::build()), Some(UCode::Cancelled), None, Some(UPriority::CS4), true; "succeeds for valid commstatus")]
     #[test_case(Some(reply_to_address()), method_to_invoke(), Some(UUID::build()), None, Some(100), Some(UPriority::CS4), true; "succeeds for ttl > 0)")]
     #[test_case(Some(reply_to_address()), method_to_invoke(), Some(UUID::build()), None, Some(0), Some(UPriority::CS4), true; "succeeds for ttl = 0")]
@@ -770,22 +770,22 @@ mod tests {
     }
 
     fn publish_topic() -> UUri {
-        uuri(0x0000_5410, 0xa010)
+        uuri(0x0001_5410, 0xa010)
     }
 
     fn origin() -> UUri {
-        uuri(0x0000_3c00, 0x9a00)
+        uuri(0x0001_3c00, 0x9a00)
     }
 
     fn destination() -> UUri {
-        uuri(0x0000_3d07, 0x0000)
+        uuri(0x0001_3d07, 0x0000)
     }
 
     fn reply_to_address() -> UUri {
-        uuri(0x0000_010b, 0x0000)
+        uuri(0x0001_010b, 0x0000)
     }
 
     fn method_to_invoke() -> UUri {
-        uuri(0x0000_03ae, 0x00e2)
+        uuri(0x0001_03ae, 0x00e2)
     }
 }

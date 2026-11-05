@@ -34,7 +34,7 @@ use crate::{
 fn udiscovery_uri(resource_id: u16) -> UUri {
     UUri::try_from_parts(
         "",
-        UDISCOVERY_TYPE_ID,
+        0x0001_0000 | UDISCOVERY_TYPE_ID,
         UDISCOVERY_VERSION_MAJOR,
         resource_id,
     )
@@ -215,7 +215,8 @@ mod tests {
                     uris: Some(UUriBatch {
                         uris: vec![UUriProto {
                             authority_name: "other".to_string(),
-                            ue_id: 0x0004_D5A3,
+                            ue_type_id: 0xD5A3,
+                            ue_instance_id: 0x0004,
                             ue_version_major: 0x01,
                             resource_id: 0xD3FE,
                             ..Default::default()
@@ -280,7 +281,8 @@ mod tests {
                 let topic_info = ServiceTopicInfo {
                     topic: Some(UUriProto {
                         authority_name: "other".to_string(),
-                        ue_id: 0x0004_D5A3,
+                        ue_type_id: 0xD5A3,
+                        ue_instance_id: 0x0004,
                         ue_version_major: 0x01,
                         resource_id: 0xD3FE,
                         ..Default::default()

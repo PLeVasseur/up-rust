@@ -85,7 +85,9 @@ mod tests {
     use crate::{utransport::MockTransport, StaticUriProvider, UCode, UPriority, UStatus, UUID};
 
     fn new_uri_provider() -> Arc<StaticUriProvider> {
-        Arc::new(StaticUriProvider::new("", 0x0005, 0x02).expect("failed to create URI provider"))
+        Arc::new(
+            StaticUriProvider::new("", 0x0001_0005, 0x02).expect("failed to create URI provider"),
+        )
     }
 
     #[tokio::test]

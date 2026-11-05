@@ -631,7 +631,7 @@ impl FieldsReader<'_> {
 #[cfg(test)]
 pub(crate) fn received_authority_fields(authority: &str, in_sink: bool) -> Vec<u8> {
     fn uri(out: &mut Vec<u8>, authority: &str, resource: u16) {
-        out.extend_from_slice(&1_u32.to_le_bytes());
+        out.extend_from_slice(&0x0001_0001_u32.to_le_bytes());
         out.extend_from_slice(&resource.to_le_bytes());
         out.push(1);
         out.push(u8::try_from(authority.len()).unwrap());
@@ -666,15 +666,15 @@ mod tests {
     use super::*;
 
     fn topic() -> UUri {
-        UUri::try_from_parts("vehicle", 0x4210, 0x01, 0x9000).expect("topic")
+        UUri::try_from_parts("vehicle", 0x0001_4210, 0x01, 0x9000).expect("topic")
     }
 
     fn method() -> UUri {
-        UUri::try_from_parts("vehicle", 0x4210, 0x01, 0x00b1).expect("method")
+        UUri::try_from_parts("vehicle", 0x0001_4210, 0x01, 0x00b1).expect("method")
     }
 
     fn reply_to() -> UUri {
-        UUri::try_from_parts("cloud", 0x10ab, 0x02, 0x0000).expect("reply-to")
+        UUri::try_from_parts("cloud", 0x0001_10AB, 0x02, 0x0000).expect("reply-to")
     }
 
     #[test_case::test_case(UMessageType::Request, reply_to(), Some(method()), None; "request without TTL")]

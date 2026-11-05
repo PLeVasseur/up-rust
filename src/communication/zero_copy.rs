@@ -660,11 +660,11 @@ mod tests {
         ));
         let sender = Endpoint::new(
             Arc::clone(&transport),
-            Arc::new(StaticUriProvider::new("vehicle", 1, 1).unwrap()),
+            Arc::new(StaticUriProvider::new("vehicle", 0x0001_0001, 1).unwrap()),
         );
         let receiver = Endpoint::new(
             transport,
-            Arc::new(StaticUriProvider::new("vehicle", 2, 1).unwrap()),
+            Arc::new(StaticUriProvider::new("vehicle", 0x0001_0002, 1).unwrap()),
         );
         (core, sender, receiver)
     }

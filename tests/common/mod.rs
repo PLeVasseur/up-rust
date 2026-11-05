@@ -18,7 +18,7 @@ use std::{
     str::FromStr,
 };
 
-use cucumber::{cli, codegen::WorldInventory, parser::basic::Walker, World};
+use cucumber::{cli, codegen::WorldInventory, parser::basic::Walker, writer::Ext, World};
 
 #[allow(dead_code)]
 const FEATURES_PATH: &str = "";
@@ -66,15 +66,19 @@ pub(crate) async fn run<T: World + WorldInventory + std::fmt::Debug>(
         let mut opts = cli::Opts::<
             cucumber::parser::basic::Cli,
             cucumber::runner::basic::Cli,
-            cucumber::writer::junit::Cli,
+            cli::Compose<cucumber::writer::basic::Cli, cucumber::writer::junit::Cli>,
             CustomTckOpts,
         >::parsed();
         opts.parser.features = Some(walker);
         T::cucumber()
-            .with_writer(cucumber::writer::JUnit::new(file, 0))
+            .with_writer(
+                cucumber::writer::Basic::stdout()
+                    .summarized()
+                    .tee(cucumber::writer::JUnit::new(file, 0).discard_stats_writes()),
+            )
             .with_cli(opts)
             .fail_on_skipped()
-            .run(FEATURES_PATH)
+            .run_and_exit(FEATURES_PATH)
             .await;
     } else {
         let mut opts = cli::Opts::<cucumber::parser::basic::Cli, _, _, CustomTckOpts>::parsed();
@@ -82,7 +86,7 @@ pub(crate) async fn run<T: World + WorldInventory + std::fmt::Debug>(
         T::cucumber()
             .with_cli(opts)
             .fail_on_skipped()
-            .run(FEATURES_PATH)
+            .run_and_exit(FEATURES_PATH)
             .await;
     }
     Ok(())

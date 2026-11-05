@@ -152,10 +152,11 @@ fn warm_native_paths_do_not_allocate() {
     let identity = StableContainerPayload::<Signal>::identity(&agreement).unwrap();
     let plain_identity = StableContainerPayload::<Plain>::identity(&agreement).unwrap();
     assert_ne!(identity, plain_identity);
-    let metadata = UFrameMetadata::publish(UUri::try_from_parts("v", 0x4210, 1, 0x9000).unwrap())
-        .with_native_payload_identity(identity)
-        .build()
-        .unwrap();
+    let metadata =
+        UFrameMetadata::publish(UUri::try_from_parts("v", 0x0001_4210, 1, 0x9000).unwrap())
+            .with_native_payload_identity(identity)
+            .build()
+            .unwrap();
     let signal = Signal {
         id: 7,
         flag: true,

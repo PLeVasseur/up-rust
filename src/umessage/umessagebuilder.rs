@@ -134,7 +134,7 @@ impl UMessageBuilder<InitialBuilderState> {
     /// use up_rust::{UMessageBuilder, UMessageType, PayloadEncoding, UPriority, UUri};
     ///
     /// # fn main() -> Result<(), Box<dyn std::error::Error>> {
-    /// let topic = UUri::try_from("//my-vehicle/4210/1/B24D")?;
+    /// let topic = UUri::try_from("//my-vehicle/4210/1/1/B24D")?;
     /// let message = UMessageBuilder::publish(topic.clone())
     ///                    .build_with_payload("closed", PayloadEncoding::TEXT)?;
     /// assert_eq!(message.type_(), UMessageType::Publish);
@@ -178,8 +178,8 @@ impl UMessageBuilder<InitialBuilderState> {
     /// use up_rust::{UMessageBuilder, UMessageType, PayloadEncoding, UPriority, UUri};
     ///
     /// # fn main() -> Result<(), Box<dyn std::error::Error>> {
-    /// let origin = UUri::try_from("//my-vehicle/4210/5/F20B")?;
-    /// let destination = UUri::try_from("//my-cloud/CCDD/2/0")?;
+    /// let origin = UUri::try_from("//my-vehicle/4210/1/5/F20B")?;
+    /// let destination = UUri::try_from("//my-cloud/CCDD/1/2/0")?;
     /// let message = UMessageBuilder::notification(origin.clone(), destination.clone())
     ///                    .build_with_payload("unexpected movement", PayloadEncoding::TEXT)?;
     /// assert_eq!(message.type_(), UMessageType::Notification);
@@ -232,8 +232,8 @@ impl UMessageBuilder<InitialBuilderState> {
     /// use up_rust::{UMessageBuilder, UMessageType, PayloadEncoding, UPriority, UUri};
     ///
     /// # fn main() -> Result<(), Box<dyn std::error::Error>> {
-    /// let method_to_invoke = UUri::try_from("//my-vehicle/4210/5/64AB")?;
-    /// let reply_to_address = UUri::try_from("//my-cloud/BA4C/1/0")?;
+    /// let method_to_invoke = UUri::try_from("//my-vehicle/4210/1/5/64AB")?;
+    /// let reply_to_address = UUri::try_from("//my-cloud/BA4C/1/1/0")?;
     /// let message = UMessageBuilder::request(method_to_invoke.clone(), reply_to_address.clone(), 5000)
     ///                    .build_with_payload("lock", PayloadEncoding::TEXT)?;
     /// assert_eq!(message.type_(), UMessageType::Request);
@@ -291,8 +291,8 @@ impl UMessageBuilder<InitialBuilderState> {
     /// use up_rust::{UMessageBuilder, UMessageType, PayloadEncoding, UPriority, UUID, UUri};
     ///
     /// # fn main() -> Result<(), Box<dyn std::error::Error>> {
-    /// let invoked_method = UUri::try_from("//my-vehicle/4210/5/64AB")?;
-    /// let reply_to_address = UUri::try_from("//my-cloud/BA4C/1/0")?;
+    /// let invoked_method = UUri::try_from("//my-vehicle/4210/1/5/64AB")?;
+    /// let reply_to_address = UUri::try_from("//my-cloud/BA4C/1/1/0")?;
     /// let request_id = UUID::build();
     /// // a service implementation would normally use
     /// // `UMessageBuilder::response_for_request(&request_message.attributes)` instead
@@ -355,8 +355,8 @@ impl UMessageBuilder<InitialBuilderState> {
     /// use up_rust::{UMessageBuilder, UMessageType, PayloadEncoding, UPriority, UUID, UUri};
     ///
     /// # fn main() -> Result<(), Box<dyn std::error::Error>> {
-    /// let method_to_invoke = UUri::try_from("//my-vehicle/4210/5/64AB")?;
-    /// let reply_to_address = UUri::try_from("//my-cloud/BA4C/1/0")?;
+    /// let method_to_invoke = UUri::try_from("//my-vehicle/4210/1/5/64AB")?;
+    /// let reply_to_address = UUri::try_from("//my-cloud/BA4C/1/1/0")?;
     /// let request_message_id = UUID::build();
     /// let request_message = UMessageBuilder::request(method_to_invoke.clone(), reply_to_address.clone(), 5000)
     ///                           .with_message_id(request_message_id.clone()) // normally not needed, used only for asserts below
@@ -429,7 +429,7 @@ impl<S: BuilderState> UMessageBuilder<S> {
     /// use up_rust::{UMessageBuilder, UMessageType, PayloadEncoding, UPriority, UUID, UUri};
     ///
     /// # fn main() -> Result<(), Box<dyn std::error::Error>> {
-    /// let topic = UUri::try_from("//my-vehicle/4210/1/B24D")?;
+    /// let topic = UUri::try_from("//my-vehicle/4210/1/1/B24D")?;
     /// let mut builder = UMessageBuilder::publish(topic);
     /// let message_one = builder
     ///                     .with_message_id(UUID::build())
@@ -469,7 +469,7 @@ impl<S: BuilderState> UMessageBuilder<S> {
     /// use up_rust::{UMessageBuilder, UMessageType, PayloadEncoding, UPriority, UUri};
     ///
     /// # fn main() -> Result<(), Box<dyn std::error::Error>> {
-    /// let topic = UUri::try_from("//my-vehicle/4210/1/B24D")?;
+    /// let topic = UUri::try_from("//my-vehicle/4210/1/1/B24D")?;
     /// let message = UMessageBuilder::publish(topic)
     ///                   .with_priority(UPriority::CS5)
     ///                   .build_with_payload("closed", PayloadEncoding::TEXT)?;
@@ -506,8 +506,8 @@ impl<S: BuilderState> UMessageBuilder<S> {
     /// use up_rust::{UMessageBuilder, UMessageType, PayloadEncoding, UPriority, UUID, UUri};
     ///
     /// # fn main() -> Result<(), Box<dyn std::error::Error>> {
-    /// let invoked_method = UUri::try_from("//my-vehicle/4210/5/64AB")?;
-    /// let reply_to_address = UUri::try_from("//my-cloud/BA4C/1/0")?;
+    /// let invoked_method = UUri::try_from("//my-vehicle/4210/1/5/64AB")?;
+    /// let reply_to_address = UUri::try_from("//my-cloud/BA4C/1/1/0")?;
     /// let request_msg_id = UUID::build();
     /// // a service implementation would normally use
     /// // `UMessageBuilder::response_for_request(&request_message.attributes)` instead
@@ -539,7 +539,7 @@ impl<S: BuilderState> UMessageBuilder<S> {
     /// use up_rust::{UMessageBuilder, UMessageType, PayloadEncoding, UPriority, UUri};
     ///
     /// # fn main() -> Result<(), Box<dyn std::error::Error>> {
-    /// let topic = UUri::try_from("//my-vehicle/4210/1/B24D")?;
+    /// let topic = UUri::try_from("//my-vehicle/4210/1/1/B24D")?;
     /// let traceparent = "00-4bf92f3577b34da6a3ce929d0e0e4736-00f067aa0ba902b7-01";
     /// let message = UMessageBuilder::publish(topic.clone())
     ///                    .with_traceparent(traceparent)
@@ -574,8 +574,8 @@ impl<S: BuilderState> UMessageBuilder<S> {
     /// use up_rust::{UAttributes, UAttributesValidators, UMessageBuilder, UMessageError, UMessageType, UPriority, UUID, UUri};
     ///
     /// # fn main() -> Result<(), Box<dyn std::error::Error>> {
-    /// let invoked_method = UUri::try_from("//my-vehicle/4210/5/64AB")?;
-    /// let reply_to_address = UUri::try_from("//my-cloud/BA4C/1/0")?;
+    /// let invoked_method = UUri::try_from("//my-vehicle/4210/1/5/64AB")?;
+    /// let reply_to_address = UUri::try_from("//my-cloud/BA4C/1/1/0")?;
     /// // a service implementation would normally use
     /// // `UMessageBuilder::response_for_request(&request_message.attributes)` instead
     /// let result = UMessageBuilder::response(reply_to_address, UUID::build(), invoked_method)
@@ -594,8 +594,8 @@ impl<S: BuilderState> UMessageBuilder<S> {
     /// use up_rust::{UMessageBuilder, UMessageType, UPriority, UUID, UUri};
     ///
     /// # fn main() -> Result<(), Box<dyn std::error::Error>> {
-    /// let invoked_method = UUri::try_from("//my-vehicle/4210/5/64AB")?;
-    /// let reply_to_address = UUri::try_from("//my-cloud/BA4C/1/0")?;
+    /// let invoked_method = UUri::try_from("//my-vehicle/4210/1/5/64AB")?;
+    /// let reply_to_address = UUri::try_from("//my-cloud/BA4C/1/1/0")?;
     /// let message_id = UUID::build();
     /// // a service implementation would normally use
     /// // `UMessageBuilder::response_for_request(&request_message.attributes)` instead
@@ -656,7 +656,7 @@ impl<S: BuilderState> UMessageBuilder<S> {
     /// use up_rust::{UMessageBuilder, UMessageType, PayloadEncoding, UPriority, UUri};
     ///
     /// # fn main() -> Result<(), Box<dyn std::error::Error>> {
-    /// let topic = UUri::try_from("//my-vehicle/4210/1/B24D")?;
+    /// let topic = UUri::try_from("//my-vehicle/4210/1/1/B24D")?;
     /// let message = UMessageBuilder::publish(topic)
     ///                    .build_with_payload("locked", PayloadEncoding::TEXT)?;
     /// assert!(message.payload().is_some());
@@ -702,8 +702,8 @@ impl<S: BuilderState> UMessageBuilder<S> {
     /// use up_rust::{UCode, UMessageBuilder, UMessageType, PayloadEncoding, UPriority, UStatus, UUID, UUri};
     ///
     /// # fn main() -> Result<(), Box<dyn std::error::Error>> {
-    /// let invoked_method = UUri::try_from("//my-vehicle/4210/5/64AB")?;
-    /// let reply_to_address = UUri::try_from("//my-cloud/BA4C/1/0")?;
+    /// let invoked_method = UUri::try_from("//my-vehicle/4210/1/5/64AB")?;
+    /// let reply_to_address = UUri::try_from("//my-cloud/BA4C/1/1/0")?;
     /// let payload = StringValue::new();
     /// let request_id = UUID::build();
     /// // a service implementation would normally use
@@ -753,8 +753,8 @@ impl<S: BuilderState> UMessageBuilder<S> {
     /// use up_rust::{UCode, UMessageBuilder, UMessageType, PayloadEncoding, UPriority, UStatus, UUID, UUri};
     ///
     /// # fn main() -> Result<(), Box<dyn std::error::Error>> {
-    /// let invoked_method = UUri::try_from("//my-vehicle/4210/5/64AB")?;
-    /// let reply_to_address = UUri::try_from("//my-cloud/BA4C/1/0")?;
+    /// let invoked_method = UUri::try_from("//my-vehicle/4210/1/5/64AB")?;
+    /// let reply_to_address = UUri::try_from("//my-cloud/BA4C/1/1/0")?;
     /// let payload = StringValue::new();
     /// let request_id = UUID::build();
     /// // a service implementation would normally use
@@ -801,8 +801,8 @@ impl UMessageBuilder<RequestBuilderState> {
     /// use up_rust::{UMessageBuilder, UMessageType, PayloadEncoding, UPriority, UUri};
     ///
     /// # fn main() -> Result<(), Box<dyn std::error::Error>> {
-    /// let method_to_invoke = UUri::try_from("//my-vehicle/4210/5/64AB")?;
-    /// let reply_to_address = UUri::try_from("//my-cloud/BA4C/1/0")?;
+    /// let method_to_invoke = UUri::try_from("//my-vehicle/4210/1/5/64AB")?;
+    /// let reply_to_address = UUri::try_from("//my-cloud/BA4C/1/1/0")?;
     /// let token = "this-is-my-token";
     /// let message = UMessageBuilder::request(method_to_invoke, reply_to_address, 5000)
     ///                     .with_token(token)
@@ -833,8 +833,8 @@ impl UMessageBuilder<RequestBuilderState> {
     /// use up_rust::{UCode, UMessageBuilder, PayloadEncoding, UPriority, UUri};
     ///
     /// # fn main() -> Result<(), Box<dyn std::error::Error>> {
-    /// let method_to_invoke = UUri::try_from("//my-vehicle/4210/5/64AB")?;
-    /// let reply_to_address = UUri::try_from("//my-cloud/BA4C/1/0")?;
+    /// let method_to_invoke = UUri::try_from("//my-vehicle/4210/1/5/64AB")?;
+    /// let reply_to_address = UUri::try_from("//my-cloud/BA4C/1/1/0")?;
     /// let message = UMessageBuilder::request(method_to_invoke, reply_to_address, 5000)
     ///                     .with_permission_level(12)
     ///                     .build_with_payload("lock", PayloadEncoding::TEXT)?;
@@ -866,8 +866,8 @@ impl UMessageBuilder<ResponseBuilderState> {
     /// use up_rust::{UCode, UMessageBuilder, UPriority, UUID, UUri};
     ///
     /// # fn main() -> Result<(), Box<dyn std::error::Error>> {
-    /// let invoked_method = UUri::try_from("//my-vehicle/4210/5/64AB")?;
-    /// let reply_to_address = UUri::try_from("//my-cloud/BA4C/1/0")?;
+    /// let invoked_method = UUri::try_from("//my-vehicle/4210/1/5/64AB")?;
+    /// let reply_to_address = UUri::try_from("//my-cloud/BA4C/1/1/0")?;
     /// let request_msg_id = UUID::build();
     /// // a service implementation would normally use
     /// // `UMessageBuilder::response_for_request(&request_message.attributes)` instead
@@ -892,9 +892,9 @@ mod tests {
 
     use test_case::test_case;
 
-    const METHOD_TO_INVOKE: &str = "//my-vehicle/4D123/2/6FA3";
-    const REPLY_TO_ADDRESS: &str = "//my-cloud/9CB3/1/0";
-    const TOPIC: &str = "//my-vehicle/4210/1/B24D";
+    const METHOD_TO_INVOKE: &str = "//my-vehicle/D123/4/2/6FA3";
+    const REPLY_TO_ADDRESS: &str = "//my-cloud/9CB3/1/1/0";
+    const TOPIC: &str = "//my-vehicle/4210/1/1/B24D";
 
     #[test_case(UPriority::CS0; "with priority CS0")]
     #[test_case(UPriority::CS1; "with priority CS1")]
@@ -1199,7 +1199,7 @@ mod tests {
     #[test_case(0xE000; "reserved lower bound")]
     #[test_case(0xEFFF; "reserved upper bound")]
     fn builder_refuses_to_originate_reserved_encodings(id: u32) {
-        let topic = UUri::try_from("//my-vehicle/D45/23/A001").unwrap();
+        let topic = UUri::try_from("//my-vehicle/D45/1/23/A001").unwrap();
         let result = UMessageBuilder::publish(topic)
             .build_with_payload("payload", PayloadEncoding::from_id(id).unwrap());
         assert!(matches!(
@@ -1212,7 +1212,7 @@ mod tests {
 
     #[test]
     fn carrier_restamping_still_preserves_reserved_encodings() {
-        let topic = UUri::try_from("//my-vehicle/D45/23/A001").unwrap();
+        let topic = UUri::try_from("//my-vehicle/D45/1/23/A001").unwrap();
         let message = UMessageBuilder::publish(topic)
             .build_with_payload("payload", PayloadEncoding::RAW)
             .unwrap()

@@ -67,21 +67,21 @@ pub async fn main() -> Result<(), Box<dyn std::error::Error>> {
 
     let get_method = UUri::try_from_parts(
         "local_authority",
-        0xAAA1,
+        0x0001_AAA1,
         0x01,
         up_rust::symphony::METHOD_GET_RESOURCE_ID,
     )
     .expect("failed to create get method URI");
     let update_method = UUri::try_from_parts(
         "local_authority",
-        0xAAA1,
+        0x0001_AAA1,
         0x01,
         up_rust::symphony::METHOD_UPDATE_RESOURCE_ID,
     )
     .expect("failed to create update method URI");
     let delete_method = UUri::try_from_parts(
         "local_authority",
-        0xAAA1,
+        0x0001_AAA1,
         0x01,
         up_rust::symphony::METHOD_DELETE_RESOURCE_ID,
     )
@@ -104,7 +104,11 @@ pub async fn main() -> Result<(), Box<dyn std::error::Error>> {
 
     let rpc_client = InMemoryRpcClient::new(
         transport.clone(),
-        Arc::new(StaticUriProvider::new("local_authority", 0xAAA2, 0x01)?),
+        Arc::new(StaticUriProvider::new(
+            "local_authority",
+            0x0001_AAA2,
+            0x01,
+        )?),
     )
     .await
     .expect("failed to create RPC client");

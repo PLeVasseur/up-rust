@@ -115,7 +115,7 @@ impl UMessage {
     /// ```
     /// use up_rust::{UMessageBuilder, UUri, PayloadEncoding};
     ///
-    /// let topic = UUri::try_from("//my-vehicle/D45/23/A001").unwrap();
+    /// let topic = UUri::try_from("//my-vehicle/D45/1/23/A001").unwrap();
     /// let msg = UMessageBuilder::publish(topic.clone()).build().unwrap();
     /// assert!(msg.validate().is_ok());
     ///
@@ -174,7 +174,7 @@ impl UMessage {
     /// use up_rust::{UMessageBuilder, UMessageType, UUri};
     ///
     /// # fn main() -> Result<(), Box<dyn std::error::Error>> {
-    /// let topic = UUri::try_from("//my-vehicle/D45/23/A001")?;
+    /// let topic = UUri::try_from("//my-vehicle/D45/1/23/A001")?;
     /// let msg = UMessageBuilder::publish(topic).build()?;
     /// assert_eq!(msg.type_(), UMessageType::Publish);
     /// # Ok(())
@@ -201,7 +201,7 @@ impl UMessage {
     /// use up_rust::{UMessageBuilder, UMessageType, UUri, UUID};
     ///
     /// # fn main() -> Result<(), Box<dyn std::error::Error>> {
-    /// let topic = UUri::try_from("//my-vehicle/D45/23/A001")?;
+    /// let topic = UUri::try_from("//my-vehicle/D45/1/23/A001")?;
     /// let msg_id = UUID::build();
     /// let msg = UMessageBuilder::publish(topic).with_message_id(msg_id.clone()).build()?;
     /// assert_eq!(msg.id(), &msg_id);
@@ -223,7 +223,7 @@ impl UMessage {
     /// use up_rust::{UMessageBuilder, UMessageType, UUri};
     ///
     /// # fn main() -> Result<(), Box<dyn std::error::Error>> {
-    /// let topic = UUri::try_from("//my-vehicle/D45/23/A001")?;
+    /// let topic = UUri::try_from("//my-vehicle/D45/1/23/A001")?;
     /// let msg = UMessageBuilder::publish(topic.clone()).build()?;
     /// assert_eq!(msg.source(), &topic);
     /// # Ok(())
@@ -244,8 +244,8 @@ impl UMessage {
     /// use up_rust::{UMessageBuilder, UMessageType, UUri};
     ///
     /// # fn main() -> Result<(), Box<dyn std::error::Error>> {
-    /// let origin = UUri::try_from("//my-vehicle/D45/23/A001")?;
-    /// let dest = UUri::try_from("//other-vehicle/D10/3/0")?;
+    /// let origin = UUri::try_from("//my-vehicle/D45/1/23/A001")?;
+    /// let dest = UUri::try_from("//other-vehicle/D10/1/3/0")?;
     /// let msg = UMessageBuilder::notification(origin, dest.clone()).build()?;
     /// assert!(msg.sink().is_some_and(|sink| sink == &dest));
     /// # Ok(())
@@ -270,8 +270,8 @@ impl UMessage {
     /// use up_rust::{UMessageBuilder, UMessageType, UUri};
     ///
     /// # fn main() -> Result<(), Box<dyn std::error::Error>> {
-    /// let origin = UUri::try_from("//my-vehicle/D45/23/A001")?;
-    /// let dest = UUri::try_from("//other-vehicle/D10/3/0")?;
+    /// let origin = UUri::try_from("//my-vehicle/D45/1/23/A001")?;
+    /// let dest = UUri::try_from("//other-vehicle/D10/1/3/0")?;
     /// let msg = UMessageBuilder::notification(origin, dest.clone()).build()?;
     /// assert_eq!(msg.sink_unchecked(), &dest);
     /// # Ok(())
@@ -292,7 +292,7 @@ impl UMessage {
     /// use up_rust::{UMessageBuilder, UMessageType, UPriority, UUri};
     ///
     /// # fn main() -> Result<(), Box<dyn std::error::Error>> {
-    /// let topic = UUri::try_from("//my-vehicle/D45/23/A001")?;
+    /// let topic = UUri::try_from("//my-vehicle/D45/1/23/A001")?;
     /// let msg = UMessageBuilder::publish(topic).with_priority(UPriority::CS3).build()?;
     /// assert!(msg.priority().is_some_and(|prio| prio == UPriority::CS3));
     /// # Ok(())
@@ -317,7 +317,7 @@ impl UMessage {
     /// use up_rust::{UMessageBuilder, UMessageType, UPriority, UUri};
     ///
     /// # fn main() -> Result<(), Box<dyn std::error::Error>> {
-    /// let topic = UUri::try_from("//my-vehicle/D45/23/A001")?;
+    /// let topic = UUri::try_from("//my-vehicle/D45/1/23/A001")?;
     /// let msg = UMessageBuilder::publish(topic).with_priority(UPriority::CS3).build()?;
     /// assert_eq!(msg.priority_unchecked(), UPriority::CS3);
     /// # Ok(())
@@ -338,8 +338,8 @@ impl UMessage {
     /// use up_rust::{UCode, UMessageBuilder, UMessageType, UUID, UUri};
     ///
     /// # fn main() -> Result<(), Box<dyn std::error::Error>> {
-    /// let invoked_method = UUri::try_from("//my-vehicle/D45/2/101")?;
-    /// let reply_to = UUri::try_from("//other-vehicle/D10/3/0")?;
+    /// let invoked_method = UUri::try_from("//my-vehicle/D45/1/2/101")?;
+    /// let reply_to = UUri::try_from("//other-vehicle/D10/1/3/0")?;
     /// let msg = UMessageBuilder::response(reply_to, UUID::build(), invoked_method)
     ///   .with_comm_status(UCode::Ok)
     ///   .build()?;
@@ -366,8 +366,8 @@ impl UMessage {
     /// use up_rust::{UCode, UMessageBuilder, UMessageType, UUID, UUri};
     ///
     /// # fn main() -> Result<(), Box<dyn std::error::Error>> {
-    /// let invoked_method = UUri::try_from("//my-vehicle/D45/2/101")?;
-    /// let reply_to = UUri::try_from("//other-vehicle/D10/3/0")?;
+    /// let invoked_method = UUri::try_from("//my-vehicle/D45/1/2/101")?;
+    /// let reply_to = UUri::try_from("//other-vehicle/D10/1/3/0")?;
     /// let msg = UMessageBuilder::response(reply_to, UUID::build(), invoked_method)
     ///   .with_comm_status(UCode::Internal)
     ///   .build()?;
@@ -394,8 +394,8 @@ impl UMessage {
     /// use up_rust::{UMessageBuilder, UUri};
     ///
     /// # fn main() -> Result<(), Box<dyn std::error::Error>> {
-    /// let invoked_method = UUri::try_from("//my-vehicle/D45/2/101")?;
-    /// let reply_to = UUri::try_from("//other-vehicle/D10/3/0")?;
+    /// let invoked_method = UUri::try_from("//my-vehicle/D45/1/2/101")?;
+    /// let reply_to = UUri::try_from("//other-vehicle/D10/1/3/0")?;
     /// let msg = UMessageBuilder::request(invoked_method, reply_to, 5000)
     ///   .build()?;
     /// assert!(msg.ttl().is_some_and(|ttl| ttl == 5000));
@@ -425,8 +425,8 @@ impl UMessage {
     /// use up_rust::{UMessageBuilder, UUri};
     ///
     /// # fn main() -> Result<(), Box<dyn std::error::Error>> {
-    /// let invoked_method = UUri::try_from("//my-vehicle/D45/2/101")?;
-    /// let reply_to = UUri::try_from("//other-vehicle/D10/3/0")?;
+    /// let invoked_method = UUri::try_from("//my-vehicle/D45/1/2/101")?;
+    /// let reply_to = UUri::try_from("//other-vehicle/D10/1/3/0")?;
     /// let msg = UMessageBuilder::request(invoked_method, reply_to, 5000)
     ///   .build()?;
     /// assert!(msg.ttl_unchecked() == 5000);
@@ -448,8 +448,8 @@ impl UMessage {
     /// use up_rust::{UMessageBuilder, UUri};
     ///
     /// # fn main() -> Result<(), Box<dyn std::error::Error>> {
-    /// let invoked_method = UUri::try_from("//my-vehicle/D45/2/101")?;
-    /// let reply_to = UUri::try_from("//other-vehicle/D10/3/0")?;
+    /// let invoked_method = UUri::try_from("//my-vehicle/D45/1/2/101")?;
+    /// let reply_to = UUri::try_from("//other-vehicle/D10/1/3/0")?;
     /// let msg = UMessageBuilder::request(invoked_method, reply_to, 5000)
     ///   .with_permission_level(3)
     ///   .build()?;
@@ -473,8 +473,8 @@ impl UMessage {
     ///
     /// # fn main() -> Result<(), Box<dyn std::error::Error>> {
     /// let token = "my_token";
-    /// let invoked_method = UUri::try_from("//my-vehicle/D45/2/101")?;
-    /// let reply_to = UUri::try_from("//other-vehicle/D10/3/0")?;
+    /// let invoked_method = UUri::try_from("//my-vehicle/D45/1/2/101")?;
+    /// let reply_to = UUri::try_from("//other-vehicle/D10/1/3/0")?;
     /// let msg = UMessageBuilder::request(invoked_method, reply_to, 5000)
     ///   .with_token(token)
     ///   .build()?;
@@ -498,8 +498,8 @@ impl UMessage {
     ///
     /// # fn main() -> Result<(), Box<dyn std::error::Error>> {
     /// let traceparent = "my_traceparent";
-    /// let invoked_method = UUri::try_from("//my-vehicle/D45/2/101")?;
-    /// let reply_to = UUri::try_from("//other-vehicle/D10/3/0")?;
+    /// let invoked_method = UUri::try_from("//my-vehicle/D45/1/2/101")?;
+    /// let reply_to = UUri::try_from("//other-vehicle/D10/1/3/0")?;
     /// let msg = UMessageBuilder::request(invoked_method, reply_to, 5000)
     ///   .with_traceparent(traceparent)
     ///   .build()?;
@@ -523,8 +523,8 @@ impl UMessage {
     ///
     /// # fn main() -> Result<(), Box<dyn std::error::Error>> {
     /// let request_id = UUID::build();
-    /// let invoked_method = UUri::try_from("//my-vehicle/D45/2/101")?;
-    /// let reply_to = UUri::try_from("//other-vehicle/D10/3/0")?;
+    /// let invoked_method = UUri::try_from("//my-vehicle/D45/1/2/101")?;
+    /// let reply_to = UUri::try_from("//other-vehicle/D10/1/3/0")?;
     /// let msg = UMessageBuilder::response(reply_to, request_id.clone(), invoked_method)
     ///   .build()?;
     /// assert!(msg.request_id().is_some_and(|id| id == &request_id));
@@ -551,8 +551,8 @@ impl UMessage {
     ///
     /// # fn main() -> Result<(), Box<dyn std::error::Error>> {
     /// let request_id = UUID::build();
-    /// let invoked_method = UUri::try_from("//my-vehicle/D45/2/101")?;
-    /// let reply_to = UUri::try_from("//other-vehicle/D10/3/0")?;
+    /// let invoked_method = UUri::try_from("//my-vehicle/D45/1/2/101")?;
+    /// let reply_to = UUri::try_from("//other-vehicle/D10/1/3/0")?;
     /// let msg = UMessageBuilder::response(reply_to, request_id.clone(), invoked_method)
     ///   .build()?;
     /// assert_eq!(msg.request_id_unchecked(), &request_id);
@@ -574,7 +574,7 @@ impl UMessage {
     /// use up_rust::{UMessageBuilder, PayloadEncoding, UUri};
     ///
     /// # fn main() -> Result<(), Box<dyn std::error::Error>> {
-    /// let topic = UUri::try_from("//my-vehicle/D45/23/A001")?;
+    /// let topic = UUri::try_from("//my-vehicle/D45/1/23/A001")?;
     /// let msg = UMessageBuilder::publish(topic)
     ///   .build_with_payload("hello".as_bytes(), PayloadEncoding::TEXT)?;
     /// assert!(msg.payload_encoding().is_some_and(|format| format == PayloadEncoding::TEXT));
@@ -601,7 +601,7 @@ impl UMessage {
     /// use up_rust::{UMessageBuilder, PayloadEncoding, UUri};
     ///
     /// # fn main() -> Result<(), Box<dyn std::error::Error>> {
-    /// let topic = UUri::try_from("//my-vehicle/D45/23/A001")?;
+    /// let topic = UUri::try_from("//my-vehicle/D45/1/23/A001")?;
     /// let msg = UMessageBuilder::publish(topic)
     ///   .build_with_payload("hello".as_bytes(), PayloadEncoding::TEXT)?;
     /// assert_eq!(msg.payload_encoding().unwrap(), PayloadEncoding::TEXT);
@@ -629,7 +629,7 @@ impl UMessage {
     /// use up_rust::{UMessageBuilder, UUri};
     ///
     /// # fn main() -> Result<(), Box<dyn std::error::Error>> {
-    /// let topic = UUri::try_from("//my-vehicle/D45/23/A001")?;
+    /// let topic = UUri::try_from("//my-vehicle/D45/1/23/A001")?;
     /// let msg = UMessageBuilder::publish(topic).build()?;
     /// assert!(msg.is_publish());
     /// # Ok(())
@@ -650,8 +650,8 @@ impl UMessage {
     /// use up_rust::{UMessageBuilder, UUri};
     ///
     /// # fn main() -> Result<(), Box<dyn std::error::Error>> {
-    /// let invoked_method = UUri::try_from("//my-vehicle/D45/2/101")?;
-    /// let reply_to = UUri::try_from("//other-vehicle/D10/3/0")?;
+    /// let invoked_method = UUri::try_from("//my-vehicle/D45/1/2/101")?;
+    /// let reply_to = UUri::try_from("//other-vehicle/D10/1/3/0")?;
     /// let msg = UMessageBuilder::request(invoked_method, reply_to, 5000)
     ///   .build()?;
     /// assert!(msg.is_request());
@@ -673,8 +673,8 @@ impl UMessage {
     /// use up_rust::{UCode, UMessageBuilder, UUID, UUri};
     ///
     /// # fn main() -> Result<(), Box<dyn std::error::Error>> {
-    /// let invoked_method = UUri::try_from("//my-vehicle/D45/2/101")?;
-    /// let reply_to = UUri::try_from("//other-vehicle/D10/3/0")?;
+    /// let invoked_method = UUri::try_from("//my-vehicle/D45/1/2/101")?;
+    /// let reply_to = UUri::try_from("//other-vehicle/D10/1/3/0")?;
     /// let msg = UMessageBuilder::response(reply_to, UUID::build(), invoked_method)
     ///   .build()?;
     /// assert!(msg.is_response());
@@ -696,8 +696,8 @@ impl UMessage {
     /// use up_rust::{UMessageBuilder, UUri};
     ///
     /// # fn main() -> Result<(), Box<dyn std::error::Error>> {
-    /// let origin = UUri::try_from("//my-vehicle/D45/23/A001")?;
-    /// let dest = UUri::try_from("//other-vehicle/D10/3/0")?;
+    /// let origin = UUri::try_from("//my-vehicle/D45/1/23/A001")?;
+    /// let dest = UUri::try_from("//other-vehicle/D10/1/3/0")?;
     /// let msg = UMessageBuilder::notification(origin, dest).build()?;
     /// assert!(msg.is_notification());
     /// # Ok(())
@@ -716,7 +716,7 @@ impl UMessage {
     /// ```
     /// # fn main() -> Result<(), Box<dyn std::error::Error>> {
     /// use up_rust::{UMessageBuilder, UUri};
-    /// let publish_msg = UMessageBuilder::publish(UUri::try_from("//my-vehicle/D45/1/A001")?)
+    /// let publish_msg = UMessageBuilder::publish(UUri::try_from("//my-vehicle/D45/1/1/A001")?)
     ///     .build()?;
     /// assert!(publish_msg.check_expired().is_ok());
     /// # Ok(())
@@ -746,7 +746,7 @@ impl UMessage {
     ///     .as_millis();
     ///
     /// let reference_time = now + 300_000; // 5 minutes from now
-    /// let publish_msg = UMessageBuilder::publish(UUri::try_from("//my-vehicle/D45/1/A001")?)
+    /// let publish_msg = UMessageBuilder::publish(UUri::try_from("//my-vehicle/D45/1/1/A001")?)
     ///     .with_ttl(5_000) // Set a TTL of 5 seconds
     ///     .build()?;
     /// assert!(publish_msg.check_expired_for_reference(reference_time).is_err());
@@ -937,7 +937,7 @@ mod protobuf_support {
                 value: "hello".to_string(),
                 ..Default::default()
             };
-            let topic = UUri::try_from_parts("local", 0xabcd, 0x01, 0x9000)
+            let topic = UUri::try_from_parts("local", 0x0001_ABCD, 0x01, 0x9000)
                 .expect("failed to create topic");
             let msg = UMessageBuilder::publish(topic)
                 .build_with_protobuf_payload(&payload)
@@ -949,7 +949,7 @@ mod protobuf_support {
 
         #[test]
         fn extract_payload_fails_for_no_payload() {
-            let topic = UUri::try_from_parts("local", 0xabcd, 0x01, 0x9000)
+            let topic = UUri::try_from_parts("local", 0x0001_ABCD, 0x01, 0x9000)
                 .expect("failed to create topic");
             let msg = UMessageBuilder::publish(topic)
                 .build()
@@ -1061,7 +1061,8 @@ mod core_types_support {
                 .into(),
                 source: Some(crate::up_core_api::uri::UUri {
                     authority_name: "source".to_string(),
-                    ue_id: 0x0001,
+                    ue_type_id: 0x0001,
+                    ue_instance_id: 1,
                     ue_version_major: 0x01,
                     resource_id: 0x8001,
                     ..Default::default()
@@ -1122,13 +1123,14 @@ mod core_types_support {
             let encoding = PayloadEncoding::from_id(id).unwrap();
             // Carriage test: re-stamped as a carrier would, since the builder
             // refuses to originate reserved identifiers.
-            let message =
-                UMessageBuilder::publish(UUri::try_from_parts("vehicle", 1, 1, 0x8001).unwrap())
-                    .with_ttl(ttl)
-                    .build_with_payload(Bytes::new(), PayloadEncoding::RAW)
-                    .unwrap()
-                    .with_declared_payload_encoding(encoding)
-                    .unwrap();
+            let message = UMessageBuilder::publish(
+                UUri::try_from_parts("vehicle", 0x0001_0001, 1, 0x8001).unwrap(),
+            )
+            .with_ttl(ttl)
+            .build_with_payload(Bytes::new(), PayloadEncoding::RAW)
+            .unwrap()
+            .with_declared_payload_encoding(encoding)
+            .unwrap();
             let bytes = crate::ProtobufMappable::write_to_protobuf_bytes(&message).unwrap();
             let restored =
                 <UMessage as crate::ProtobufMappable>::parse_from_protobuf_bytes(&bytes).unwrap();
@@ -1166,7 +1168,7 @@ mod test {
 
     #[test]
     fn declared_payload_encoding_requires_payload_bytes() {
-        let topic = UUri::try_from_parts("vehicle", 0x1000, 1, 0x8001).unwrap();
+        let topic = UUri::try_from_parts("vehicle", 0x0001_1000, 1, 0x8001).unwrap();
         let message = UMessageBuilder::publish(topic).build().unwrap();
 
         assert!(matches!(

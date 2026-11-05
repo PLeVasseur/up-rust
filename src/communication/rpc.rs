@@ -371,7 +371,7 @@ mod tests {
         request.value = "hello".to_string();
         let result = client
             .invoke_proto_method::<StringValue, StringValue>(
-                UUri::try_from_parts("", 0x1000, 0x01, 0x0001).unwrap(),
+                UUri::try_from_parts("", 0x0001_1000, 0x01, 0x0001).unwrap(),
                 CallOptions::for_rpc_request(5_000, None, None, None),
                 request,
             )
@@ -391,7 +391,7 @@ mod tests {
         request.value = "hello".to_string();
         let result = client
             .invoke_proto_method::<StringValue, StringValue>(
-                UUri::try_from_parts("", 0x1000, 0x01, 0x0001).unwrap(),
+                UUri::try_from_parts("", 0x0001_1000, 0x01, 0x0001).unwrap(),
                 CallOptions::for_rpc_request(5_000, None, None, None),
                 request,
             )

@@ -10,7 +10,7 @@ impl UOwnedTransportImpl for Transport {
 }
 
 async fn send_unvalidated(transport: &Transport) -> Result<(), UStatus> {
-    let topic = UUri::try_from_parts("vehicle", 0x4210, 1, 0x9000).unwrap();
+    let topic = UUri::try_from_parts("vehicle", 0x0001_4210, 1, 0x9000).unwrap();
     let metadata = UFrameMetadata::publish(topic).build().unwrap();
     let unvalidated = UOwnedFrame::new_unchecked(metadata, None);
     transport.send_owned(unvalidated).await
