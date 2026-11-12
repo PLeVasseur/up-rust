@@ -1,0 +1,478 @@
+# Copyright (c) 2026 Contributors to the Eclipse Foundation
+# See the NOTICE file(s) distributed with this work for copyright ownership.
+# Licensed under the Apache License, Version 2.0.
+# SPDX-License-Identifier: Apache-2.0
+version: 1
+toolchains:
+  current: "stable"
+  msrv: "1.88.0"
+checks:
+  - name: format
+    group: style
+    roles: [current]
+    timeout: 120
+    command: [cargo, "+{toolchain}", fmt, --all, --, --check]
+  - name: check-all
+    group: check
+    roles: [current, msrv]
+    timeout: 1200
+    command: [cargo, "+{toolchain}", check, --locked, --workspace, --all-features, --all-targets]
+  - name: clippy-all
+    group: style
+    roles: [current]
+    timeout: 1200
+    command: [cargo, "+{toolchain}", clippy, --locked, --workspace, --all-features, --all-targets, --, -D, warnings]
+  - name: clippy-default
+    group: style
+    roles: [current]
+    timeout: 1200
+    command: [cargo, "+{toolchain}", clippy, --locked, -p, up-rust, --no-default-features, --all-targets, --, -D, warnings]
+  - name: docs-all
+    group: docs
+    roles: [current]
+    timeout: 1200
+    command: [cargo, "+{toolchain}", doc, --locked, --workspace, --all-features, --no-deps]
+  - name: docs-default
+    group: docs
+    roles: [current]
+    timeout: 1200
+    command: [cargo, "+{toolchain}", doc, --locked, -p, up-rust, --no-default-features, --no-deps]
+  - name: lib-core
+    group: tests
+    roles: [current, msrv]
+    timeout: 1200
+    completion: libtest
+    command: [cargo, "+{toolchain}", test, --locked, -p, up-rust, --features, "protobuf-support,communication-api", --lib]
+  - name: doctests-core
+    group: tests
+    roles: [current, msrv]
+    timeout: 1200
+    completion: libtest
+    command: [cargo, "+{toolchain}", test, --locked, -p, up-rust, --features, "protobuf-support,communication-api", --doc]
+  - name: lib-all
+    group: tests
+    roles: [current, msrv]
+    timeout: 1200
+    completion: libtest
+    command: [cargo, "+{toolchain}", test, --locked, --workspace, --all-features, --lib]
+  - name: lib-default
+    group: tests
+    roles: [current, msrv]
+    timeout: 1200
+    completion: libtest
+    command: [cargo, "+{toolchain}", test, --locked, -p, up-rust, --no-default-features, --lib]
+  - name: doctests-all
+    group: tests
+    roles: [current, msrv]
+    timeout: 1200
+    completion: libtest
+    command: [cargo, "+{toolchain}", test, --locked, --workspace, --all-features, --doc]
+  - name: doctests-default
+    group: tests
+    roles: [current, msrv]
+    timeout: 1200
+    completion: libtest
+    command: [cargo, "+{toolchain}", test, --locked, -p, up-rust, --no-default-features, --doc]
+  - name: tck-uri
+    group: tests
+    roles: [current, msrv]
+    timeout: 600
+    completion: cucumber
+    command: [cargo, "+{toolchain}", test, --locked, --all-features, --test, tck_uuri]
+  - name: tck-uuid
+    group: tests
+    roles: [current, msrv]
+    timeout: 600
+    completion: cucumber
+    command: [cargo, "+{toolchain}", test, --locked, --all-features, --test, tck_uuid]
+  - name: example-notify
+    group: tests
+    roles: [current, msrv]
+    timeout: 600
+    command: [cargo, "+{toolchain}", check, --locked, --no-default-features, --example, simple_notify, --features, "up-l2-notifier,protobuf-support,util"]
+  - name: example-publish
+    group: tests
+    roles: [current, msrv]
+    timeout: 600
+    command: [cargo, "+{toolchain}", check, --locked, --no-default-features, --example, simple_publish, --features, "up-l2-publisher,protobuf-support,util"]
+  - name: example-rpc
+    group: tests
+    roles: [current, msrv]
+    timeout: 600
+    command: [cargo, "+{toolchain}", check, --locked, --no-default-features, --example, simple_rpc, --features, "up-l2-rpc-client,up-l2-rpc-server,util"]
+  - name: example-symphony
+    group: tests
+    roles: [current, msrv]
+    timeout: 600
+    command: [cargo, "+{toolchain}", check, --locked, --no-default-features, --example, symphony_target, --features, "symphony,up-l2-rpc-client,up-l2-rpc-server,util"]
+  - name: example-typed-door
+    group: tests
+    roles: [current, msrv]
+    timeout: 600
+    command: [cargo, "+{toolchain}", check, --locked, --no-default-features, --example, typed_door, --features, "typed-communication,test-util,util"]
+  - name: example-user-first-door
+    group: tests
+    roles: [current, msrv]
+    timeout: 600
+    command: [cargo, "+{toolchain}", check, --locked, --no-default-features, --example, user_first_door, --features, "typed-communication,test-util,util"]
+  - name: example-serialized-inline-transport
+    group: tests
+    roles: [current, msrv]
+    timeout: 600
+    command: [cargo, "+{toolchain}", check, --locked, --no-default-features, --example, serialized_inline_transport, --features, "owned-frame-transport,transport-implementer-api,wire-implementer-api,typed-communication"]
+  # The first-contact examples are also run: they are the first code a newcomer executes.
+  - name: example-hello-publisher
+    group: tests
+    roles: [current, msrv]
+    timeout: 600
+    command: [cargo, "+{toolchain}", run, --locked, --no-default-features, --example, hello_publisher, --features, "typed-communication,test-util"]
+  - name: example-hello-notify
+    group: tests
+    roles: [current, msrv]
+    timeout: 600
+    command: [cargo, "+{toolchain}", run, --locked, --no-default-features, --example, hello_notify, --features, "typed-communication,test-util"]
+  - name: example-hello-rpc
+    group: tests
+    roles: [current, msrv]
+    timeout: 600
+    command: [cargo, "+{toolchain}", run, --locked, --no-default-features, --example, hello_rpc, --features, "typed-communication,test-util"]
+  - name: abi-layout
+    group: abi
+    roles: [current, msrv]
+    timeout: 600
+    command: [bash, tools/ci/check_abi.sh, "{toolchain}"]
+  - name: wire-private-identity
+    group: tests
+    roles: [current, msrv]
+    timeout: 600
+    completion: libtest
+    command: [cargo, "+{toolchain}", test, --locked, --all-features, --test, wire_private_identity]
+  - name: metadata-conformance
+    group: tests
+    roles: [current, msrv]
+    timeout: 600
+    completion: libtest
+    command: [cargo, "+{toolchain}", test, --locked, --all-features, --test, wire_metadata_conformance]
+  - name: metadata-golden
+    group: tests
+    roles: [current, msrv]
+    timeout: 600
+    completion: libtest
+    command: [cargo, "+{toolchain}", test, --locked, --all-features, --test, wire_metadata_golden]
+  - name: owned-listener-lifetime
+    group: tests
+    roles: [current, msrv]
+    timeout: 600
+    completion: libtest
+    command: [cargo, "+{toolchain}", test, --locked, --all-features, --test, owned_listener_lifetime]
+  - name: implementer-minimal
+    group: check
+    roles: [current, msrv]
+    timeout: 1200
+    command: [cargo, "+{toolchain}", check, --locked, --no-default-features, --features, transport-implementer-api, --all-targets]
+  - name: owned-minimal
+    group: check
+    roles: [current, msrv]
+    timeout: 1200
+    command: [cargo, "+{toolchain}", check, --locked, --no-default-features, --features, owned-frame-transport, --all-targets]
+  - name: util-minimal
+    group: check
+    roles: [current, msrv]
+    timeout: 1200
+    command: [cargo, "+{toolchain}", check, --locked, --no-default-features, --features, util, --all-targets]
+  - name: native-callback-ui
+    group: tests
+    roles: [current]
+    timeout: 1200
+    completion: trybuild
+    command: [cargo, "+{toolchain}", test, --locked, --all-features, --test, listener_admission_ui]
+  - name: native-callback-admission
+    group: tests
+    roles: [current, msrv]
+    timeout: 1200
+    completion: libtest
+    command: [cargo, "+{toolchain}", test, --locked, --all-features, --test, listener_admission_native]
+  - name: cloudevents-public-api
+    group: tests
+    roles: [current, msrv]
+    timeout: 1200
+    completion: libtest
+    command: [cargo, "+{toolchain}", test, --locked, -p, up-rust, --no-default-features, --features, cloudevents, --test, cloudevents_public_api]
+  - name: adapter-minimal
+    group: check
+    roles: [current, msrv]
+    timeout: 1200
+    command: [cargo, "+{toolchain}", check, --locked, --no-default-features, --features, selected-wire-transport-adapter, --all-targets]
+  - name: wire-user-minimal
+    group: check
+    roles: [current, msrv]
+    timeout: 1200
+    command: [cargo, "+{toolchain}", check, --locked, --no-default-features, --features, selected-wire-user-api, --all-targets]
+  - name: wire-constructor-codegen
+    group: tests
+    roles: [current, msrv]
+    timeout: 1200
+    command: [python3, tools/ci/check_wire_constructor.py, --toolchain, "{toolchain}"]
+  - name: owned-role-minimal
+    group: check
+    roles: [current, msrv]
+    timeout: 1200
+    command: [cargo, "+{toolchain}", check, --locked, --no-default-features, --features, "owned-frame-transport,usubscription", --all-targets]
+  - name: owned-typed-role-minimal
+    group: check
+    roles: [current, msrv]
+    timeout: 1200
+    command: [cargo, "+{toolchain}", check, --locked, --no-default-features, --features, "owned-frame-transport,usubscription,selected-wire-transport-adapter", --all-targets]
+  - name: dependency-policy
+    group: dependency
+    roles: [current]
+    timeout: 600
+    command: [cargo, deny, --offline, --locked, --all-features, check]
+  - name: native-identity-minimal
+    group: tests
+    roles: [current, msrv]
+    timeout: 1200
+    completion: libtest
+    command: [cargo, "+{toolchain}", test, --locked, --no-default-features, --features, native-identity, --lib]
+  - name: native-identity-docs
+    group: docs
+    roles: [current, msrv]
+    timeout: 1200
+    completion: libtest
+    command: [cargo, "+{toolchain}", test, --locked, --no-default-features, --features, native-identity, --doc]
+  - name: native-feature-dependencies
+    group: check
+    roles: [current, msrv]
+    timeout: 600
+    command: [python3, tools/ci/check_native_features.py, --toolchain, "{toolchain}"]
+  - name: zero-copy-minimal
+    group: check
+    roles: [current, msrv]
+    timeout: 1200
+    command: [cargo, "+{toolchain}", check, --locked, --no-default-features, --features, zero-copy-transport, --all-targets]
+  - name: native-inventory-minimal
+    group: check
+    roles: [current, msrv]
+    timeout: 1200
+    command: [cargo, "+{toolchain}", check, --locked, --no-default-features, --features, native-inventory, --all-targets]
+  - name: prepared-core-runtime-minimal
+    group: tests
+    roles: [current, msrv]
+    timeout: 1800
+    completion: libtest
+    command: [cargo, "+{toolchain}", test, --locked, -p, up-rust, --no-default-features, --features, "zero-copy-transport,transport-implementer-api", --lib]
+  - name: external-wire-consumer
+    group: tests
+    roles: [current, msrv]
+    timeout: 1200
+    completion: libtest
+    command: [cargo, "+{toolchain}", test, --locked, -p, up-rust, --no-default-features, --features, "wire-implementer-api,owned-frame-transport", --test, fake_external_wire]
+  - name: native-role-guide-minimal
+    group: docs
+    roles: [current, msrv]
+    timeout: 1800
+    completion: libtest
+    command: [cargo, "+{toolchain}", test, --locked, -p, up-rust, --no-default-features, --features, up-l2-zero-copy, --doc]
+  - name: native-inventory
+    group: tests
+    roles: [current, msrv]
+    timeout: 1200
+    completion: libtest
+    command: [cargo, "+{toolchain}", test, --locked, --all-features, --test, native_inventory]
+  - name: native-inventory-duplicate
+    group: tests
+    roles: [current, msrv]
+    timeout: 1200
+    completion: libtest
+    command: [cargo, "+{toolchain}", test, --locked, --all-features, --test, native_inventory_duplicate]
+  - name: native-path-zero-alloc
+    group: tests
+    roles: [current, msrv]
+    timeout: 1200
+    completion: libtest
+    command: [cargo, "+{toolchain}", test, --locked, --all-features, --test, native_path_zero_alloc, --, --test-threads=8]
+  - name: stable-payload-ui
+    group: tests
+    roles: [current]
+    timeout: 1200
+    completion: trybuild
+    command: [cargo, "+{toolchain}", test, --locked, --all-features, --test, stable_payload_trybuild]
+  - name: owned-frame-ui
+    group: tests
+    roles: [current]
+    timeout: 1200
+    completion: trybuild
+    command: [cargo, "+{toolchain}", test, --locked, --all-features, --test, owned_frame_trybuild]
+  - name: selected-wire-ui
+    group: tests
+    roles: [current]
+    timeout: 1200
+    completion: trybuild
+    command: [cargo, "+{toolchain}", test, --locked, --all-features, --test, selected_wire_payload_trybuild]
+  - name: native-tool-cli
+    group: tests
+    roles: [current, msrv]
+    timeout: 1200
+    command: [python3, tools/ci/check_native_tool.py, --toolchain, "{toolchain}"]
+  - name: zero-copy-roles-minimal
+    group: tests
+    roles: [current, msrv]
+    timeout: 1200
+    completion: libtest
+    command: [cargo, "+{toolchain}", test, --locked, -p, up-rust, --no-default-features, --features, up-l2-zero-copy, --lib, "communication::zero_copy"]
+  - name: zero-copy-subscriber-minimal
+    group: tests
+    roles: [current, msrv]
+    timeout: 1200
+    completion: libtest
+    command: [cargo, "+{toolchain}", test, --locked, -p, up-rust, --no-default-features, --features, "up-l2-zero-copy,usubscription", --lib, "communication::zero_copy"]
+  - name: prepared-allocation-debug
+    group: tests
+    roles: [current, msrv]
+    timeout: 1800
+    command: [python3, tools/ci/check_prepared_allocation.py, --toolchain, "{toolchain}", --profile, debug]
+  - name: prepared-allocation-release
+    group: tests
+    roles: [current, msrv]
+    timeout: 1800
+    command: [python3, tools/ci/check_prepared_allocation.py, --toolchain, "{toolchain}", --profile, release]
+  - name: prepared-benchmark
+    group: tests
+    roles: [current, msrv]
+    timeout: 1800
+    command: [python3, tools/ci/check_prepared_allocation.py, --toolchain, "{toolchain}", --profile, release, --bench]
+  # The heap guard's own contract: exact counts, thread scoping and failure reporting.
+  - name: heap-guard-contract
+    group: tests
+    roles: [current, msrv]
+    timeout: 1200
+    command: [cargo, "+{toolchain}", test, --locked, --all-features, --test, heap_guard_contract]
+  - name: heap-guard-not-installed
+    group: tests
+    roles: [current, msrv]
+    timeout: 1200
+    completion: libtest
+    command: [cargo, "+{toolchain}", test, --locked, --all-features, --test, heap_guard_not_installed]
+  # A window that needs the C-level observer refuses to run without it. The positive
+  # controls need the observer preloaded and run from tools outside this gate.
+  - name: heap-guard-c-level-not-loaded
+    group: tests
+    roles: [current, msrv]
+    timeout: 1200
+    completion: libtest
+    command: [cargo, "+{toolchain}", test, --locked, --all-features, --test, heap_guard_c_level_not_loaded]
+  # Cold-thread and owned-frame runtime paths, windows are thread-scoped.
+  - name: runtime-heap-coverage
+    group: tests
+    roles: [current, msrv]
+    timeout: 1200
+    completion: libtest
+    command: [cargo, "+{toolchain}", test, --locked, --all-features, --test, runtime_heap_coverage]
+  - name: payload-fixture-core
+    group: tests
+    roles: [current, msrv]
+    timeout: 1200
+    completion: libtest
+    command: [cargo, "+{toolchain}", test, --locked, -p, up-rust, --no-default-features, --features, payload-contract-fixtures, --test, payload_contract, --test, payload_contract_vectors]
+  - name: payload-fixture-full
+    group: tests
+    roles: [current, msrv]
+    timeout: 1200
+    completion: libtest
+    command: [cargo, "+{toolchain}", test, --locked, -p, up-rust, --all-features, --test, payload_contract, --test, payload_contract_vectors]
+  # Typed/application role suites share one feature union, a superset of each
+  # target's required-features, so one SDK build serves all of them.
+  - name: typed-application
+    group: tests
+    roles: [current, msrv]
+    timeout: 1200
+    completion: libtest
+    command: [cargo, "+{toolchain}", test, --locked, -p, up-rust, --no-default-features, --features, "typed-communication,payload-contract-fixtures,wire-implementer-api,test-util,util,up-l2-zero-copy", --test, typed_application]
+  - name: user-first-application
+    group: tests
+    roles: [current, msrv]
+    timeout: 1200
+    completion: libtest
+    command: [cargo, "+{toolchain}", test, --locked, -p, up-rust, --no-default-features, --features, "typed-communication,payload-contract-fixtures,wire-implementer-api,test-util,util,up-l2-zero-copy", --test, user_first_application]
+  - name: user-first-bindings
+    group: tests
+    roles: [current, msrv]
+    timeout: 1200
+    completion: libtest
+    command: [cargo, "+{toolchain}", test, --locked, -p, up-rust, --no-default-features, --features, "typed-communication,payload-contract-fixtures,wire-implementer-api,test-util,util,up-l2-zero-copy", --test, user_first_bindings]
+  - name: user-first-recovery
+    group: tests
+    roles: [current, msrv]
+    timeout: 1200
+    completion: libtest
+    command: [cargo, "+{toolchain}", test, --locked, -p, up-rust, --no-default-features, --features, "typed-communication,payload-contract-fixtures,wire-implementer-api,test-util,util,up-l2-zero-copy", --test, user_first_recovery]
+  - name: native-retained-cleanup
+    group: tests
+    roles: [current, msrv]
+    timeout: 1200
+    completion: libtest
+    command: [cargo, "+{toolchain}", test, --locked, -p, up-rust, --no-default-features, --features, "typed-communication,payload-contract-fixtures,wire-implementer-api,test-util,util,up-l2-zero-copy", --test, native_retained_cleanup]
+  - name: independent-roles
+    group: tests
+    roles: [current, msrv]
+    timeout: 1200
+    completion: libtest
+    command: [cargo, "+{toolchain}", test, --locked, -p, up-rust, --no-default-features, --features, "typed-communication,payload-contract-fixtures,wire-implementer-api,test-util,util,up-l2-zero-copy", --test, independent_roles, --test, independent_roles_proof]
+  - name: independent-native-roles
+    group: tests
+    roles: [current, msrv]
+    timeout: 1200
+    completion: libtest
+    command: [cargo, "+{toolchain}", test, --locked, -p, up-rust, --no-default-features, --features, "typed-communication,payload-contract-fixtures,wire-implementer-api,test-util,util,up-l2-zero-copy", --test, independent_native_roles, --test, independent_native_roles_proof]
+  - name: owned-rpc-join
+    group: tests
+    roles: [current, msrv]
+    timeout: 1200
+    completion: libtest
+    command: [cargo, "+{toolchain}", test, --locked, -p, up-rust, --no-default-features, --features, "typed-communication,payload-contract-fixtures,wire-implementer-api,test-util,util,up-l2-zero-copy", --test, owned_rpc_join]
+  - name: role-set
+    group: tests
+    roles: [current, msrv]
+    timeout: 1200
+    completion: libtest
+    command: [cargo, "+{toolchain}", test, --locked, -p, up-rust, --no-default-features, --features, "typed-communication,payload-contract-fixtures,wire-implementer-api,test-util,util,up-l2-zero-copy", --test, role_set]
+  - name: schema-simple-path
+    group: tests
+    roles: [current, msrv]
+    timeout: 1200
+    completion: libtest
+    command: [cargo, "+{toolchain}", test, --locked, -p, up-rust, --no-default-features, --features, "typed-communication,payload-contract-fixtures,wire-implementer-api,test-util,util,up-l2-zero-copy", --test, schema_simple_path]
+  - name: carriage-admission
+    group: tests
+    roles: [current, msrv]
+    timeout: 1200
+    completion: libtest
+    command: [cargo, "+{toolchain}", test, --locked, -p, up-rust, --no-default-features, --features, "typed-communication,payload-contract-fixtures,wire-implementer-api,test-util,util,up-l2-zero-copy", --test, carriage_admission]
+  # The same simple-path targets on the minimal feature set their [[test]] entries declare.
+  - name: application-roles-minimal
+    group: tests
+    roles: [current, msrv]
+    timeout: 1200
+    completion: libtest
+    command: [cargo, "+{toolchain}", test, --locked, -p, up-rust, --no-default-features, --features, "typed-communication,test-util", --test, role_set, --test, schema_simple_path, --test, carriage_admission]
+  # Typed addressing needs no features beyond the default build.
+  - name: entity-addressing
+    group: tests
+    roles: [current, msrv]
+    timeout: 600
+    completion: libtest
+    command: [cargo, "+{toolchain}", test, --locked, -p, up-rust, --no-default-features, --test, entity_addressing]
+  # Dispatch allocation controls count calling-thread allocations; both targets
+  # share their declared feature set and also run with the release profile.
+  - name: serialized-dispatch
+    group: tests
+    roles: [current, msrv]
+    timeout: 1200
+    completion: libtest
+    command: [cargo, "+{toolchain}", test, --locked, -p, up-rust, --no-default-features, --features, "owned-frame-transport,transport-implementer-api,wire-implementer-api,typed-communication,test-util", --test, serialized_dispatch, --test, serialized_dispatch_controls]
+  - name: serialized-dispatch-release
+    group: tests
+    roles: [current, msrv]
+    timeout: 1800
+    completion: libtest
+    command: [cargo, "+{toolchain}", test, --locked, --release, -p, up-rust, --no-default-features, --features, "owned-frame-transport,transport-implementer-api,wire-implementer-api,typed-communication,test-util", --test, serialized_dispatch, --test, serialized_dispatch_controls]

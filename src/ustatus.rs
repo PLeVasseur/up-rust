@@ -17,61 +17,95 @@ use bytes::Bytes;
 
 use crate::SerializationError;
 
+/// Canonical status codes for uProtocol operations.
+///
+/// These mirror the gRPC canonical codes, as required by the uProtocol
+/// specification; every transport and role reports failures through
+/// them. The application guide shows how
+/// callers act on the common ones.
 #[derive(Copy, Debug, Clone, PartialEq)]
 #[repr(C)]
 pub enum UCode {
+    /// Not an error; the operation completed successfully.
     Ok = 0,
+    /// The operation was cancelled, typically by the caller.
     Cancelled = 1,
+    /// Unknown error, or an error from a foreign error space.
     Unknown = 2,
+    /// The caller specified an invalid argument, regardless of system state.
     InvalidArgument = 3,
+    /// A deadline expired before the operation could complete.
     DeadlineExceeded = 4,
+    /// A requested entity (listener, topic, resource) was not found.
     NotFound = 5,
+    /// The entity a caller attempted to create already exists.
     AlreadyExists = 6,
+    /// The caller lacks permission to execute the operation.
     PermissionDenied = 7,
+    /// A resource (quota, buffer space, loan capacity) has been exhausted.
     ResourceExhausted = 8,
+    /// The system is not in a state required for the operation.
     FailedPrecondition = 9,
+    /// The operation was aborted, typically due to a concurrency conflict.
     Aborted = 10,
+    /// The operation was attempted past the valid range.
     OutOfRange = 11,
+    /// The operation is not implemented or supported by this transport or service.
     Unimplemented = 12,
+    /// An internal invariant was broken; a bug in the implementation.
     Internal = 13,
+    /// The service or link is currently unavailable; retrying may succeed.
     Unavailable = 14,
+    /// Unrecoverable data loss or corruption.
     DataLoss = 15,
+    /// The request lacks valid authentication credentials.
     Unauthenticated = 16,
 }
 
 impl UCode {
+    /// Converts from the protobuf wire value.
+    ///
+    /// # Errors
+    ///
+    /// Returns an error if `value` is not a defined code.
     pub fn try_from_i32(value: i32) -> Result<Self, SerializationError> {
-        match value {
-            x if x == UCode::Ok as i32 => Ok(UCode::Ok),
-            x if x == UCode::Cancelled as i32 => Ok(UCode::Cancelled),
-            x if x == UCode::Unknown as i32 => Ok(UCode::Unknown),
-            x if x == UCode::InvalidArgument as i32 => Ok(UCode::InvalidArgument),
-            x if x == UCode::DeadlineExceeded as i32 => Ok(UCode::DeadlineExceeded),
-            x if x == UCode::NotFound as i32 => Ok(UCode::NotFound),
-            x if x == UCode::AlreadyExists as i32 => Ok(UCode::AlreadyExists),
-            x if x == UCode::PermissionDenied as i32 => Ok(UCode::PermissionDenied),
-            x if x == UCode::ResourceExhausted as i32 => Ok(UCode::ResourceExhausted),
-            x if x == UCode::FailedPrecondition as i32 => Ok(UCode::FailedPrecondition),
-            x if x == UCode::Aborted as i32 => Ok(UCode::Aborted),
-            x if x == UCode::OutOfRange as i32 => Ok(UCode::OutOfRange),
-            x if x == UCode::Unimplemented as i32 => Ok(UCode::Unimplemented),
-            x if x == UCode::Internal as i32 => Ok(UCode::Internal),
-            x if x == UCode::Unavailable as i32 => Ok(UCode::Unavailable),
-            x if x == UCode::DataLoss as i32 => Ok(UCode::DataLoss),
-            x if x == UCode::Unauthenticated as i32 => Ok(UCode::Unauthenticated),
-            _ => Err(SerializationError::new(format!(
-                "unknown UCode value: {}",
-                value
-            ))),
-        }
+        Self::from_i32(value)
+            .ok_or_else(|| SerializationError::new(format!("unknown UCode value: {value}")))
     }
 
+    /// Converts a defined wire value without allocating an error for unknown codes.
+    #[must_use]
+    pub const fn from_i32(value: i32) -> Option<Self> {
+        Some(match value {
+            0 => Self::Ok,
+            1 => Self::Cancelled,
+            2 => Self::Unknown,
+            3 => Self::InvalidArgument,
+            4 => Self::DeadlineExceeded,
+            5 => Self::NotFound,
+            6 => Self::AlreadyExists,
+            7 => Self::PermissionDenied,
+            8 => Self::ResourceExhausted,
+            9 => Self::FailedPrecondition,
+            10 => Self::Aborted,
+            11 => Self::OutOfRange,
+            12 => Self::Unimplemented,
+            13 => Self::Internal,
+            14 => Self::Unavailable,
+            15 => Self::DataLoss,
+            16 => Self::Unauthenticated,
+            _ => return None,
+        })
+    }
+
+    /// Returns the protobuf wire value of this code.
     #[must_use]
     pub fn value(&self) -> i32 {
         *self as i32
     }
 }
 
+/// Minimal `google.protobuf.Any` carrier: a type URL plus serialized bytes.
 #[derive(Debug, Clone, PartialEq)]
 #[repr(C)]
 pub struct UAny {
@@ -80,6 +114,7 @@ pub struct UAny {
 }
 
 impl UAny {
+    /// Creates a carrier from a type URL and serialized value bytes.
     pub fn new<V: Into<Bytes>>(type_url: String, value: V) -> Self {
         UAny {
             type_url,
@@ -87,15 +122,18 @@ impl UAny {
         }
     }
 
-    pub fn get_type_url(&self) -> &str {
+    /// Returns the type URL identifying the payload type.
+    pub fn type_url(&self) -> &str {
         &self.type_url
     }
 
-    pub fn get_value(&self) -> &[u8] {
+    /// Returns the serialized value bytes.
+    pub fn value(&self) -> &[u8] {
         &self.value
     }
 }
 
+/// Operation status: a [`UCode`] with optional message and details.
 #[derive(Debug, Clone, PartialEq)]
 #[repr(C)]
 pub struct UStatus {
@@ -113,7 +151,7 @@ impl UStatus {
     /// use up_rust::{UCode, UStatus};
     ///
     /// let status = UStatus::ok();
-    /// assert_eq!(status.get_code(), UCode::Ok);
+    /// assert_eq!(status.code(), UCode::Ok);
     /// ```
     #[must_use]
     pub fn ok() -> Self {
@@ -132,8 +170,8 @@ impl UStatus {
     /// use up_rust::{UCode, UStatus};
     ///
     /// let status = UStatus::fail_with_code(UCode::DataLoss, "something went wrong");
-    /// assert_eq!(status.get_code(), UCode::DataLoss);
-    /// assert_eq!(status.get_message().unwrap(), "something went wrong");
+    /// assert_eq!(status.code(), UCode::DataLoss);
+    /// assert_eq!(status.message().unwrap(), "something went wrong");
     /// ```
     pub fn fail_with_code<M: Into<std::string::String>>(code: UCode, msg: M) -> Self {
         Self::new(code, Some(msg), None)
@@ -147,9 +185,9 @@ impl UStatus {
     /// use up_rust::{UCode, UStatus};
     ///
     /// let status = UStatus::new(UCode::DataLoss, Some("something went wrong"), None);
-    /// assert_eq!(status.get_code(), UCode::DataLoss);
-    /// assert_eq!(status.get_message().unwrap(), "something went wrong");
-    /// assert!(status.get_details().is_empty());
+    /// assert_eq!(status.code(), UCode::DataLoss);
+    /// assert_eq!(status.message().unwrap(), "something went wrong");
+    /// assert!(status.details().is_empty());
     /// ```
     pub fn new<M: Into<std::string::String>>(
         code: UCode,
@@ -178,7 +216,7 @@ impl UStatus {
     /// ```
     #[must_use]
     pub fn is_failed(&self) -> bool {
-        self.get_code() != UCode::Ok
+        self.code() != UCode::Ok
     }
 
     /// Checks if this status represents a success.
@@ -196,7 +234,7 @@ impl UStatus {
     /// ```
     #[must_use]
     pub fn is_success(&self) -> bool {
-        self.get_code() == UCode::Ok
+        self.code() == UCode::Ok
     }
 
     /// Gets this status' error message.
@@ -211,13 +249,13 @@ impl UStatus {
     /// use up_rust::{UCode, UStatus};
     ///
     /// let failed_status = UStatus::fail_with_code(UCode::Internal, "my error message");
-    /// assert_eq!(failed_status.get_message(), Some("my error message"));
+    /// assert_eq!(failed_status.message(), Some("my error message"));
     ///
     /// let succeeded_status = UStatus::ok();
-    /// assert!(succeeded_status.get_message().is_none());
+    /// assert!(succeeded_status.message().is_none());
     /// ```
     #[must_use]
-    pub fn get_message(&self) -> Option<&str> {
+    pub fn message(&self) -> Option<&str> {
         self.message.as_deref()
     }
 
@@ -237,14 +275,14 @@ impl UStatus {
     /// use up_rust::{UCode, UStatus};
     ///
     /// let failed_status = UStatus::fail_with_code(UCode::Internal, "my error message");
-    /// assert_eq!(failed_status.get_message_or_default("default"), "my error message");
+    /// assert_eq!(failed_status.message_or_default("default"), "my error message");
     ///
     /// let succeeded_status = UStatus::ok();
-    /// assert_eq!(succeeded_status.get_message_or_default("default"), "default");
+    /// assert_eq!(succeeded_status.message_or_default("default"), "default");
     /// ```
     #[must_use]
-    pub fn get_message_or_default<'a>(&'a self, default: &'a str) -> &'a str {
-        self.get_message().unwrap_or(default)
+    pub fn message_or_default<'a>(&'a self, default: &'a str) -> &'a str {
+        self.message().unwrap_or(default)
     }
 
     /// Gets this status' error code.
@@ -255,10 +293,10 @@ impl UStatus {
     /// use up_rust::{UCode, UStatus};
     ///
     /// let status_with_code = UStatus::fail_with_code(UCode::Internal, "my error message");
-    /// assert_eq!(status_with_code.get_code(), UCode::Internal);
+    /// assert_eq!(status_with_code.code(), UCode::Internal);
     /// ```
     #[must_use]
-    pub fn get_code(&self) -> UCode {
+    pub fn code(&self) -> UCode {
         self.code
     }
 
@@ -271,13 +309,13 @@ impl UStatus {
     ///
     /// let details = vec![UAny::new("type.googleapis.com/google.protobuf.StringValue".to_string(), b"the string".as_ref())];
     /// let status_with_details = UStatus::new(UCode::Internal, Some("my error message"), Some(details.clone()));
-    /// assert_eq!(status_with_details.get_details(), details.as_slice());
+    /// assert_eq!(status_with_details.details(), details.as_slice());
     ///
     /// let status_without_details = UStatus::fail_with_code(UCode::Internal, "my error message");
-    /// assert!(status_without_details.get_details().is_empty());
+    /// assert!(status_without_details.details().is_empty());
     /// ```
     #[must_use]
-    pub fn get_details(&self) -> &[UAny] {
+    pub fn details(&self) -> &[UAny] {
         &self.details
     }
 }
@@ -285,21 +323,21 @@ impl UStatus {
 impl std::fmt::Display for UStatus {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         let mut s = String::from("UStatus [");
-        s.push_str(&format!("code: {:?}", self.get_code()));
-        if let Some(msg) = self.get_message() {
+        s.push_str(&format!("code: {:?}", self.code()));
+        if let Some(msg) = self.message() {
             s.push_str(&format!(", message: {msg}"));
         }
-        if !self.get_details().is_empty() {
-            s.push_str(&format!(", details: {:?}", self.get_details()));
+        if !self.details().is_empty() {
+            s.push_str(&format!(", details: {:?}", self.details()));
         }
         s.push(']');
-        write!(f, "{}", s)
+        write!(f, "{s}")
     }
 }
 
 impl Error for UStatus {}
 
-#[cfg(feature = "up-core-types")]
+#[cfg(feature = "up-core-api")]
 mod core_types_support {
     use protobuf::{well_known_types::any::Any, Message};
 
@@ -398,9 +436,9 @@ mod core_types_support {
     impl From<&UStatus> for UStatusProto {
         fn from(value: &UStatus) -> Self {
             UStatusProto {
-                code: UCodeProto::from(value.get_code()).into(),
-                message: value.get_message().map(|m| m.to_string()),
-                details: value.get_details().iter().map(Any::from).collect(),
+                code: UCodeProto::from(value.code()).into(),
+                message: value.message().map(|m| m.to_string()),
+                details: value.details().iter().map(Any::from).collect(),
                 ..Default::default()
             }
         }
@@ -466,13 +504,13 @@ mod tests {
     fn test_ustatus_fail_with_code() {
         for code in ALL_UCODES {
             let ustatus = UStatus::fail_with_code(*code, "the message");
-            assert!(ustatus.get_code() == *code && ustatus.get_message() == Some("the message"));
+            assert!(ustatus.code() == *code && ustatus.message() == Some("the message"));
         }
     }
 
     #[test]
     // [utest->req~ustatus-data-model-proto~1]
-    #[cfg(feature = "up-core-types")]
+    #[cfg(feature = "up-core-api")]
     fn test_proto_serialization() {
         use crate::ProtobufMappable;
 

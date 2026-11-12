@@ -1,0 +1,5 @@
+error: inventory requires a concrete type; use register_native_type! for a generic instantiation
+ --> tests/ui/stable_payload/generic_inventory_requires_concrete_registration.rs:6:15
+  |
+6 | struct Generic<T: 'static> {
+  |               ^^^^^^^^^^^^

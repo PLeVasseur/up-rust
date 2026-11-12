@@ -20,22 +20,23 @@
 // [impl->dsn~cloudevents-umessage-mapping~2]
 
 use crate::{
-    UAttributes, UAttributesError, UAttributesValidators, UCode, UMessage, UMessageError,
-    UMessageType, UPayloadFormat, UPriority, UUri, UUID,
+    PayloadEncoding, UAttributes, UAttributesError, UCode, UMessage, UMessageError, UMessageType,
+    UPriority, UUri, UUID,
 };
 use bytes::Bytes;
-use protobuf::well_known_types::any::Any;
 
-pub use cloudevents::{cloud_event::CloudEventAttributeValue, CloudEvent};
+pub use cloudevents::{cloud_event, cloud_event::CloudEventAttributeValue, CloudEvent};
 
 include!(concat!(env!("OUT_DIR"), "/cloudevents/mod.rs"));
 
 // The _official_ content type to use for CloudEvents serialized using the
 // protobuf format.
+/// MIME content type for protobuf-encoded CloudEvents.
 pub const CONTENT_TYPE_CLOUDEVENTS_PROTOBUF: &str = "application/cloudevents+protobuf";
 
 const CLOUDEVENTS_SPEC_VERSION: &str = "1.0";
 
+const ATTRIBUTE_NAME_DATACONTENTTYPE: &str = "datacontenttype";
 const EXTENSION_NAME_COMMSTATUS: &str = "commstatus";
 const EXTENSION_NAME_PERMISSION_LEVEL: &str = "plevel";
 const EXTENSION_NAME_PFORMAT: &str = "pformat";
@@ -85,8 +86,7 @@ impl CloudEvent {
                     .map_err(|e| UAttributesError::parsing_error(e.to_string()));
             } else {
                 return Err(UAttributesError::parsing_error(format!(
-                    "expected URI reference for {} extension attribute but found {:?}",
-                    EXTENSION_NAME_SINK, extension_value
+                    "expected URI reference for {EXTENSION_NAME_SINK} extension attribute but found {extension_value:?}"
                 )));
             }
         }
@@ -105,8 +105,7 @@ impl CloudEvent {
                 return UPriority::try_from_priority_code(extension_value.ce_string());
             } else {
                 return Err(UAttributesError::parsing_error(format!(
-                    "expected String value for {} extension attribute but found {:?}",
-                    EXTENSION_NAME_PRIORITY, extension_value
+                    "expected String value for {EXTENSION_NAME_PRIORITY} extension attribute but found {extension_value:?}"
                 )));
             }
         }
@@ -125,11 +124,10 @@ impl CloudEvent {
             if extension_value.has_ce_integer() {
                 return u32::try_from(extension_value.ce_integer())
                     .map(Option::Some)
-                    .map_err(|_e| UAttributesError::parsing_error(format!("expected unsigned Integer value for {} extension attribute but found {:?}", EXTENSION_NAME_TTL, extension_value)));
+                    .map_err(|_e| UAttributesError::parsing_error(format!("expected unsigned Integer value for {EXTENSION_NAME_TTL} extension attribute but found {extension_value:?}")));
             } else {
                 return Err(UAttributesError::parsing_error(format!(
-                    "expected Integer value for {} extension attribute but found {:?}",
-                    EXTENSION_NAME_TTL, extension_value
+                    "expected Integer value for {EXTENSION_NAME_TTL} extension attribute but found {extension_value:?}"
                 )));
             }
         }
@@ -150,8 +148,7 @@ impl CloudEvent {
                 return Ok(Some(extension_value.ce_string().to_string()));
             } else {
                 return Err(UAttributesError::parsing_error(format!(
-                    "expected String value for {} extension attribute but found {:?}",
-                    EXTENSION_NAME_TOKEN, extension_value
+                    "expected String value for {EXTENSION_NAME_TOKEN} extension attribute but found {extension_value:?}"
                 )));
             }
         }
@@ -170,11 +167,10 @@ impl CloudEvent {
             if extension_value.has_ce_integer() {
                 return u32::try_from(extension_value.ce_integer())
                     .map(Option::Some)
-                    .map_err(|_e| UAttributesError::parsing_error(format!("expected unsigned Integer value for {} extension attribute but found {:?}", EXTENSION_NAME_PERMISSION_LEVEL, extension_value)));
+                    .map_err(|_e| UAttributesError::parsing_error(format!("expected unsigned Integer value for {EXTENSION_NAME_PERMISSION_LEVEL} extension attribute but found {extension_value:?}")));
             } else {
                 return Err(UAttributesError::parsing_error(format!(
-                    "expected Integer value for {} extension attribute but found {:?}",
-                    EXTENSION_NAME_PERMISSION_LEVEL, extension_value
+                    "expected Integer value for {EXTENSION_NAME_PERMISSION_LEVEL} extension attribute but found {extension_value:?}"
                 )));
             }
         }
@@ -200,8 +196,7 @@ impl CloudEvent {
                     .map_err(|e| UAttributesError::parsing_error(e.to_string()));
             } else {
                 return Err(UAttributesError::parsing_error(format!(
-                    "expected String value for {} extension attribute but found {:?}",
-                    EXTENSION_NAME_REQUEST_ID, extension_value
+                    "expected String value for {EXTENSION_NAME_REQUEST_ID} extension attribute but found {extension_value:?}"
                 )));
             }
         }
@@ -229,8 +224,7 @@ impl CloudEvent {
                     });
             } else {
                 return Err(UAttributesError::parsing_error(format!(
-                    "expected Integer value for {} extension attribute but found {:?}",
-                    EXTENSION_NAME_COMMSTATUS, extension_value
+                    "expected Integer value for {EXTENSION_NAME_COMMSTATUS} extension attribute but found {extension_value:?}"
                 )));
             }
         }
@@ -252,8 +246,7 @@ impl CloudEvent {
                 return Ok(Some(extension_value.ce_string().to_string()));
             } else {
                 return Err(UAttributesError::parsing_error(format!(
-                    "expected String value for {} extension attribute but found {:?}",
-                    EXTENSION_NAME_TRACEPARENT, extension_value
+                    "expected String value for {EXTENSION_NAME_TRACEPARENT} extension attribute but found {extension_value:?}"
                 )));
             }
         }
@@ -267,33 +260,40 @@ impl CloudEvent {
             .insert(EXTENSION_NAME_TRACEPARENT.to_string(), val);
     }
 
-    fn get_payload_format(&self) -> Result<UPayloadFormat, UAttributesError> {
+    fn get_payload_encoding(&self) -> Result<Option<PayloadEncoding>, UAttributesError> {
         if let Some(extension_value) = self.attributes.get(EXTENSION_NAME_PFORMAT) {
             if extension_value.has_ce_integer() {
-                return UPayloadFormat::try_from_i32(extension_value.ce_integer()).map_err(|_e| {
+                let id = u32::try_from(extension_value.ce_integer()).map_err(|_| {
                     UAttributesError::parsing_error(format!(
-                        "unsupported payload format {:?} in {} extension attribute",
-                        extension_value.ce_integer(),
-                        EXTENSION_NAME_PFORMAT
+                        "negative payload-encoding identifier in {EXTENSION_NAME_PFORMAT} extension attribute"
+                    ))
+                })?;
+                return PayloadEncoding::from_id(id).map(Some).map_err(|_| {
+                    UAttributesError::parsing_error(format!(
+                        "payload-encoding identifier exceeds 65535 in {EXTENSION_NAME_PFORMAT} extension attribute"
                     ))
                 });
             } else {
                 return Err(UAttributesError::parsing_error(format!(
-                    "expected Integer value for {} extension attribute but found {:?}",
-                    EXTENSION_NAME_PFORMAT, extension_value
+                    "expected Integer value for {EXTENSION_NAME_PFORMAT} extension attribute but found {extension_value:?}"
                 )));
             }
         }
-        Ok(UPayloadFormat::Unspecified)
+        Ok(None)
     }
 
-    fn set_payload_format(&mut self, format: UPayloadFormat) {
-        if format != UPayloadFormat::Unspecified {
-            let mut val = CloudEventAttributeValue::new();
-            val.set_ce_integer(format.as_i32());
-            self.attributes
-                .insert(EXTENSION_NAME_PFORMAT.to_string(), val);
-        }
+    fn set_payload_encoding(&mut self, encoding: PayloadEncoding) -> Result<(), UMessageError> {
+        let id = i32::try_from(encoding.id()).map_err(|_| {
+            UMessageError::PayloadError(format!(
+                "payload-encoding identifier {} exceeds the CloudEvents integer range",
+                encoding.id()
+            ))
+        })?;
+        let mut val = CloudEventAttributeValue::new();
+        val.set_ce_integer(id);
+        self.attributes
+            .insert(EXTENSION_NAME_PFORMAT.to_string(), val);
+        Ok(())
     }
 }
 
@@ -328,7 +328,7 @@ impl TryFrom<UMessage> for CloudEvent {
         if let Some(priority) = message.priority() {
             event.set_priority(priority);
         }
-        if let Some(ttl) = message.ttl() {
+        if let Some(ttl) = message.ttl().filter(|ttl| *ttl > 0) {
             event.set_ttl(ttl)?;
         }
         if let Some(token) = message.token() {
@@ -346,37 +346,19 @@ impl TryFrom<UMessage> for CloudEvent {
         if let Some(traceparent) = message.traceparent() {
             event.set_traceparent(traceparent);
         }
-        let payload_format = message
-            .payload_format()
-            .unwrap_or(UPayloadFormat::Unspecified);
         if let Some(payload) = message.payload() {
-            event.set_payload_format(payload_format);
-            match payload_format {
-                UPayloadFormat::Protobuf | UPayloadFormat::ProtobufWrappedInAny => {
-                    let data = Any {
-                        value: payload.to_vec(),
-                        ..Default::default()
-                    };
-                    event.set_proto_data(data);
-                }
-                UPayloadFormat::Text | UPayloadFormat::Json => {
-                    let data = String::from_utf8(payload.to_vec())
-                        .map(|v| v.to_string())
-                        .map_err(|_e| {
-                            UMessageError::PayloadError(
-                                "failed to transform payload to string".to_string(),
-                            )
-                        })?;
-                    event.set_text_data(data);
-                }
-                UPayloadFormat::Unspecified
-                | UPayloadFormat::Raw
-                | UPayloadFormat::Shm
-                | UPayloadFormat::Someip
-                | UPayloadFormat::SomeipTlv => {
-                    event.set_binary_data(payload.to_vec());
-                }
-            }
+            let Some(payload_encoding) = message.payload_encoding() else {
+                return Err(UMessageError::PayloadError(
+                    "message payload has no declared encoding".to_string(),
+                ));
+            };
+            event.set_payload_encoding(payload_encoding)?;
+            let mut content_type = CloudEventAttributeValue::new();
+            content_type.set_ce_string("application/octet-stream".to_owned());
+            event
+                .attributes
+                .insert(ATTRIBUTE_NAME_DATACONTENTTYPE.to_owned(), content_type);
+            event.set_binary_data(payload.to_vec());
         }
         Ok(event)
     }
@@ -410,32 +392,43 @@ impl TryFrom<CloudEvent> for UMessage {
             source: event.get_source()?,
             sink: event.get_sink()?,
             priority: Some(event.get_priority()?),
-            ttl: event.get_ttl()?,
+            ttl: event.get_ttl()?.filter(|ttl| *ttl > 0),
             permission_level: event.get_permission_level()?,
             reqid: event.get_request_id()?,
             token: event.get_token()?,
             traceparent: event.get_traceparent()?,
-            payload_format: Some(event.get_payload_format()?),
+            payload_encoding_id: event.get_payload_encoding()?,
         };
-        UAttributesValidators::get_validator_for_attributes(&attributes).validate(&attributes)?;
+
+        if attributes.payload_encoding().is_none()
+            && (event.has_binary_data() || event.has_text_data() || event.has_proto_data())
+        {
+            return Err(UMessageError::PayloadError(
+                "payload data property requires pformat, regardless of its type".to_owned(),
+            ));
+        }
 
         let payload = if event.has_binary_data() {
             Some(Bytes::copy_from_slice(event.binary_data()))
-        } else if event.has_text_data() {
-            Some(event.text_data().to_owned().into())
-        } else if event.has_proto_data() {
-            Some(event.proto_data().value.to_vec().into())
+        } else if event.has_text_data() || event.has_proto_data() {
+            return Err(UMessageError::PayloadError(
+                "typed CloudEvents text_data and proto_data are unsupported; use opaque binary_data"
+                    .to_owned(),
+            ));
         } else {
             None
         };
 
+        // this will also validate the attributes and return an error if they are not valid
         UMessage::new(attributes, payload)
     }
 }
 
 #[cfg(test)]
 mod tests {
+    use protobuf::well_known_types::any::Any;
     use std::str::FromStr;
+    use test_case::test_case;
 
     use cloudevents::CloudEvent;
     use protobuf::{well_known_types::wrappers::StringValue, Message};
@@ -445,10 +438,10 @@ mod tests {
     use super::*;
 
     const MESSAGE_ID: &str = "00000000-0001-7000-8010-101010101a1a";
-    const TOPIC: &str = "//my-vehicle/A81B/1/A9BA";
-    const METHOD: &str = "//my-vehicle/A000/2/1";
-    const REPLY_TO: &str = "//my-vehicle/A81B/1/0";
-    const DESTINATION: &str = "//my-vehicle/A000/2/0";
+    const TOPIC: &str = "//my-vehicle/A81B/1/1/A9BA";
+    const METHOD: &str = "//my-vehicle/A000/1/2/1";
+    const REPLY_TO: &str = "//my-vehicle/A81B/1/1/0";
+    const DESTINATION: &str = "//my-vehicle/A000/1/2/0";
     const PERMISSION_LEVEL: u32 = 5;
     const PRIORITY: UPriority = UPriority::CS4;
     const TTL: u32 = 15_000;
@@ -512,7 +505,7 @@ mod tests {
                 .with_priority(PRIORITY)
                 .with_ttl(TTL)
                 .with_traceparent(TRACEPARENT)
-                .build_with_payload("test".as_bytes(), UPayloadFormat::Text)
+                .build_with_payload("test".as_bytes(), PayloadEncoding::TEXT)
                 .expect("failed to create message");
 
         let event =
@@ -523,9 +516,9 @@ mod tests {
                 .attributes
                 .get(EXTENSION_NAME_PFORMAT)
                 .map(|v| v.ce_integer()),
-            Some(UPayloadFormat::Text.as_i32())
+            Some(PayloadEncoding::TEXT.id() as i32)
         );
-        assert_eq!(event.text_data(), "test");
+        assert_eq!(event.binary_data(), b"test");
     }
 
     #[test]
@@ -541,7 +534,7 @@ mod tests {
         .with_priority(PRIORITY)
         .with_ttl(TTL)
         .with_traceparent(TRACEPARENT)
-        .build_with_payload("{\"count\": 5}".as_bytes(), UPayloadFormat::Json)
+        .build_with_payload("{\"count\": 5}".as_bytes(), PayloadEncoding::JSON)
         .expect("failed to create message");
 
         let event =
@@ -557,9 +550,9 @@ mod tests {
                 .attributes
                 .get(EXTENSION_NAME_PFORMAT)
                 .map(|v| v.ce_integer()),
-            Some(UPayloadFormat::Json.as_i32())
+            Some(PayloadEncoding::JSON.id() as i32)
         );
-        assert_eq!(event.text_data(), "{\"count\": 5}");
+        assert_eq!(event.binary_data(), b"{\"count\": 5}");
     }
 
     #[test]
@@ -579,7 +572,7 @@ mod tests {
         .with_permission_level(PERMISSION_LEVEL)
         .with_traceparent(TRACEPARENT)
         .with_token(token)
-        .build_with_payload(payload.as_slice(), UPayloadFormat::Raw)
+        .build_with_payload(payload.as_slice(), PayloadEncoding::RAW)
         .expect("failed to create message");
         let event =
             CloudEvent::try_from(message).expect("failed to create CloudEvent from UMessage");
@@ -608,7 +601,7 @@ mod tests {
                 .attributes
                 .get(EXTENSION_NAME_PFORMAT)
                 .map(|v| v.ce_integer()),
-            Some(UPayloadFormat::Raw.as_i32())
+            Some(PayloadEncoding::RAW.id() as i32)
         );
         assert!(!event.has_proto_data());
         assert!(!event.has_text_data());
@@ -658,16 +651,162 @@ mod tests {
                 .attributes
                 .get(EXTENSION_NAME_PFORMAT)
                 .map(|v| v.ce_integer()),
-            Some(UPayloadFormat::Protobuf.as_i32())
+            Some(PayloadEncoding::PROTOBUF.id() as i32)
         );
-        assert!(!event.has_binary_data());
+        assert!(event.has_binary_data());
         assert!(!event.has_text_data());
         assert_eq!(
-            event.proto_data().value,
+            event.binary_data(),
             Any::pack(&payload)
                 .expect("failed to pack payload into Any")
                 .value
         );
+    }
+
+    #[test_case(-1; "negative identifier")]
+    #[test_case(65536; "just above sixteen bits")]
+    #[test_case(i32::MAX; "maximum CloudEvents integer")]
+    fn incoming_encoding_must_be_within_the_unsigned_16_bit_range(id: i32) {
+        let mut event = CloudEvent::new();
+        let mut value = CloudEventAttributeValue::new();
+        value.set_ce_integer(id);
+        event
+            .attributes
+            .insert(EXTENSION_NAME_PFORMAT.to_owned(), value);
+        assert!(matches!(
+            event.get_payload_encoding(),
+            Err(UAttributesError::ParsingError(_))
+        ));
+    }
+
+    #[test_case(0, b""; "contract defined empty")]
+    #[test_case(0, b"\xff\0\x80{"; "contract defined arbitrary octets")]
+    #[test_case(1, b""; "Any empty")]
+    #[test_case(1, b"\xff\0\x80{"; "Any is not decoded")]
+    #[test_case(2, b""; "protobuf empty")]
+    #[test_case(2, b"\xff\0\x80{"; "protobuf is not decoded")]
+    #[test_case(3, b""; "JSON empty")]
+    #[test_case(3, b"\xff\0\x80{"; "JSON is not parsed")]
+    #[test_case(7, b""; "text empty")]
+    #[test_case(7, b"\xff\0\x80{"; "text is not decoded")]
+    #[test_case(8, b""; "unassigned empty")]
+    #[test_case(8, b"\xff\0\x80{"; "unassigned arbitrary octets")]
+    #[test_case(0xE000, b""; "reserved empty")]
+    #[test_case(0xE000, b"\xff\0\x80{"; "reserved arbitrary octets")]
+    #[test_case(0xFFFF, b""; "future reserved empty")]
+    #[test_case(0xFFFF, b"\xff\0\x80{"; "future reserved arbitrary octets")]
+    fn opaque_round_trip_preserves_octets_and_presence(id: u32, payload: &[u8]) {
+        let encoding = PayloadEncoding::from_id(id).unwrap();
+        // Carriage test: the message is built with a registered encoding and
+        // re-stamped as a carrier would, because builders refuse to originate
+        // reserved identifiers while carriage must preserve them.
+        let message = UMessageBuilder::publish(UUri::from_str(TOPIC).unwrap())
+            .with_ttl(0)
+            .build_with_payload(Bytes::copy_from_slice(payload), PayloadEncoding::RAW)
+            .unwrap()
+            .with_declared_payload_encoding(encoding)
+            .unwrap();
+        let event = CloudEvent::try_from(message).unwrap();
+        assert!(event.has_binary_data());
+        assert!(!event.has_text_data() && !event.has_proto_data());
+        assert_eq!(event.binary_data(), payload);
+        assert_eq!(event.get_payload_encoding().unwrap(), Some(encoding));
+        assert_eq!(
+            event
+                .attributes
+                .get(ATTRIBUTE_NAME_DATACONTENTTYPE)
+                .unwrap()
+                .ce_string(),
+            "application/octet-stream"
+        );
+        let serialized = event.write_to_bytes().unwrap();
+        let event = CloudEvent::parse_from_bytes(&serialized).unwrap();
+        let message = UMessage::try_from(event).unwrap();
+        assert_eq!(message.payload().unwrap().as_ref(), payload);
+        assert_eq!(message.payload_encoding(), Some(encoding));
+        assert_eq!(message.ttl(), None);
+    }
+
+    #[test]
+    fn payloadless_event_has_no_payload_metadata() {
+        let empty = UMessageBuilder::publish(UUri::from_str(TOPIC).unwrap())
+            .build()
+            .unwrap();
+        let event = CloudEvent::try_from(empty).unwrap();
+        assert!(!event.has_binary_data() && !event.has_text_data() && !event.has_proto_data());
+        assert!(!event.attributes.contains_key(EXTENSION_NAME_PFORMAT));
+        assert!(!event
+            .attributes
+            .contains_key(ATTRIBUTE_NAME_DATACONTENTTYPE));
+        assert!(UMessage::try_from(event).unwrap().payload().is_none());
+    }
+
+    #[test_case("binary"; "empty binary data still requires pformat")]
+    #[test_case("text"; "empty typed text still requires pformat")]
+    #[test_case("proto"; "empty typed proto still requires pformat")]
+    fn payload_data_without_encoding_is_rejected_before_typed_mapping(kind: &str) {
+        let message = UMessageBuilder::publish(UUri::from_str(TOPIC).unwrap())
+            .build_with_payload(Bytes::new(), PayloadEncoding::RAW)
+            .unwrap();
+        let mut event = CloudEvent::try_from(message).unwrap();
+        match kind {
+            "binary" => event.set_binary_data(Vec::new()),
+            "text" => event.set_text_data(String::new()),
+            "proto" => event.set_proto_data(Any::new()),
+            _ => unreachable!("test cases are exhaustive"),
+        }
+        event.attributes.remove(EXTENSION_NAME_PFORMAT);
+        assert!(matches!(
+            UMessage::try_from(event),
+            Err(UMessageError::PayloadError(message)) if message.contains("requires pformat")
+        ));
+    }
+
+    #[test_case(false; "text data cannot declare RAW")]
+    #[test_case(true; "protobuf data cannot declare RAW")]
+    fn typed_input_with_raw_encoding_is_rejected(proto: bool) {
+        let message = UMessageBuilder::publish(UUri::from_str(TOPIC).unwrap())
+            .build_with_payload(Bytes::new(), PayloadEncoding::RAW)
+            .unwrap();
+        let mut event = CloudEvent::try_from(message).unwrap();
+        if proto {
+            event.set_proto_data(Any::new());
+        } else {
+            event.set_text_data("text".to_owned());
+        }
+        assert!(matches!(
+            UMessage::try_from(event),
+            Err(UMessageError::PayloadError(_))
+        ));
+    }
+
+    #[test_case(PayloadEncoding::TEXT, false; "valid text encoding")]
+    #[test_case(PayloadEncoding::JSON, false; "valid JSON encoding")]
+    #[test_case(PayloadEncoding::PROTOBUF, true; "valid protobuf encoding")]
+    #[test_case(PayloadEncoding::PROTOBUF_WRAPPED_IN_ANY, true; "valid Any encoding")]
+    fn typed_input_is_rejected_even_with_valid_metadata(encoding: PayloadEncoding, proto: bool) {
+        let message = UMessageBuilder::publish(UUri::from_str(TOPIC).unwrap())
+            .build_with_payload(Bytes::new(), encoding)
+            .unwrap();
+        for empty in [false, true] {
+            let mut event = CloudEvent::try_from(message.clone()).unwrap();
+            if proto {
+                event.set_proto_data(Any {
+                    value: if empty { vec![] } else { vec![0xff, 0] },
+                    ..Default::default()
+                });
+            } else {
+                event.set_text_data(if empty {
+                    String::new()
+                } else {
+                    "valid text".into()
+                });
+            }
+            assert!(
+                matches!(UMessage::try_from(event), Err(UMessageError::PayloadError(message))
+                if message.contains("typed CloudEvents"))
+            );
+        }
     }
 
     //
@@ -698,7 +837,12 @@ mod tests {
         event.id = MESSAGE_ID.into();
         event.source = TOPIC.into();
 
-        assert!(UMessage::try_from(event).is_err());
+        assert!(matches!(
+            UMessage::try_from(event),
+            Err(UMessageError::AttributesValidationError(
+                UAttributesError::ValidationError(_)
+            ))
+        ));
     }
 
     #[test]
@@ -711,14 +855,16 @@ mod tests {
         event.set_priority(UPriority::CS4);
         event.set_ttl(TTL).expect("failed to set TTL on message");
         event.set_traceparent(TRACEPARENT);
-        event.set_payload_format(UPayloadFormat::Text);
-        event.set_text_data("test".to_string());
+        event
+            .set_payload_encoding(PayloadEncoding::TEXT)
+            .expect("valid payload encoding");
+        event.set_binary_data(b"test".to_vec());
 
         let umessage =
             UMessage::try_from(event).expect("failed to create UMessage from CloudEvent");
         let attribs = umessage.attributes();
         assert_standard_umessage_attributes(attribs, UMessageType::Publish, TOPIC, None);
-        assert_eq!(attribs.payload_format_unchecked(), UPayloadFormat::Text);
+        assert_eq!(attribs.payload_encoding().unwrap(), PayloadEncoding::TEXT);
         assert_eq!(umessage.payload(), Some("test".as_bytes().into()))
     }
 
@@ -733,8 +879,10 @@ mod tests {
         event.set_priority(UPriority::CS4);
         event.set_ttl(TTL).expect("failed to set TTL on message");
         event.set_traceparent(TRACEPARENT);
-        event.set_payload_format(UPayloadFormat::Json);
-        event.set_text_data("{\"count\": 5}".to_string());
+        event
+            .set_payload_encoding(PayloadEncoding::JSON)
+            .expect("valid payload encoding");
+        event.set_binary_data(b"{\"count\": 5}".to_vec());
 
         let umessage =
             UMessage::try_from(event).expect("failed to create UMessage from CloudEvent");
@@ -745,7 +893,7 @@ mod tests {
             TOPIC,
             Some(DESTINATION.to_string()),
         );
-        assert_eq!(attribs.payload_format_unchecked(), UPayloadFormat::Json);
+        assert_eq!(attribs.payload_encoding().unwrap(), PayloadEncoding::JSON);
         assert_eq!(umessage.payload(), Some("{\"count\": 5}".as_bytes().into()))
     }
 
@@ -761,6 +909,9 @@ mod tests {
         event.set_ttl(TTL).expect("failed to set TTL on message");
         event.set_traceparent(TRACEPARENT);
         event
+            .set_payload_encoding(PayloadEncoding::PROTOBUF_WRAPPED_IN_ANY)
+            .expect("valid payload encoding");
+        event
             .set_permission_level(PERMISSION_LEVEL)
             .expect("failed to set permission level on message");
         event.set_token("my-token");
@@ -771,10 +922,7 @@ mod tests {
         let serialized_payload = payload_wrapped_in_any
             .write_to_bytes()
             .expect("failed to serialize payload");
-        event.set_proto_data(Any {
-            value: serialized_payload.clone(),
-            ..Default::default()
-        });
+        event.set_binary_data(serialized_payload.clone());
 
         let umessage =
             UMessage::try_from(event).expect("failed to create UMessage from CloudEvent");
@@ -788,8 +936,8 @@ mod tests {
         assert_eq!(attribs.permission_level, Some(PERMISSION_LEVEL));
         assert_eq!(attribs.token(), Some("my-token"));
         assert_eq!(
-            attribs.payload_format_unchecked(),
-            UPayloadFormat::Unspecified
+            attribs.payload_encoding(),
+            Some(PayloadEncoding::PROTOBUF_WRAPPED_IN_ANY)
         );
         assert_eq!(
             umessage.payload(),
@@ -811,11 +959,10 @@ mod tests {
         event.set_traceparent(TRACEPARENT);
         event.set_request_id(&request_id);
         event.set_commstatus(UCode::Ok);
-        event.set_payload_format(UPayloadFormat::Protobuf);
-        event.set_proto_data(Any {
-            value: DATA.to_vec(),
-            ..Default::default()
-        });
+        event
+            .set_payload_encoding(PayloadEncoding::PROTOBUF)
+            .expect("valid payload encoding");
+        event.set_binary_data(DATA.to_vec());
 
         let umessage =
             UMessage::try_from(event).expect("failed to create UMessage from CloudEvent");
@@ -828,7 +975,10 @@ mod tests {
         );
         assert_eq!(attribs.commstatus, None);
         assert_eq!(attribs.reqid, Some(request_id));
-        assert_eq!(attribs.payload_format_unchecked(), UPayloadFormat::Protobuf);
+        assert_eq!(
+            attribs.payload_encoding().unwrap(),
+            PayloadEncoding::PROTOBUF
+        );
         assert_eq!(umessage.payload(), Some(DATA.as_slice().into()));
     }
 }

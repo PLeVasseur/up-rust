@@ -11,24 +11,49 @@
  * SPDX-License-Identifier: Apache-2.0
  ********************************************************************************/
 
-use bytes::{Buf, Bytes};
-use rand::Rng;
 use std::time::{Duration, SystemTime};
 use std::{hash::Hash, str::FromStr};
 
+use bytes::{Buf, Bytes};
+use rand::Rng;
 use uuid_simd::{AsciiCase, Out};
+
+use crate::UAttributesError;
 
 const BITMASK_VERSION: u64 = 0b1111 << 12;
 const VERSION_7: u64 = 0b0111 << 12;
 const BITMASK_VARIANT: u64 = 0b11 << 62;
 const VARIANT_RFC4122: u64 = 0b10 << 62;
 
-fn is_correct_version(msb: u64) -> bool {
+const fn is_correct_version(msb: u64) -> bool {
     msb & BITMASK_VERSION == VERSION_7
 }
 
-fn is_correct_variant(lsb: u64) -> bool {
+const fn is_correct_variant(lsb: u64) -> bool {
     lsb & BITMASK_VARIANT == VARIANT_RFC4122
+}
+
+#[cfg(test)]
+mod wire_value_tests {
+    use super::UUID;
+
+    #[test]
+    fn wire_uuid_predicate_checks_every_version_and_variant() {
+        for version in 0..16_u64 {
+            for variant in 0..4_u64 {
+                let msb = (1234 << 16) | (version << 12) | 0x345;
+                let lsb = (variant << 62) | 0x1234;
+                assert_eq!(
+                    UUID::is_valid_u64_pair(msb, lsb),
+                    version == 7 && variant == 2
+                );
+                assert_eq!(
+                    UUID::is_valid_u64_pair(msb, lsb),
+                    UUID::from_u64_pair(msb, lsb).is_ok()
+                );
+            }
+        }
+    }
 }
 
 #[derive(Debug)]
@@ -52,6 +77,7 @@ impl std::fmt::Display for UuidConversionError {
 
 impl std::error::Error for UuidConversionError {}
 
+/// A uProtocol UUIDv7 message identifier (RFC 9562 layout).
 #[derive(Debug, Clone, PartialEq)]
 #[repr(C)]
 pub struct UUID {
@@ -66,6 +92,15 @@ impl std::fmt::Display for UUID {
 }
 
 impl UUID {
+    /// Checks the UUIDv7 version and RFC variant bits without creating an error string.
+    ///
+    /// This applies the same bit constraints as [`UUID::from_u64_pair`]. It does
+    /// not impose a timestamp freshness or origin policy.
+    #[must_use]
+    pub const fn is_valid_u64_pair(msb: u64, lsb: u64) -> bool {
+        is_correct_version(msb) && is_correct_variant(lsb)
+    }
+
     /// Creates a new UUID from a byte array.
     ///
     /// # Arguments
@@ -133,6 +168,17 @@ impl UUID {
         Ok(UUID { msb, lsb })
     }
 
+    /// Gets this UUID as a pair of 64 bit integers.
+    ///
+    /// # Returns
+    ///
+    /// A tuple of the most significant and least significant 8 bytes,
+    /// i.e. the inverse of [`UUID::from_u64_pair`].
+    #[must_use]
+    pub fn as_u64_pair(&self) -> (u64, u64) {
+        (self.msb, self.lsb)
+    }
+
     // [impl->dsn~uuid-spec~1]
     pub(crate) fn build_for_timestamp(duration_since_unix_epoch: Duration) -> UUID {
         let timestamp_millis = u64::try_from(duration_since_unix_epoch.as_millis())
@@ -170,7 +216,7 @@ impl UUID {
     /// use up_rust::UUID;
     ///
     /// let uuid = UUID::build();
-    /// assert!(uuid.get_time() <= SystemTime::now()
+    /// assert!(uuid.time() <= SystemTime::now()
     ///     .duration_since(SystemTime::UNIX_EPOCH)
     ///     .expect("current system time is set to a point in time before UNIX Epoch")
     ///     .as_millis() as u64);
@@ -229,19 +275,73 @@ impl UUID {
     /// let msb = 0x018D548EA8E07000u64;
     /// // variant = 0b10
     /// let lsb = 0x8000000000000000u64;
-    /// let creation_time = UUID::from_u64_pair(msb, lsb).unwrap().get_time();
+    /// let creation_time = UUID::from_u64_pair(msb, lsb).unwrap().time();
     /// assert_eq!(creation_time, 0x018D548EA8E0_u64);
     /// ```
     // [impl->dsn~uuid-spec~1]
     // [utest->dsn~uuid-spec~1]
     #[must_use]
-    pub fn get_time(&self) -> u64 {
+    pub fn time(&self) -> u64 {
         // the timestamp is contained in the 48 most significant bits
         self.msb >> 16
     }
+
+    /// Checks if this UUID should be considered expired.
+    ///
+    /// # Arguments
+    /// * `ttl` - The time-to-live value for the UUID, in milliseconds.
+    ///
+    /// # Errors
+    ///
+    /// Returns an error if the time-to-live is greater than 0, but
+    /// * the current system time cannot be determined, or
+    /// * the timestamp extracted from this UUID plus the time-to-live value
+    ///   is less than the current system time.
+    pub fn check_expired(&self, ttl: u32) -> Result<(), UAttributesError> {
+        // messages with a TTL of 0 are considered to never expire, so we can skip the check in that case
+        if ttl == 0 {
+            return Ok(());
+        }
+        let now = SystemTime::now()
+            .duration_since(SystemTime::UNIX_EPOCH)
+            .map_err(|_| {
+                UAttributesError::validation_error(
+                    "current system time is set to a point in time before UNIX Epoch",
+                )
+            })?
+            .as_millis();
+        self.check_expired_for_reference(ttl, now)
+    }
+
+    /// Checks if this UUID should be considered expired.
+    ///
+    /// # Arguments
+    /// * `ttl` - The time-to-live value for the UUID, in milliseconds.
+    /// * `reference_time` - The reference time to use for the expiration check, in milliseconds since UNIX EPOCH.
+    ///
+    /// # Errors
+    ///
+    /// Returns an error if the time-to-live is greater than 0, but
+    /// * the current system time cannot be determined, or
+    /// * the timestamp extracted from this UUID plus the time-to-live value
+    ///   is less than the given reference time.
+    pub fn check_expired_for_reference(
+        &self,
+        ttl: u32,
+        reference_time: u128,
+    ) -> Result<(), UAttributesError> {
+        // messages with a TTL of 0 are considered to never expire, so we can skip the check in that case
+        if ttl == 0 {
+            return Ok(());
+        }
+        if (self.time() as u128).saturating_add(ttl as u128) < reference_time {
+            return Err(UAttributesError::ExpiredError);
+        }
+        Ok(())
+    }
 }
 
-#[cfg(feature = "up-core-types")]
+#[cfg(feature = "up-core-api")]
 mod core_types_support {
     use super::*;
     use crate::up_core_api::uuid::UUID as UUIDProto;
@@ -354,7 +454,7 @@ impl TryFrom<Vec<u8>> for UUID {
     /// let conversion_attempt = UUID::try_from(bytes);
     /// assert!(conversion_attempt.is_ok());
     /// let uuid = conversion_attempt.unwrap();
-    /// assert_eq!(uuid.get_time(), 0x1_u64);
+    /// assert_eq!(uuid.time(), 0x1_u64);
     /// ```
     fn try_from(value: Vec<u8>) -> Result<Self, Self::Error> {
         let mut buf: Bytes = value.into();
@@ -462,8 +562,22 @@ impl FromStr for UUID {
 
 #[cfg(test)]
 mod tests {
+    use std::time::UNIX_EPOCH;
 
     use super::*;
+    use test_case::test_case;
+
+    #[test_case(500, 1_499 => matches Ok(()); "before deadline")]
+    #[test_case(500, 1_500 => matches Ok(()); "exactly at deadline")]
+    #[test_case(500, 1_501 => matches Err(UAttributesError::ExpiredError); "after deadline")]
+    #[test_case(0, u128::MAX => matches Ok(()); "zero is unlimited")]
+    fn expiration_at_reference_time(
+        ttl: u32,
+        reference_time: u128,
+    ) -> Result<(), UAttributesError> {
+        let id = UUID::build_for_timestamp(Duration::from_millis(1_000));
+        id.check_expired_for_reference(ttl, reference_time)
+    }
 
     // [utest->dsn~uuid-spec~1]
     // [utest->req~uuid-type~1]
@@ -474,9 +588,8 @@ mod tests {
         // variant = 0b10
         let lsb = 0x8000000000000000_u64;
         let conversion_attempt = UUID::from_u64_pair(msb, lsb);
-        assert!(conversion_attempt.is_ok_and(|uuid| {
-            uuid.get_time() == 0x1_u64 && uuid.msb == msb && uuid.lsb == lsb
-        }));
+        assert!(conversion_attempt
+            .is_ok_and(|uuid| { uuid.time() == 0x1_u64 && uuid.msb == msb && uuid.lsb == lsb }));
 
         // timestamp = 1, (invalid) ver = 0b0000
         let msb = 0x0000000000010000_u64;
@@ -502,7 +615,7 @@ mod tests {
         let conversion_attempt = UUID::from_bytes(&bytes);
         assert!(conversion_attempt.is_ok());
         let uuid = conversion_attempt.unwrap();
-        assert_eq!(uuid.get_time(), 0x1_u64);
+        assert_eq!(uuid.time(), 0x1_u64);
     }
 
     #[test]
@@ -523,5 +636,29 @@ mod tests {
 
         assert_eq!(String::from(&uuid), "00000000-0001-7000-8010-101010101a1a");
         assert_eq!(String::from(uuid), "00000000-0001-7000-8010-101010101a1a");
+    }
+
+    fn build_for_time_offset(offset_millis: i64) -> UUID {
+        let duration_since_unix_epoch = SystemTime::now()
+            .duration_since(UNIX_EPOCH)
+            .expect("current system time is set to a point in time before UNIX Epoch");
+        let now_as_millis_since_epoch: u64 = u64::try_from(duration_since_unix_epoch.as_millis())
+            .expect("current system time is too far in the future");
+        let creation_timestamp = now_as_millis_since_epoch
+            .checked_add_signed(offset_millis)
+            .unwrap();
+        UUID::build_for_timestamp_millis(creation_timestamp)
+    }
+    #[test_case(build_for_time_offset(-1000), 0 => false; "for past message with TTL 0")]
+    #[test_case(build_for_time_offset(-1000), 500 => true; "for past message with expired TTL")]
+    #[test_case(build_for_time_offset(-1000), 2000 => false; "for past message with non-expired TTL")]
+    #[test_case(build_for_time_offset(1000), 2000 => false; "for future message with TTL")]
+    fn test_is_expired(id: UUID, ttl: u32) -> bool {
+        if id.check_expired(ttl).is_ok() {
+            false
+        } else {
+            id.check_expired(ttl)
+                .is_err_and(|e| matches!(e, UAttributesError::ExpiredError))
+        }
     }
 }

@@ -35,12 +35,16 @@ fn handle_response_message(response: UMessage) -> Result<Option<UPayload>, Servi
     match response.commstatus() {
         Some(UCode::Ok) | None => {
             // successful invocation
-            let payload_format = response
-                .payload_format()
-                .unwrap_or(crate::UPayloadFormat::Unspecified);
-            Ok(response
-                .payload()
-                .map(|payload| UPayload::new(payload, payload_format)))
+            let response_payload = match (response.payload(), response.payload_encoding()) {
+                (Some(data), Some(encoding)) => Some(UPayload::new(data, encoding)),
+                (Some(_), None) => {
+                    return Err(ServiceInvocationError::InvalidArgument(
+                        "message carries a payload without a declared payload encoding".to_string(),
+                    ))
+                }
+                (None, _) => None,
+            };
+            Ok(response_payload)
         }
         Some(code) => {
             // try to extract UStatus from response payload
@@ -163,6 +167,12 @@ pub struct InMemoryRpcClient<T, P> {
     response_listener: Arc<ResponseListener>,
 }
 
+impl<T, P> core::fmt::Debug for InMemoryRpcClient<T, P> {
+    fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
+        f.debug_struct("InMemoryRpcClient").finish_non_exhaustive()
+    }
+}
+
 impl<T: UTransport, P: LocalUriProvider> InMemoryRpcClient<T, P> {
     /// Creates a new RPC client for a given transport.
     ///
@@ -283,11 +293,14 @@ mod tests {
     use crate::{utransport::MockTransport, StaticUriProvider, UMessageBuilder, UPriority, UUri};
 
     fn new_uri_provider() -> Arc<StaticUriProvider> {
-        Arc::new(StaticUriProvider::new("", 0x0005, 0x02).expect("failed to create URI provider"))
+        Arc::new(
+            StaticUriProvider::new("", 0x0001_0005, 0x02).expect("failed to create URI provider"),
+        )
     }
 
     fn service_method_uri() -> UUri {
-        UUri::try_from_parts("", 0x0001, 0x01, 0x1000).expect("failed to create service method URI")
+        UUri::try_from_parts("", 0x0001_0001, 0x01, 0x1000)
+            .expect("failed to create service method URI")
     }
 
     #[tokio::test]

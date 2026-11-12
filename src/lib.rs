@@ -12,37 +12,108 @@
  ********************************************************************************/
 
 /*!
-up-rust is the [Eclipse uProtocol&trade; Language Library](https://github.com/eclipse-uprotocol/up-spec/blob/v1.6.0-alpha.7/languages.adoc) for the
-Rust programming language.
+# uProtocol in Rust
 
-This crate can be used to
+uProtocol separates application messaging from the transport used to carry
+messages across an IPC or network boundary. Applications can use five
+**Communication Layer** role APIs across four messaging patterns:
 
-* implement uEntities that communicate with each other using the uProtocol [Communication Layer API](https://github.com/eclipse-uprotocol/up-spec/blob/v1.6.0-alpha.7/up-l2/api.adoc)
-  over one of the supported transport protocols.
-* implement support for an additional transport protocol by means of implementing the [Transport & Session Layer API](https://github.com/eclipse-uprotocol/up-spec/blob/v1.6.0-alpha.7/up-l1/README.adoc).
+* `Publisher` emits events;
+* `Subscriber` consumes events;
+* `Notifier` targets a one-way message;
+* `RpcClient` invokes a service, while `RpcServer` serves it.
+
+With `typed-communication`, ordinary applications use `communication::application`:
+declare operations once, bind them to a `Deployment`, and store domain-only role
+handles; `examples/hello_publisher.rs` is the smallest complete program. The same
+business handlers serve serialized and native setups, although native paths have
+only been exercised on test fixtures. `communication::advanced::typed`
+exposes the underlying static engines for advanced code and native deployment
+bindings. The classic `.proto` message API remains supported. Applications can instead call
+[`UTransport::send`] directly and receive messages through registered
+listeners for push, [`UTransport::receive`] for pull, or both. A transport maps
+the contract to its broker, bus, or peer-to-peer protocol.
+
+```rust
+use up_rust::{PayloadEncoding, UMessageBuilder, UStatus, UTransport, UUri};
+
+async fn publish_engine_temp(
+    transport: &dyn UTransport,
+) -> Result<(), UStatus> {
+    let topic = UUri::try_from_parts("my-vehicle", 0x1_0001, 1, 0x8001)
+        .expect("valid topic URI");
+    let message = UMessageBuilder::publish(topic)
+        .build_with_payload("92.5", PayloadEncoding::TEXT)
+        .expect("valid publish message");
+
+    transport.send(message).await
+}
+```
+
+The [`guide`] provides:
+
+* [building an application](crate::guide::applications), starting from small
+  runnable programs,
+* [application role examples](crate::guide::applications::communication),
+* [direct Transport Layer examples](crate::guide::applications::transport),
+* [transport implementation guidance](crate::guide::transports), and
+* [a public trait map](crate::guide::trait_map).
+
+## Vocabulary
+
+* **Role**: application-facing publish, subscribe, notify or RPC behavior.
+* **Message**: the classic owned metadata-and-payload value, `UMessage`.
+* **Frame**: shared semantic metadata plus a payload view.
+* **Payload codec**: a domain/schema mapping to portable bytes, selected independently
+  of the enclosing message format.
+* **Envelope**: the format carrying semantic metadata and payload bytes.
+* **Wire profile**: a binding-level metadata/framing identity; typed message operations
+  do not select their payload codec through this profile.
+  * **Agreement**: immutable deployment context for interpreting native identity.
+* **Transport**: physical carriage, storage and delivery; encoded cores carry
+  prepared bytes while the shared adapter validates their representation.
+
+## Module map
+
+`communication` contains enabled role traits and implementations; `frame` owns
+metadata and read-side views; `payload` owns codecs and typed borrowing; `wire`
+owns selected identities and metadata codecs. The [`guide`] supplies audience-
+oriented examples and exact feature recipes.
 
 ## Features
 
-None of the following features are enabled by default, so you can pick and choose which parts of the library you want to use by enabling the corresponding features. Note that some features depend on each other, so enabling one feature might automatically enable other features as well. For example, enabling `up-core-types` will also enable `protobuf-support` since the generated types require that.
+None of the following features are enabled by default, so you can pick and choose which parts of the library you want to use by enabling the corresponding features. Note that some features depend on each other, so enabling one feature might automatically enable other features as well. For example, enabling `up-core-api` will also enable `protobuf-support` since the generated types require that.
 
-* `cloudevents` Enables support for mapping [crate::UMessage]s to/from [crate::CloudEvent]s using Protobuf Format according to the
+* `cloudevents` Enables support for mapping [crate::UMessage]s to/from `CloudEvent`s using Protobuf Format according to the
   [uProtocol specification](https://github.com/eclipse-uprotocol/up-spec/blob/v1.6.0-alpha.7/up-l1/cloudevents.adoc).
-* `communication` Enables default implementations for all [Communication Layer API](https://github.com/eclipse-uprotocol/up-spec/blob/v1.6.0-alpha.7/up-l2/api.adoc) traits on top of the [Transport & Session Layer API](https://github.com/eclipse-uprotocol/up-spec/blob/v1.6.0-alpha.7/up-l1/README.adoc).
-* `protobuf-support` Enables convenience functions on the Transport & Session as well as the Communcation Layer APIs for implicitly mapping objects to protobuf payloads on the fly. This is particularly useful for using protoc-generated types as payloads using the [message builder](crate::UMessageBuilder::build_with_protobuf_payload) or [payload constructor](crate::communication::UPayload::try_from_protobuf). The only requirement for the object types is that they implement the [crate::ProtobufMappable] trait. A blanket implementation for types generated by the `protobuf` crate is also provided. Note that it is still possible to use protobufs as payloads even without enabling this feature. The payload of a [crate::UMessage] can be set to an arbitrary byte array, so protobuf messages can be serialized to bytes and set as payload without any support from the library. Enabling this feature just adds some convenient helper functions for automatically handling the mapping to protobuf payloads. The examples also illustrate the usage of these helper functions.
-* `symphony` Enables support for implementing an [Eclipse Symphony](https://github.com/eclipse-symphony) Target Provider as a uService exposed via the Communication Layer API's [RPC Server](crate::communication::RpcServer).
-* `test-util` provides some useful mock implementations for testing. In particular, provides mock implementations of [UTransport] and Communication Layer API traits which make implementing unit tests a lot easier.
-* `up-core-types` Enables support for mapping the crate's public API types to protobufs as defined in the uProtocol specification. This includes, for example, the `UStatus` type which is used in the Communication Layer API for conveying errors. Enabling this feature also enables `protobuf-support` since the generated types require that.
-* `up-l2-api` Enables support for the [Communication Layer API](https://github.com/eclipse-uprotocol/up-spec/blob/v1.6.0-alpha.7/up-l2/api.adoc). This includes the trait definitions for the various roles defined by the API, such as [Notifier](crate::communication::Notifier), [Publisher](crate::communication::Publisher), [Subscriber](crate::communication::Subscriber), [RpcClient](crate::communication::RpcClient) and [RpcServer](crate::communication::RpcServer).
-* `up-l2-notifier` Enables a default implementation of the [Notifier](crate::communication::Notifier) trait on top of the Transport Layer API.
-* `up-l2-publisher` Enables a default implementation of the [Publisher](crate::communication::Publisher) trait on top of the Transport Layer API.
-* `up-l2-subscriber` Enables a default implementation of the [Subscriber](crate::communication::Subscriber) trait on top of the Transport Layer API.
-* `up-l2-rpc-client` Enables a default implementation of the [RpcClient](crate::communication::RpcClient) trait on top of the Transport Layer API.
-* `up-l2-rpc-server` Enables a default implementation of the [RpcServer](crate::communication::RpcServer) trait on top of the Transport Layer API.
+  `CloudEventAttributeValue` and the nested `cloud_event` types name the event's attribute and data fields.
+* `typed-communication` Enables the schema-owned application roles (`communication::application`),
+  the static typed engines (`communication::advanced::typed`), fixed payload codecs and scoped
+  owned reception. Add `up-l2-zero-copy` for required native loans and checked leases.
+* `communication` Enables compatibility implementations for all [Communication Layer API](https://github.com/eclipse-uprotocol/up-spec/blob/v1.6.0-alpha.7/up-l2/api.adoc) traits on top of the [Transport & Session Layer API](https://github.com/eclipse-uprotocol/up-spec/blob/v1.6.0-alpha.7/up-l1/README.adoc).
+* `protobuf-support` Enables convenience functions on the Transport & Session as well as the Communication Layer APIs for implicitly mapping objects to protobuf payloads on the fly. This is particularly useful for using protoc-generated types as payloads using `UMessageBuilder::build_with_protobuf_payload` or `UPayload::try_from_protobuf`. The only requirement for the object types is that they implement `ProtobufMappable`. A blanket implementation for types generated by the `protobuf` crate is also provided. Note that it is still possible to use protobufs as payloads even without enabling this feature. The payload of a [crate::UMessage] can be set to an arbitrary byte array, so protobuf messages can be serialized to bytes and set as payload without any support from the library. Enabling this feature just adds some convenient helper functions for automatically handling the mapping to protobuf payloads. The examples also illustrate the usage of these helper functions.
+* `symphony` Enables support for implementing an [Eclipse Symphony](https://github.com/eclipse-symphony) Target Provider as a uService exposed via the Communication Layer API's `RpcServer`.
+* `test-util` provides some useful mock implementations for testing. In particular, provides mock implementations of [UTransport] and Communication Layer API traits which make implementing unit tests a lot easier. It also provides `heap_guard`, a `GlobalAlloc` wrapper and measurement windows for contract tests that assert a runtime path neither allocates, frees nor reallocates.
+* `up-core-api` Enables support for mapping the crate's public API types to protobufs as defined in the uProtocol specification. This includes, for example, the [`UStatus`] type which is used in the Communication Layer API for conveying errors. Enabling this feature also enables `protobuf-support` since the generated types require that.
+* `communication-api` Enables support for the [Communication Layer API](https://github.com/eclipse-uprotocol/up-spec/blob/v1.6.0-alpha.7/up-l2/api.adoc). This includes the trait definitions for the various roles defined by the API, such as `Notifier`, `Publisher`, `Subscriber`, `RpcClient`, and `RpcServer`.
+* `up-l2-notifier` Enables a default implementation of the `Notifier` trait on top of the Transport Layer API.
+* `up-l2-publisher` Enables a default implementation of the `Publisher` trait on top of the Transport Layer API.
+* `up-l2-subscriber` Enables a default implementation of the `Subscriber` trait on top of the Transport Layer API.
+* `up-l2-rpc-client` Enables a default implementation of the `RpcClient` trait on top of the Transport Layer API.
+* `up-l2-rpc-server` Enables a default implementation of the `RpcServer` trait on top of the Transport Layer API.
+* `up-l2-zero-copy` Enables the prepared stable-native engines in `communication::zero_copy`;
+  with `typed-communication`, also the native application roles.
+* `transport-implementer` One switch for wire and transport bindings: implementer contracts,
+  owned-frame and native-loan families and the selected-wire adapters.
+* `payload-contract-fixtures` exposes representative payload schemas and fixtures
+  for conformance and diagnostics. `payload-contract-large-fixtures` adds the
+  specified LiDAR/camera cases; `payload-contract-simulator-fixtures` reserves
+  simulator-specific applicability without inventing an implemented stable case.
 * `udiscovery` Enables support for types required to interact with [uDiscovery service](https://github.com/eclipse-uprotocol/up-spec/blob/v1.6.0-alpha.7/up-l3/udiscovery/v3/README.adoc)
   implementations.
 * `usubscription` Enables support for types required to interact with [uSubscription service](https://github.com/eclipse-uprotocol/up-spec/blob/v1.6.0-alpha.7/up-l3/usubscription/v3/README.adoc)
   implementations.
-* `util` provides some useful helper structs. In particular, provides a [local, in-memory UTransport](crate::local_transport::LocalTransport) for exchanging messages within a single process. This transport is also used by the examples illustrating usage of the Communication Layer API.
+* `util` provides some useful helper structs. In particular, it provides the local, in-memory `LocalTransport` for exchanging messages within a single process. This transport is also used by the examples illustrating usage of the Communication Layer API.
 
 ## References
 
@@ -50,13 +121,68 @@ None of the following features are enabled by default, so you can pick and choos
 
 */
 
+#[cfg(feature = "zero-copy-transport")]
+extern crate self as up_rust;
+
 #[cfg(feature = "cloudevents")]
 mod cloudevents;
+/// Nested Protobuf Event Format types of [`CloudEvent`].
+///
+/// [`CloudEvent::data`] holds a [`cloud_event::Data`], and each
+/// [`CloudEventAttributeValue`] holds a
+/// [`cloud_event::cloud_event_attribute_value::Attr`]. Both oneofs are
+/// non-exhaustive. Mapped uProtocol payloads use only opaque `binary_data`.
+///
+/// ```rust
+/// use up_rust::{cloud_event::Data, CloudEvent};
+///
+/// fn binary_payload(event: &CloudEvent) -> Option<&[u8]> {
+///     match event.data.as_ref()? {
+///         Data::BinaryData(bytes) => Some(bytes),
+///         _ => None,
+///     }
+/// }
+///
+/// let mut event = CloudEvent::new();
+/// assert_eq!(binary_payload(&event), None);
+/// event.set_binary_data(vec![0x2a]);
+/// assert_eq!(binary_payload(&event), Some(&[0x2a][..]));
+/// ```
+#[cfg(feature = "cloudevents")]
+pub use cloudevents::cloud_event;
+/// Value of one CloudEvent context or extension attribute.
+///
+/// [`CloudEvent::attributes`] maps attribute names to these values. The
+/// generated accessors set and read the `attr` oneof, whose variants are
+/// [`cloud_event::cloud_event_attribute_value::Attr`].
+///
+/// ```rust
+/// use up_rust::{CloudEvent, CloudEventAttributeValue, PayloadEncoding, UMessageBuilder, UUri};
+///
+/// fn string_attribute<'a>(event: &'a CloudEvent, name: &str) -> Option<&'a str> {
+///     event
+///         .attributes
+///         .get(name)
+///         .filter(|value| value.has_ce_string())
+///         .map(CloudEventAttributeValue::ce_string)
+/// }
+///
+/// let topic = UUri::try_from_parts("my-vehicle", 0x1_0001, 1, 0x8001)?;
+/// let message = UMessageBuilder::publish(topic).build_with_payload("92.5", PayloadEncoding::TEXT)?;
+/// let mut event = CloudEvent::try_from(message)?;
+/// let mut route = CloudEventAttributeValue::new();
+/// route.set_ce_string("bridge-1".to_owned());
+/// event.attributes.insert("xroute".to_owned(), route);
+/// assert_eq!(string_attribute(&event, "xroute"), Some("bridge-1"));
+/// # Ok::<(), Box<dyn std::error::Error>>(())
+/// ```
+#[cfg(feature = "cloudevents")]
+pub use cloudevents::CloudEventAttributeValue;
 #[cfg(feature = "cloudevents")]
 pub use cloudevents::{CloudEvent, CONTENT_TYPE_CLOUDEVENTS_PROTOBUF};
 
 // [impl->dsn~communication-layer-api-namespace~1]
-#[cfg(feature = "up-l2-api")]
+#[cfg(feature = "communication-api")]
 pub mod communication;
 
 #[cfg(any(feature = "udiscovery", feature = "usubscription"))]
@@ -65,14 +191,128 @@ pub mod core;
 #[cfg(feature = "util")]
 pub mod local_transport;
 
+#[cfg(feature = "transport-implementer-api")]
+mod listener_admission;
+#[cfg(feature = "transport-implementer-api")]
+pub use listener_admission::{ListenerAdmission, ListenerQuiesceError, NativeCallbackGuard};
+
+#[cfg(feature = "transport-implementer-api")]
+mod recovery;
+#[cfg(feature = "transport-implementer-api")]
+pub use recovery::{Completion, Failure, FailureHistory, StopProgress};
+
+#[cfg(feature = "transport-implementer-api")]
+mod registration;
+#[cfg(feature = "transport-implementer-api")]
+pub use registration::{
+    InboxPushError, OverflowPolicy, Registration, RegistrationConfig, RegistrationHandler,
+    RegistrationInbox, RegistrationSetupError, RegistrationStats, RegistrationStopError,
+};
+
+/// Representative payload fixtures for conformance and allocation diagnostics.
+#[cfg(feature = "payload-contract-fixtures")]
+pub mod bench_fixtures;
+
+/// Audience-oriented examples and implementation guidance.
+pub mod guide {
+    #![doc = include_str!("guide/README.md")]
+    #[cfg(feature = "typed-communication")]
+    #[doc = include_str!("guide/independent_l1_implementer.md")]
+    pub mod independent_l1_implementer {}
+
+    #[cfg(feature = "typed-communication")]
+    #[doc = include_str!("guide/independent_l1_user.md")]
+    pub mod independent_l1_user {}
+
+    #[cfg(feature = "typed-communication")]
+    #[doc = include_str!("guide/independent_l2_implementer.md")]
+    pub mod independent_l2_implementer {}
+
+    #[cfg(feature = "typed-communication")]
+    #[doc = include_str!("guide/independent_l2_user.md")]
+    pub mod independent_l2_user {}
+
+    /// Typed static engines: setup, migration deltas and ownership.
+    #[doc = include_str!("guide/typed.md")]
+    pub mod typed {}
+    /// Supported classic message-oriented application recipes.
+    #[cfg_attr(all(feature = "communication", feature = "util"), doc = include_str!("guide/compatibility_communication.md"))]
+    pub mod compatibility_communication {}
+
+    #[doc = include_str!("../MIGRATION.md")]
+    pub mod migration {}
+
+    #[doc = include_str!("guide/uris.md")]
+    pub mod uris {}
+
+    #[doc = include_str!("guide/registrations.md")]
+    pub mod registrations {}
+
+    #[doc = include_str!("guide/frame_metadata.md")]
+    pub mod frame_metadata {}
+
+    #[doc = include_str!("guide/applications.md")]
+    pub mod applications {
+        #[doc = include_str!("guide/communication.md")]
+        pub mod communication {}
+
+        #[doc = include_str!("guide/transport.md")]
+        pub mod transport {}
+    }
+
+    #[doc = include_str!("guide/utransport.md")]
+    pub mod utransport {}
+
+    #[doc = include_str!("guide/transports.md")]
+    pub mod transports {}
+    #[cfg_attr(feature = "owned-frame-transport", doc = include_str!("guide/owned.md"))]
+    #[cfg_attr(
+        not(feature = "owned-frame-transport"),
+        doc = "Enable `owned-frame-transport` for the owned-frame guide."
+    )]
+    pub mod owned {}
+
+    #[cfg_attr(feature = "up-l2-zero-copy", doc = include_str!("guide/zero_copy.md"))]
+    #[cfg_attr(
+        not(feature = "up-l2-zero-copy"),
+        doc = "Enable `up-l2-zero-copy` for the stable-native communication guide."
+    )]
+    pub mod zero_copy {}
+
+    #[cfg_attr(
+        feature = "communication",
+        doc = include_str!("guide/trait_map.md")
+    )]
+    #[cfg_attr(
+        not(feature = "communication"),
+        doc = include_str!("guide/trait_map_core.md")
+    )]
+    pub mod trait_map {}
+    #[doc = include_str!("guide/wire_identity.md")]
+    pub mod wire_identity {}
+    #[cfg_attr(feature = "native-identity", doc = include_str!("guide/wires.md"))]
+    #[cfg_attr(
+        not(feature = "native-identity"),
+        doc = "Enable `wire-implementer-api` for the wire and payload codec guide."
+    )]
+    pub mod wires {}
+    #[cfg_attr(feature = "native-identity", doc = include_str!("guide/native_identity.md"))]
+    #[cfg_attr(
+        not(feature = "native-identity"),
+        doc = "Enable `native-identity` for target-qualified descriptors and deployment agreement."
+    )]
+    pub mod native_identity {}
+}
+
 #[cfg(feature = "symphony")]
 pub mod symphony;
 
 mod uattributes;
 pub use uattributes::{
-    NotificationValidator, PublishValidator, RequestValidator, ResponseValidator, UAttributes,
-    UAttributesError, UAttributesValidator, UAttributesValidators, UMessageType, UPayloadFormat,
-    UPriority,
+    NotificationValidator, PayloadEncoding, PublishValidator, RequestValidator, ResponseValidator,
+    UAttributes, UAttributesError, UAttributesValidator, UAttributesValidators, UMessageType,
+    UPriority, PAYLOAD_ENCODING_PRIVATE_USE_MAX, PAYLOAD_ENCODING_PRIVATE_USE_MIN,
+    PAYLOAD_ENCODING_RESERVED_MIN,
 };
 
 mod umessage;
@@ -82,7 +322,13 @@ pub use umessage::{
 };
 
 mod uri;
-pub use uri::{UUri, UUriError};
+pub use uri::{ExactUUri, UEntityId, UUri, UUriError, UUriPartsError};
+
+#[cfg(feature = "zero-copy-transport")]
+pub use frame::header::{
+    header_fields_len, header_len, parse_header, write_header, write_header_uninit, HeaderLimits,
+    RxHeader, TxHeaderParts, UFrameHeaderError, WrittenHeader, HEADER_TRACEPARENT_CAPACITY,
+};
 
 mod ustatus;
 pub use ustatus::{UAny, UCode, UStatus};
@@ -95,10 +341,13 @@ pub use utransport::{
 #[cfg(feature = "test-util")]
 pub use utransport::{MockLocalUriProvider, MockTransport, MockUListener};
 
+#[cfg(feature = "test-util")]
+pub mod heap_guard;
+
 mod uuid;
 pub use uuid::UUID;
 
-#[cfg(feature = "up-core-types")]
+#[cfg(feature = "up-core-api")]
 // protoc-generated types, see build.rs
 pub(crate) mod up_core_api {
     include!(concat!(env!("OUT_DIR"), "/uprotocol/mod.rs"));
@@ -111,3 +360,261 @@ pub use protobuf_mappable::ProtobufMappable;
 
 mod serialization_error;
 pub use serialization_error::SerializationError;
+
+// ---- native frame model ----
+
+mod validation_state;
+pub use validation_state::{Unvalidated, Validated};
+
+/// The native frame data model: metadata, canonical field-block codec, and
+/// the read-side frame view contract.
+pub mod frame;
+pub use frame::metadata::{NativeTypeToken, UFrameMetadata, UFrameMetadataError};
+#[cfg(feature = "native-identity")]
+pub use frame::native::{
+    NativeByteOrder, NativeField, NativePayloadIdentity, NativeProfile, NativeProfileAgreement,
+    NativeProfileError, NativeRepresentation, NativeTarget, MAX_NATIVE_DESCRIPTOR_BYTES,
+    NATIVE_DESCRIPTOR_VERSION, NATIVE_TOKEN_DERIVATION_VERSION,
+};
+pub use frame::{validate_frame_view_for_transport, UFrameView};
+
+/// Payload codec contracts shared by the frame families.
+pub mod payload;
+#[cfg(feature = "native-identity")]
+pub use payload::codec::{
+    DecodePayload, EncodePayload, PayloadCodec, PayloadCodecIdentity, PayloadDecodeLimit,
+    PayloadIdentity, PayloadLayout, ProtobufAnyPayload, ProtobufPayload, RawBytes,
+    ReadDecodePayload,
+};
+#[cfg(feature = "zero-copy-transport")]
+pub use payload::loan::BorrowPayload;
+#[cfg(feature = "zero-copy-transport")]
+pub use payload::stable::{
+    InitializedStablePayload, StableContainerPayload, StablePayload, StablePayloadField,
+    StablePayloadInit, StablePayloadInitSet, StablePayloadInitUnset, StablePayloadPatternError,
+};
+pub use payload::UWireError;
+#[cfg(feature = "zero-copy-transport")]
+pub use up_rust_macros::{StablePayload, StablePayloadInit};
+
+#[cfg(feature = "zero-copy-transport")]
+mod zero_copy;
+#[cfg(feature = "zero-copy-transport")]
+pub use zero_copy::{
+    AdmissionError, Frame, HeaderAdmission, HeaderAdmissionStats, HeaderHandler, HeaderLease,
+    LoanedPayload, PayloadAlignment, PayloadLoanProvenance, RxAdmission, RxLease, RxStats,
+    TokenBuffer, TokenBufferSetupError, TokenError, ULoanedContiguousZeroCopyRxFrame, UTxBuffer,
+    UTxLoanSpec, UTxPayloadSpec, UUninitTxBuffer, UVecRxLease, UVecTxBuffer, UVecUninitTxBuffer,
+    UZeroCopyRxLease, ZeroCopyHandler,
+};
+#[cfg(all(feature = "zero-copy-transport", feature = "transport-implementer-api"))]
+pub use zero_copy::{
+    FrameSink, InitializedTx, LoanError, PreparedTransportCore, PreparedTxStorage, RouteLimits,
+    SendError, SetupError, TxFrameLayout, WireRegistration, WireRegistrationStopError,
+};
+#[cfg(all(feature = "zero-copy-transport", feature = "transport-implementer-api"))]
+pub use zero_copy::{
+    MessageFields, OpaqueRoute, OpaqueTemplate, PayloadInit, RouteConfig, RouteDefinition, TxRoute,
+    TxTemplate,
+};
+#[cfg(all(
+    feature = "zero-copy-transport",
+    feature = "transport-implementer-api",
+    any(test, feature = "test-util")
+))]
+pub use zero_copy::{PoolCore, PoolCoreConfig, PoolFrame};
+
+#[cfg(all(feature = "zero-copy-transport", feature = "transport-implementer-api"))]
+pub use zero_copy::{
+    NativeCallError, NativeRequestHandler, PendingNativeCall, PreparedRpcClient, PreparedRpcServer,
+    RpcClientConfig, RpcClientStats, RpcServerConfig, RpcServerStats, RpcServerStopError,
+};
+
+/// Linked native-type registration for target-side descriptor export.
+#[cfg(feature = "native-inventory")]
+pub mod native_inventory;
+
+/// Registers a concrete stable payload for target-side inventory export.
+///
+/// Enable `native-inventory` and link the defining crate into the exporter.
+/// Registration neither allocates payload IDs nor constructs application values.
+#[cfg(feature = "native-inventory")]
+#[macro_export]
+macro_rules! register_native_type {
+    ($ty:ty) => {
+        $crate::native_inventory::__inventory::submit! {
+            $crate::native_inventory::NativeTypeRegistration::of::<$ty>()
+        }
+    };
+}
+
+/// Requires `native-inventory` for concrete type registration.
+#[cfg(not(feature = "native-inventory"))]
+#[macro_export]
+macro_rules! register_native_type {
+    ($ty:ty) => {
+        compile_error!("native type registration requires the up-rust native-inventory feature");
+    };
+}
+
+#[cfg(feature = "owned-frame-transport")]
+pub use frame::envelope::{UFrameEnvelope, UFrameWireError};
+#[cfg(feature = "owned-frame-transport")]
+mod owned_frame;
+#[cfg(all(feature = "owned-frame-transport", feature = "test-util"))]
+pub use owned_frame::InMemoryOwnedTransport;
+#[cfg(feature = "owned-frame-transport")]
+pub use owned_frame::UOwnedFrame;
+#[cfg(feature = "owned-frame-transport")]
+pub use utransport::{UOwnedListener, UOwnedTransport, UOwnedTransportImpl};
+#[cfg(feature = "owned-frame-transport")]
+pub mod owned_rpc;
+
+#[cfg(feature = "owned-frame-transport")]
+pub mod inline_dispatch;
+#[cfg(all(
+    feature = "owned-frame-transport",
+    feature = "transport-implementer-api"
+))]
+pub mod serialized_dispatch;
+
+#[cfg(feature = "wire-implementer-api")]
+pub mod wire;
+#[cfg(all(feature = "native-identity", not(feature = "wire-implementer-api")))]
+mod wire;
+#[cfg(feature = "native-identity")]
+pub use wire::WireIdentity;
+#[cfg(any(feature = "selected-wire-user-api", feature = "wire-implementer-api"))]
+pub use wire::{
+    ProtobufWire, UFrameFieldsMetadataCodec, UProtocolNativeWire, WireCompatibility,
+    WireIdentityNamespace, WireIdentityRef, NATIVE_EXPLICIT_PAYLOAD_FAMILY_ID,
+    PROTOBUF_PAYLOAD_FAMILY_ID, PROTOBUF_WIRE_ID, UFRAME_FIELDS_METADATA_LAYOUT_ID,
+    UPROTOCOL_NATIVE_WIRE_ID, XCDR_V2_PAYLOAD_FAMILY_ID, XCDR_V2_WIRE_ID,
+};
+#[cfg(feature = "zero-copy-transport")]
+pub use wire::{StableContainerWire, STABLE_CONTAINER_PAYLOAD_FAMILY_ID, STABLE_CONTAINER_WIRE_ID};
+#[cfg(feature = "wire-implementer-api")]
+pub use wire::{
+    UWire, UWireDecode, UWireDecodeOwned, UWireEncode, UWireMetadataCodec, UWireMetadataCodecFor,
+    UWireMetadataContext, UWireMetadataError, UWirePayload, UWireReadDecode,
+};
+
+#[cfg(all(
+    feature = "selected-wire-transport-core",
+    feature = "transport-implementer-api"
+))]
+pub mod wire_transport;
+#[cfg(all(
+    feature = "selected-wire-transport-core",
+    not(feature = "transport-implementer-api")
+))]
+mod wire_transport;
+#[cfg(feature = "zero-copy-transport")]
+pub use wire_transport::StableContainerWireTransport;
+#[cfg(all(feature = "zero-copy-transport", feature = "transport-implementer-api"))]
+pub use wire_transport::UEncodedLoanedRxFrame;
+#[cfg(feature = "transport-implementer-api")]
+pub use wire_transport::UEncodedRxFrame;
+#[cfg(all(
+    feature = "selected-wire-transport-core",
+    any(
+        feature = "transport-implementer-api",
+        feature = "wire-implementer-api",
+        feature = "selected-wire-user-api"
+    )
+))]
+pub use wire_transport::UWireTransport;
+#[cfg(all(
+    feature = "owned-frame-transport",
+    feature = "transport-implementer-api"
+))]
+pub use wire_transport::{
+    EncodedOwnedFrame, PreparedOwnedFrame, UEncodedOwnedListener, UOwnedTransportCore,
+};
+#[cfg(feature = "selected-wire-user-api")]
+pub use wire_transport::{
+    ProtobufWireTransport, UHasWire, UNativePrefixWireTransport, UWireRx, UWithNativePrefixWire,
+};
+
+#[cfg(test)]
+mod test_support;
+
+#[cfg(any(
+    all(feature = "zero-copy-transport", feature = "transport-implementer-api"),
+    feature = "typed-communication"
+))]
+mod pending_calls;
+
+/// Bounded request/response correlation for reusable L2 protocols.
+///
+/// [`PendingCalls`](correlation::PendingCalls) is the same table the SDK's RPC engines
+/// use. Reserve before sending, deliver a frame only after checking its exact
+/// source, sink, kind and payload identity, and wait with
+/// [`PendingGuard::wait`](correlation::PendingGuard::wait). Dropping a guard frees its
+/// slot, so a cancelled caller leaves no stale reservation and a late reply is
+/// rejected. Correlation alone is not an RPC protocol: deadlines, route
+/// validation and retained cleanup remain the protocol author's.
+#[cfg(any(
+    all(feature = "zero-copy-transport", feature = "transport-implementer-api"),
+    feature = "typed-communication"
+))]
+pub mod correlation {
+    pub use super::pending_calls::{PendingCalls, PendingClosed, PendingGuard, ReserveError};
+}
+
+/// Implementation details of the SDK's macros; not part of the public API.
+#[doc(hidden)]
+#[cfg(feature = "typed-communication")]
+pub mod __private {
+    pub use bytes::Bytes;
+    pub use tokio;
+
+    /// Measures serialized output without storing it.
+    #[derive(Debug, Default)]
+    pub struct ByteCounter(usize);
+
+    impl ByteCounter {
+        /// Bytes written so far.
+        #[must_use]
+        pub fn len(&self) -> usize {
+            self.0
+        }
+
+        /// True if nothing has been written.
+        #[must_use]
+        pub fn is_empty(&self) -> bool {
+            self.0 == 0
+        }
+    }
+
+    impl std::io::Write for ByteCounter {
+        fn write(&mut self, bytes: &[u8]) -> std::io::Result<usize> {
+            self.0 = self.0.saturating_add(bytes.len());
+            Ok(bytes.len())
+        }
+
+        fn flush(&mut self) -> std::io::Result<()> {
+            Ok(())
+        }
+    }
+}
+
+#[cfg(feature = "owned-frame-transport")]
+pub use utransport::OwnedAttachment;
+
+#[cfg(feature = "owned-frame-transport")]
+mod classic_carriage;
+#[cfg(feature = "owned-frame-transport")]
+pub use classic_carriage::ClassicCarriage;
+
+#[cfg(all(feature = "zero-copy-transport", feature = "transport-implementer-api"))]
+pub use zero_copy::NativeLoanCore;
+
+#[cfg(all(
+    feature = "owned-frame-transport",
+    any(
+        feature = "wire-implementer-api",
+        feature = "selected-wire-transport-adapter"
+    )
+))]
+pub use wire_transport::{OwnedWireContext, OwnedWireDeclaration, OwnedWireTransport};

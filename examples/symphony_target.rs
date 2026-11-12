@@ -25,7 +25,7 @@ use up_rust::{
     communication::{CallOptions, InMemoryRpcClient, InMemoryRpcServer, RpcClient, UPayload},
     local_transport::LocalTransport,
     symphony::DeploymentTarget,
-    StaticUriProvider, UPayloadFormat, UUri,
+    PayloadEncoding, StaticUriProvider, UEntityId, UUri,
 };
 
 struct ExampleDeploymentTarget(Arc<Notify>, Arc<Notify>, Arc<Notify>);
@@ -60,27 +60,28 @@ impl DeploymentTarget for ExampleDeploymentTarget {
     }
 }
 
+/// Runs the example Symphony deployment target.
 #[tokio::main]
 pub async fn main() -> Result<(), Box<dyn std::error::Error>> {
     let transport = Arc::new(LocalTransport::default());
 
-    let get_method = UUri::try_from_parts(
+    let get_method = UUri::for_entity(
         "local_authority",
-        0xAAA1,
+        UEntityId::first_instance(0xAAA1),
         0x01,
         up_rust::symphony::METHOD_GET_RESOURCE_ID,
     )
     .expect("failed to create get method URI");
-    let update_method = UUri::try_from_parts(
+    let update_method = UUri::for_entity(
         "local_authority",
-        0xAAA1,
+        UEntityId::first_instance(0xAAA1),
         0x01,
         up_rust::symphony::METHOD_UPDATE_RESOURCE_ID,
     )
     .expect("failed to create update method URI");
-    let delete_method = UUri::try_from_parts(
+    let delete_method = UUri::for_entity(
         "local_authority",
-        0xAAA1,
+        UEntityId::first_instance(0xAAA1),
         0x01,
         up_rust::symphony::METHOD_DELETE_RESOURCE_ID,
     )
@@ -103,7 +104,11 @@ pub async fn main() -> Result<(), Box<dyn std::error::Error>> {
 
     let rpc_client = InMemoryRpcClient::new(
         transport.clone(),
-        Arc::new(StaticUriProvider::new("local_authority", 0xAAA2, 0x01)?),
+        Arc::new(StaticUriProvider::for_entity(
+            "local_authority",
+            UEntityId::first_instance(0xAAA2),
+            0x01,
+        )?),
     )
     .await
     .expect("failed to create RPC client");
@@ -114,7 +119,7 @@ pub async fn main() -> Result<(), Box<dyn std::error::Error>> {
     });
     let payload = UPayload::new(
         serde_json::to_vec(&request_payload).expect("failed to create request payload"),
-        UPayloadFormat::Json,
+        PayloadEncoding::JSON,
     );
     let call_options = CallOptions::for_rpc_request(0x1000, None, None, None);
     rpc_client

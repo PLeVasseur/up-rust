@@ -16,12 +16,17 @@ categories = ["api-bindings"]
 description = "The Eclipse uProtocol Rust Language Library"
 edition = "2021"
 include = [
+    "/abi/*",
+    "/benches/*",
     "/build.rs",
     "/Cargo.toml",
     "/examples/*",
     "/proto/*",
     "/README.md",
+    "/MIGRATION.md",
     "/src/*",
+    "/test-fixtures/proto/**",
+    "/tests/**",
     "/up-spec/up-core-api/uprotocol/*",
 ]
 keywords = ["uProtocol", "SDK", "communication"]
@@ -31,6 +36,10 @@ readme = "README.md"
 repository = "https://github.com/eclipse-uprotocol/up-rust"
 rust-version = "1.88"
 version = "0.10.0-SNAPSHOT"
+resolver = "2"
+
+[workspace]
+members = ["macros", "tools/up-native-profile", "test-fixtures/native-inventory-types", "test-fixtures/native-inventory-export"]
 
 [features]
 default = []
@@ -43,56 +52,100 @@ communication = [
     "up-l2-rpc-server",
 ]
 protobuf-support = ["dep:protobuf"]
+payload-contract-fixtures = ["protobuf-wire", "zero-copy-transport", "dep:serde", "serde/derive", "dep:serde_json"]
+payload-contract-large-fixtures = ["payload-contract-fixtures"]
+payload-contract-simulator-fixtures = ["payload-contract-large-fixtures"]
 symphony = ["up-l2-rpc-server", "dep:serde", "dep:serde_json", "dep:symphony"]
 test-util = ["dep:mockall"]
-up-core-types = ["protobuf-support"]
-up-l2-api = ["dep:thiserror"]
-up-l2-notifier = ["up-l2-api"]
-up-l2-publisher = ["up-l2-api"]
-up-l2-subscriber = ["up-l2-api", "usubscription"]
-up-l2-rpc-client = ["up-l2-api", "up-core-types", "tokio/sync", "tokio/time"]
-up-l2-rpc-server = ["up-l2-api", "up-core-types", "tokio/sync", "tokio/time"]
+# Generated core-service protobuf APIs and conversions.
+up-core-api = ["protobuf-support"]
+# Target-qualified native descriptors and deployment agreement.
+native-identity = ["dep:sha2"]
+selected-wire-codec-core = ["native-identity"]
+selected-wire-transport-core = ["selected-wire-codec-core"]
+selected-wire-transport-adapter = ["selected-wire-transport-core"]
+selected-wire-user-api = ["selected-wire-transport-adapter", "up-core-api"]
+transport-implementer-api = ["selected-wire-transport-core", "tokio/sync", "tokio/rt", "tokio/time"]
+# One switch for wire and transport bindings: the implementer contracts, owned-frame
+# and native-loan families and the selected-wire adapters, so a binding cannot miss
+# transport-implementer-api. Bindings that need less can still compose the parts.
+transport-implementer = ["transport-implementer-api", "owned-frame-transport", "wire-implementer-api", "selected-wire-user-api", "zero-copy-transport", "protobuf-wire"]
+owned-frame-transport = ["selected-wire-transport-core", "up-core-api"]
+wire-implementer-api = ["selected-wire-codec-core"]
+protobuf-wire = ["up-core-api", "selected-wire-codec-core"]
+zero-copy-transport = ["dep:up-rust-macros", "native-identity", "selected-wire-transport-core"]
+native-inventory = ["zero-copy-transport", "dep:inventory"]
+# Communication Layer traits, independently of their default implementations.
+communication-api = []
+# Primary typed roles; native loan capability remains an explicit additional feature.
+typed-communication = ["selected-wire-user-api", "communication-api", "owned-frame-transport", "transport-implementer-api", "usubscription", "tokio/macros"]
+up-l2-notifier = ["communication-api"]
+up-l2-publisher = ["communication-api"]
+up-l2-subscriber = ["communication-api", "usubscription"]
+up-l2-rpc-client = ["communication-api", "up-core-api", "tokio/sync", "tokio/time"]
+up-l2-rpc-server = ["communication-api", "up-core-api", "tokio/sync", "tokio/time"]
+up-l2-zero-copy = ["communication-api", "selected-wire-user-api", "transport-implementer-api", "zero-copy-transport"]
 udiscovery = ["up-l2-rpc-client"]
 usubscription = ["up-l2-rpc-client"]
-util = ["tokio/sync"]
+util = ["transport-implementer-api"]
 
 [dependencies]
-async-trait = { version = "0.1" }
+async-trait = { version = "0.1.92" }
 bytes = { version = "1.12.1" }
-mediatype = "0.23"
-mockall = { version = "0.15", optional = true }
+# prevent usage of yanked 0.10.1 version of chacha20
+chacha20 = { version = "0.10.2" }
+fluent-uri = { version = "0.4.1", features = ["net"] }
+# Pin the linked-registration implementation exercised by the target exporter tests.
+inventory = { version = "=0.3.24", optional = true }
+mediatype = "0.23.0"
+mockall = { version = "0.15.0", optional = true }
 protobuf = { version = "3.7.2", features = ["with-bytes"], optional = true }
-rand = { version = "0.10.2" }
-regex = { version = "1.13.1", default-features = false, features = ["perf", "std"] }
+rand = { version = "0.10.3" }
 serde = { version = "1.0.228", optional = true }
 serde_json = { version = "1.0.150", optional = true }
+sha2 = { version = "0.11.0", optional = true }
 symphony = { version = "0.1.5", optional = true }
-thiserror = { version = "1.0.69", optional = true }
-tokio = { version = "1.53.1", default-features = false, optional = true }
-tracing = { version = "0.1", default-features = false, features = ["log", "std"] }
-uriparse = { version = "0.6" }
-uuid-simd = { version = "0.8", default-features = false, features = ["std", "detect"] }
+thiserror = { version = "2.0.21" }
+tokio = { version = "1.54.1", default-features = false, optional = true }
+tracing = { version = "0.1.44", default-features = false, features = ["log", "std"] }
+up-rust-macros = { version = "0.10.0-SNAPSHOT", path = "macros", optional = true }
+uuid-simd = { version = "0.8.0", default-features = false, features = ["std", "detect"] }
 
 [build-dependencies]
 protobuf-codegen = { version = "3.7.2" }
 protoc-bin-vendored = { version = "3.2" }
 
 [dev-dependencies]
-clap = { version = "4.6.1" }
+clap = { version = "4.6.7" }
 # addresses RUSTSEC-2026-0204
-crossbeam-epoch = { version = "0.9.20" }
+crossbeam-epoch = { version = "0.9.21" }
 cucumber = { version = "0.23.0", features = ["output-junit"] }
 hex = { version = "0.4.3" }
 junit-report = { version = "0.9.1" }
 mockall = { version = "0.15.0" }
-test-case = { version = "3.3.1" }
+pretty_assertions = { version = "1.4" }
+# Keep property generation and its MSRV dependency closure at the tested version.
+proptest = { version = "=1.5.0" }
+# serde derive for example and test schemas using json_codec!; not a library dependency.
+serde = { version = "1.0.228", features = ["derive"] }
+serde_json = "1.0.150"
+sha2 = "0.11.0"
+test-case = { version = "3.4.0" }
+trybuild = "=1.0.121"
 tokio = { version = "1.53.1", default-features = false, features = [
     "macros",
+    "test-util",
     "rt",
     "rt-multi-thread",
     "sync",
     "time",
 ] }
+
+[[test]]
+name = "prepared_paths_zero_alloc"
+path = "tests/prepared_paths_zero_alloc.rs"
+harness = false
+required-features = ["payload-contract-fixtures", "transport-implementer-api", "test-util", "up-l2-zero-copy", "usubscription", "typed-communication"]
 
 [profile.release]
 opt-level = 3
@@ -107,38 +160,38 @@ denylist = ["test-util"]
 skip_feature_sets = [
     # the features on the left side include the features on the right side,
     # so there is no need to test them together
-    ["up-core-types", "protobuf-support"],
+    ["up-core-api", "protobuf-support"],
     ["cloudevents", "protobuf-support"],
     ["symphony", "up-l2-rpc-server"],
-    ["symphony", "up-l2-api"],
+    ["symphony", "communication-api"],
     ["communication", "up-l2-notifier"],
     ["communication", "up-l2-publisher"],
     ["communication", "up-l2-subscriber"],
     ["communication", "up-l2-rpc-client"],
     ["communication", "up-l2-rpc-server"],
-    ["communication", "up-l2-api"],
-    ["communication", "up-core-types"],
+    ["communication", "communication-api"],
+    ["communication", "up-core-api"],
     ["communication", "protobuf-support"],
     ["communication", "usubscription"],
-    ["up-l2-notifier", "up-l2-api"],
-    ["up-l2-publisher", "up-l2-api"],
-    ["up-l2-subscriber", "up-l2-api"],
+    ["up-l2-notifier", "communication-api"],
+    ["up-l2-publisher", "communication-api"],
+    ["up-l2-subscriber", "communication-api"],
     ["up-l2-subscriber", "usubscription"],
     ["up-l2-subscriber", "up-l2-rpc-client"],
-    ["up-l2-subscriber", "up-core-types"],
-    ["up-l2-rpc-client", "up-l2-api"],
-    ["up-l2-rpc-client", "up-core-types"],
+    ["up-l2-subscriber", "up-core-api"],
+    ["up-l2-rpc-client", "communication-api"],
+    ["up-l2-rpc-client", "up-core-api"],
     ["up-l2-rpc-client", "protobuf-support"],
-    ["up-l2-rpc-server", "up-l2-api"],
-    ["up-l2-rpc-server", "up-core-types"],
+    ["up-l2-rpc-server", "communication-api"],
+    ["up-l2-rpc-server", "up-core-api"],
     ["up-l2-rpc-server", "protobuf-support"],
     ["usubscription", "up-l2-rpc-client"],
-    ["usubscription", "up-l2-api"],
-    ["usubscription", "up-core-types"],
+    ["usubscription", "communication-api"],
+    ["usubscription", "up-core-api"],
     ["usubscription", "protobuf-support"],
     ["udiscovery", "up-l2-rpc-client"],
-    ["udiscovery", "up-l2-api"],
-    ["udiscovery", "up-core-types"],
+    ["udiscovery", "communication-api"],
+    ["udiscovery", "up-core-api"],
     ["udiscovery", "protobuf-support"],
 ]
 # optional dependencies are activated by means of features only
@@ -147,7 +200,7 @@ max_combination_size = 3
 
 [[example]]
 name = "simple_notify"
-required-features = ["up-l2-notifier", "util"]
+required-features = ["up-l2-notifier", "protobuf-support", "util"]
 
 [[example]]
 name = "simple_publish"
@@ -161,26 +214,237 @@ required-features = ["up-l2-rpc-client", "up-l2-rpc-server", "util"]
 name = "symphony_target"
 required-features = ["symphony", "up-l2-rpc-client", "up-l2-rpc-server", "util"]
 
+# The first programs a newcomer runs; see the application guide.
+[[example]]
+name = "hello_publisher"
+required-features = ["typed-communication", "test-util"]
+
+[[example]]
+name = "hello_notify"
+required-features = ["typed-communication", "test-util"]
+
+[[example]]
+name = "hello_rpc"
+required-features = ["typed-communication", "test-util"]
+
+# Cucumber owns execution and reporting for these conformance targets.
 [[test]]
 name = "tck_uuri"
-harness = false                       # allows Cucumber to print output instead of libtest
-required-features = ["up-core-types"]
+harness = false
+required-features = ["up-core-api"]
 
 [[test]]
 name = "tck_uuid"
-harness = false                       # allows Cucumber to print output instead of libtest
-required-features = ["up-core-types"]
+harness = false
+required-features = ["up-core-api"]
 
-[lints.rust]
-# this prevents cargo from complaining about code blocks
-# excluded from tarpaulin coverage checks
+[[test]]
+name = "wire_metadata_conformance"
+required-features = ["wire-implementer-api", "up-core-api"]
+
+[[test]]
+name = "wire_metadata_golden"
+required-features = ["wire-implementer-api", "up-core-api"]
+
+[[test]]
+name = "owned_listener_lifetime"
+required-features = ["owned-frame-transport"]
+
+[[test]]
+name = "listener_admission_ui"
+required-features = ["transport-implementer-api"]
+
+[[test]]
+name = "listener_admission_native"
+required-features = ["transport-implementer-api", "test-util"]
+
+[[test]]
+name = "cloudevents_public_api"
+required-features = ["cloudevents"]
+
+[[test]]
+name = "owned_frame_trybuild"
+required-features = ["owned-frame-transport"]
+
+[[test]]
+name = "stable_payload_trybuild"
+required-features = ["native-inventory"]
+
+[[test]]
+name = "native_path_zero_alloc"
+required-features = ["zero-copy-transport", "test-util"]
+
+[[test]]
+name = "native_inventory"
+required-features = ["native-inventory"]
+
+[[test]]
+name = "native_inventory_duplicate"
+required-features = ["native-inventory"]
+
+[[test]]
+name = "selected_wire_payload_trybuild"
+required-features = ["zero-copy-transport", "transport-implementer-api", "selected-wire-user-api"]
+
+[[test]]
+name = "heap_guard_contract"
+harness = false
+required-features = ["test-util"]
+
+[[test]]
+name = "heap_guard_not_installed"
+required-features = ["test-util"]
+
+# Needs the C-level allocation observer preloaded; see the runner scripts.
+[[test]]
+name = "heap_guard_c_level"
+harness = false
+test = false
+required-features = ["test-util"]
+
+[[test]]
+name = "heap_guard_c_level_not_loaded"
+required-features = ["test-util"]
+
+[[test]]
+name = "runtime_heap_coverage"
+required-features = ["typed-communication", "transport-implementer-api", "wire-implementer-api", "owned-frame-transport", "payload-contract-fixtures", "up-l2-zero-copy", "test-util"]
+
+[[test]]
+name = "payload_contract"
+required-features = ["payload-contract-fixtures"]
+
+[[test]]
+name = "fake_external_wire"
+required-features = ["wire-implementer-api"]
+
+[[bench]]
+name = "payload_contract"
+harness = false
+required-features = ["payload-contract-fixtures", "up-l2-zero-copy", "wire-implementer-api", "test-util"]
+
+[lints]
+workspace = true
+
+[workspace.lints.rust]
+# Every public item is documented and every public type is inspectable.
+# Copy is a per-type semver commitment, not a crate-wide hygiene default.
+missing_docs = "deny"
+missing_debug_implementations = "deny"
+# Accept code blocks excluded from tarpaulin coverage checks.
 unexpected_cfgs = { level = "warn", check-cfg = ['cfg(tarpaulin_include)'] }
 
-[lints.clippy]
+[workspace.lints.clippy]
 # see https://corrode.dev/blog/defensive-programming/#clippy-lints-for-defensive-programming
+# Every unsafe block and every public unsafe fn states its proof obligation.
+undocumented_unsafe_blocks = "deny"
+missing_safety_doc = "deny"
 indexing_slicing = "deny"
 fallible_impl_from = "deny"
 wildcard_enum_match_arm = "deny"
 unneeded_field_pattern = "deny"
 fn_params_excessive_bools = "deny"
 must_use_candidate = "allow"
+
+[[example]]
+name = "typed_door"
+required-features = ["typed-communication", "test-util", "util"]
+
+[[test]]
+name = "typed_application"
+required-features = ["typed-communication", "test-util", "util"]
+
+[[example]]
+name = "user_first_door"
+required-features = ["typed-communication", "test-util", "util"]
+
+[[test]]
+name = "user_first_application"
+required-features = ["typed-communication", "test-util", "util"]
+
+[[test]]
+name = "native_retained_cleanup"
+path = "tests/native_retained_cleanup.rs"
+required-features = ["typed-communication", "up-l2-zero-copy", "test-util", "util"]
+
+[[test]]
+name = "user_first_bindings"
+path = "tests/user_first_bindings.rs"
+required-features = ["typed-communication", "test-util", "util"]
+
+[[test]]
+name = "user_first_recovery"
+path = "tests/user_first_recovery.rs"
+required-features = ["typed-communication", "test-util", "util"]
+
+[[test]]
+name = "independent_roles"
+path = "tests/independent_roles.rs"
+required-features = ["typed-communication", "payload-contract-fixtures", "test-util", "wire-implementer-api"]
+
+[[test]]
+name = "independent_native_roles"
+path = "tests/independent_native_roles.rs"
+required-features = ["typed-communication", "payload-contract-fixtures", "test-util", "up-l2-zero-copy"]
+
+[[test]]
+name = "serialized_dispatch"
+path = "tests/serialized_dispatch.rs"
+required-features = ["owned-frame-transport", "transport-implementer-api", "wire-implementer-api", "typed-communication", "test-util"]
+
+[[example]]
+name = "serialized_inline_transport"
+path = "examples/serialized_inline_transport.rs"
+required-features = ["owned-frame-transport", "transport-implementer-api", "wire-implementer-api", "typed-communication"]
+
+# Additive target for serialized-dispatch-controls-3 (R2/R3/R4). Merge once,
+# next to the existing `serialized_dispatch` [[test]] entry. Same feature
+# closure as that target so one admitted build serves both; the minimum
+# closure actually used is owned-frame-transport + transport-implementer-api
+# + wire-implementer-api. The standalone tests/ui/dispatch_controls_*.rs files
+# are NOT Cargo targets: Cargo does not auto-discover tests/ui/*.rs, and no
+# existing trybuild glob (tests/ui/<subdir>/*.rs or exact files) matches them.
+[[test]]
+name = "serialized_dispatch_controls"
+path = "tests/serialized_dispatch_controls.rs"
+required-features = ["owned-frame-transport", "transport-implementer-api", "wire-implementer-api", "typed-communication", "test-util"]
+
+# independent-roles-proof-1: append once to up-rust/Cargo.toml (after the
+# existing independent_native_roles target). REQUIRED before the two new
+# tests/*.rs files land: Cargo auto-discovers tests/*.rs, and without these
+# required-features a default-feature `cargo test` would try to build them.
+# Feature sets mirror the existing independent_roles / independent_native_roles
+# targets whose example supports these targets include.
+
+[[test]]
+name = "independent_roles_proof"
+path = "tests/independent_roles_proof.rs"
+required-features = ["typed-communication", "payload-contract-fixtures", "test-util", "wire-implementer-api"]
+
+[[test]]
+name = "independent_native_roles_proof"
+path = "tests/independent_native_roles_proof.rs"
+required-features = ["typed-communication", "payload-contract-fixtures", "test-util", "up-l2-zero-copy"]
+
+
+[[test]]
+name = "owned_rpc_join"
+path = "tests/owned_rpc_join.rs"
+required-features = ["typed-communication"]
+
+# sdk-ergonomics-5: role set, schema simple paths. Same feature conventions as the
+# user-first targets; entity_addressing.rs needs no extra features.
+[[test]]
+name = "role_set"
+path = "tests/role_set.rs"
+required-features = ["typed-communication", "test-util"]
+
+[[test]]
+name = "schema_simple_path"
+path = "tests/schema_simple_path.rs"
+required-features = ["typed-communication", "test-util"]
+
+[[test]]
+name = "carriage_admission"
+path = "tests/carriage_admission.rs"
+required-features = ["typed-communication", "test-util"]

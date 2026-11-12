@@ -12,42 +12,34 @@
  ********************************************************************************/
 
 use bytes::Bytes;
+use thiserror::Error;
 
-#[cfg(all(feature = "up-l2-api", feature = "protobuf-support"))]
+#[cfg(all(feature = "communication-api", feature = "protobuf-support"))]
 pub(crate) use protobuf_support::deserialize_protobuf_bytes;
 pub use umessagebuilder::*;
 
 use crate::{
-    SerializationError, UAttributes, UAttributesError, UCode, UMessageType, UPayloadFormat,
-    UPriority, UUri, UUID,
+    PayloadEncoding, SerializationError, UAttributes, UAttributesError, UAttributesValidators,
+    UCode, UMessageType, UPriority, UUri, UUID,
 };
 
 mod umessagebuilder;
 
 pub(crate) type Payload = Bytes;
 
-#[derive(Debug)]
+/// Errors produced when building or converting a [`UMessage`].
+#[derive(Debug, Error)]
 pub enum UMessageError {
+    /// The message attributes failed validation.
+    #[error("Attributes validation error: {0}")]
     AttributesValidationError(UAttributesError),
+    /// The payload could not be (de)serialized.
+    #[error("Failed to serialize message: {0}")]
     DataSerializationError(SerializationError),
+    /// The payload is inconsistent with the message (wrong format or presence).
+    #[error("UMessage payload error: {0}")]
     PayloadError(String),
 }
-
-impl std::fmt::Display for UMessageError {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        match self {
-            Self::AttributesValidationError(e) => f.write_fmt(format_args!(
-                "Builder state is not consistent with message type: {e}"
-            )),
-            Self::DataSerializationError(e) => {
-                f.write_fmt(format_args!("Failed to serialize payload: {e}"))
-            }
-            Self::PayloadError(e) => f.write_fmt(format_args!("UMessage payload error: {e}")),
-        }
-    }
-}
-
-impl std::error::Error for UMessageError {}
 
 impl From<UAttributesError> for UMessageError {
     fn from(value: UAttributesError) -> Self {
@@ -80,6 +72,7 @@ impl From<&str> for UMessageError {
     }
 }
 
+/// One uProtocol message: attributes plus optional payload bytes.
 #[derive(Debug, Clone, PartialEq)]
 #[repr(C)]
 pub struct UMessage {
@@ -88,17 +81,87 @@ pub struct UMessage {
 }
 
 impl UMessage {
-    // This convenience constructor is used internally only, e.g. by the UMessageBuilder for creating
-    // the final message after validation.
-    // Client code can create UMessages using the UMessageBuilder only.
+    /// This convenience constructor is used internally only, e.g. by the [crate::UMessageBuilder] for creating
+    /// the final message after validation.
+    ///
+    /// Client code can only create UMessages using the [crate::UMessageBuilder] or by deserializing and mapping a
+    /// protobuf. Both of these approaches use this constructor and will therefore validate the message before
+    /// returning it to client code.
+    ///
+    /// # Errors
+    ///
+    /// Returns an error if the given attributes and payload fail [validation](Self::validate).
     pub(crate) fn new(
         attributes: UAttributes,
         payload: Option<Bytes>,
     ) -> Result<Self, UMessageError> {
-        Ok(UMessage {
+        let msg = UMessage {
             attributes,
             payload,
-        })
+        };
+        msg.validate()?;
+        Ok(msg)
+    }
+
+    /// Validates this message's attributes and payload.
+    ///
+    /// # Errors
+    ///
+    /// Returns an error if the message's attributes are [invalid](crate::UAttributesValidator::validate)
+    /// or are not consistent with the message's payload, e.g. the message has a payload encoding but no
+    /// payload or vice versa.
+    ///
+    /// # Example
+    /// ```
+    /// use up_rust::{UMessageBuilder, UUri, PayloadEncoding};
+    ///
+    /// let topic = UUri::try_from("//my-vehicle/D45/1/23/A001").unwrap();
+    /// let msg = UMessageBuilder::publish(topic.clone()).build().unwrap();
+    /// assert!(msg.validate().is_ok());
+    ///
+    /// let msg = UMessageBuilder::publish(topic).build_with_payload("Hello", PayloadEncoding::TEXT).unwrap();
+    /// assert!(msg.validate().is_ok());
+    /// ```
+    pub fn validate(&self) -> Result<(), UMessageError> {
+        UAttributesValidators::validator_for_attributes(&self.attributes)
+            .validate(&self.attributes)?;
+        // [impl->dsn~up-attributes-payload-encoding-id~1]
+        if self.attributes.payload_encoding().is_some() && self.payload.is_none() {
+            return Err(UMessageError::PayloadError(
+                "message declares an encoding without payload bytes".to_string(),
+            ));
+        }
+        if self.attributes.payload_encoding().is_none() && self.payload.is_some() {
+            return Err(UMessageError::PayloadError(
+                "message payload has no declared encoding".to_string(),
+            ));
+        }
+        Ok(())
+    }
+
+    /// Returns this message with its payload encoding set to the given
+    /// encoding identity, replacing any previously declared encoding.
+    ///
+    /// This supports transport decorators that apply a "fixed per topic"
+    /// encoding convention on behalf of wires that cannot carry the
+    /// identifier; such decorators stamp received
+    /// messages so downstream consumers see a total declaration.
+    ///
+    /// # Errors
+    ///
+    /// Returns [`UMessageError::PayloadError`] when the message has no payload
+    /// bytes to describe.
+    pub fn with_declared_payload_encoding(
+        mut self,
+        encoding: PayloadEncoding,
+    ) -> Result<Self, UMessageError> {
+        if self.payload.is_none() {
+            return Err(UMessageError::PayloadError(
+                "cannot declare a payload encoding on a message without payload bytes".to_string(),
+            ));
+        }
+        self.attributes.payload_encoding_id = Some(encoding);
+        Ok(self)
     }
 
     /// Get this message's attributes.
@@ -111,7 +174,7 @@ impl UMessage {
     /// use up_rust::{UMessageBuilder, UMessageType, UUri};
     ///
     /// # fn main() -> Result<(), Box<dyn std::error::Error>> {
-    /// let topic = UUri::try_from("//my-vehicle/D45/23/A001")?;
+    /// let topic = UUri::try_from("//my-vehicle/D45/1/23/A001")?;
     /// let msg = UMessageBuilder::publish(topic).build()?;
     /// assert_eq!(msg.type_(), UMessageType::Publish);
     /// # Ok(())
@@ -138,7 +201,7 @@ impl UMessage {
     /// use up_rust::{UMessageBuilder, UMessageType, UUri, UUID};
     ///
     /// # fn main() -> Result<(), Box<dyn std::error::Error>> {
-    /// let topic = UUri::try_from("//my-vehicle/D45/23/A001")?;
+    /// let topic = UUri::try_from("//my-vehicle/D45/1/23/A001")?;
     /// let msg_id = UUID::build();
     /// let msg = UMessageBuilder::publish(topic).with_message_id(msg_id.clone()).build()?;
     /// assert_eq!(msg.id(), &msg_id);
@@ -160,7 +223,7 @@ impl UMessage {
     /// use up_rust::{UMessageBuilder, UMessageType, UUri};
     ///
     /// # fn main() -> Result<(), Box<dyn std::error::Error>> {
-    /// let topic = UUri::try_from("//my-vehicle/D45/23/A001")?;
+    /// let topic = UUri::try_from("//my-vehicle/D45/1/23/A001")?;
     /// let msg = UMessageBuilder::publish(topic.clone()).build()?;
     /// assert_eq!(msg.source(), &topic);
     /// # Ok(())
@@ -181,8 +244,8 @@ impl UMessage {
     /// use up_rust::{UMessageBuilder, UMessageType, UUri};
     ///
     /// # fn main() -> Result<(), Box<dyn std::error::Error>> {
-    /// let origin = UUri::try_from("//my-vehicle/D45/23/A001")?;
-    /// let dest = UUri::try_from("//other-vehicle/D10/3/0")?;
+    /// let origin = UUri::try_from("//my-vehicle/D45/1/23/A001")?;
+    /// let dest = UUri::try_from("//other-vehicle/D10/1/3/0")?;
     /// let msg = UMessageBuilder::notification(origin, dest.clone()).build()?;
     /// assert!(msg.sink().is_some_and(|sink| sink == &dest));
     /// # Ok(())
@@ -207,8 +270,8 @@ impl UMessage {
     /// use up_rust::{UMessageBuilder, UMessageType, UUri};
     ///
     /// # fn main() -> Result<(), Box<dyn std::error::Error>> {
-    /// let origin = UUri::try_from("//my-vehicle/D45/23/A001")?;
-    /// let dest = UUri::try_from("//other-vehicle/D10/3/0")?;
+    /// let origin = UUri::try_from("//my-vehicle/D45/1/23/A001")?;
+    /// let dest = UUri::try_from("//other-vehicle/D10/1/3/0")?;
     /// let msg = UMessageBuilder::notification(origin, dest.clone()).build()?;
     /// assert_eq!(msg.sink_unchecked(), &dest);
     /// # Ok(())
@@ -229,7 +292,7 @@ impl UMessage {
     /// use up_rust::{UMessageBuilder, UMessageType, UPriority, UUri};
     ///
     /// # fn main() -> Result<(), Box<dyn std::error::Error>> {
-    /// let topic = UUri::try_from("//my-vehicle/D45/23/A001")?;
+    /// let topic = UUri::try_from("//my-vehicle/D45/1/23/A001")?;
     /// let msg = UMessageBuilder::publish(topic).with_priority(UPriority::CS3).build()?;
     /// assert!(msg.priority().is_some_and(|prio| prio == UPriority::CS3));
     /// # Ok(())
@@ -254,7 +317,7 @@ impl UMessage {
     /// use up_rust::{UMessageBuilder, UMessageType, UPriority, UUri};
     ///
     /// # fn main() -> Result<(), Box<dyn std::error::Error>> {
-    /// let topic = UUri::try_from("//my-vehicle/D45/23/A001")?;
+    /// let topic = UUri::try_from("//my-vehicle/D45/1/23/A001")?;
     /// let msg = UMessageBuilder::publish(topic).with_priority(UPriority::CS3).build()?;
     /// assert_eq!(msg.priority_unchecked(), UPriority::CS3);
     /// # Ok(())
@@ -275,8 +338,8 @@ impl UMessage {
     /// use up_rust::{UCode, UMessageBuilder, UMessageType, UUID, UUri};
     ///
     /// # fn main() -> Result<(), Box<dyn std::error::Error>> {
-    /// let invoked_method = UUri::try_from("//my-vehicle/D45/2/101")?;
-    /// let reply_to = UUri::try_from("//other-vehicle/D10/3/0")?;
+    /// let invoked_method = UUri::try_from("//my-vehicle/D45/1/2/101")?;
+    /// let reply_to = UUri::try_from("//other-vehicle/D10/1/3/0")?;
     /// let msg = UMessageBuilder::response(reply_to, UUID::build(), invoked_method)
     ///   .with_comm_status(UCode::Ok)
     ///   .build()?;
@@ -303,8 +366,8 @@ impl UMessage {
     /// use up_rust::{UCode, UMessageBuilder, UMessageType, UUID, UUri};
     ///
     /// # fn main() -> Result<(), Box<dyn std::error::Error>> {
-    /// let invoked_method = UUri::try_from("//my-vehicle/D45/2/101")?;
-    /// let reply_to = UUri::try_from("//other-vehicle/D10/3/0")?;
+    /// let invoked_method = UUri::try_from("//my-vehicle/D45/1/2/101")?;
+    /// let reply_to = UUri::try_from("//other-vehicle/D10/1/3/0")?;
     /// let msg = UMessageBuilder::response(reply_to, UUID::build(), invoked_method)
     ///   .with_comm_status(UCode::Internal)
     ///   .build()?;
@@ -331,8 +394,8 @@ impl UMessage {
     /// use up_rust::{UMessageBuilder, UUri};
     ///
     /// # fn main() -> Result<(), Box<dyn std::error::Error>> {
-    /// let invoked_method = UUri::try_from("//my-vehicle/D45/2/101")?;
-    /// let reply_to = UUri::try_from("//other-vehicle/D10/3/0")?;
+    /// let invoked_method = UUri::try_from("//my-vehicle/D45/1/2/101")?;
+    /// let reply_to = UUri::try_from("//other-vehicle/D10/1/3/0")?;
     /// let msg = UMessageBuilder::request(invoked_method, reply_to, 5000)
     ///   .build()?;
     /// assert!(msg.ttl().is_some_and(|ttl| ttl == 5000));
@@ -362,8 +425,8 @@ impl UMessage {
     /// use up_rust::{UMessageBuilder, UUri};
     ///
     /// # fn main() -> Result<(), Box<dyn std::error::Error>> {
-    /// let invoked_method = UUri::try_from("//my-vehicle/D45/2/101")?;
-    /// let reply_to = UUri::try_from("//other-vehicle/D10/3/0")?;
+    /// let invoked_method = UUri::try_from("//my-vehicle/D45/1/2/101")?;
+    /// let reply_to = UUri::try_from("//other-vehicle/D10/1/3/0")?;
     /// let msg = UMessageBuilder::request(invoked_method, reply_to, 5000)
     ///   .build()?;
     /// assert!(msg.ttl_unchecked() == 5000);
@@ -385,8 +448,8 @@ impl UMessage {
     /// use up_rust::{UMessageBuilder, UUri};
     ///
     /// # fn main() -> Result<(), Box<dyn std::error::Error>> {
-    /// let invoked_method = UUri::try_from("//my-vehicle/D45/2/101")?;
-    /// let reply_to = UUri::try_from("//other-vehicle/D10/3/0")?;
+    /// let invoked_method = UUri::try_from("//my-vehicle/D45/1/2/101")?;
+    /// let reply_to = UUri::try_from("//other-vehicle/D10/1/3/0")?;
     /// let msg = UMessageBuilder::request(invoked_method, reply_to, 5000)
     ///   .with_permission_level(3)
     ///   .build()?;
@@ -410,8 +473,8 @@ impl UMessage {
     ///
     /// # fn main() -> Result<(), Box<dyn std::error::Error>> {
     /// let token = "my_token";
-    /// let invoked_method = UUri::try_from("//my-vehicle/D45/2/101")?;
-    /// let reply_to = UUri::try_from("//other-vehicle/D10/3/0")?;
+    /// let invoked_method = UUri::try_from("//my-vehicle/D45/1/2/101")?;
+    /// let reply_to = UUri::try_from("//other-vehicle/D10/1/3/0")?;
     /// let msg = UMessageBuilder::request(invoked_method, reply_to, 5000)
     ///   .with_token(token)
     ///   .build()?;
@@ -435,8 +498,8 @@ impl UMessage {
     ///
     /// # fn main() -> Result<(), Box<dyn std::error::Error>> {
     /// let traceparent = "my_traceparent";
-    /// let invoked_method = UUri::try_from("//my-vehicle/D45/2/101")?;
-    /// let reply_to = UUri::try_from("//other-vehicle/D10/3/0")?;
+    /// let invoked_method = UUri::try_from("//my-vehicle/D45/1/2/101")?;
+    /// let reply_to = UUri::try_from("//other-vehicle/D10/1/3/0")?;
     /// let msg = UMessageBuilder::request(invoked_method, reply_to, 5000)
     ///   .with_traceparent(traceparent)
     ///   .build()?;
@@ -460,8 +523,8 @@ impl UMessage {
     ///
     /// # fn main() -> Result<(), Box<dyn std::error::Error>> {
     /// let request_id = UUID::build();
-    /// let invoked_method = UUri::try_from("//my-vehicle/D45/2/101")?;
-    /// let reply_to = UUri::try_from("//other-vehicle/D10/3/0")?;
+    /// let invoked_method = UUri::try_from("//my-vehicle/D45/1/2/101")?;
+    /// let reply_to = UUri::try_from("//other-vehicle/D10/1/3/0")?;
     /// let msg = UMessageBuilder::response(reply_to, request_id.clone(), invoked_method)
     ///   .build()?;
     /// assert!(msg.request_id().is_some_and(|id| id == &request_id));
@@ -488,8 +551,8 @@ impl UMessage {
     ///
     /// # fn main() -> Result<(), Box<dyn std::error::Error>> {
     /// let request_id = UUID::build();
-    /// let invoked_method = UUri::try_from("//my-vehicle/D45/2/101")?;
-    /// let reply_to = UUri::try_from("//other-vehicle/D10/3/0")?;
+    /// let invoked_method = UUri::try_from("//my-vehicle/D45/1/2/101")?;
+    /// let reply_to = UUri::try_from("//other-vehicle/D10/1/3/0")?;
     /// let msg = UMessageBuilder::response(reply_to, request_id.clone(), invoked_method)
     ///   .build()?;
     /// assert_eq!(msg.request_id_unchecked(), &request_id);
@@ -501,31 +564,32 @@ impl UMessage {
         self.attributes().request_id_unchecked()
     }
 
-    /// Gets this message's payload format.
+    /// Gets this message's payload encoding.
     ///
-    /// This function simply delegates to [`UAttributes::payload_format`].
+    /// This function delegates to [`UAttributes::payload_encoding`].
     ///
     /// # Example
     ///
     /// ```rust
-    /// use up_rust::{UMessageBuilder, UPayloadFormat, UUri};
+    /// use up_rust::{UMessageBuilder, PayloadEncoding, UUri};
     ///
     /// # fn main() -> Result<(), Box<dyn std::error::Error>> {
-    /// let topic = UUri::try_from("//my-vehicle/D45/23/A001")?;
+    /// let topic = UUri::try_from("//my-vehicle/D45/1/23/A001")?;
     /// let msg = UMessageBuilder::publish(topic)
-    ///   .build_with_payload("hello".as_bytes(), UPayloadFormat::Text)?;
-    /// assert!(msg.payload_format().is_some_and(|format| format == UPayloadFormat::Text));
+    ///   .build_with_payload("hello".as_bytes(), PayloadEncoding::TEXT)?;
+    /// assert!(msg.payload_encoding().is_some_and(|format| format == PayloadEncoding::TEXT));
     /// # Ok(())
     /// # }
     /// ```
     #[must_use]
-    pub fn payload_format(&self) -> Option<UPayloadFormat> {
-        self.attributes().payload_format()
+    pub fn payload_encoding(&self) -> Option<PayloadEncoding> {
+        self.attributes().payload_encoding()
     }
 
-    /// Gets this message's payload format.
+    /// Gets this message's payload encoding.
     ///
-    /// This function simply delegates to [`UAttributes::payload_format_unchecked`].
+    /// This function delegates to [`UAttributes::payload_encoding`] and
+    /// unwraps the value.
     ///
     /// # Panics
     ///
@@ -534,22 +598,23 @@ impl UMessage {
     /// # Example
     ///
     /// ```rust
-    /// use up_rust::{UMessageBuilder, UPayloadFormat, UUri};
+    /// use up_rust::{UMessageBuilder, PayloadEncoding, UUri};
     ///
     /// # fn main() -> Result<(), Box<dyn std::error::Error>> {
-    /// let topic = UUri::try_from("//my-vehicle/D45/23/A001")?;
+    /// let topic = UUri::try_from("//my-vehicle/D45/1/23/A001")?;
     /// let msg = UMessageBuilder::publish(topic)
-    ///   .build_with_payload("hello".as_bytes(), UPayloadFormat::Text)?;
-    /// assert_eq!(msg.payload_format_unchecked(), UPayloadFormat::Text);
+    ///   .build_with_payload("hello".as_bytes(), PayloadEncoding::TEXT)?;
+    /// assert_eq!(msg.payload_encoding().unwrap(), PayloadEncoding::TEXT);
     /// # Ok(())
     /// # }
     /// ```
     #[must_use]
-    pub fn payload_format_unchecked(&self) -> UPayloadFormat {
-        self.attributes().payload_format_unchecked()
+    pub fn payload_encoding_unchecked(&self) -> PayloadEncoding {
+        self.attributes().payload_encoding().unwrap()
     }
 
     #[must_use]
+    /// Returns the payload bytes, if the message carries any.
     pub fn payload(&self) -> Option<Bytes> {
         self.payload.clone()
     }
@@ -564,7 +629,7 @@ impl UMessage {
     /// use up_rust::{UMessageBuilder, UUri};
     ///
     /// # fn main() -> Result<(), Box<dyn std::error::Error>> {
-    /// let topic = UUri::try_from("//my-vehicle/D45/23/A001")?;
+    /// let topic = UUri::try_from("//my-vehicle/D45/1/23/A001")?;
     /// let msg = UMessageBuilder::publish(topic).build()?;
     /// assert!(msg.is_publish());
     /// # Ok(())
@@ -585,8 +650,8 @@ impl UMessage {
     /// use up_rust::{UMessageBuilder, UUri};
     ///
     /// # fn main() -> Result<(), Box<dyn std::error::Error>> {
-    /// let invoked_method = UUri::try_from("//my-vehicle/D45/2/101")?;
-    /// let reply_to = UUri::try_from("//other-vehicle/D10/3/0")?;
+    /// let invoked_method = UUri::try_from("//my-vehicle/D45/1/2/101")?;
+    /// let reply_to = UUri::try_from("//other-vehicle/D10/1/3/0")?;
     /// let msg = UMessageBuilder::request(invoked_method, reply_to, 5000)
     ///   .build()?;
     /// assert!(msg.is_request());
@@ -608,8 +673,8 @@ impl UMessage {
     /// use up_rust::{UCode, UMessageBuilder, UUID, UUri};
     ///
     /// # fn main() -> Result<(), Box<dyn std::error::Error>> {
-    /// let invoked_method = UUri::try_from("//my-vehicle/D45/2/101")?;
-    /// let reply_to = UUri::try_from("//other-vehicle/D10/3/0")?;
+    /// let invoked_method = UUri::try_from("//my-vehicle/D45/1/2/101")?;
+    /// let reply_to = UUri::try_from("//other-vehicle/D10/1/3/0")?;
     /// let msg = UMessageBuilder::response(reply_to, UUID::build(), invoked_method)
     ///   .build()?;
     /// assert!(msg.is_response());
@@ -631,8 +696,8 @@ impl UMessage {
     /// use up_rust::{UMessageBuilder, UUri};
     ///
     /// # fn main() -> Result<(), Box<dyn std::error::Error>> {
-    /// let origin = UUri::try_from("//my-vehicle/D45/23/A001")?;
-    /// let dest = UUri::try_from("//other-vehicle/D10/3/0")?;
+    /// let origin = UUri::try_from("//my-vehicle/D45/1/23/A001")?;
+    /// let dest = UUri::try_from("//other-vehicle/D10/1/3/0")?;
     /// let msg = UMessageBuilder::notification(origin, dest).build()?;
     /// assert!(msg.is_notification());
     /// # Ok(())
@@ -646,6 +711,17 @@ impl UMessage {
     /// Checks if this message should be considered expired.
     ///
     /// This function simply delegates to [`UAttributes::check_expired`].
+    ///
+    /// # Example
+    /// ```
+    /// # fn main() -> Result<(), Box<dyn std::error::Error>> {
+    /// use up_rust::{UMessageBuilder, UUri};
+    /// let publish_msg = UMessageBuilder::publish(UUri::try_from("//my-vehicle/D45/1/1/A001")?)
+    ///     .build()?;
+    /// assert!(publish_msg.check_expired().is_ok());
+    /// # Ok(())
+    /// # }
+    /// ```
     pub fn check_expired(&self) -> Result<(), UAttributesError> {
         self.attributes().check_expired()
     }
@@ -658,6 +734,25 @@ impl UMessage {
     ///
     /// * `reference_time` - The reference time as milliseconds since UNIX epoch. The check will
     ///   be performed in relation to this point in time.
+    ///
+    /// # Example
+    /// ```
+    /// # fn main() -> Result<(), Box<dyn std::error::Error>> {
+    /// use std::time::SystemTime;
+    /// use up_rust::{UMessageBuilder, UUri};
+    ///
+    /// let now = SystemTime::now()
+    ///     .duration_since(SystemTime::UNIX_EPOCH)?
+    ///     .as_millis();
+    ///
+    /// let reference_time = now + 300_000; // 5 minutes from now
+    /// let publish_msg = UMessageBuilder::publish(UUri::try_from("//my-vehicle/D45/1/1/A001")?)
+    ///     .with_ttl(5_000) // Set a TTL of 5 seconds
+    ///     .build()?;
+    /// assert!(publish_msg.check_expired_for_reference(reference_time).is_err());
+    /// # Ok(())
+    /// # }
+    /// ```
     pub fn check_expired_for_reference(
         &self,
         reference_time: u128,
@@ -681,14 +776,18 @@ mod protobuf_support {
         ///
         /// # Errors
         ///
-        /// Returns an error if the message payload format is neither [UPayloadFormat::Protobuf] nor
-        /// [UPayloadFormat::ProtobufWrappedInAny] or if the bytes in the
+        /// Returns an error if the message payload encoding is neither [PayloadEncoding::PROTOBUF] nor
+        /// [PayloadEncoding::PROTOBUF_WRAPPED_IN_ANY] or if the bytes in the
         /// payload cannot be deserialized into the target type.
         #[cfg(feature = "protobuf-support")]
         pub fn extract_protobuf<T: ProtobufMappable>(&self) -> Result<T, UMessageError> {
             if let Some(payload) = self.payload.as_ref() {
-                let payload_format = self.payload_format().unwrap_or(UPayloadFormat::Unspecified);
-                deserialize_protobuf_bytes(payload, &payload_format)
+                let Some(payload_encoding) = self.payload_encoding() else {
+                    return Err(UMessageError::PayloadError(
+                        "Message payload has no declared encoding".to_string(),
+                    ));
+                };
+                deserialize_protobuf_bytes(payload, payload_encoding)
             } else {
                 Err(UMessageError::PayloadError(
                     "Message has no payload".to_string(),
@@ -706,35 +805,31 @@ mod protobuf_support {
     /// # Arguments
     ///
     /// * `payload` - The payload data.
-    /// * `payload_format` - The format/encoding of the data. Must be one of
-    ///    - `UPayloadFormat::UPAYLOAD_FORMAT_PROTOBUF`
-    ///    - `UPayloadFormat::UPAYLOAD_FORMAT_PROTOBUF_WRAPPED_IN_ANY`
+    /// * `payload_encoding` - The encoding of the data. Must be one of
+    ///    - `PayloadEncoding::PROTOBUF`
+    ///    - `PayloadEncoding::PROTOBUF_WRAPPED_IN_ANY`
     ///
     /// # Errors
     ///
-    /// Returns an error if the payload format is unsupported or if the data can not be deserialized
-    /// into the target type based on the given format.
+    /// Returns an error if the payload encoding is unsupported or if the data can not be
+    /// deserialized into the target type based on the declared encoding.
     #[cfg(feature = "protobuf-support")]
     pub(crate) fn deserialize_protobuf_bytes<T: ProtobufMappable>(
         payload: &[u8],
-        payload_format: &UPayloadFormat,
+        payload_encoding: PayloadEncoding,
     ) -> Result<T, UMessageError> {
-        match payload_format {
-            UPayloadFormat::Protobuf => {
+        match payload_encoding {
+            PayloadEncoding::PROTOBUF => {
                 T::parse_from_protobuf_bytes(payload).map_err(UMessageError::DataSerializationError)
             }
-            UPayloadFormat::ProtobufWrappedInAny => T::parse_from_packed_protobuf_bytes(payload)
-                .map_err(UMessageError::DataSerializationError),
-            UPayloadFormat::Unspecified
-            | UPayloadFormat::Json
-            | UPayloadFormat::Raw
-            | UPayloadFormat::Shm
-            | UPayloadFormat::Someip
-            | UPayloadFormat::SomeipTlv
-            | UPayloadFormat::Text => {
-                let detail_msg = payload_format.to_media_type().map_or_else(
-                    || format!("Unknown payload format: {}", *payload_format as i32),
-                    |mt| format!("Invalid/unsupported payload format: {mt}"),
+            PayloadEncoding::PROTOBUF_WRAPPED_IN_ANY => {
+                T::parse_from_packed_protobuf_bytes(payload)
+                    .map_err(UMessageError::DataSerializationError)
+            }
+            _ => {
+                let detail_msg = payload_encoding.media_type().map_or_else(
+                    || format!("Unsupported payload encoding: {payload_encoding}"),
+                    |mt| format!("Invalid/unsupported payload encoding: {mt}"),
                 );
                 Err(UMessageError::from(detail_msg))
             }
@@ -773,7 +868,7 @@ mod protobuf_support {
                 &data
                     .write_to_bytes()
                     .expect("Failed to write protobuf bytes"),
-                &UPayloadFormat::Protobuf,
+                PayloadEncoding::PROTOBUF,
             );
             assert!(result.is_ok_and(|v| v.value == *"hello world"));
 
@@ -785,7 +880,7 @@ mod protobuf_support {
 
             let result = deserialize_protobuf_bytes::<StringValue>(
                 &buf,
-                &UPayloadFormat::ProtobufWrappedInAny,
+                PayloadEncoding::PROTOBUF_WRAPPED_IN_ANY,
             );
             assert!(result.is_ok_and(|v| v.value == *"hello world"));
         }
@@ -798,20 +893,21 @@ mod protobuf_support {
             let buf: Bytes = any.write_to_bytes().unwrap().into();
             let result = deserialize_protobuf_bytes::<DoubleValue>(
                 &buf,
-                &UPayloadFormat::ProtobufWrappedInAny,
+                PayloadEncoding::PROTOBUF_WRAPPED_IN_ANY,
             );
             assert!(result.is_err_and(|e| matches!(e, UMessageError::DataSerializationError(_))));
         }
 
-        #[test_case(UPayloadFormat::Json; "JSON format")]
-        #[test_case(UPayloadFormat::Raw; "RAW format")]
-        #[test_case(UPayloadFormat::Shm; "SHM format")]
-        #[test_case(UPayloadFormat::Someip; "SOMEIP format")]
-        #[test_case(UPayloadFormat::SomeipTlv; "SOMEIP TLV format")]
-        #[test_case(UPayloadFormat::Text; "TEXT format")]
-        #[test_case(UPayloadFormat::Unspecified; "UNSPECIFIED format")]
-        fn test_deserialize_protobuf_bytes_fails_for_(format: UPayloadFormat) {
-            let result = deserialize_protobuf_bytes::<StringValue>("hello".as_bytes(), &format);
+        #[test_case(PayloadEncoding::JSON; "JSON format")]
+        #[test_case(PayloadEncoding::RAW; "RAW format")]
+        #[test_case(PayloadEncoding::CONTRACT_DEFINED; "contract-defined encoding")]
+        #[test_case(PayloadEncoding::SOMEIP; "SOMEIP format")]
+        #[test_case(PayloadEncoding::SOMEIP_TLV; "SOMEIP TLV format")]
+        #[test_case(PayloadEncoding::TEXT; "TEXT format")]
+        #[test_case(PayloadEncoding::from_id(0xFBEE).unwrap(); "private-use id")]
+        #[test_case(PayloadEncoding::from_id(8).unwrap(); "unassigned id")]
+        fn test_deserialize_protobuf_bytes_fails_for_(format: PayloadEncoding) {
+            let result = deserialize_protobuf_bytes::<StringValue>("hello".as_bytes(), format);
             assert!(result.is_err_and(|e| matches!(e, UMessageError::PayloadError(_))));
         }
 
@@ -829,7 +925,7 @@ mod protobuf_support {
             // WHEN deserializing the bytes into a Duration message using the ProtobufWrappedInAny format
             let result = deserialize_protobuf_bytes::<Duration>(
                 buf.as_slice(),
-                &UPayloadFormat::ProtobufWrappedInAny,
+                PayloadEncoding::PROTOBUF_WRAPPED_IN_ANY,
             );
             // THEN the deserialization fails with a DataSerializationError
             assert!(result.is_err_and(|e| matches!(e, UMessageError::DataSerializationError(_))))
@@ -841,7 +937,7 @@ mod protobuf_support {
                 value: "hello".to_string(),
                 ..Default::default()
             };
-            let topic = UUri::try_from_parts("local", 0xabcd, 0x01, 0x9000)
+            let topic = UUri::try_from_parts("local", 0x0001_ABCD, 0x01, 0x9000)
                 .expect("failed to create topic");
             let msg = UMessageBuilder::publish(topic)
                 .build_with_protobuf_payload(&payload)
@@ -853,7 +949,7 @@ mod protobuf_support {
 
         #[test]
         fn extract_payload_fails_for_no_payload() {
-            let topic = UUri::try_from_parts("local", 0xabcd, 0x01, 0x9000)
+            let topic = UUri::try_from_parts("local", 0x0001_ABCD, 0x01, 0x9000)
                 .expect("failed to create topic");
             let msg = UMessageBuilder::publish(topic)
                 .build()
@@ -865,7 +961,7 @@ mod protobuf_support {
     }
 }
 
-#[cfg(feature = "up-core-types")]
+#[cfg(feature = "up-core-api")]
 mod core_types_support {
     use protobuf::{well_known_types::any::Any, Message};
 
@@ -888,7 +984,7 @@ mod core_types_support {
     impl TryFrom<&UMessageProto> for UMessage {
         type Error = UMessageError;
         fn try_from(value: &UMessageProto) -> Result<Self, Self::Error> {
-            let mut attributes = value.attributes.as_ref().map_or_else(
+            let attributes = value.attributes.as_ref().map_or_else(
                 || {
                     Err(UAttributesError::validation_error(
                         "UMessageProto has no attributes",
@@ -896,22 +992,6 @@ mod core_types_support {
                 },
                 UAttributes::try_from,
             )?;
-            // The uattributes.proto file in up-spec v1.6.0.alpha.7 does not declare the payload_format field
-            // as optional. Consequently, a UMessage protobuf that does not have a payload still ALWAYS has
-            // the UNSPECIFIED payload_format when being deserialized.
-            // When mapping such a message to the (internal) UMessage struct, we therefore need to also consider
-            // whether the message actually has payload or not, in order to set the payload_format field to the
-            // proper value, i.e. Some(Unspecified), if the message has payload, or None otherwise.
-            // This is relevant, because the presence of a payload_format value in the UMessage struct is used to
-            // determine whether the message has payload or not, e.g. when serializing the message back to
-            // protobuf or when extracting the payload as a protobuf message.
-            //
-            // This should no longer be necessary once the payload_format field in uattributes.proto is declared as
-            // optional in the UP specification and the protobuf definitions are updated accordingly.
-            //
-            if value.payload.is_none() {
-                attributes.payload_format = None;
-            }
             UMessage::new(attributes, value.payload.clone())
         }
     }
@@ -968,10 +1048,8 @@ mod core_types_support {
             assert!(result.is_err_and(|e| matches!(e, UMessageError::AttributesValidationError(_))));
         }
 
-        #[test_case::test_case(None => None; "for no payload")]
-        #[test_case::test_case(Some("payload") => Some(UPayloadFormat::Unspecified); "for some payload")]
-        fn test_try_from_handles_payload_format(payload: Option<&str>) -> Option<UPayloadFormat> {
-            let valid_attribs_proto = UAttributesProto {
+        fn valid_attributes(encoding_id: Option<u32>) -> UAttributesProto {
+            UAttributesProto {
                 type_: EnumOrUnknown::from_i32(
                     crate::up_core_api::uattributes::UMessageType::UMESSAGE_TYPE_PUBLISH.value(),
                 ),
@@ -983,31 +1061,86 @@ mod core_types_support {
                 .into(),
                 source: Some(crate::up_core_api::uri::UUri {
                     authority_name: "source".to_string(),
-                    ue_id: 0x0001,
+                    ue_type_id: 0x0001,
+                    ue_instance_id: 1,
                     ue_version_major: 0x01,
-                    resource_id: 0x0001,
+                    resource_id: 0x8001,
                     ..Default::default()
                 })
                 .into(),
                 priority: EnumOrUnknown::from_i32(
                     crate::up_core_api::uattributes::UPriority::UPRIORITY_UNSPECIFIED.value(),
                 ),
-                payload_format: EnumOrUnknown::from_i32(
-                    crate::up_core_api::uattributes::UPayloadFormat::UPAYLOAD_FORMAT_UNSPECIFIED
-                        .value(),
-                ),
+                payload_encoding_id: encoding_id,
                 ..Default::default()
-            };
-            // GIVEN a UMessageProto with valid attributes (including the UNSPECIFIED payload format) but no payload
-            let proto = UMessageProto {
-                attributes: Some(valid_attribs_proto).into(),
-                payload: payload.map(|p| p.as_bytes().to_vec().into()),
+            }
+        }
+
+        fn message_proto(payload: Option<&str>, encoding_id: Option<u32>) -> UMessageProto {
+            UMessageProto {
+                attributes: Some(valid_attributes(encoding_id)).into(),
+                payload: payload.map(|value| value.as_bytes().to_vec().into()),
                 ..Default::default()
-            };
-            // WHEN converting the UMessageProto to a UMessage
-            UMessage::try_from(&proto)
-                .expect("failed to convert UMessageProto to UMessage")
-                .payload_format()
+            }
+        }
+
+        #[test_case::test_case(None, None => matches Ok(()); "both absent")]
+        #[test_case::test_case(Some("payload"), Some(3) => matches Ok(()); "both present")]
+        #[test_case::test_case(Some(""), Some(0) => matches Ok(()); "empty payload with explicit zero")]
+        #[test_case::test_case(Some("payload"), None => matches Err(UMessageError::PayloadError(_)); "payload without encoding")]
+        #[test_case::test_case(Some(""), None => matches Err(UMessageError::PayloadError(_)); "empty payload without encoding")]
+        #[test_case::test_case(None, Some(3) => matches Err(UMessageError::PayloadError(_)); "encoding without payload")]
+        #[test_case::test_case(None, Some(0) => matches Err(UMessageError::PayloadError(_)); "explicit zero without payload")]
+        fn protobuf_payload_presence_is_exact(
+            payload: Option<&str>,
+            encoding_id: Option<u32>,
+        ) -> Result<(), UMessageError> {
+            let message = UMessage::try_from(&message_proto(payload, encoding_id))?;
+            assert_eq!(
+                message.payload().map(|bytes| bytes.to_vec()),
+                payload.map(|value| value.as_bytes().to_vec())
+            );
+            assert_eq!(
+                message.payload_encoding().map(PayloadEncoding::id),
+                encoding_id
+            );
+            Ok(())
+        }
+
+        #[test_case::test_case(0, 0; "unlimited contract defined")]
+        #[test_case::test_case(0, 8; "unlimited unassigned")]
+        #[test_case::test_case(0, 0xEFFF; "unlimited reserved")]
+        #[test_case::test_case(0, 0xFFFF; "unlimited future reserved")]
+        #[test_case::test_case(1, 0; "minimum lifetime contract defined")]
+        #[test_case::test_case(1, 8; "minimum lifetime unassigned")]
+        #[test_case::test_case(1, 0xEFFF; "minimum lifetime reserved")]
+        #[test_case::test_case(1, 0xFFFF; "minimum lifetime future reserved")]
+        #[test_case::test_case(u32::MAX, 0; "maximum lifetime contract defined")]
+        #[test_case::test_case(u32::MAX, 8; "maximum lifetime unassigned")]
+        #[test_case::test_case(u32::MAX, 0xEFFF; "maximum lifetime reserved")]
+        #[test_case::test_case(u32::MAX, 0xFFFF; "maximum lifetime future reserved")]
+        fn protobuf_preserves_empty_payload_and_scalar_ttl_semantics(ttl: u32, id: u32) {
+            let encoding = PayloadEncoding::from_id(id).unwrap();
+            // Carriage test: re-stamped as a carrier would, since the builder
+            // refuses to originate reserved identifiers.
+            let message = UMessageBuilder::publish(
+                UUri::try_from_parts("vehicle", 0x0001_0001, 1, 0x8001).unwrap(),
+            )
+            .with_ttl(ttl)
+            .build_with_payload(Bytes::new(), PayloadEncoding::RAW)
+            .unwrap()
+            .with_declared_payload_encoding(encoding)
+            .unwrap();
+            let bytes = crate::ProtobufMappable::write_to_protobuf_bytes(&message).unwrap();
+            let restored =
+                <UMessage as crate::ProtobufMappable>::parse_from_protobuf_bytes(&bytes).unwrap();
+            assert_eq!(restored.ttl().unwrap_or(0), ttl);
+            assert_eq!(restored.payload_encoding(), Some(encoding));
+            assert_eq!(restored.payload(), Some(Bytes::new()));
+            if ttl == 0 {
+                assert_eq!(restored.ttl(), None);
+                assert!(restored.check_expired_for_reference(u128::MAX).is_ok());
+            }
         }
     }
 }
@@ -1031,5 +1164,17 @@ mod test {
     fn test_from_error_msg() {
         let message_error = UMessageError::from("an error occurred");
         assert!(matches!(message_error, UMessageError::PayloadError(_)));
+    }
+
+    #[test]
+    fn declared_payload_encoding_requires_payload_bytes() {
+        let topic = UUri::try_from_parts("vehicle", 0x0001_1000, 1, 0x8001).unwrap();
+        let message = UMessageBuilder::publish(topic).build().unwrap();
+
+        assert!(matches!(
+            message.with_declared_payload_encoding(PayloadEncoding::RAW),
+            Err(UMessageError::PayloadError(error))
+                if error.contains("without payload bytes")
+        ));
     }
 }

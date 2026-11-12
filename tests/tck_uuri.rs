@@ -11,6 +11,8 @@
  * SPDX-License-Identifier: Apache-2.0
  ********************************************************************************/
 
+//! uProtocol TCK conformance rows for UUri behavior.
+
 use std::str::FromStr;
 
 use cucumber::{given, then, when};
@@ -42,9 +44,14 @@ async fn with_authority(w: &mut UUriWorld, authority_name: String) {
     w.authority_name = authority_name;
 }
 
-#[given(expr = "having entity identifier {word}")]
-async fn with_entity_id(w: &mut UUriWorld, entity_id: String) {
-    w.ue_id = common::value_as_u32(entity_id);
+#[given(expr = "having entity type {word}")]
+async fn with_entity_type(world: &mut UUriWorld, entity_type: String) {
+    world.ue_id = (world.ue_id & 0xFFFF_0000) | u32::from(common::value_as_u16(entity_type));
+}
+
+#[given(expr = "having entity instance {word}")]
+async fn with_entity_instance(world: &mut UUriWorld, entity_instance: String) {
+    world.ue_id = (world.ue_id & 0xFFFF) | (u32::from(common::value_as_u16(entity_instance)) << 16);
 }
 
 #[given(expr = "having major version {word}")]

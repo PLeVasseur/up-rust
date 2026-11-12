@@ -203,7 +203,13 @@ pub struct InMemorySubscriber<T, S, N> {
     subscription_change_listener: Arc<SubscriptionChangeListener>,
 }
 
-#[cfg(feature = "up-l2-notifier")]
+impl<T, S, N> core::fmt::Debug for InMemorySubscriber<T, S, N> {
+    fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
+        f.debug_struct("InMemorySubscriber").finish_non_exhaustive()
+    }
+}
+
+#[cfg(feature = "communication")]
 impl<T: UTransport + 'static, P: crate::LocalUriProvider + 'static>
     InMemorySubscriber<
         T,
@@ -462,7 +468,7 @@ mod tests {
 
         // and a Subscriber using this Notifier
         let subscription_change_listener = Arc::new(SubscriptionChangeListener::default());
-        let topic = UUri::try_from_parts("other", 0x1a9a, 0x01, 0x8100).unwrap();
+        let topic = UUri::try_from_parts("other", 0x0001_1A9A, 0x01, 0x8100).unwrap();
         let handler = Arc::new(MockSubscriptionChangeHandler::new());
         subscription_change_listener
             .add_handler(topic.clone(), handler)
@@ -516,7 +522,7 @@ mod tests {
         .unwrap();
 
         // WHEN subscribing to a topic
-        let topic = UUri::try_from_parts("other", 0x1a9a, 0x01, 0x8100).unwrap();
+        let topic = UUri::try_from_parts("other", 0x0001_1A9A, 0x01, 0x8100).unwrap();
         let mut listener = MockUListener::new();
         listener.expect_on_receive().never();
         let listener_ref = Arc::new(listener);
@@ -567,7 +573,7 @@ mod tests {
         .unwrap();
 
         // WHEN subscribing to a topic
-        let topic = UUri::try_from_parts("other", 0x1a9a, 0x01, 0x8100).unwrap();
+        let topic = UUri::try_from_parts("other", 0x0001_1A9A, 0x01, 0x8100).unwrap();
         let listener = Arc::new(MockUListener::new());
         let subscribe_attempt = subscriber
             .subscribe(
@@ -637,7 +643,7 @@ mod tests {
         .unwrap();
 
         // WHEN subscribing to a topic
-        let topic = UUri::try_from_parts("other", 0x1a9a, 0x01, 0x8100).unwrap();
+        let topic = UUri::try_from_parts("other", 0x0001_1A9A, 0x01, 0x8100).unwrap();
         let mut mock_listener = MockUListener::new();
         mock_listener.expect_on_receive().once().return_const(());
         let listener = Arc::new(mock_listener);
@@ -693,7 +699,7 @@ mod tests {
         .unwrap();
 
         // WHEN unsubscribing from a topic for which no listener had been registered
-        let topic = UUri::try_from_parts("other", 0x1a9a, 0x01, 0x8100).unwrap();
+        let topic = UUri::try_from_parts("other", 0x0001_1A9A, 0x01, 0x8100).unwrap();
         let listener = Arc::new(MockUListener::new());
         let unsubscribe_attempt = subscriber.unsubscribe(&topic, listener.clone()).await;
 
@@ -728,7 +734,7 @@ mod tests {
         .await
         .unwrap();
         // which already has a listener registered
-        let topic = UUri::try_from_parts("other", 0x1a9a, 0x01, 0x8100).unwrap();
+        let topic = UUri::try_from_parts("other", 0x0001_1A9A, 0x01, 0x8100).unwrap();
         let handler = MockSubscriptionChangeHandler::new();
         subscriber
             .add_subscription_change_handler(&topic, Arc::new(handler))
@@ -774,7 +780,7 @@ mod tests {
         .await
         .unwrap();
         // which already has a listener registered
-        let topic = UUri::try_from_parts("other", 0x1a9a, 0x01, 0x8100).unwrap();
+        let topic = UUri::try_from_parts("other", 0x0001_1A9A, 0x01, 0x8100).unwrap();
         let handler = MockSubscriptionChangeHandler::new();
         subscriber
             .add_subscription_change_handler(&topic, Arc::new(handler))
@@ -829,7 +835,7 @@ mod tests {
         .await
         .unwrap();
         // which already has a listener registered
-        let topic = UUri::try_from_parts("other", 0x1a9a, 0x01, 0x8100).unwrap();
+        let topic = UUri::try_from_parts("other", 0x0001_1A9A, 0x01, 0x8100).unwrap();
         let handler = MockSubscriptionChangeHandler::new();
         subscriber
             .add_subscription_change_handler(&topic, Arc::new(handler))
@@ -855,33 +861,33 @@ mod tests {
     fn message_with_wrong_type(msg_type: UMessageType) -> UMessage {
         match msg_type {
             UMessageType::Publish => UMessageBuilder::publish(
-                UUri::try_from_parts("other", 0x1a9a, 0x01, 0x8100)
+                UUri::try_from_parts("other", 0x0001_1A9A, 0x01, 0x8100)
                     .expect("should have been able to create URI"),
             )
             .build()
             .expect("should have been able to create publish message"),
             UMessageType::Notification => UMessageBuilder::notification(
-                UUri::try_from_parts("other", 0x1a9a, 0x01, 0x8100)
+                UUri::try_from_parts("other", 0x0001_1A9A, 0x01, 0x8100)
                     .expect("should have been able to create origin URI"),
-                UUri::try_from_parts("other", 0x1a9b, 0x01, 0x0000)
+                UUri::try_from_parts("other", 0x0001_1A9B, 0x01, 0x0000)
                     .expect("should have been able to create destination URI"),
             )
             .build()
             .expect("should have been able to create notification message"),
             UMessageType::Request => UMessageBuilder::request(
-                UUri::try_from_parts("other", 0x1a9a, 0x01, 0x0100)
+                UUri::try_from_parts("other", 0x0001_1A9A, 0x01, 0x0100)
                     .expect("should have been able to create method-to-invoke URI"),
-                UUri::try_from_parts("other", 0x1a9b, 0x01, 0x0000)
+                UUri::try_from_parts("other", 0x0001_1A9B, 0x01, 0x0000)
                     .expect("should have been able to create reply-to-address URI"),
                 5000,
             )
             .build()
             .expect("should have been able to create request message"),
             UMessageType::Response => UMessageBuilder::response(
-                UUri::try_from_parts("other", 0x1a9b, 0x01, 0x0000)
+                UUri::try_from_parts("other", 0x0001_1A9B, 0x01, 0x0000)
                     .expect("should have been able to create reply-to-address URI"),
                 UUID::build(),
-                UUri::try_from_parts("other", 0x1a9a, 0x01, 0x0100)
+                UUri::try_from_parts("other", 0x0001_1A9A, 0x01, 0x0100)
                     .expect("should have been able to create method-to-invoke URI"),
             )
             .build()
@@ -891,9 +897,9 @@ mod tests {
 
     fn notification_with_wrong_payload() -> UMessage {
         UMessageBuilder::notification(
-            UUri::try_from_parts("other", 0x1a9a, 0x01, 0x8100)
+            UUri::try_from_parts("other", 0x0001_1A9A, 0x01, 0x8100)
                 .expect("should have been able to create origin URI"),
-            UUri::try_from_parts("other", 0x1a9b, 0x01, 0x0000)
+            UUri::try_from_parts("other", 0x0001_1A9B, 0x01, 0x0000)
                 .expect("should have been able to create destination URI"),
         )
         .build_with_protobuf_payload(&StringValue::new())
@@ -910,9 +916,9 @@ mod tests {
             ..Default::default()
         };
         UMessageBuilder::notification(
-            UUri::try_from_parts("other", 0x1a9a, 0x01, 0x8100)
+            UUri::try_from_parts("other", 0x0001_1A9A, 0x01, 0x8100)
                 .expect("should have been able to create origin URI"),
-            UUri::try_from_parts("other", 0x1a9b, 0x01, 0x0000)
+            UUri::try_from_parts("other", 0x0001_1A9B, 0x01, 0x0000)
                 .expect("should have been able to create destination URI"),
         )
         .build_with_protobuf_payload(&update)
@@ -920,7 +926,7 @@ mod tests {
     }
 
     fn status_update_without_status() -> UMessage {
-        let topic = UUri::try_from_parts("other", 0x1a9a, 0x01, 0x8100)
+        let topic = UUri::try_from_parts("other", 0x0001_1A9A, 0x01, 0x8100)
             .expect("should have been able to create topic URI");
         let proto_topic = crate::up_core_api::uri::UUri::from(&topic);
         let update = Update {
@@ -928,9 +934,9 @@ mod tests {
             ..Default::default()
         };
         UMessageBuilder::notification(
-            UUri::try_from_parts("other", 0x1a9a, 0x01, 0x8100)
+            UUri::try_from_parts("other", 0x0001_1A9A, 0x01, 0x8100)
                 .expect("should have been able to create origin URI"),
-            UUri::try_from_parts("other", 0x1a9b, 0x01, 0x0000)
+            UUri::try_from_parts("other", 0x0001_1A9B, 0x01, 0x0000)
                 .expect("should have been able to create destination URI"),
         )
         .build_with_protobuf_payload(&update)
@@ -947,7 +953,7 @@ mod tests {
     async fn test_subscription_change_listener_ignores(notification: UMessage) {
         let listener = SubscriptionChangeListener::default();
 
-        let topic = UUri::try_from_parts("other", 0x1a9a, 0x01, 0x8100).unwrap();
+        let topic = UUri::try_from_parts("other", 0x0001_1A9A, 0x01, 0x8100).unwrap();
         let mut handler = MockSubscriptionChangeHandler::new();
         handler.expect_on_subscription_change().never();
 
@@ -959,9 +965,9 @@ mod tests {
 
     #[tokio::test]
     async fn test_subscription_change_listener_invokes_handler_for_subscribed_topic() {
-        let subscriber = UUri::try_from_parts("local", 0x2000, 0x01, 0x0000)
+        let subscriber = UUri::try_from_parts("local", 0x0001_2000, 0x01, 0x0000)
             .expect("should have been able to create subscriber URI");
-        let topic = UUri::try_from_parts("other", 0x1a9a, 0x01, 0x8100).unwrap();
+        let topic = UUri::try_from_parts("other", 0x0001_1A9A, 0x01, 0x8100).unwrap();
         let status_proto = crate::up_core_api::usubscription::SubscriptionStatus {
             state: crate::up_core_api::usubscription::subscription_status::State::SUBSCRIBED.into(),
             ..Default::default()
@@ -977,7 +983,7 @@ mod tests {
             ..Default::default()
         };
         let subscription_change_notification = UMessageBuilder::notification(
-            UUri::try_from_parts("local", 0x0000, 0x01, 0x8000)
+            UUri::try_from_parts("local", 0x0001_0000, 0x01, 0x8000)
                 .expect("should have been able to create uSubscription service URI"),
             subscriber.clone(),
         )

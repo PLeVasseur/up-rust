@@ -2,15 +2,39 @@
 
 This file is meant to provide an overview and explainer on what the up-rust workflow automation strategy is, and what the different workflow elements do.
 
-__A general note:__ All workflows will use the `stable` version of the Rust toolchain, unless the GitHub actions variable `RUST_TOOLCHAIN` is set to pin a specific Rust version (e.g. ```RUST_TOOLCHAIN=1.76.0```).
+The generated SDK checks use [`tools/ci/policy.yaml`](../../tools/ci/policy.yaml),
+defaulting to `stable` for current-compiler lanes and Rust 1.88.0 for MSRV.
+Manual/reusable `RUST_TOOLCHAIN` inputs override only current
+lanes; release checks forward that input. Local gates accept the same environment
+variable, and print the compiler actually used. Other workflows retain their own
+documented toolchain inputs and selection rules.
 
 At this time, there are three events that will initiate a workflow run:
 
 ## PRs and merges to main
 
-We want a comprehensive but also quick check & test workflow. This should be testing all relevant/obvious feature sets, run on all major OSes, and of course include all the Rust goodness around cargo check, fmt, clippy and so on.
+[`check.yaml`](check.yaml) is generated from the repository's command policy.
+Each compiler/group job invokes the same `tools/ci/gate.sh` command available
+locally. Current Rust owns strict quality checks and compiler-diagnostic fixtures;
+MSRV runs its declared build and runtime coverage. Policy does not cap workspace
+build jobs or test threads. The dedicated allocation target uses eight threads.
 
-This is implemented in [`check.yaml`](check.yaml) and [`check-dependencies.yaml`](check-dependencies.yaml)
+Generate and verify both shell/YAML outputs with the commands in the
+[CI guide](../../tools/ci/README.md). Missing targets, incomplete test summaries
+and command timeouts fail. Timeout cleanup includes descendants that survive the
+leader's exit. The independent dependency-policy workflow, link checking and
+feature-powerset jobs retain their separate responsibilities.
+The dependency job prepares locked project dependencies and its advisory cache
+before running the same explicitly offline/locked dependency gate used locally.
+
+The feature job checks an isolated source/specification snapshot, prunes only its
+dev-dependencies and audits the derived offline lock against the owning lock.
+Every powerset check then runs locked/offline. Its actual case count, logs,
+snapshot and lock audit are retained as `feature-results`; the checkout is unchanged.
+
+The current test job publishes readable command logs as `test-results`, preserving
+the artifact name consumed by [`release.yaml`](release.yaml); these are not JUnit
+XML. Local runs establish local results, while hosted jobs report their own status.
 
 ## Release publication
 

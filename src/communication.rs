@@ -13,16 +13,32 @@
 
 /*!
 Traits representing uProtocol's [Communication Layer API](https://github.com/eclipse-uprotocol/up-spec/blob/v1.6.0-alpha.7/up-l2/api.adoc) for publishing and subscribing to topics and for invoking RPC methods. Also contains default implementations of the traits employing uProtocol's [Transport & Session Layer API](crate::UTransport).
+
+With `typed-communication`, ordinary applications use the domain-only roles in
+`application`: a schema package declares operations and payload mappings, and
+setup binds them to a `Deployment`. The engines underneath are reachable, for
+reusable libraries and bindings, under `advanced`. Representation, codec and
+compatible carriage are setup decisions. Business handlers receive storage-owning
+deliveries. Native sends initialize middleware loans synchronously; serialized
+sends borrow values for their codec.
+
+The classic message traits and implementations remain supported. The `owned`
+module implements those traits over `UOwnedTransport`, and `zero_copy` holds the
+prepared native engines that native bindings compose; neither is an application
+entry point.
 */
 
 use bytes::Bytes;
 use thiserror::Error;
 
-use crate::{UCode, UPayloadFormat, UPriority, UStatus, UUID};
+use crate::{PayloadEncoding, UCode, UPriority, UStatus, UUID};
 
 mod notification;
-#[cfg(any(test, feature = "test-util"))]
+#[cfg(feature = "test-util")]
 pub use notification::MockNotifier;
+#[cfg(all(test, not(feature = "test-util")))]
+#[allow(unused_imports)] // Private test support across feature combinations.
+pub(crate) use notification::MockNotifier;
 pub use notification::{NotificationError, Notifier};
 
 #[cfg(feature = "up-l2-notifier")]
@@ -31,8 +47,11 @@ mod simple_notifier;
 pub use simple_notifier::SimpleNotifier;
 
 mod pubsub;
-#[cfg(any(test, feature = "test-util"))]
+#[cfg(feature = "test-util")]
 pub use pubsub::MockSubscriptionChangeHandler;
+#[cfg(all(test, not(feature = "test-util")))]
+#[allow(unused_imports)] // Private test support across feature combinations.
+pub(crate) use pubsub::MockSubscriptionChangeHandler;
 pub use pubsub::{PubSubError, Publisher, Subscriber, SubscriptionChangeHandler};
 
 #[cfg(feature = "up-l2-publisher")]
@@ -46,8 +65,11 @@ mod in_memory_subscriber;
 pub use in_memory_subscriber::InMemorySubscriber;
 
 mod rpc;
-#[cfg(any(test, feature = "test-util"))]
+#[cfg(feature = "test-util")]
 pub use rpc::{MockRequestHandler, MockRpcClient, MockRpcServerImpl};
+#[cfg(all(test, not(feature = "test-util")))]
+#[allow(unused_imports)] // Private test support across feature combinations.
+pub(crate) use rpc::{MockRequestHandler, MockRpcClient, MockRpcServerImpl};
 pub use rpc::{RequestHandler, RpcClient, RpcServer, ServiceInvocationError};
 
 #[cfg(feature = "up-l2-rpc-client")]
@@ -92,7 +114,7 @@ pub(crate) fn build_message<S: crate::umessage::BuilderState>(
     payload: Option<UPayload>,
 ) -> Result<crate::UMessage, crate::UMessageError> {
     if let Some(pl) = payload {
-        let format = pl.payload_format();
+        let format = pl.payload_encoding();
         message_builder.build_with_payload(pl.payload, format)
     } else {
         message_builder.build()
@@ -106,13 +128,17 @@ pub(crate) fn build_message<S: crate::umessage::BuilderState>(
 #[derive(Clone, Debug, PartialEq)]
 #[repr(C)]
 pub enum SubscriptionStatus {
+    /// Not subscribed.
     Unsubscribed,
+    /// Subscription requested; confirmation pending.
     SubscribePending,
+    /// Actively subscribed.
     Subscribed,
+    /// Unsubscription requested; confirmation pending.
     UnsubscribePending,
 }
 
-#[cfg(all(feature = "up-core-types", feature = "usubscription"))]
+#[cfg(all(feature = "up-core-api", feature = "usubscription"))]
 mod core_types_support {
     use super::{SubscriptionStatus, UCode, UStatus};
     use crate::up_core_api::usubscription::subscription_status::State;
@@ -130,7 +156,7 @@ mod core_types_support {
                 Ok(State::UNSUBSCRIBE_PENDING) => Ok(SubscriptionStatus::UnsubscribePending),
                 Err(v) => Err(UStatus::fail_with_code(
                     UCode::InvalidArgument,
-                    format!("unknown subscription status {:?}", v),
+                    format!("unknown subscription status {v:?}"),
                 )),
             }
         }
@@ -164,13 +190,13 @@ pub enum RegistrationError {
 
 impl From<UStatus> for RegistrationError {
     fn from(value: UStatus) -> Self {
-        match value.get_code() {
+        match value.code() {
             UCode::AlreadyExists => RegistrationError::AlreadyExists,
             UCode::NotFound => RegistrationError::NoSuchListener,
             UCode::ResourceExhausted => RegistrationError::MaxListenersExceeded,
             UCode::Unimplemented => RegistrationError::PushDeliveryMethodNotSupported,
             UCode::InvalidArgument => {
-                RegistrationError::InvalidFilter(value.get_message().unwrap_or("N/A").to_string())
+                RegistrationError::InvalidFilter(value.message().unwrap_or("N/A").to_string())
             }
             UCode::Ok
             | UCode::Cancelled
@@ -332,10 +358,10 @@ impl CallOptions {
     }
 }
 
-/// A wrapper around (raw) message payload data and the corresponding payload format.
+/// A wrapper around raw message payload data and its payload encoding.
 #[derive(Clone, Debug, PartialEq)]
 pub struct UPayload {
-    payload_format: UPayloadFormat,
+    payload_encoding: PayloadEncoding,
     payload: Bytes,
 }
 
@@ -345,24 +371,24 @@ impl UPayload {
     /// # Examples
     ///
     /// ```rust
-    /// use up_rust::UPayloadFormat;
+    /// use up_rust::PayloadEncoding;
     /// use up_rust::communication::UPayload;
     ///
     /// let data: Vec<u8> = vec![0x00_u8, 0x01_u8, 0x02_u8];
-    /// let payload = UPayload::new(data, UPayloadFormat::Raw);
-    /// assert_eq!(payload.payload_format(), UPayloadFormat::Raw);
+    /// let payload = UPayload::new(data, PayloadEncoding::RAW);
+    /// assert_eq!(payload.payload_encoding(), PayloadEncoding::RAW);
     /// assert_eq!(payload.payload().len(), 3);
     /// ```
-    pub fn new<T: Into<Bytes>>(payload: T, payload_format: UPayloadFormat) -> Self {
+    pub fn new<T: Into<Bytes>>(payload: T, payload_encoding: PayloadEncoding) -> Self {
         UPayload {
-            payload_format,
+            payload_encoding,
             payload: payload.into(),
         }
     }
 
     /// Creates a new UPayload from an object that can be mapped to/from a protobuf.
     ///
-    /// The resulting payload will have `UPayloadType::UPAYLOAD_FORMAT_PROTOBUF_WRAPPED_IN_ANY`.
+    /// The resulting payload declares [`PayloadEncoding::PROTOBUF_WRAPPED_IN_ANY`].
     ///
     /// # Errors
     ///
@@ -371,13 +397,13 @@ impl UPayload {
     /// # Examples
     ///
     /// ```rust
-    /// use up_rust::{communication::UPayload, UPayloadFormat};
+    /// use up_rust::{communication::UPayload, PayloadEncoding};
     /// use protobuf::{well_known_types::wrappers::StringValue};
     ///
     /// let mut data = StringValue::new();
     /// data.value = "hello world".to_string();
     /// assert!(UPayload::try_from_protobuf(data).is_ok_and(|pl|
-    ///     pl.payload_format() == UPayloadFormat::ProtobufWrappedInAny
+    ///     pl.payload_encoding() == PayloadEncoding::PROTOBUF_WRAPPED_IN_ANY
     ///         && pl.payload().len() > 0));
     /// ```
     #[cfg(feature = "protobuf-support")]
@@ -386,17 +412,17 @@ impl UPayload {
         T: crate::ProtobufMappable,
     {
         obj.write_to_packed_protobuf_bytes()
-            .map(|buf| UPayload::new(buf, UPayloadFormat::ProtobufWrappedInAny))
+            .map(|buf| UPayload::new(buf, PayloadEncoding::PROTOBUF_WRAPPED_IN_ANY))
             .map_err(crate::UMessageError::from)
     }
 
-    /// Gets the payload format.
+    /// Gets the payload encoding.
     ///
     /// # Returns
     ///
     /// payload value of `UPayload`.
-    pub fn payload_format(&self) -> UPayloadFormat {
-        self.payload_format
+    pub fn payload_encoding(&self) -> PayloadEncoding {
+        self.payload_encoding
     }
 
     /// Gets the payload data.
@@ -417,14 +443,14 @@ impl UPayload {
     ///
     /// # Errors
     ///
-    /// * Returns an error if the unpacking process fails, for example if the payload format
-    ///   is neither [`UPayloadFormat::Protobuf`] nor [`UPayloadFormat::ProtobufWrappedInAny`],
+    /// * Returns an error if the unpacking process fails, for example if the payload encoding
+    ///   is neither [`PayloadEncoding::PROTOBUF`] nor [`PayloadEncoding::PROTOBUF_WRAPPED_IN_ANY`],
     ///   or if the payload could not be deserialized into the target type `T`.
     ///
     /// # Examples
     ///
     /// ```rust
-    /// use up_rust::{communication::UPayload, UPayloadFormat};
+    /// use up_rust::{communication::UPayload, PayloadEncoding};
     /// use protobuf::{well_known_types::wrappers::StringValue};
     ///
     /// let mut data = StringValue::new();
@@ -439,6 +465,64 @@ impl UPayload {
     where
         T: crate::ProtobufMappable,
     {
-        crate::umessage::deserialize_protobuf_bytes(&self.payload, &self.payload_format)
+        crate::umessage::deserialize_protobuf_bytes(&self.payload, self.payload_encoding)
     }
+}
+
+#[cfg(all(
+    feature = "usubscription",
+    feature = "selected-wire-transport-core",
+    feature = "owned-frame-transport"
+))]
+pub(crate) fn validate_listener_topic(topic: &crate::UUri) -> Result<(), RegistrationError> {
+    topic
+        .verify_no_wildcards()
+        .map_err(|error| RegistrationError::InvalidFilter(error.to_string()))
+}
+
+#[cfg(all(
+    feature = "owned-frame-transport",
+    feature = "usubscription",
+    feature = "selected-wire-transport-core"
+))]
+/// Owned-frame implementations of the publisher, subscriber, notifier and RPC roles.
+///
+/// These facades implement the classic role traits over `UOwnedTransport`; the
+/// caller supplies URI identity and, for subscription, a uSubscription service.
+#[cfg_attr(feature = "typed-communication", doc(hidden))]
+pub mod owned;
+
+/// Prepared stable-native publisher, notifier, receiver and RPC engines over receive leases.
+///
+/// Enable `up-l2-zero-copy`. Native deployment bindings and the typed layer compose
+/// these engines; subscription service coordination belongs to the typed roles.
+#[cfg(feature = "up-l2-zero-copy")]
+#[cfg_attr(feature = "typed-communication", doc(hidden))]
+pub mod zero_copy;
+
+/// Advanced static engines and delivery contracts used by domain deployment bindings.
+/// Reach this through [`advanced::typed`]; ordinary applications use [`application`].
+#[cfg(feature = "typed-communication")]
+#[doc(hidden)]
+pub mod typed;
+
+/// Domain-only stored application roles and explicit deployment configuration.
+#[cfg(feature = "typed-communication")]
+pub mod application;
+
+/// Engines beneath the application roles, for reusable libraries and bindings.
+///
+/// Ordinary applications use [`application`]. These paths keep the same validation,
+/// ownership and capacity contracts; they are never needed to deploy a role subset.
+#[cfg(feature = "typed-communication")]
+pub mod advanced {
+    #[doc(inline)]
+    pub use super::typed;
+
+    #[doc(inline)]
+    pub use super::owned;
+
+    #[cfg(feature = "up-l2-zero-copy")]
+    #[doc(inline)]
+    pub use super::zero_copy;
 }

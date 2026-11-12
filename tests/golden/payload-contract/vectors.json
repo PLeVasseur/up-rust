@@ -1,0 +1,79 @@
+{
+  "byte_order": "little",
+  "format": 1,
+  "sequence": 17,
+  "vectors": [
+    {
+      "alignment": 8,
+      "bytes": 56,
+      "case_id": 1,
+      "file": "can_classic_max.bin",
+      "name": "can_classic_max",
+      "sha256": "3f9ddb9cf4b535dffd9f994d7f27c39df543dcaecd2ee27d62d28c9198909cc7",
+      "type_name": "org.eclipse.uprotocol.bench.v1.CanClassicFrameV1"
+    },
+    {
+      "alignment": 8,
+      "bytes": 112,
+      "case_id": 2,
+      "file": "can_fd_max.bin",
+      "name": "can_fd_max",
+      "sha256": "b050053cc2d135f91248481f4df6aaaa3306d497a17bb01e30a20ea5a272ec58",
+      "type_name": "org.eclipse.uprotocol.bench.v1.CanFdFrameV1"
+    },
+    {
+      "alignment": 8,
+      "bytes": 1472,
+      "case_id": 3,
+      "file": "someip_single_mtu.bin",
+      "name": "someip_single_mtu",
+      "sha256": "539e5ab8cb126cea3494ed709b7b8cc61df9e6f700be2157142799a68805c0d5",
+      "type_name": "org.eclipse.uprotocol.bench.v1.SomeIpSignalBatchMtuV1"
+    },
+    {
+      "alignment": 8,
+      "bytes": 4160,
+      "case_id": 4,
+      "file": "streamer_4k.bin",
+      "name": "streamer_4k",
+      "sha256": "e95394c23061d22018ab1226c7080841110b4102f98ea172b9fe4a4a49c09fbb",
+      "type_name": "org.eclipse.uprotocol.bench.v1.StreamChunk4kV1"
+    },
+    {
+      "alignment": 8,
+      "bytes": 35248,
+      "case_id": 5,
+      "file": "radar_ars548_detection_list.bin",
+      "name": "radar_ars548_detection_list",
+      "sha256": "da9e4cf123b05d54184dd1daf0488b6b9263ac13162518dc16497e80ac2b028d",
+      "type_name": "org.eclipse.uprotocol.bench.v1.RadarDetectionListArs548V1"
+    },
+    {
+      "alignment": 8,
+      "bytes": 65600,
+      "case_id": 6,
+      "file": "streamer_64k.bin",
+      "name": "streamer_64k",
+      "sha256": "2729616bc0de5e0de2a6f4310528017031e01ff28df593b1c853d418fcc808ba",
+      "type_name": "org.eclipse.uprotocol.bench.v1.StreamChunk64kV1"
+    },
+    {
+      "alignment": 8,
+      "bytes": 4915328,
+      "case_id": 7,
+      "file": "lidar_hesai_at128_1200x128_xyzircaedt.bin",
+      "name": "lidar_hesai_at128_1200x128_xyzircaedt",
+      "sha256": "e4ceb1b29265cc1518351aebf2b4517a70ef2bd8486d4857a3da912ee6d39705",
+      "type_name": "org.eclipse.uprotocol.bench.v1.LidarPointCloudHesaiAt128V1"
+    },
+    {
+      "alignment": 8,
+      "bytes": 12441784,
+      "case_id": 8,
+      "file": "camera_8mp_3840x2160_bayer_rggb12p.bin",
+      "name": "camera_8mp_3840x2160_bayer_rggb12p",
+      "sha256": "0bb28cad1bda5847911fc201d50141cc67d08aeb3b1b0fc9a34f73660424b082",
+      "type_name": "org.eclipse.uprotocol.bench.v1.CameraBayerRggb12pFrame8mpV1"
+    }
+  ]
+}
