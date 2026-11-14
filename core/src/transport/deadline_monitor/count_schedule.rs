@@ -4,11 +4,13 @@
 //! It does not supply a timer, a WCET, an arrival wake protocol or admission.
 //! The new report adds owner-approved validated J; physical qualification remains open.
 
+#[cfg(test)]
 use super::{DeadlineMonitor, COUNTED, HALF_RANGE, PAST_OFFSET, TICK_MASK};
 #[cfg(test)]
 use super::MonitorConfig;
 // [impl->req~ssr-atomic-width~1]
 // Facade-routing contribution only; target lowering and the whole SDK remain unqualified.
+#[cfg(test)]
 use crate::platform::atomic::Ordering;
 
 /// A planning observation, not a reservation of the monitor's current state.
@@ -96,6 +98,7 @@ impl MonitorConfig {
     }
 }
 
+#[cfg(test)]
 impl DeadlineMonitor {
     /// Compute events for one observed word without changing the counting kernel.
     ///

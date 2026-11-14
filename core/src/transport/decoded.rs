@@ -40,6 +40,7 @@ impl<T: 'static> DecodedSlot<T> {
     /// initializer error/unwind does not publish a T or set the flag; a safe
     /// initializer that writes then unwinds may leak that value. A previously
     /// initialized T remains valid when no initializer is called.
+    #[expect(clippy::mut_from_ref, reason = "The unsafe caller contract requires exclusive slot ownership for the full returned borrow, including reentry")]
     pub(crate) unsafe fn get_or_init(&self, wire: &dyn Wire<T>) -> Result<&mut T, WireError> {
         // SAFETY: exclusive slot ownership covers the flag and typed storage
         // through the returned borrow. NonNull/typed allocation establish

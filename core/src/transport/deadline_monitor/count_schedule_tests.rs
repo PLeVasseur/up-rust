@@ -1,10 +1,12 @@
 //! NEW fixtures only: UNCOMPILED / UNRUN. No hardware timing evidence.
+#[cfg(test)]
+use crate::test_support::FixtureResult as _;
 use super::*;
 use super::count_schedule::{CountSchedule, WaitRequest};
 use crate::transport::report::Counters;
 
 fn make(deadline: u64, latency: u64, now: u64) -> DeadlineMonitor {
-    DeadlineMonitor::new(MonitorConfig::new(deadline, latency).unwrap(), now)
+    DeadlineMonitor::new(MonitorConfig::new(deadline, latency).require_fixture(), now)
 }
 
 // [utest->req~ssr-qos-deadline~3]

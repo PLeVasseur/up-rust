@@ -246,6 +246,7 @@ fn r2_1_two_first_sightings_of_one_peer_take_one_entry() {
 /// race the report that the peer was lost. Afterwards it holds at most one entry,
 /// and once it is forgotten both entries are free. At `85dae7d`: 148 and 111 of
 /// 20,000 rounds doubled. Threaded: many seeds under Miri.
+// [utest->req~ssr-peer-stale-rejected~1]
 #[test]
 fn r2_1_first_sightings_racing_the_peers_forget_take_one_entry() {
     static REGION: StartupRegion<4096> = StartupRegion::new();
@@ -266,7 +267,9 @@ fn r2_1_first_sightings_racing_the_peers_forget_take_one_entry() {
             &|| table.forget(LOST),
         ],
         |_| {
-            if !third_peer_finds_room(table, LOST, OTHER) {
+            // Both later-admission actions have completed. Release that exact
+            // current identity; an old loss must not be wildcard cleanup.
+            if !third_peer_finds_room(table, LOST_LATER, OTHER) {
                 doubled += 1;
             }
             // Everything forgotten: both entries are free for anyone.
@@ -323,6 +326,7 @@ fn r2_1_first_sightings_racing_another_peers_departure_take_one_entry() {
 /// comes back at a later incarnation with two first frames at once. The old entry
 /// is freed by its last user, possibly after one first frame has passed it; the
 /// new tenure must take one entry. Threaded: many seeds under Miri.
+// [utest->req~ssr-peer-stale-rejected~1]
 #[test]
 fn r2_1_first_sightings_racing_the_retirement_of_the_peers_old_entry_take_one_entry() {
     static REGION: StartupRegion<4096> = StartupRegion::new();
@@ -347,7 +351,9 @@ fn r2_1_first_sightings_racing_the_retirement_of_the_peers_old_entry_take_one_en
             },
         ],
         |_| {
-            if !third_peer_finds_room(table, LOST, NEXT) {
+            // Both later-admission actions have completed. Release that exact
+            // current identity; an old loss must not be wildcard cleanup.
+            if !third_peer_finds_room(table, LOST_LATER, NEXT) {
                 doubled += 1;
             }
         },

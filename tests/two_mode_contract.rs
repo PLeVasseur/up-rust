@@ -1932,8 +1932,9 @@ fn a_server_failure_status_reaches_the_caller() {
 }
 
 #[test]
-fn a_restarted_server_fails_outstanding_calls_and_stale_responses_are_refused() {
-    let rpc = rpc(&[], TTL);
+fn g2_observed_restart_keeps_unbound_calls_pending_and_stale_responses_are_refused() {
+    let clock = TestClock::leak(1_000, 1_700_000_000_000);
+    let rpc = rpc_clocked(clock, TTL);
     let mut first = rpc.client.invoke(&door(1, 0)).unwrap();
     answer(&rpc.server, 1);
     assert!(first.try_response().unwrap().is_some(), "peer seen once");
@@ -1949,10 +1950,9 @@ fn a_restarted_server_fails_outstanding_calls_and_stale_responses_are_refused() 
             incarnation: restarted,
         },
     );
-    assert!(matches!(
-        outstanding.try_response(),
-        Err(CallError::PeerRestarted)
-    ));
+    assert!(outstanding.try_response().unwrap().is_none());
+    clock.advance_ns(31_000_000_000);
+    assert!(matches!(outstanding.try_response(), Err(CallError::TimedOut)));
     drop(outstanding);
 
     // A response still in transit from the earlier incarnation completes nothing.
@@ -1965,7 +1965,7 @@ fn a_restarted_server_fails_outstanding_calls_and_stale_responses_are_refused() 
     rpc.bus.set_incarnation(2, restarted);
     drop(call);
 
-    // A server reported gone fails what is outstanding.
+    // An observed peer loss cannot authenticate an unbound call destination.
     let mut lost = rpc.client.invoke(&door(4, 0)).unwrap();
     rpc.bus.report_peer_lost(
         1,
@@ -1974,7 +1974,9 @@ fn a_restarted_server_fails_outstanding_calls_and_stale_responses_are_refused() 
             incarnation: restarted,
         },
     );
-    assert!(matches!(lost.try_response(), Err(CallError::PeerLost)));
+    assert!(lost.try_response().unwrap().is_none());
+    clock.advance_ns(31_000_000_000);
+    assert!(matches!(lost.try_response(), Err(CallError::TimedOut)));
 }
 
 /// A response racing the deadline completes the call exactly once, and its slot returns.

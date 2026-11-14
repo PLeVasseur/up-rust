@@ -98,21 +98,22 @@ fn failure(operation: &'static str, code: i32) -> StartupError {
 
 fn with_attribute_cleanup(error: StartupError, code: i32) -> StartupError {
     if code == 0 { return error; }
-    match error {
-        StartupError::DeadlineWorker { operation, code: primary, memory, join_cleanup, .. } =>
-            StartupError::DeadlineWorker { operation, code: primary, attribute_cleanup: Some(code), join_cleanup, memory },
-        StartupError::Memory(memory) => StartupError::DeadlineWorker {
-            operation: "startup memory", code: 0, attribute_cleanup: Some(code), join_cleanup: None, memory: Some(memory) },
-        other => other, // only the two preceding variants are produced below.
+    if let StartupError::DeadlineWorker { operation, code: primary, memory, join_cleanup, .. } = error {
+        StartupError::DeadlineWorker { operation, code: primary, attribute_cleanup: Some(code), join_cleanup, memory }
+    } else if let StartupError::Memory(memory) = error {
+        StartupError::DeadlineWorker {
+            operation: "startup memory", code: 0, attribute_cleanup: Some(code), join_cleanup: None, memory: Some(memory) }
+    } else {
+        error
     }
 }
 
 fn with_join_cleanup(error: StartupError, code: i32) -> StartupError {
     if code == 0 { return error; }
-    match error {
-        StartupError::DeadlineWorker { operation, code: primary, memory, attribute_cleanup, .. } =>
-            StartupError::DeadlineWorker { operation, code: primary, attribute_cleanup, join_cleanup: Some(code), memory },
-        other => other, // the caller supplies failure(...) above.
+    if let StartupError::DeadlineWorker { operation, code: primary, memory, attribute_cleanup, .. } = error {
+        StartupError::DeadlineWorker { operation, code: primary, attribute_cleanup, join_cleanup: Some(code), memory }
+    } else {
+        error
     }
 }
 

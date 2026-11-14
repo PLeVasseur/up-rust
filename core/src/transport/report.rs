@@ -68,6 +68,39 @@ pub struct RouteReport {
     pub deviations: &'static [&'static super::Deviation],
 }
 
+/// One coherent observation of an armed receive route's deadline state.
+///
+/// Obtain this from `TransportRuntime::deadline_report`. Every field is copied
+/// within one SDK metadata interval. It does not qualify clock/arrival evidence,
+/// autonomous service, reporting delay J, restart custody or the target backend.
+/// The owning runtime and RouteId identify a process-local, never-reset monitor;
+/// this value is not a persistent restart identity or a mutation capability.
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+#[non_exhaustive]
+pub struct DeadlineReport {
+    /// Full activation sample or latest accepted forward arrival sample.
+    /// Units and nonwrapping epoch are the owning runtime's monotonic clock.
+    /// This need not identify the latest physical arrival when samples are missing.
+    pub origin_ns: u64,
+    /// Accumulated gap credits folded from accepted timestamp observations.
+    /// Arithmetic is exact while `count_exhausted` is false, including at
+    /// `u128::MAX`; a further credit saturates and latches that flag.
+    ///
+    /// `missing_sample` permanently invalidates a complete/exact physical-gap
+    /// interpretation, even after later valid arrivals. With missing samples this
+    /// value is neither a universal upper nor lower bound on physical gaps.
+    /// Even both health flags being false does not authenticate the clock or
+    /// ingress: physical-route interpretation requires qualified clock, queue
+    /// arrival and recording contracts, which these flags do not establish.
+    pub missed_gaps: u128,
+    /// Sticky evidence that an arrival timestamp was unavailable. It does not
+    /// invent an arrival, rearm the monitor or clear after a later valid sample.
+    pub missing_sample: bool,
+    /// Sticky evidence that an increment beyond u128::MAX was required.
+    /// The count remains at its maximum and existing arrivals continue to rearm.
+    pub count_exhausted: bool,
+}
+
 /// Fixed counters for one route, read without touching the heap.
 ///
 /// Each field is an independent atomic observation, not a globally atomic
@@ -115,9 +148,9 @@ pub struct RouteCounters {
     /// Saturating fault counter.
     pub clock_unavailable: u32,
     /// Qualifying gaps in binding-queue arrivals, including later-refused frames.
-    /// An observed COUNTED monitor bit is not a published counter credit. Reads
-    /// are per-field; see the route's accepted J/read-ordering evidence. A later
-    /// reader's reaction delay is additional to D + 2L + resolution + J.
+    /// Legacy u32 diagnostic mirror; it can lag the joint full-width publication.
+    /// Use `TransportRuntime::deadline_report` for the coherent deadline state.
+    /// Reads here remain per-field, and timing/observation evidence is separate.
     /// Saturating fault counter.
     pub deadline_missed: u32,
     /// Requests from clients outside the deployment list.

@@ -1541,7 +1541,7 @@ impl TransportRuntime {
     /// Independent relaxed counter loads; this does not service a monitor or
     /// produce a cross-field atomic snapshot. A deadline load is a qualifying
     /// next read only under its report's `qualifying_read` contract and evidence.
-    /// COUNTED is not publication. Acquire alone would not force visibility;
+    /// The legacy deadline counter can lag the coherent deadline_report;
     /// callers' later observation/reaction time is additional to the reported J.
     #[must_use]
     pub fn counters(&self, route: RouteId) -> RouteCounters {
@@ -1556,6 +1556,20 @@ impl TransportRuntime {
             }
         }
         RouteCounters::default()
+    }
+
+    /// Copies one coherent deadline report for this runtime's receive route.
+    /// Returns None for an unknown route, a send route, or a monitor that has
+    /// not been armed. Does not service a monitor, allocate, or invoke a clock.
+    /// The fields share one observation boundary; other route counters do not.
+    /// Route IDs are local to the selected runtime; another runtime can use the
+    /// same numeric ID. Health and physical-gap interpretation follow
+    /// [`super::report::DeadlineReport`], not an implicit clock/ingress guarantee.
+    /// Target execution and reporting-time guarantees require their own evidence.
+    #[must_use]
+    pub fn deadline_report(&self, route: RouteId) -> Option<super::report::DeadlineReport> {
+        self.core.rx.iter().find(|rx| rx.id() == route)
+            .and_then(|rx| rx.common().monitor.report())
     }
 
     /// A token to wait on the transport's signal. Take it before polling.

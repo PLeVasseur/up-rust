@@ -12,6 +12,8 @@ compile_error!("native AtomicU32 CAS and RMW are required");
 #[cfg(not(any(target_pointer_width = "32", target_pointer_width = "64")))]
 compile_error!("this candidate's addressable-slice sum proof covers 32/64-bit pointers");
 
+#[cfg(test)]
+use crate::test_support::FixtureResult as _;
 use crate::platform::atomic::{AtomicU32, Ordering::SeqCst};
 
 const LOW_BITS: u32 = 30;
@@ -470,40 +472,40 @@ mod retirement_tests {
     #[test]
     fn retirement_more_than_word_capacity_and_exact_full() {
         let mut cells = [const { IndexSlot::new() }; 65];
-        let pool = IndexPoolSetup::new(&mut cells).unwrap().enter_runtime();
+        let pool = IndexPoolSetup::new(&mut cells).require_fixture().enter_runtime();
         let mut leases = [const { None }; 65];
-        for (i, lease) in leases.iter_mut().enumerate() { *lease = Some(pool.try_acquire().unwrap()); assert_eq!(lease.as_ref().unwrap().index(), i); }
+        for (i, lease) in leases.iter_mut().enumerate() { *lease = Some(pool.try_acquire().require_fixture()); assert_eq!(lease.as_ref().require_fixture().index(), i); }
         assert!(matches!(pool.try_acquire(), Err(PoolError::Full)));
-        drop(leases[47].take());
-        assert_eq!(pool.try_acquire().unwrap().index(), 47);
+        drop(leases.get_mut(47).require_fixture().take());
+        assert_eq!(pool.try_acquire().require_fixture().index(), 47);
         assert_eq!(pool.lifetime(), LifetimeState::Healthy);
     }
     #[test]
     fn retirement_exact_width_carries() {
         for initial in [(1_u64 << 30) - 2, (1_u64 << 61) - 2] {
             let mut cells = [IndexSlot::new()];
-            let mut setup = IndexPoolSetup::new(&mut cells).unwrap();
-            setup.__seed_free_for_test(0, initial).unwrap();
+            let mut setup = IndexPoolSetup::new(&mut cells).require_fixture();
+            setup.__seed_free_for_test(0, initial).require_fixture();
             let pool = setup.enter_runtime();
-            drop(pool.try_acquire().unwrap());
-            assert_eq!(pool.cells[0].read_clock(&mut |_| {}).value, initial + 2);
-            drop(pool.try_acquire().unwrap());
-            assert_eq!(pool.cells[0].read_clock(&mut |_| {}).value, initial + 4);
+            drop(pool.try_acquire().require_fixture());
+            assert_eq!(pool.cells.first().require_fixture().read_clock(&mut |_| {}).value, initial + 2);
+            drop(pool.try_acquire().require_fixture());
+            assert_eq!(pool.cells.first().require_fixture().read_clock(&mut |_| {}).value, initial + 4);
         }
     }
     #[test]
     fn retirement_warning_precedes_terminal_and_held_owner_survives() {
         let mut cells = [IndexSlot::new(), IndexSlot::new()];
-        let mut setup = IndexPoolSetup::new(&mut cells).unwrap().with_lifetime_policy(LifetimePolicy::new(3).unwrap());
-        setup.__seed_free_for_test(0, LAST_FREE - 8).unwrap();
+        let mut setup = IndexPoolSetup::new(&mut cells).require_fixture().with_lifetime_policy(LifetimePolicy::new(3).require_fixture());
+        setup.__seed_free_for_test(0, LAST_FREE - 8).require_fixture();
         let pool = setup.enter_runtime();
         assert_eq!(pool.lifetime(), LifetimeState::Healthy);
-        let first = pool.try_acquire().unwrap();
-        let held = pool.try_acquire().unwrap();
+        let first = pool.try_acquire().require_fixture();
+        let held = pool.try_acquire().require_fixture();
         assert!(matches!(pool.try_acquire(), Err(PoolError::Full)));
         assert_eq!(pool.lifetime(), LifetimeState::LifetimeMarginLow);
         drop(first);
-        for _ in 0..3 { drop(pool.try_acquire().unwrap()); }
+        for _ in 0..3 { drop(pool.try_acquire().require_fixture()); }
         assert!(pool.is_retired());
         assert_eq!(held.index(), 1);
         assert!(matches!(pool.try_acquire(), Err(PoolError::PoolRetired)));
@@ -514,23 +516,23 @@ mod retirement_tests {
     #[test]
     fn retirement_publication_does_not_require_an_observer() {
         let mut cells = [IndexSlot::new()];
-        let mut setup = IndexPoolSetup::new(&mut cells).unwrap();
-        setup.__seed_free_for_test(0, LAST_FREE - 2).unwrap();
+        let mut setup = IndexPoolSetup::new(&mut cells).require_fixture();
+        setup.__seed_free_for_test(0, LAST_FREE - 2).require_fixture();
         let pool = setup.enter_runtime();
-        drop(pool.try_acquire().unwrap()); // no monitor ran during the last lifetime
+        drop(pool.try_acquire().require_fixture()); // no monitor ran during the last lifetime
         assert_eq!(pool.lifetime(), LifetimeState::Retired);
         assert_eq!(pool.warning.load(SeqCst), 1); // warning was published, not observed
     }
     #[test]
     fn retirement_preclose_claim_completes_without_revocation() {
         let mut cells = [IndexSlot::new(), IndexSlot::new()];
-        let mut setup = IndexPoolSetup::new(&mut cells).unwrap();
-        setup.__seed_free_for_test(0, LAST_FREE - 2).unwrap();
+        let mut setup = IndexPoolSetup::new(&mut cells).require_fixture();
+        setup.__seed_free_for_test(0, LAST_FREE - 2).require_fixture();
         let pool = setup.enter_runtime();
-        let mut terminal = Some(pool.try_acquire().unwrap());
+        let mut terminal = Some(pool.try_acquire().require_fixture());
         let admitted = pool.acquire_with(&mut |event| {
             if event == Event::Claimed(1) { drop(terminal.take()); }
-        }).unwrap();
+        }).require_fixture();
         assert_eq!(admitted.index(), 1);
         assert_eq!(pool.lifetime(), LifetimeState::Retired);
         drop(admitted);
@@ -539,10 +541,10 @@ mod retirement_tests {
     #[test]
     fn retirement_closure_defeats_paused_unadmitted_claim() {
         let mut cells = [IndexSlot::new(), IndexSlot::new()];
-        let mut setup = IndexPoolSetup::new(&mut cells).unwrap();
-        setup.__seed_free_for_test(0, LAST_FREE - 2).unwrap();
+        let mut setup = IndexPoolSetup::new(&mut cells).require_fixture();
+        setup.__seed_free_for_test(0, LAST_FREE - 2).require_fixture();
         let pool = setup.enter_runtime();
-        let mut terminal = Some(pool.try_acquire().unwrap());
+        let mut terminal = Some(pool.try_acquire().require_fixture());
         let result = pool.acquire_with(&mut |event| {
             if matches!(event, Event::BeforeClaim(1, _)) { drop(terminal.take()); }
         });
@@ -550,17 +552,17 @@ mod retirement_tests {
     }
     #[test]
     fn retirement_policy_validation_and_real_width_margin() {
-        assert_eq!(LifetimePolicy::for_response(1_000_000, 2_500, 32).unwrap().warning_remaining(), 2_500_032);
-        assert_eq!(LifetimePolicy::for_response(1, 1, 0).unwrap().warning_remaining(), 1);
+        assert_eq!(LifetimePolicy::for_response(1_000_000, 2_500, 32).require_fixture().warning_remaining(), 2_500_032);
+        assert_eq!(LifetimePolicy::for_response(1, 1, 0).require_fixture().warning_remaining(), 1);
         assert!(LifetimePolicy::new(0).is_err());
         assert!(LifetimePolicy::new(u64::MAX).is_err());
         assert!(LifetimePolicy::for_response(u64::MAX, u64::MAX, u64::MAX).is_err());
         assert!(LifetimePolicy::for_response(0, 1, 0).is_err());
         let mut cells = [IndexSlot::new()];
-        let mut setup = IndexPoolSetup::new(&mut cells).unwrap();
+        let mut setup = IndexPoolSetup::new(&mut cells).require_fixture();
         assert!(setup.__seed_free_for_test(0, 1).is_err());
         assert!(setup.__seed_free_for_test(1, 0).is_err());
-        setup.__seed_free_for_test(0, LAST_FREE).unwrap();
+        setup.__seed_free_for_test(0, LAST_FREE).require_fixture();
         let pool = setup.enter_runtime();
         assert!(matches!(pool.try_acquire(), Err(PoolError::PoolRetired)));
     }

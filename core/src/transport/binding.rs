@@ -101,6 +101,30 @@ impl PeerRef {
     };
 }
 
+/// Result of reporting one exact peer incarnation as lost.
+///
+/// This reports SDK metadata/call transitions, not underlying transport cleanup,
+/// retained-loan release, or completion of the deployment's recovery protocol.
+/// A peer-table removal and call transitions are separate bounded operations;
+/// these fields do not constitute one coherent global snapshot.
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub enum PeerLossOutcome {
+    /// The inbound route does not exist in this runtime.
+    UnknownRoute,
+    /// Either identity word was zero. Nothing was removed or failed.
+    /// A dead-peer hint without its observed incarnation is not an exact loss.
+    Unidentified,
+    /// This inbound route does not implement peer-loss handling.
+    Unsupported,
+    /// The exact loss was processed. A repeated or old report may change nothing.
+    Applied {
+        /// The peer table held and removed this exact identity at that operation.
+        peer_removed: bool,
+        /// Armed calls with this exact stored identity changed to `PeerLost`.
+        calls_failed: usize,
+    },
+}
+
 /// What a sink tells a receive loop to do next.
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub enum Flow {
@@ -686,6 +710,20 @@ impl RuntimePort {
         Ok(())
     }
 
+    /// Records that the timestamp for a binding-queue arrival was unavailable.
+    /// Latches deadline health without inventing an arrival time or rearming.
+    /// This does not satisfy a route's required arrival-evidence contract; the
+    /// binding must report the underlying fault separately as applicable.
+    /// A later valid arrived call does not clear this health fact.
+    ///
+    /// # Errors
+    /// Returns UnknownRoute if the handle belongs to no receive route here.
+    pub fn arrival_sample_missing(&self, route: InboundRoute) -> Result<(), ReceiveError> {
+        let inbound = self.core.inbound(route).ok_or(ReceiveError::UnknownRoute)?;
+        inbound.common().queue_arrival_sample_missing();
+        Ok(())
+    }
+
     /// Delivers an arrival already reported at a binding-owned queue boundary.
     /// Buffered push bindings use this when dequeuing; direct push uses `deliver`.
     /// This avoids a second report at take/admission. No receipt buffer is added.
@@ -763,18 +801,49 @@ impl RuntimePort {
         }
     }
 
-    /// Reports that a peer's incarnation changed, failing calls bound to the old one.
+    /// Reports a newer incarnation of the same identified peer. Only calls
+    /// actually bound to that peer's older incarnation may fail; UNKNOWN calls
+    /// remain response/deadline-bound. A receive-table observation is not a send
+    /// destination binding, and current RpcClient sends remain UNKNOWN.
     pub fn peer_restarted(&self, route: InboundRoute, peer: PeerRef) {
         if let Some(inbound) = self.core.inbound(route) {
             inbound.peer_restarted(peer);
         }
     }
 
-    /// Reports that a peer is gone, for instance a lease or SD TTL expiry.
+    /// Compatibility notification; processes only an exact nonzero peer identity.
+    ///
+    /// This unit-returning wrapper retains existing call-site shapes. It does not
+    /// expose an unidentified or unmatched report. New bindings should use
+    /// `report_peer_lost` and observe its outcome; zero is never a wildcard.
     pub fn peer_lost(&self, route: InboundRoute, peer: PeerRef) {
-        if let Some(inbound) = self.core.inbound(route) {
-            inbound.peer_lost(peer);
+        let _ = self.report_peer_lost(route, peer);
+    }
+
+    /// Reports the exact peer incarnation observed lost at the binding's boundary.
+    ///
+    /// A zero peer or incarnation is `Unidentified`, never a wildcard. A delayed
+    /// loss cannot erase another incarnation or fail a call bound to another
+    /// identity. Calls whose destination was unknown retain response/deadline
+    /// completion. Current RpcClient sends are UNKNOWN because the send contracts
+    /// do not bind an authenticated recipient. This method cannot infer their
+    /// server generation from an observed response or loss hint.
+    /// Removal retains no tombstone: delayed frames can be re-admitted after
+    /// entry reuse. Exact removal alone is not complete stale-history recovery.
+    /// The binding must not substitute its currently latest peer for an event
+    /// whose actual incarnation is unknown. Use `readable` for wake hints and
+    /// report the underlying identity limitation in binding diagnostics.
+    // [impl->req~ssr-peer-failure-normal~1]
+    // [impl->req~ssr-peer-stale-rejected~1]
+    #[must_use]
+    pub fn report_peer_lost(&self, route: InboundRoute, peer: PeerRef) -> PeerLossOutcome {
+        let Some(inbound) = self.core.inbound(route) else {
+            return PeerLossOutcome::UnknownRoute;
+        };
+        if peer.peer == 0 || peer.incarnation == 0 {
+            return PeerLossOutcome::Unidentified;
         }
+        inbound.peer_lost(peer)
     }
 }
 

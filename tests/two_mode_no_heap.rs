@@ -885,7 +885,7 @@ fn rpc(results: &mut Results) {
     );
     assert_eq!(server.counters().unknown_client, 200);
 
-    // Deadlines: the tick, polling, and a call failed by a restarting or lost peer.
+    // Deadlines: tick, polling, and unbound calls surviving observed peer events.
     let clock = TestClock::leak(1_000, 1_700_000_000_000);
     let bus = InMemoryBus::new(16, 4096);
     let a = handoff_on(bus, 1, clock);
@@ -899,7 +899,7 @@ fn rpc(results: &mut Results) {
         peer: 2,
         incarnation,
     };
-    results.window("rpc_deadline_restart_and_lost_peer_200", || {
+    results.window("rpc_deadline_unbound_restart_and_loss_200", || {
         for round in 0..200_u64 {
             // Answered once, so the peer's incarnation is known.
             let mut call = client.invoke(&door(1, 0)).unwrap();
@@ -925,16 +925,17 @@ fn rpc(results: &mut Results) {
             let _ = server.try_recv().unwrap();
             let incarnation = bus.restart(2);
             bus.report_peer_restarted(1, peer(incarnation));
-            assert!(matches!(
-                restarted.try_response(),
-                Err(CallError::PeerRestarted)
-            ));
+            assert!(restarted.try_response().unwrap().is_none());
+            clock.advance_ns(10_000_000);
+            assert!(matches!(restarted.try_response(), Err(CallError::TimedOut)));
             drop(restarted);
 
             let mut lost = client.invoke(&door(1, 0)).unwrap();
             let _ = server.try_recv().unwrap();
             bus.report_peer_lost(1, peer(incarnation));
-            assert!(matches!(lost.try_response(), Err(CallError::PeerLost)));
+            assert!(lost.try_response().unwrap().is_none());
+            clock.advance_ns(10_000_000);
+            assert!(matches!(lost.try_response(), Err(CallError::TimedOut)));
             drop(lost);
             let _ = round;
         }

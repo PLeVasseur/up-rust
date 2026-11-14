@@ -1,5 +1,8 @@
-//! Internal native32 deadline-counting kernel. Source candidate; not integrated.
+//! Monitor configuration and retained predecessor counting-model controls.
+//! Runtime publication is now in metadata::CoherentDeadline in this experiment.
+//! The one-word algorithm below is compiled only for historical model tests.
 //!
+//! The following historical notes describe the test-only predecessor model.
 //! This is counting state only: it publishes no message or payload memory.
 //! All shared mutable state is a single AtomicU32. No unsafe code, allocation,
 //! destructor, wide atomic, lock, division, or panicking index is used here.
@@ -20,11 +23,16 @@
 
 // [impl->req~ssr-atomic-width~1]
 // Facade-routing contribution only; this import does not establish target support.
+#[cfg(test)]
 use crate::platform::atomic::{AtomicU32, Ordering};
 
+#[cfg(test)]
 const COUNTED: u32 = 1 << 31;
+#[cfg(test)]
 const TICK_MASK: u32 = COUNTED - 1;
+#[cfg(test)]
 const HALF_RANGE: u32 = 1 << 30;
+#[cfg(test)]
 const REFRESH_AGE: u32 = 1 << 29;
 const PAST_OFFSET: u32 = 1 << 28;
 
@@ -74,6 +82,16 @@ impl MonitorConfig {
     pub(crate) fn deadline_ns(self) -> u64 { self.deadline_ns }
     pub(crate) fn latency_ns(self) -> u64 { self.latency_ns }
 
+    /// # Safety-usable invariant
+    /// Returns the immutable constructor-checked shift in 0..=53. Performs only
+    /// a scalar copy; invokes no callback, destructor or metadata operation.
+    pub(crate) fn tick_shift(self) -> u32 { self.shift }
+
+    /// # Safety-usable invariant
+    /// Returns the immutable cutoff ceil((D + L) / quantum), in 1024..=2048.
+    /// Performs only a scalar copy; invokes no callback or metadata operation.
+    pub(crate) fn cutoff_ticks(self) -> u32 { self.cutoff_ticks }
+
     pub(crate) fn report(self) -> MonitorReport {
         let quantum_ns = 1_u64.wrapping_shl(self.shift);
         let resolution_ns = u128::from(quantum_ns) * 2;
@@ -98,6 +116,7 @@ impl MonitorConfig {
         }
     }
 
+    #[cfg(test)]
     fn tick(self, now_ns: u64) -> u32 {
         (now_ns.wrapping_shr(self.shift) as u32) & TICK_MASK
     }
@@ -152,14 +171,18 @@ pub(crate) struct MonitorReport {
     pub inner_wait_from_sample_ns: u64,
 }
 
+// Retained predecessor model controls only. Actual runtime uses CoherentDeadline.
+#[cfg(test)]
 pub(crate) struct DeadlineMonitor {
     config: MonitorConfig,
     word: AtomicU32,
 }
 
+#[cfg(test)]
 #[derive(Clone, Copy)]
 enum Observation { Arrival, Check }
 
+#[cfg(test)]
 impl DeadlineMonitor {
     /// Construct/arm at activation before sharing the runtime route.
     pub(crate) fn new(config: MonitorConfig, now_ns: u64) -> Self {
@@ -236,6 +259,7 @@ mod tests;
 #[path = "deadline_monitor/count_schedule.rs"]
 mod count_schedule;
 pub(crate) use count_schedule::{CountSchedule, WaitRequest};
+#[cfg(test)]
 #[path = "deadline_monitor/counter_publication.rs"]
 mod counter_publication;
 #[cfg(test)]

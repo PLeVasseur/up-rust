@@ -101,10 +101,10 @@ fn serialized_publisher_and_subscriber_admit_declared_transport_allocation() {
         }
         let runtime = setup.enter_runtime().unwrap();
         assert_eq!(starts.load(Ordering::Relaxed), 1);
-        assert!(!runtime.routes()[0].native_payload);
+        assert_eq!(runtime.routes().first().map(|route| route.native_payload), Some(false));
         assert!(matches!(
-            runtime.routes()[0].heap,
-            RuntimeHeap::Allocates(_)
+            runtime.routes().first().map(|route| route.heap),
+            Some(RuntimeHeap::Allocates(_))
         ));
     }
 }
@@ -116,7 +116,7 @@ fn serialized_carrier_legs_admit_declared_transport_allocation() {
         prepare_carrier(&setup, &[carried(false)], receive);
         let runtime = setup.enter_runtime().unwrap();
         assert_eq!(starts.load(Ordering::Relaxed), 1);
-        assert!(!runtime.routes()[0].native_payload);
+        assert_eq!(runtime.routes().first().map(|route| route.native_payload), Some(false));
     }
 }
 
@@ -141,7 +141,7 @@ fn native_and_mixed_carrier_reports_remain_native_with_heap_free_binding() {
         for wires in [vec![carried(true)], vec![carried(false), carried(true)]] {
             let (setup, _) = setup(RuntimeHeap::None);
             prepare_carrier(&setup, &wires, receive);
-            assert!(setup.enter_runtime().unwrap().routes()[0].native_payload);
+            assert_eq!(setup.enter_runtime().unwrap().routes().first().map(|route| route.native_payload), Some(true));
         }
     }
 }

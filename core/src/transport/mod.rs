@@ -48,7 +48,13 @@ pub mod carrier;
 pub mod envelope;
 pub mod error;
 pub mod frame;
+#[doc(hidden)]
+pub mod local;
+mod metadata;
 pub mod ids;
+#[doc(hidden)]
+#[cfg(up_rust_test_hooks)]
+pub use metadata::__native32_records_control;
 pub mod inbound;
 pub mod mode;
 pub mod qos;
@@ -68,7 +74,7 @@ pub(crate) mod tests;
 pub use receive_budget::ReceiveBudget;
 pub use binding::{
     BindingRefusal, BindingRoute, BindingSetup, Capabilities, Flow, HandoffRuntime, InboundFrame,
-    InboundRoute, LendingRuntime, OutgoingFrame, PayloadBytes, PeerRef, PreparedRoute, ReplyToken,
+    InboundRoute, LendingRuntime, OutgoingFrame, PayloadBytes, PeerLossOutcome, PeerRef, PreparedRoute, ReplyToken,
     RouteDeclaration, RouteKind, RuntimePort, SendRefusal, HandoffFailure,
 };
 pub use carrier::{
@@ -88,7 +94,7 @@ pub use mode::{
 pub use qos::{
     check_qos, Deadline, Overflow, Qos, QosRefused, QosSetting, QosSupport, Reliability, SendReport,
 };
-pub use report::{RouteCounterDelta, RouteCounters, RouteId, RouteReport, SendMode};
+pub use report::{DeadlineReport, RouteCounterDelta, RouteCounters, RouteId, RouteReport, SendMode};
 pub use rpc::{Call, CallTable, Reply};
 pub use waiver::{Deviation, DeviationKind, HeapOperation, RuntimePermit, RuntimeWaiver};
 pub use wake::RouteWake;
@@ -287,19 +293,20 @@ pub enum SendError {
 impl SendError {
     /// Original error identity, excluding an attached handoff prefix report.
     pub fn cause(self) -> Self {
-        match self {
-            Self::PartialHandoff { refusal, .. } => match refusal {
+        if let Self::PartialHandoff { refusal, .. } = self {
+            match refusal {
                 binding::SendRefusal::PoolRetired => Self::PoolRetired,
                 binding::SendRefusal::Busy => Self::Busy,
                 binding::SendRefusal::TooLarge => Self::PayloadTooLarge,
                 binding::SendRefusal::Failed { code, detail } => Self::Rejected { code, detail },
-            },
-            other => other,
+            }
+        } else {
+            self
         }
     }
     /// Available prefix effects. None is no supplied report, never proof of zero.
     pub fn delivery_report(self) -> Option<SendReport> {
-        match self { Self::PartialHandoff { report, .. } => Some(report), _ => None }
+        if let Self::PartialHandoff { report, .. } = self { Some(report) } else { None }
     }
 
     /// The uProtocol status code for this refusal. Heap-free.

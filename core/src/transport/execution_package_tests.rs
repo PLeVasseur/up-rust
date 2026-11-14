@@ -1,5 +1,7 @@
 //! Narrow missing execution-package fixtures; controlled platform only.
 #![allow(clippy::unwrap_used, clippy::expect_used, clippy::panic)]
+#[cfg(test)]
+use crate::test_support::FixtureResult as _;
 use super::*;
 use crate::communication::two_mode::Publisher;
 use crate::memory::StartupRegion;
@@ -187,7 +189,7 @@ fn receive_pool_uses_the_published_full_u64_warning_margin() {
     let role = Subscriber::<u32>::on(&setup, topic).wire(TestWire { fail_encode: false }).build().unwrap();
     setup.__seed_pool_free_for_test(0, u64::MAX - 1 - 2 * (margin - 1)).unwrap();
     let runtime = setup.enter_runtime().unwrap();
-    let report = &runtime.routes()[0];
+    let report = runtime.routes().first().require_fixture();
     assert_eq!(report.lifetime_policy, policy);
     assert_eq!(runtime.pool_lifetime(report.id), Some(LifetimeState::Healthy));
     let role = role.activate(&runtime).unwrap();
@@ -208,7 +210,7 @@ fn rpc_call_pool_uses_the_published_full_u64_warning_margin() {
         .wire(TestWire { fail_encode: false }).build().unwrap();
     setup.__seed_pool_free_for_test(0, u64::MAX - 1 - 2 * (margin - 1)).unwrap();
     let runtime = setup.enter_runtime().unwrap();
-    let response_id = runtime.core.rx[0].id();
+    let response_id = runtime.core.rx.first().require_fixture().id();
     for report in runtime.routes() { assert_eq!(report.lifetime_policy, policy); }
     assert_eq!(runtime.pool_lifetime(response_id), Some(LifetimeState::Healthy));
     let client = client.activate(&runtime).unwrap();

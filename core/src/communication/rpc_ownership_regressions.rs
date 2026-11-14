@@ -68,6 +68,73 @@ mod rpc_ownership_regressions {
         unsafe { core::slice::from_raw_parts(target.as_ptr().cast::<u8>(), target.len()) }
     }
 
+    struct IdentifiedOwner {
+        owner: BoxOwner,
+        peer: PeerRef,
+        drops: &'static AtomicU32,
+    }
+    impl Frame for IdentifiedOwner {
+        fn encoded_metadata(&self) -> &[u8] { self.owner.encoded_metadata() }
+        fn payload(&self) -> Option<LoanedPayload<'_>> { self.owner.payload() }
+        fn peer(&self) -> PeerRef { self.peer }
+    }
+    impl Drop for IdentifiedOwner {
+        fn drop(&mut self) { self.drops.fetch_add(1, SeqCst); }
+    }
+
+    // [utest->req~ssr-peer-rpc-ends~1]
+    #[test]
+    fn g2_retained_response_peer_mismatch_drops_only_the_rejected_owner() {
+        static REGION: StartupRegion<{ 1 << 20 }> = StartupRegion::new();
+        static DROPS: AtomicU32 = AtomicU32::new(0);
+        let memory = REGION.claim().unwrap();
+        let topic = TestUri(1).get_resource_uri(0x8001);
+        let source = TestUri(2).get_resource_uri(1);
+        let sink = TestUri(1).get_source_uri();
+        let (agreement, _) = native_header(&memory, &topic);
+        let request = id(501);
+        let header = response_header(&memory, agreement, &source, &sink, &request, 601);
+        let setup = TransportSetup::lending_on(&memory, &CLOCK, NativePush { fault: false }).unwrap();
+        let role = Subscriber::<Scalar>::on(&setup, topic)
+            .wire(crate::wire::NativeWire::new(agreement)).build().unwrap();
+        let base = &role.route.common;
+        let table = CallTable::<Scalar>::place(&memory, 1, 4, true, &[], None,
+            setup.shared().lifetime_policy()).unwrap();
+        let common = RxCommon::new(base.name, base.id, base.binding_route,
+            Some(UMessageType::Response), source, Some(sink), &[], Envelope::UFrameFields,
+            base.admitted, HeaderLimits { max_token_len: 0 }, PeerTable::new_in(&memory, 2).unwrap(),
+            base.qos, base.heap, base.deviations, base.shared);
+        let responses: &'static ClientResponses<Scalar> = memory.place(ClientResponses { common, table }).unwrap();
+        let a = PeerRef { peer: 42, incarnation: 7 };
+        let wrong = IdentifiedOwner { owner: BoxOwner { metadata: header,
+            value: std::boxed::Box::new(Scalar(99)) },
+            peer: PeerRef { peer: 43, incarnation: 19 }, drops: &DROPS };
+        let right = IdentifiedOwner { owner: BoxOwner { metadata: header,
+            value: std::boxed::Box::new(Scalar(73)) }, peer: a, drops: &DROPS };
+        let runtime = setup.enter_runtime().unwrap();
+        let _role = role.activate(&runtime).unwrap();
+        // Private fixture supplies a known destination to test that predicate.
+        // It does NOT establish a public send destination-binding protocol.
+        let index = table.reserve(&request, crate::platform::Monotonic(u64::MAX), a).unwrap();
+        // SAFETY: reserve transferred this exact table's sole in-range raw
+        // obligation, adopted here exactly once. responses/shared belong to the
+        // initialized same table/context; no other Call or index return exists.
+        let mut call: Call<Scalar, InPlace> = unsafe {
+            Call::from_reserved(table, responses, responses.common.shared, index)
+        };
+        assert_eq!(responses.deliver_retained(RetainedFrame::new(wrong)),
+            Err(crate::transport::ReceiveError::NoMatchingCall));
+        assert_eq!(DROPS.load(SeqCst), 1);
+        assert!(call.__taken_payload().is_err());
+        assert!(call.try_response().unwrap().is_none());
+        responses.deliver_retained(RetainedFrame::new(right)).unwrap();
+        assert_eq!(DROPS.load(SeqCst), 1);
+        assert_eq!(call.__taken_payload().unwrap().0, 73);
+        assert!(call.try_response().unwrap().is_some());
+        drop(call);
+        assert_eq!(DROPS.load(SeqCst), 2);
+    }
+
     #[test]
     fn rpc_retained_parse_error_after_reuse_never_exposes_previous_payload() {
         static REGION: StartupRegion<{ 1 << 20 }> = StartupRegion::new();
@@ -102,7 +169,7 @@ mod rpc_ownership_regressions {
         let _role = role.activate(&runtime).unwrap();
         let mut previous = None;
         for (ordinal, owner) in owners.into_iter().enumerate() {
-            let index = table.reserve(&requests[ordinal], crate::platform::Monotonic(u64::MAX), 0).unwrap();
+            let index = table.reserve(&requests[ordinal], crate::platform::Monotonic(u64::MAX), crate::transport::PeerRef::UNKNOWN).unwrap();
             if let Some(old) = previous { assert_eq!(index, old); }
             previous = Some(index);
             // SAFETY: reserve just returned the sole obligation for this table.

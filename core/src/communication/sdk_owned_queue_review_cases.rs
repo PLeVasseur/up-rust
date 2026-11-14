@@ -126,7 +126,7 @@ mod sdk_owned_queue_review_cases {
                 assert_eq!(phase, 2); assert_eq!(root, route.__review_queue_snapshot().0);
                 assert_eq!(route.__review_queue_snapshot().1, 1); hits[3].fetch_add(1, SeqCst);
             }
-            _ => {}
+            Event::Counted(_) | Event::TailSwapped(_) | Event::Linked(_) | Event::PopLocked | Event::BeforeSurplus | Event::ProtectedRoot(_) | Event::ReclaimClaimed(_) | Event::ReclaimRootChecked(..) | Event::ReviewRootLoaded(..) | Event::ReviewReclaimDecision(..) | Event::ReviewCandidateClaimed(..) | Event::ReviewOfferTransferred(..) | Event::ReviewPopCommitted(..) => {}
         }));
         // Main operation crosses scheduler Box lifetime; nested production work
         // alone is measured above. No whole-schedule allocation claim.
@@ -152,7 +152,7 @@ mod sdk_owned_queue_review_cases {
                 let inner = queue_schedule::install(Box::new(move |e| match e {
                     Event::ReviewReclaimDecision(bank, false, true) if bank == old => { hits[1].fetch_add(1, SeqCst); }
                     Event::ReviewCandidateClaimed(_, bank) => assert_ne!(bank, old, "protected old tenure recycled"),
-                    _ => {}
+                    Event::Counted(_) | Event::TailSwapped(_) | Event::Linked(_) | Event::PopLocked | Event::BeforeSurplus | Event::ProtectedRoot(_) | Event::ReclaimClaimed(_) | Event::ReclaimRootChecked(..) | Event::ReviewRootLoaded(..) | Event::ReviewRootValidated(..) | Event::ReviewRootRetried(..) | Event::ReviewReclaimDecision(..) | Event::ReviewOfferTransferred(..) | Event::ReviewPopCommitted(..) => {}
                 }));
                 heap_window(|| receive(route, 17)); oracle.done(0);
                 for _ in 0..24 { heap_window(|| {
@@ -192,7 +192,7 @@ mod sdk_owned_queue_review_cases {
                     }
                     Event::Counted(incoming) => assert_ne!(incoming, victim),
                     Event::ReviewCandidateClaimed(_, bank) => { assert_ne!(bank, old); assert_ne!(bank, next); }
-                    _ => {}
+                    Event::TailSwapped(_) | Event::Linked(_) | Event::PopLocked | Event::BeforeSurplus | Event::ProtectedRoot(_) | Event::ReclaimClaimed(_) | Event::ReclaimRootChecked(..) | Event::ReviewRootLoaded(..) | Event::ReviewRootValidated(..) | Event::ReviewRootRetried(..) | Event::ReviewReclaimDecision(..) | Event::ReviewOfferTransferred(..) | Event::ReviewPopCommitted(..) => {}
                 }));
                 heap_window(|| receive(route, 29)); oracle.done(1);
                 for _ in 0..24 { heap_window(|| { route.deliver_retained(oracle.native(2, metadata, c)).unwrap(); receive(route, 41); }); oracle.live(0); }

@@ -144,7 +144,7 @@ mod sdk_owned_queue_cases {
             assert_eq!(*role.try_recv().unwrap().unwrap(),17); assert!(role.try_recv().unwrap().is_none());
             let c=runtime.counters(route.common.id);
             match overflow { Overflow::DropNewest=>{assert_eq!(c.dropped_newest,1);assert_eq!(c.busy,0);},
-                Overflow::Wait {..}=>{assert_eq!(c.busy,1);assert_eq!(c.dropped_newest,0);}, _=>unreachable!() }
+                Overflow::Wait {..}=>{assert_eq!(c.busy,1);assert_eq!(c.dropped_newest,0);}, other=>assert!(matches!(other, Overflow::DropNewest | Overflow::Wait {..}), "unexpected fixture overflow: {other:?}") }
         }
         // This checks the existing SDK receive refusal, not sender deadline retry.
     }

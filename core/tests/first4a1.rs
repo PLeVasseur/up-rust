@@ -3,8 +3,16 @@
 //! Targeted 4A1 behavior. No native or whole-delivery claim.
 #![allow(missing_docs, clippy::unwrap_used, clippy::expect_used, clippy::panic)]
 pub use up_rust_core::{
-    communication, frame, memory, platform, transport, uattributes, uri, uuid, wire,
+    communication, frame, memory, transport, uattributes, uri, uuid, wire,
 };
+// Host integration fixture for the shared test doubles' private atomic import.
+// Keep the production module private; this is the same public AtomicU32 type.
+pub mod platform {
+    pub use up_rust_core::platform::*;
+    pub(crate) mod atomic {
+        pub(crate) use core::sync::atomic::AtomicU32;
+    }
+}
 #[path = "../src/transport/tests.rs"]
 mod doubles;
 mod support;
@@ -288,7 +296,7 @@ fn first4a1_deviation_declaration_survives_route_admission() {
     let setup = TransportSetup::handoff_on(&memory, &CLOCK, Declares).unwrap().strict(&Inspect);
     Publisher::<u32>::on(&setup, &TestUri(1), 0x8001).wire(TestWire { fail_encode:false }).build().unwrap();
     let runtime=assert_no_heap("deviation transition",||setup.enter_runtime().unwrap());
-    assert_eq!(runtime.routes()[0].deviations, RECORDS);
+    assert_eq!(runtime.routes().first().map(|route| route.deviations), Some(RECORDS));
 }
 
 // V7 normative naming; protocol naming is not a gated safety requirement.

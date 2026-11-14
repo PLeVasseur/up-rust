@@ -16,9 +16,12 @@
 //! The table is built during initialization and lives until process exit. A
 //! call's slot is claimed before its request is sent, so a response that races
 //! the send still finds its reservation. Every call completes: with a response,
-//! when its deadline passes, or when its server restarts or is reported gone.
-//! Correlation is the full key: the route fixes source and sink, and the slot
-//! records the request ID. Dropping a [`Call`] releases any owned decoded value
+//! when its deadline passes, or when an authenticated destination is lost or
+//! superseded. The current send contracts supply no authenticated destination:
+//! RpcClient reservations are UNKNOWN and loss/restart cannot terminate them.
+//! Response correlation checks the route's source/sink and full request ID;
+//! internally bound reservations additionally require the full response peer.
+//! Correlation of UNKNOWN calls is not destination authentication. Dropping a [`Call`] releases any owned decoded value
 //! before returning its slot.
 //!
 //! A response is decoded once, into a startup slot the size of `Resp`, when
@@ -34,9 +37,9 @@ use core::fmt;
 use core::marker::PhantomData;
 use core::mem::{self, MaybeUninit};
 use core::ops::Deref;
-use crate::platform::atomic::{AtomicBool, AtomicI32, AtomicU32, AtomicU64, AtomicUsize, Ordering};
+use crate::platform::atomic::{AtomicBool, AtomicI32, AtomicU32, AtomicUsize, Ordering};
 
-use super::binding::{BindingRoute, InboundFrame, PayloadBytes, PeerRef};
+use super::binding::{BindingRoute, InboundFrame, PayloadBytes, PeerLossOutcome, PeerRef};
 use super::envelope::ParsedFrame;
 use super::error::{CallError, ReceiveError, StartupError};
 use super::frame::RetainedFrame;
@@ -53,21 +56,22 @@ use crate::ucode::UCode;
 use crate::uuid::UUID;
 use crate::wire::{Encoded, InPlace, RuntimeHeap, Wire, WireMode};
 
-const FREE: u64 = 0;
-const RESERVED: u64 = 1;
-const ARMED: u64 = 2;
-const DELIVERING: u64 = 3;
-const COMPLETE: u64 = 4;
-const TIMED_OUT: u64 = 5;
-const PEER_RESTARTED: u64 = 6;
-const PEER_LOST: u64 = 7;
-const ABANDONED: u64 = 8;
-const TAKEN: u64 = 9;
+pub(super) const FREE: u64 = 0;
+pub(super) const RESERVED: u64 = 1;
+pub(super) const ARMED: u64 = 2;
+pub(super) const DELIVERING: u64 = 3;
+pub(super) const COMPLETE: u64 = 4;
+pub(super) const TIMED_OUT: u64 = 5;
+pub(super) const PEER_RESTARTED: u64 = 6;
+pub(super) const PEER_LOST: u64 = 7;
+pub(super) const ABANDONED: u64 = 8;
+pub(super) const TAKEN: u64 = 9;
 /// The owner is releasing the slot: its frame and waker are still the owner's.
-const RELEASING: u64 = 10;
-const PHASE_MASK: u64 = 0xff;
+pub(super) const RELEASING: u64 = 10;
+pub(super) const PHASE_MASK: u64 = 0xff;
 
 /// The only terminal failures a shared observer may publish from ARMED.
+#[cfg(test)]
 #[derive(Clone, Copy)]
 enum CompletionFailure {
     TimedOut,
@@ -75,6 +79,7 @@ enum CompletionFailure {
     PeerLost,
 }
 
+#[cfg(test)]
 impl CompletionFailure {
     fn phase(self) -> u64 {
         match self {
@@ -85,11 +90,28 @@ impl CompletionFailure {
     }
 }
 
-fn phase(state: u64) -> u64 {
+/// Extracts the phase bits without modifying the state.
+///
+/// # Safety-usable invariant
+/// Returns exactly `state & PHASE_MASK`, in `0..=PHASE_MASK`, for every `u64`.
+/// This primitive integer operation invokes no user code, cannot unwind, and
+/// accesses no shared storage or exclusion guard; it cannot reenter a metadata
+/// leaf. It does not validate that the extracted bits name a supported phase.
+pub(super) fn phase(state: u64) -> u64 {
     state & PHASE_MASK
 }
 
-fn with_phase(state: u64, next: u64) -> u64 {
+/// Combines the state's generation bits with the supplied phase word.
+///
+/// # Safety-usable invariant
+/// Returns exactly `(state & !PHASE_MASK) | next` for all arguments. The result's
+/// phase bits are `next & PHASE_MASK`. If `next & !PHASE_MASK == 0`, every bit
+/// outside the phase mask is preserved from `state`; otherwise those high bits
+/// are ORed with `next` as well. This helper does not validate a phase or authorize
+/// an ownership transition. Its primitive integer operations invoke no user
+/// code, cannot unwind, and access no shared storage or exclusion guard, so they
+/// cannot reenter a metadata leaf.
+pub(super) fn with_phase(state: u64, next: u64) -> u64 {
     (state & !PHASE_MASK) | next
 }
 
@@ -101,11 +123,7 @@ fn free_state(state: u64) -> u64 {
 const NO_ENCODING: u32 = u32::MAX;
 
 struct CallSlot {
-    state: AtomicU64,
-    msb: AtomicU64,
-    lsb: AtomicU64,
-    deadline: AtomicU64,
-    incarnation: AtomicU64,
+    metadata: super::metadata::CallMetadata,
     status: AtomicI32,
     encoding: AtomicU32,
     response_len: AtomicUsize,
@@ -212,11 +230,7 @@ impl<Resp: Send + Sync + 'static> CallTable<Resp> {
         let mut slots = memory.fixed_vec::<CallSlot>(capacity)?;
         for _ in 0..capacity {
             slots.push(CallSlot {
-                state: AtomicU64::new(FREE),
-                msb: AtomicU64::new(0),
-                lsb: AtomicU64::new(0),
-                deadline: AtomicU64::new(0),
-                incarnation: AtomicU64::new(0),
+                metadata: super::metadata::CallMetadata::new(),
                 status: AtomicI32::new(0),
                 encoding: AtomicU32::new(NO_ENCODING),
                 response_len: AtomicUsize::new(0),
@@ -284,7 +298,12 @@ impl<Resp: Send + Sync + 'static> CallTable<Resp> {
     /// Ok transfers exactly one current raw pool obligation for slots[index].
     /// The index is in range; ARMED records the initialized request state and
     /// no retained frame. Only one Call::from_reserved may adopt that obligation.
-    pub(crate) fn reserve(&self, id: &UUID, deadline: Monotonic, incarnation: u64) -> Result<u32, CallError> {
+    /// The supplied identity is copied (partial identities become UNKNOWN).
+    /// This helper does not authenticate it. Production RpcClient supplies only
+    /// UNKNOWN until a send/response destination-binding protocol exists. An
+    /// observed receive peer is insufficient. UNKNOWN calls retain response/TTL
+    /// completion and cannot be failed by a loss/restart event.
+    pub(crate) fn reserve(&self, id: &UUID, deadline: Monotonic, peer: PeerRef) -> Result<u32, CallError> {
         let index = self.free.pop()?;
         // Both tables have the same immutable setup capacity; a pool index is
         // therefore in range. Keep a checked, non-panicking boundary even when
@@ -295,18 +314,13 @@ impl<Resp: Send + Sync + 'static> CallTable<Resp> {
             unsafe { self.free.push(index) };
             return Err(CallError::InternalState);
         };
-        let state = slot.state.load(Ordering::Acquire);
         let (msb, lsb) = id.as_u64_pair();
-        slot.state.store(with_phase(state, RESERVED), Ordering::Release);
-        slot.msb.store(msb, Ordering::Relaxed);
-        slot.lsb.store(lsb, Ordering::Relaxed);
-        slot.deadline.store(deadline.0, Ordering::Relaxed);
-        slot.incarnation.store(incarnation, Ordering::Relaxed);
+        slot.metadata.reserve(msb, lsb, deadline.0, peer);
         slot.status.store(UCode::Ok.value(), Ordering::Relaxed);
         slot.encoding.store(NO_ENCODING, Ordering::Relaxed);
         slot.response_len.store(0, Ordering::Relaxed);
         slot.retained.store(false, Ordering::Relaxed);
-        slot.state.store(with_phase(state, ARMED), Ordering::Release);
+        slot.metadata.arm();
         Ok(index)
     }
 
@@ -334,36 +348,24 @@ impl<Resp: Send + Sync + 'static> CallTable<Resp> {
     /// Success changes exactly this observed ARMED tenure to a terminal failure.
     /// It never opens payload access, re-arms a taken slot, or changes generation.
     /// All other expected phases fail without a state change or wake.
+    #[cfg(test)]
     fn try_complete(&self, slot: &CallSlot, state: u64, next: CompletionFailure) -> bool {
-        if phase(state) != ARMED {
-            return false;
-        }
-        if slot
-            .state
-            .compare_exchange(
-                state,
-                with_phase(state, next.phase()),
-                Ordering::AcqRel,
-                Ordering::Relaxed,
-            )
-            .is_ok()
-        {
-            slot.wake.wake();
+        if phase(state) != ARMED { return false; }
+        if slot.metadata.compare_state(state, with_phase(state, next.phase())).is_ok() {
+            slot.wake.wake(); // region ended before external wake
             true
-        } else {
-            false
-        }
+        } else { false }
     }
 
     /// Planning snapshot only, never a payload/ownership witness. Reuse may
     /// make an event early or change it; Call::from_reserved notifies the service
-    /// after ARMED publication. All loads are from existing atomic metadata.
+    /// after ARMED publication. Each copied slot record is coherent under its metadata domain; the scan is not a whole-table snapshot.
     pub(crate) fn next_expiry(&self) -> Option<Monotonic> {
         let mut earliest = None::<u64>;
         for slot in self.slots {
-            if phase(slot.state.load(Ordering::Acquire)) == ARMED {
-                let deadline = slot.deadline.load(Ordering::Relaxed);
-                earliest = Some(earliest.map_or(deadline, |old| old.min(deadline)));
+            let snapshot = slot.metadata.snapshot();
+            if phase(snapshot.state) == ARMED {
+                earliest = Some(earliest.map_or(snapshot.deadline, |old| old.min(snapshot.deadline)));
             }
         }
         earliest.map(Monotonic)
@@ -373,68 +375,49 @@ impl<Resp: Send + Sync + 'static> CallTable<Resp> {
     pub(crate) fn expire(&self, now: Monotonic) -> usize {
         let mut expired = 0_usize;
         for slot in self.slots {
-            let state = slot.state.load(Ordering::Acquire);
-            if phase(state) == ARMED
-                && slot.deadline.load(Ordering::Relaxed) <= now.0
-                && self.try_complete(slot, state, CompletionFailure::TimedOut)
-            {
+            if slot.metadata.fail_due(now.0) {
                 expired = expired.saturating_add(1);
+                slot.wake.wake();
             }
         }
         expired
     }
 
-    /// Fails calls reserved against an earlier incarnation of the server.
-    fn fail_older(&self, incarnation: u64) {
+    /// Fails only bound calls to an older incarnation of this same full peer ID.
+    /// Unknown destinations and other peer IDs are unaffected.
+    fn fail_older(&self, peer: PeerRef) {
         for slot in self.slots {
-            let state = slot.state.load(Ordering::Acquire);
-            if phase(state) == ARMED && slot.incarnation.load(Ordering::Relaxed) < incarnation {
-                self.try_complete(slot, state, CompletionFailure::PeerRestarted);
-            }
+            if slot.metadata.fail_older(peer) { slot.wake.wake(); }
         }
     }
 
-    /// Fails every outstanding call: the server has been reported gone.
-    fn fail_all(&self) {
+    /// Fails only armed calls carrying the exact lost peer identity.
+    /// Each slot compares identity and changes phase in one metadata region;
+    /// wake callbacks run after that region and never hold its temporary borrow.
+    /// A callback/reuse between slots cannot make an old identity match a new one.
+    fn fail_peer(&self, peer: PeerRef) -> usize {
+        let mut failed = 0_usize;
         for slot in self.slots {
-            let state = slot.state.load(Ordering::Acquire);
-            if phase(state) == ARMED {
-                self.try_complete(slot, state, CompletionFailure::PeerLost);
+            if slot.metadata.fail_peer(peer) {
+                failed = failed.saturating_add(1);
+                slot.wake.wake();
             }
         }
+        failed
     }
 
-    /// Takes the DELIVERING phase of the call whose reservation holds this request ID.
+    /// Takes DELIVERING for the full request ID and, if bound, exact response peer.
+    /// UNKNOWN reservations retain the existing route/request-ID correlation.
     /// # Safety-usable invariant
     /// Ok(index,state) transfers the sole DELIVERING claim for this table's
     /// slots[index] at generation state. Only that claimant writes response/frame
     /// storage; its completion consumes this claim. Concurrent Call drop can only
     /// mark ABANDONED, transferring final cleanup to this claimant.
-    fn begin_delivery(&self, parsed: &ParsedFrame<'_>) -> Result<(usize, u64), ReceiveError> {
-        let reqid = parsed
-            .header
-            .reqid
-            .as_ref()
-            .ok_or(ReceiveError::NoMatchingCall)?;
+    fn begin_delivery(&self, parsed: &ParsedFrame<'_>, peer: PeerRef) -> Result<(usize, u64), ReceiveError> {
+        let reqid = parsed.header.reqid.as_ref().ok_or(ReceiveError::NoMatchingCall)?;
         let (msb, lsb) = reqid.as_u64_pair();
         for (index, slot) in self.slots.iter().enumerate() {
-            let state = slot.state.load(Ordering::Acquire);
-            if phase(state) != ARMED
-                || slot.msb.load(Ordering::Relaxed) != msb
-                || slot.lsb.load(Ordering::Relaxed) != lsb
-                || slot
-                    .state
-                    .compare_exchange(
-                        state,
-                        with_phase(state, DELIVERING),
-                        Ordering::AcqRel,
-                        Ordering::Relaxed,
-                    )
-                    .is_err()
-            {
-                continue;
-            }
-            return Ok((index, state));
+            if let Some(state) = slot.metadata.begin_delivery(msb, lsb, peer) { return Ok((index, state)); }
         }
         Err(ReceiveError::NoMatchingCall)
     }
@@ -446,19 +429,12 @@ impl<Resp: Send + Sync + 'static> CallTable<Resp> {
     /// COMPLETE or finishing abandoned cleanup before returning the raw pool index.
     unsafe fn finish_delivery(&self, index: usize, slot: &CallSlot, state: u64) {
         // SAFETY: the caller binds current index/state/slot and unique DELIVERING
-        // ownership. No state other than ABANDONED may defeat the COMPLETE CAS for
+        // ownership. No state other than ABANDONED may defeat the COMPLETE comparison for
         // this generation. That failed branch owns complete cleanup; drop_retained
         // and wake.clear finish before finish_return consumes the one pool index.
-        // The success branch Release-publishes writes and never returns that index.
+        // The success branch releases the metadata gate after publishing writes and never returns that index.
         unsafe {
-            if slot
-                .state
-                .compare_exchange(
-                    with_phase(state, DELIVERING),
-                    with_phase(state, COMPLETE),
-                    Ordering::AcqRel,
-                    Ordering::Relaxed,
-                )
+            if slot.metadata.compare_state(with_phase(state, DELIVERING), with_phase(state, COMPLETE))
                 .is_ok()
             {
                 slot.wake.wake();
@@ -487,8 +463,8 @@ impl<Resp: Send + Sync + 'static> CallTable<Resp> {
     }
 
     /// Stores a copied response for the call whose reservation holds this request ID.
-    fn complete_copied(&self, parsed: &ParsedFrame<'_>) -> Result<(), ReceiveError> {
-        let (index, state) = self.begin_delivery(parsed)?;
+    fn complete_copied(&self, parsed: &ParsedFrame<'_>, peer: PeerRef) -> Result<(), ReceiveError> {
+        let (index, state) = self.begin_delivery(parsed, peer)?;
         let slot = self.slots.get(index).ok_or(ReceiveError::NoMatchingCall)?;
         self.record_header(slot, parsed);
         let mut len = 0_usize;
@@ -603,14 +579,14 @@ impl<Resp: Send + Sync + 'static> CallTable<Resp> {
     /// the full returned borrow. No response take/drop/reuse may overlap. Some
     /// Response borrows only immutable completed response storage of that Call.
     unsafe fn check_outcome(&self, index: u32, now: Monotonic) -> Option<Outcome<'_>> {
-        // SAFETY: the current Call contract prevents release/reuse. The Acquire
-        // state load must observe COMPLETE before outcome's raw access; slot is
-        // from this index's checked lookup. Other states access atomics only.
+        // SAFETY: the current Call contract prevents release/reuse. The metadata gate
+        // acquisition must observe COMPLETE before outcome's raw access; slot is
+        // from this index's checked lookup. Other states access only protected metadata.
         unsafe {
             let Some(slot) = self.slots.get(index as usize) else {
                 return Some(Outcome::Failed(CallError::SlotsExhausted));
             };
-            let state = slot.state.load(Ordering::Acquire);
+            let state = slot.metadata.state();
             match phase(state) {
                 COMPLETE => return Some(self.outcome(index, slot)),
                 TIMED_OUT => return Some(Outcome::Failed(CallError::TimedOut)),
@@ -619,10 +595,8 @@ impl<Resp: Send + Sync + 'static> CallTable<Resp> {
                 TAKEN => return Some(Outcome::Failed(CallError::AlreadyTaken)),
                 _ => {}
             }
-            if phase(state) == ARMED
-                && slot.deadline.load(Ordering::Relaxed) <= now.0
-                && self.try_complete(slot, state, CompletionFailure::TimedOut)
-            {
+            if slot.metadata.fail_due(now.0) {
+                slot.wake.wake();
                 return Some(Outcome::Failed(CallError::TimedOut));
             }
             None
@@ -643,7 +617,7 @@ impl<Resp: Send + Sync + 'static> CallTable<Resp> {
 
     /// # Safety
     /// Caller holds the current Call reservation for index; slot is slots[index]
-    /// and an Acquire read observed COMPLETE. Hold the Call and exclude mutable
+    /// and a metadata gate acquisition observed COMPLETE. Hold the Call and exclude mutable
     /// take/drop/reuse throughout the returned response borrow.
     unsafe fn outcome(&self, index: u32, slot: &CallSlot) -> Outcome<'_> {
         // SAFETY: the explicit Call/COMPLETE contract orders response writes and
@@ -758,7 +732,7 @@ impl<Resp: Send + Sync + 'static> ClientResponses<Resp> {
             self.common.wire_index(parsed)?;
         }
         if admission == PeerAdmission::Restarted {
-            self.table.fail_older(peer.incarnation);
+            self.table.fail_older(peer);
         }
         Ok(())
     }
@@ -780,7 +754,7 @@ impl<Resp: Send + Sync + 'static> InboundDispatch for ClientResponses<Resp> {
                 ReceiveError::Header(error)
             })?;
         self.admit_response(&parsed, frame.peer)?;
-        let outcome = self.table.complete_copied(&parsed);
+        let outcome = self.table.complete_copied(&parsed, frame.peer);
         match outcome {
             Ok(()) => add(&self.common.counters.carried),
             Err(_) => add(&self.common.counters.refused),
@@ -817,7 +791,7 @@ impl<Resp: Send + Sync + 'static> InboundDispatch for ClientResponses<Resp> {
             drop(frame);
             return Err(error);
         }
-        let delivering = match self.table.begin_delivery(&parsed) {
+        let delivering = match self.table.begin_delivery(&parsed, peer) {
             Ok(found) => found,
             Err(error) => {
                 add(&self.common.counters.refused);
@@ -842,15 +816,19 @@ impl<Resp: Send + Sync + 'static> InboundDispatch for ClientResponses<Resp> {
 
     fn peer_restarted(&'static self, peer: PeerRef) {
         if self.common.peers.admit_event(peer) {
-            self.table.fail_older(peer.incarnation);
+            self.table.fail_older(peer);
             self.common.wake_waiters();
         }
     }
 
-    fn peer_lost(&'static self, peer: PeerRef) {
-        self.common.peers.forget(peer);
-        self.table.fail_all();
+    fn peer_lost(&'static self, peer: PeerRef) -> PeerLossOutcome {
+        let peer_removed = self.common.peers.forget_exact(peer);
+        // Do not use removal success as a permission to fail every call. Old
+        // calls may remain after table advancement; new calls may appear after
+        // removal. Each current slot independently checks its full stored peer.
+        let calls_failed = self.table.fail_peer(peer);
         self.common.wake_waiters();
+        PeerLossOutcome::Applied { peer_removed, calls_failed }
     }
 
     fn readable(&'static self) {
@@ -1013,7 +991,7 @@ impl<Resp: 'static> CallTable<Resp> {
                 // Existing phase observers must never see a recycled generation.
                 // Close before publishing any availability; other owners stay valid.
                 self.free.retire();
-            } else { slot.state.store(free_state(state), Ordering::Release); }
+            } else { slot.metadata.set_state(free_state(state)); }
             self.free.push(index); // final access to this slot, after all cleanup
         }
     }
@@ -1028,8 +1006,8 @@ impl<Resp: 'static> CallTable<Resp> {
     unsafe fn retained_bytes(&self, index: u32) -> &[u8] {
         // SAFETY: checked index bounds and retained Acquire gate the payload read;
         // retained's Release postcondition proves response writes are finished;
-        // the Call borrow excludes take/drop/reuse. A remaining completion CAS
-        // changes only atomic phase and cannot invalidate this acquired payload. Stored extent comes from the final retained owner's genuine
+        // the Call borrow excludes take/drop/reuse. A remaining metadata completion
+        // changes only protected phase and cannot invalidate this acquired payload. Stored extent comes from the final retained owner's genuine
         // slice, or null for absence (handled before reference creation). Every
         // non-null extent remains initialized and immutable for this borrow.
         {
@@ -1070,16 +1048,14 @@ impl<Resp: 'static> CallTable<Resp> {
             let Some(slot) = self.slots.get(index as usize) else {
                 return;
             };
-            let mut state = slot.state.load(Ordering::Acquire);
+            let mut state = slot.metadata.state();
             loop {
                 let next = if phase(state) == DELIVERING {
                     with_phase(state, ABANDONED)
                 } else {
                     with_phase(state, RELEASING)
                 };
-                match slot
-                    .state
-                    .compare_exchange(state, next, Ordering::AcqRel, Ordering::Acquire)
+                match slot.metadata.compare_state(state, next)
                 {
                     Ok(_) => {
                         if phase(next) == RELEASING {
@@ -1213,10 +1189,10 @@ impl<Resp: Send + Sync + 'static> Call<Resp, Encoded> {
                 // exclusive encoded Call may drop its retained frame before Reply.
                 unsafe { self.mark_taken(true) };
                 if let Err(error) = decoded {
-                    // SAFETY: exclusive Call has no Reply; TAKEN excludes another
-                    // decode and the index is withheld until Call destruction.
-                    // clear marks an owned value vacant before arbitrary Drop.
                     if let Some(value) = self.table.values.get(self.index as usize) {
+                        // SAFETY: exclusive Call has no Reply; TAKEN excludes another
+                        // decode and the index is withheld until Call destruction.
+                        // clear marks a drop-bearing value vacant before arbitrary Drop.
                         unsafe { value.clear() };
                     }
                     return Err(error);
@@ -1238,7 +1214,7 @@ impl<Resp: Send + Sync + 'static> Call<Resp, Encoded> {
     // [impl->req~ssr-async-seam~1]
     pub fn __taken_value(&self) -> Option<&Resp> {
         let slot = self.table.slots.get(self.index as usize)?;
-        if !self.decoded_success || phase(slot.state.load(Ordering::Acquire)) != TAKEN {
+        if !self.decoded_success || phase(slot.metadata.state()) != TAKEN {
             return None;
         }
         let value = self.table.values.get(self.index as usize)?;
@@ -1307,17 +1283,12 @@ impl<Resp: Send + Sync + 'static, M: WireMode> Call<Resp, M> {
             let Some(slot) = self.table.slots.get(self.index as usize) else {
                 return;
             };
-            let mut state = slot.state.load(Ordering::Acquire);
+            let mut state = slot.metadata.state();
             loop {
                 if phase(state) != COMPLETE {
                     return;
                 }
-                match slot.state.compare_exchange(
-                    state,
-                    with_phase(state, TAKEN),
-                    Ordering::AcqRel,
-                    Ordering::Acquire,
-                ) {
+                match slot.metadata.compare_state(state, with_phase(state, TAKEN)) {
                     Ok(_) => {
                         if release_frame {
                             // Decoded, so the transport's storage can go back to it.
@@ -1365,12 +1336,126 @@ pub(crate) fn check_decoders<T: 'static>(
     Ok(())
 }
 
-// GCR-3 source-only regression; UNCOMPILED and UNRUN.
+// GCR-3 regression, adapted to the experimental metadata domain.
 #[cfg(test)]
 #[allow(clippy::unwrap_used)]
 mod gcr_transition_regressions {
     use super::*;
     use crate::memory::StartupRegion;
+
+    // [utest->req~ssr-peer-failure-normal~1]
+    // [utest->req~ssr-peer-rpc-ends~1]
+    #[test]
+    fn peer_loss_table_keeps_newer_and_other_peer_calls_armed() {
+        static REGION: StartupRegion<16384> = StartupRegion::new();
+        let memory = REGION.claim().unwrap();
+        let table = CallTable::<u32>::place(&memory, 4, 4, true, &[], None,
+            super::super::LifetimePolicy::new(16).unwrap()).unwrap();
+        let lost = PeerRef { peer: 42, incarnation: 7 };
+        let identities = [lost, PeerRef { incarnation: 8, ..lost },
+            PeerRef { peer: 43, ..lost }, PeerRef::UNKNOWN];
+        // Fresh fixture has no payload/Call owner or callback. Publish only
+        // synthetic metadata; no test obtains payload or pool-return authority.
+        for (slot, peer) in table.slots.iter().zip(identities) {
+            slot.metadata.reserve(1, 2, 100, peer);
+            slot.metadata.arm();
+        }
+        assert_eq!(table.fail_peer(lost), 1);
+        for (slot, peer) in table.slots.iter().zip(identities) {
+            let expected = if peer == lost { PEER_LOST } else { ARMED };
+            assert_eq!(phase(slot.metadata.state()), expected);
+        }
+        assert_eq!(table.fail_peer(lost), 0);
+        assert_eq!(table.fail_peer(PeerRef::UNKNOWN), 0);
+        for slot in table.slots {
+            slot.metadata.set_state(FREE);
+        }
+    }
+
+    // [utest->req~ssr-peer-failure-normal~1]
+    #[test]
+    fn g2_restart_table_scopes_failures_to_the_same_identified_peer() {
+        static REGION: StartupRegion<16384> = StartupRegion::new();
+        let memory = REGION.claim().unwrap();
+        let table = CallTable::<u32>::place(&memory, 4, 4, true, &[], None,
+            super::super::LifetimePolicy::new(16).unwrap()).unwrap();
+        let a = PeerRef { peer: 42, incarnation: 7 };
+        let new_a = PeerRef { incarnation: 8, ..a };
+        let identities = [a, new_a, PeerRef { peer: 43, ..a }, PeerRef::UNKNOWN];
+        // Metadata-only fixture: no payload access, Call, or return obligation.
+        for (slot, peer) in table.slots.iter().zip(identities) {
+            slot.metadata.reserve(1, 2, 100, peer);
+            slot.metadata.arm();
+        }
+        table.fail_older(new_a);
+        for (slot, peer) in table.slots.iter().zip(identities) {
+            assert_eq!(phase(slot.metadata.state()),
+                if peer == a { PEER_RESTARTED } else { ARMED });
+            slot.metadata.set_state(FREE);
+        }
+    }
+
+    // [utest->req~ssr-peer-rpc-ends~1]
+    #[test]
+    fn g2_copied_response_rejects_other_peer_before_storage_write() {
+        use crate::frame::header::RxHeader;
+        use crate::uattributes::UMessageType;
+        static REGION: StartupRegion<16384> = StartupRegion::new();
+        let memory = REGION.claim().unwrap();
+        let table = CallTable::<u32>::place(&memory, 1, 4, false, &[], None,
+            super::super::LifetimePolicy::new(16).unwrap()).unwrap();
+        let id = UUID::try_from_wire_pair(0x7000, 0x8000_0000_0000_0001).unwrap();
+        let a = PeerRef { peer: 42, incarnation: 7 };
+        let index = table.reserve(&id, Monotonic(100), a).unwrap();
+        let slot = table.slots.get(index as usize).unwrap();
+        let parsed = ParsedFrame {
+            header: RxHeader::assemble(UMessageType::Response, None, id.clone(),
+                Some(id), None, None, None,
+                crate::uri::UUri::try_from_wire_parts("", 0x0001_0001, 1, 1).unwrap(), None,
+                Some(PayloadEncoding::private_use(0xf001)), None, 0, None, None),
+            payload: PayloadBytes::one(&[1, 2, 3, 4]), matched: None,
+        };
+        let before = slot.metadata.state();
+        for response in [PeerRef::UNKNOWN, PeerRef { peer: 43, ..a },
+            PeerRef { incarnation: 8, ..a }]
+        {
+            assert_eq!(table.complete_copied(&parsed, response), Err(ReceiveError::NoMatchingCall));
+            assert_eq!(slot.metadata.state(), before);
+            assert_eq!(slot.response_len.load(Ordering::Relaxed), 0);
+            assert_eq!(slot.encoding.load(Ordering::Relaxed), NO_ENCODING);
+            assert!(!slot.retained.load(Ordering::Acquire));
+        }
+        assert_eq!(table.complete_copied(&parsed, a), Ok(()));
+        assert_eq!(phase(slot.metadata.state()), COMPLETE);
+        assert_eq!(slot.response_len.load(Ordering::Relaxed), 4);
+        // SAFETY: reserve transferred this test the sole raw slot obligation;
+        // it was never adopted into a Call or copied to another owner. Copied
+        // delivery finished synchronously and no response view was obtained.
+        // release_any consumes that same in-range reservation exactly once.
+        unsafe { table.release_any(index) };
+    }
+
+    // [utest->req~ssr-peer-rpc-ends~1]
+    #[test]
+    fn g2_rpc_layout_report_is_measured_not_inferred_from_field_delta() {
+        extern crate std;
+        static REGION: StartupRegion<16384> = StartupRegion::new();
+        let memory = REGION.claim().unwrap();
+        let table = CallTable::<u32>::place(&memory, 4, 4, true, &[], None,
+            super::super::LifetimePolicy::new(16).unwrap()).unwrap();
+        let report = memory.seal();
+        std::println!("g2-layout target_pointer_bits={} snapshot={}/{} metadata={}/{} call_slot={}/{} table={}/{} capacity={} startup_used={} startup_capacity={}",
+            usize::BITS,
+            mem::size_of::<super::super::metadata::CallSnapshot>(), mem::align_of::<super::super::metadata::CallSnapshot>(),
+            mem::size_of::<super::super::metadata::CallMetadata>(), mem::align_of::<super::super::metadata::CallMetadata>(),
+            mem::size_of::<CallSlot>(), mem::align_of::<CallSlot>(),
+            mem::size_of::<CallTable<u32>>(), mem::align_of::<CallTable<u32>>(),
+            table.capacity(), report.used, report.capacity);
+        assert_eq!(table.capacity(), 4);
+        assert!(report.used <= report.capacity);
+        // Measurement output is host/configuration-specific; target/provider
+        // layout and exact fixed-region refusal remain separate acceptance gates.
+    }
 
     #[test]
     fn rpc_terminal_observer_cannot_reopen_owned_or_incomplete_states() {
@@ -1385,23 +1470,23 @@ mod gcr_transition_regressions {
             PEER_LOST, ABANDONED, TAKEN, RELEASING]
         {
             let observed = with_phase(17 << 8, p);
-            slot.state.store(observed, Ordering::Relaxed);
+            slot.metadata.set_state(observed);
             for failure in [CompletionFailure::TimedOut, CompletionFailure::PeerRestarted,
                 CompletionFailure::PeerLost]
             {
                 assert!(!table.try_complete(slot, observed, failure));
-                assert_eq!(slot.state.load(Ordering::Relaxed), observed);
+                assert_eq!(slot.metadata.state(), observed);
             }
         }
         for failure in [CompletionFailure::TimedOut, CompletionFailure::PeerRestarted,
             CompletionFailure::PeerLost]
         {
             let armed = with_phase(17 << 8, ARMED);
-            slot.state.store(armed, Ordering::Relaxed);
+            slot.metadata.set_state(armed);
             assert!(table.try_complete(slot, armed, failure));
-            assert_eq!(slot.state.load(Ordering::Relaxed), with_phase(armed, failure.phase()));
+            assert_eq!(slot.metadata.state(), with_phase(armed, failure.phase()));
             assert!(!table.try_complete(slot, armed, failure));
         }
-        slot.state.store(FREE, Ordering::Relaxed);
+        slot.metadata.set_state(FREE);
     }
 }

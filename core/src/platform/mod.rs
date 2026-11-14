@@ -24,6 +24,7 @@
 //! been compiled for or run on a real target (see `qnx.rs`).
 
 pub(crate) mod atomic;
+pub(crate) mod exclusion;
 pub(crate) mod prepared;
 
 use crate::platform::atomic::AtomicU32;

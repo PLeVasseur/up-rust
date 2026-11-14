@@ -11,25 +11,13 @@
  * SPDX-License-Identifier: Apache-2.0
  ********************************************************************************/
 
-//! Core's single atomic access boundary: plain re-exports, no behavior change.
-//!
-//! All atomic accesses, loads and stores included, use these types. A future
-//! backend must make every operation linearizable per word with the caller's
-//! ordering, and must not wait on one core. Bypassing an emulation lock for a
-//! load/store would invalidate its compare-and-swap. No such backend exists here.
-//!
-//! Surface: load, store, swap, compare_exchange, compare_exchange_weak,
-//! fetch_add, fetch_sub, fetch_or, fetch_max, and fence. A future backend is
-//! selected here at build time by an integrator cfg, never a Cargo feature or
-//! a per-operation Platform trait call. No no-CAS support is claimed.
-//!
-//! AtomicU64 is temporarily retained until the separate 32-bit protocol port.
-//! Facade routing alone does not establish 32-bit or no-64-bit-atomic support.
-//! Preparation for req~ssr-atomic-width~1 at neutral spec 733b006; G3 is pending,
-//! and that item does not yet carry SafetyGateUpRust. No OFT closure claimed.
+//! Native-width atomic access boundary. Full generator, peer and RPC records
+//! use the private scoped metadata operations, not an emulated wide atomic.
+//! Loads, stores and read-modify-writes on the remaining narrow words use these
+//! types. The explicit experimental model is selected by platform::exclusion.
 
 // Keep the documented operation surface even when a target uses only part of it.
 #[allow(unused_imports)]
 pub(crate) use core::sync::atomic::{
-    fence, AtomicBool, AtomicI32, AtomicPtr, AtomicU32, AtomicU64, AtomicU8, AtomicUsize, Ordering,
+    compiler_fence, fence, AtomicBool, AtomicI32, AtomicPtr, AtomicU32, AtomicU8, AtomicUsize, Ordering,
 };

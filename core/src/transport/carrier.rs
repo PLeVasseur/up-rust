@@ -73,7 +73,7 @@ use core::marker::PhantomData;
 use core::mem::MaybeUninit;
 use crate::platform::atomic::{AtomicU32, AtomicU8, Ordering};
 
-use super::binding::{Flow, InboundFrame, PayloadBytes, PeerRef, ReplyToken, RouteDeclaration};
+use super::binding::{Flow, InboundFrame, PayloadBytes, PeerLossOutcome, PeerRef, ReplyToken, RouteDeclaration};
 use super::envelope::{AdmittedWire, Envelope, ParsedFrame};
 use super::error::{ReceiveError, RouteDirection, RouteName, StartupError};
 use super::frame::RetainedFrame;
@@ -929,8 +929,11 @@ impl InboundDispatch for CarrierInbound {
         self.common.wake_waiters();
     }
 
-    fn peer_lost(&'static self, peer: PeerRef) {
-        self.common.peers.forget(peer);
+    fn peer_lost(&'static self, peer: PeerRef) -> PeerLossOutcome {
+        PeerLossOutcome::Applied {
+            peer_removed: self.common.peers.forget_exact(peer),
+            calls_failed: 0,
+        }
     }
 
     fn common(&self) -> &RxCommon { &self.common }
@@ -1459,9 +1462,12 @@ impl TransportSetup {
                 native: false,
                 max_peers: route.max_peers,
             })
-            .map_err(|error| match error {
-                StartupError::Binding { reason, .. } => carrier_refusal(self, &name, reason),
-                other => other,
+            .map_err(|error| {
+                if let StartupError::Binding { reason, .. } = error {
+                    carrier_refusal(self, &name, reason)
+                } else {
+                    error
+                }
             })?;
         let memory = self.memory();
         let peers = PeerTable::new_in(memory, route.max_peers)?;
@@ -1550,9 +1556,12 @@ impl TransportSetup {
                 native: false,
                 max_peers: 0,
             })
-            .map_err(|error| match error {
-                StartupError::Binding { reason, .. } => carrier_refusal(self, &name, reason),
-                other => other,
+            .map_err(|error| {
+                if let StartupError::Binding { reason, .. } = error {
+                    carrier_refusal(self, &name, reason)
+                } else {
+                    error
+                }
             })?;
         let memory = self.memory();
         let lending = self.family() == Family::Lending;

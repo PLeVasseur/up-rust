@@ -2,7 +2,8 @@
 //! [impl->req~ssr-qos-deadline~3] [impl->req~ssr-atomic-windows~1]
 //! Source only: PlatformInit must supply and qualify the prepared executor.
 
-use super::deadline_monitor::{DeadlineMonitor, WaitRequest};
+use super::deadline_monitor::WaitRequest;
+use super::metadata::CoherentDeadline as DeadlineMonitor;
 use super::deadline_timing::{self as timing, ArmedDeadline, DeadlineConfiguration,
     DeadlineTimingReport, ServiceRoute, TimingGap};
 use super::error::StartupError;

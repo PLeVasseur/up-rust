@@ -2,7 +2,8 @@
 //! [impl->req~ssr-qos-deadline~3] Partial contribution; accepted J amendment
 //! is recorded separately in OWNER-ACCEPTANCE.md, not an invented spec revision.
 
-use super::deadline_monitor::{DeadlineMonitor, MonitorConfig, CountSchedule};
+use super::deadline_monitor::{MonitorConfig, CountSchedule};
+use super::metadata::CoherentDeadline as DeadlineMonitor;
 use super::error::StartupError;
 use super::report::{Counter, RouteId};
 use crate::platform::atomic::{AtomicPtr, Ordering};
@@ -247,7 +248,8 @@ pub struct DeadlineTimingReport {
     pub resolution_ns: Option<u128>,
     /// R61 all-times completed-sample age requirement; not a measured result.
     pub completed_sample_max_age_ns: Option<u128>,
-    /// Strict sample-to-CAS limit; includes every pending arrival/check winner.
+    /// Conservative sample-to-completed-observation limit carried from R61;
+    /// includes every pending arrival/check winner. This is not a measured bound.
     pub pending_observation_limit_ns: Option<u128>,
     /// Internal wait span anchored to the preceding completed pass's sample.
     pub service_wait_span_ns: Option<u64>,
@@ -421,7 +423,8 @@ pub(crate) struct ArmedDeadline {
 pub(crate) struct DeadlineSlot {
     // Safety invariant: null, or a pointer derived from an initialized, aligned,
     // permanently live shared ArmedDeadline; non-null contents are never reset,
-    // moved or destroyed, and only their atomic fields may change.
+    // moved or destroyed. Interior changes use atomics or the private SDK-owned
+    // exclusion of CoherentDeadline; no unguarded mutable access is exposed.
     armed: AtomicPtr<ArmedDeadline>,
 }
 
@@ -451,7 +454,8 @@ impl DeadlineSlot {
         // establish all four. This Acquire observes the sole Release publication;
         // null was excluded. There is no deletion/reset/other pointer writer, no
         // callback between load and reference creation, and no mutable reference
-        // survives publish. Shared runtime changes affect atomic fields only.
+        // survives publish. Shared runtime changes use the private synchronized
+        // CoherentDeadline record; its fields cannot be accessed through this API.
         // The returned lifetime is bounded by &self; storage lives for 'static.
         Some(unsafe { &*ptr })
     }
@@ -464,6 +468,12 @@ impl DeadlineSlot {
     }
     pub(crate) fn check(&self, now_ns: u64, counter: &Counter<true>) -> bool {
         self.get().is_some_and(|armed| armed.monitor.check_and_publish(now_ns, counter))
+    }
+    pub(crate) fn sample_missing(&self) {
+        if let Some(armed) = self.get() { armed.monitor.sample_missing(); }
+    }
+    pub(crate) fn report(&self) -> Option<super::report::DeadlineReport> {
+        self.get().map(|armed| armed.monitor.report())
     }
     pub(crate) fn schedule(&self, previous_ns: u64, sampled_ns: u64) -> Option<CountSchedule> {
         self.get().map(|armed| armed.monitor.count_schedule(previous_ns, sampled_ns))

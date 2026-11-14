@@ -1,10 +1,12 @@
 //! Prepared fixtures; NOT COMPILED OR RUN. Uses std only for test concurrency.
 extern crate std;
 
+#[cfg(test)]
+use crate::test_support::FixtureResult as _;
 use super::*;
 
 fn monitor(deadline_ns: u64, now_ns: u64) -> DeadlineMonitor {
-    DeadlineMonitor::new(MonitorConfig::new(deadline_ns, 0).unwrap(), now_ns)
+    DeadlineMonitor::new(MonitorConfig::new(deadline_ns, 0).require_fixture(), now_ns)
 }
 
 #[test]
@@ -33,7 +35,7 @@ fn quantized_threshold_never_counts_an_equal_actual_gap() {
 
 #[test]
 fn scale_transition_uses_ceil_without_early_count_or_wide_atomic() {
-    let c = MonitorConfig::new(4095, 0).unwrap();
+    let c = MonitorConfig::new(4095, 0).require_fixture();
     assert_eq!(c.report().quantum_ns, 2);
     assert_eq!(c.cutoff_ticks, 2048);
     let m = DeadlineMonitor::new(c, 1);
@@ -136,7 +138,7 @@ fn counted_silence_survives_multiple_full_tick_wraps_with_servicing() {
 fn stale_cas_recomputes_against_winning_arrival_instead_of_double_counting() {
     let m = monitor(1024, 0);
     let old = m.word.load(Ordering::Relaxed);
-    let (proposed, count) = m.transition(old, 1025, Observation::Check).unwrap();
+    let (proposed, count) = m.transition(old, 1025, Observation::Check).require_fixture();
     assert!(count);
     assert!(m.arrival(1025));
     assert!(m.word.compare_exchange(old, proposed, Ordering::Relaxed, Ordering::Relaxed).is_err());
@@ -147,7 +149,7 @@ fn stale_cas_recomputes_against_winning_arrival_instead_of_double_counting() {
 fn stale_check_cas_cannot_overwrite_a_newer_sample() {
     let m = monitor(1024, 0);
     let old = m.word.load(Ordering::Relaxed);
-    let (proposed, _) = m.transition(old, 1025, Observation::Check).unwrap();
+    let (proposed, _) = m.transition(old, 1025, Observation::Check).require_fixture();
     assert!(m.arrival(2000));
     assert!(m.word.compare_exchange(old, proposed, Ordering::Relaxed, Ordering::Relaxed).is_err());
     assert!(!m.check(1025));
@@ -161,7 +163,7 @@ fn competing_arrival_and_check_assign_one_increment_for_the_same_gap() {
     std::thread::scope(|scope| {
         let left = scope.spawn(|| { barrier.wait(); m.arrival(1025) });
         let right = scope.spawn(|| { barrier.wait(); m.check(1025) });
-        assert_eq!(u32::from(left.join().unwrap()) + u32::from(right.join().unwrap()), 1);
+        assert_eq!(u32::from(left.join().require_fixture()) + u32::from(right.join().require_fixture()), 1);
     });
 }
 
@@ -171,7 +173,7 @@ fn startup_exclusive_arm_and_large_report_preserve_full_values() {
     m.arm(10000);
     assert!(!m.check(11024));
     assert!(m.check(11025));
-    let report = MonitorConfig::new(u64::MAX, 0).unwrap().report();
+    let report = MonitorConfig::new(u64::MAX, 0).require_fixture().report();
     assert_eq!(report.inner_wait_from_sample_ns, u64::MAX);
     assert_eq!(report.quantum_ns, 1_u64 << 53);
     assert_eq!(report.completed_sample_max_age_ns, 1_u128 << 82);
@@ -182,7 +184,7 @@ fn startup_exclusive_arm_and_large_report_preserve_full_values() {
 #[test]
 fn pending_physical_limit_preserves_strict_ticks_for_every_selected_quantum_phase() {
     for deadline in [1024, 2048, 10001, 1_000_000] {
-        let config = MonitorConfig::new(deadline, 0).unwrap();
+        let config = MonitorConfig::new(deadline, 0).require_fixture();
         let report = config.report();
         let q = report.quantum_ns;
         let max_delay = (u64::from(PAST_OFFSET) - 1) * q;
@@ -199,7 +201,7 @@ fn pending_physical_limit_preserves_strict_ticks_for_every_selected_quantum_phas
             assert!(m.arrival(refresh + deadline + 2 * q));
         }
     }
-    let corrected = MonitorConfig::new(10001, 0).unwrap().report();
+    let corrected = MonitorConfig::new(10001, 0).require_fixture().report();
     let old_counterexample_delay = u128::from(PAST_OFFSET) * 8 - 5;
     // The original report's physical promise was false. This corrected bound
     // rejects that exact advertised delay; it does not relabel the trace a pass.
@@ -208,7 +210,7 @@ fn pending_physical_limit_preserves_strict_ticks_for_every_selected_quantum_phas
 
 #[test]
 fn wait_is_anchored_to_service_sample_including_prior_and_next_pass_time() {
-    let config = MonitorConfig::new(1024, 0).unwrap();
+    let config = MonitorConfig::new(1024, 0).require_fixture();
     let report = config.report();
     let m = DeadlineMonitor::new(config, 0);
     let mut sample = 0_u64;
@@ -238,7 +240,7 @@ fn wait_is_anchored_to_service_sample_including_prior_and_next_pass_time() {
 #[test]
 fn completion_spacing_is_not_completed_sample_freshness() {
     let r = u64::from(REFRESH_AGE);
-    let report = MonitorConfig::new(1024, 0).unwrap().report();
+    let report = MonitorConfig::new(1024, 0).require_fixture().report();
     let first_sample = r - 20;
     let first_completed = r + 10;
     let next_sample = u64::from(HALF_RANGE);

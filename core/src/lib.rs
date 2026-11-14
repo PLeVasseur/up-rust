@@ -34,6 +34,9 @@
     clippy::indexing_slicing
 )]
 
+#[cfg(test)]
+mod test_support;
+
 pub mod communication;
 pub mod frame;
 pub mod memory;

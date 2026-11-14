@@ -176,8 +176,8 @@ fn peer_lost_frees_a_carrier_ingress_entry() {
     );
 }
 
-/// `peer_lost` on a client's response route frees the server's entry (and fails
-/// the calls outstanding to it): after eight servers have taken the table, a ninth
+/// `peer_lost` on a client's response route frees the server's entry; it does
+/// not infer outstanding calls' destinations. After eight servers take the table, a ninth
 /// is refused until one is reported gone, then its response completes a call.
 #[test]
 fn peer_lost_frees_a_client_response_entry() {
@@ -269,4 +269,63 @@ fn try_recv_stopping_at_its_bound_wakes_waiters() {
         SignalWait::Notified,
         "stopping at the bound woke the waiters"
     );
+}
+
+
+/// Exact loss has observable outcomes; stale/unknown/wrong-peer events cannot
+/// fail a call without an authenticated destination; observed peers are insufficient.
+// [utest->req~ssr-peer-stale-rejected~1]
+// [utest->req~ssr-peer-rpc-ends~1]
+#[test]
+fn peer_loss_outcome_preserves_newer_call_and_rejects_unknown_identity() {
+    use up_rust_core::transport::{CallError, PeerLossOutcome};
+    let clock = Clock::leak(1_000_000_000, WALL);
+    let (shared, setup) = handoff_setup(clock);
+    let method = uri(3, 1);
+    let client = RpcClient::<u32, u32>::on(&setup, &Uri(2), method.clone())
+        .wire(wire())
+        .max_in_flight(2)
+        .build()
+        .unwrap();
+    let runtime = setup.enter_runtime().unwrap();
+    let client = client.activate(&runtime).unwrap();
+    let mut seed = client.invoke(&1).unwrap();
+    let request = shared.sent.lock().unwrap().last().unwrap().clone();
+    let response = whole_frame(&Spec {
+        kind: UMessageType::Response,
+        id: uuid_at(WALL, 900),
+        reqid: Some(sent_request_id(&request)),
+        ttl: None,
+        source: method,
+        sink: Some(uri(2, 0)),
+        token: None,
+        payload: Some(&1_u32.to_le_bytes()),
+    });
+    assert_eq!(deliver(shared, &response, peer(100, 7)), Ok(()));
+    assert!(seed.try_response().unwrap().is_some());
+    drop(seed);
+    let port = shared.port();
+    let route = shared.route(0);
+    port.peer_restarted(route, peer(100, 8));
+    let mut current = client.invoke(&2).unwrap();
+    for lost in [peer(100, 7), peer(101, 8)] {
+        assert_eq!(port.report_peer_lost(route, lost), PeerLossOutcome::Applied {
+            peer_removed: false, calls_failed: 0,
+        });
+        assert!(current.try_response().unwrap().is_none());
+    }
+    assert_eq!(port.report_peer_lost(route, peer(100, 0)), PeerLossOutcome::Unidentified);
+    assert!(current.try_response().unwrap().is_none());
+    assert_eq!(port.report_peer_lost(route, peer(100, 8)), PeerLossOutcome::Applied {
+        peer_removed: true, calls_failed: 0,
+    });
+    assert!(current.try_response().unwrap().is_none());
+    clock.advance_ms(31_000);
+    assert!(matches!(current.try_response(), Err(CallError::TimedOut)));
+    drop(current);
+    let mut unknown = client.invoke(&3).unwrap();
+    assert_eq!(port.report_peer_lost(route, peer(100, 8)), PeerLossOutcome::Applied {
+        peer_removed: false, calls_failed: 0,
+    });
+    assert!(unknown.try_response().unwrap().is_none());
 }

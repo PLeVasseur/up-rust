@@ -3,8 +3,16 @@
 //! A failed route admission must not start binding resources it left behind.
 #![allow(missing_docs, clippy::unwrap_used, clippy::expect_used, clippy::panic)]
 pub use up_rust_core::{
-    communication, frame, memory, platform, transport, uattributes, uri, uuid, wire,
+    communication, frame, memory, transport, uattributes, uri, uuid, wire,
 };
+// Host integration fixture for the shared test doubles' private atomic import.
+// Keep the production module private; this is the same public AtomicU32 type.
+pub mod platform {
+    pub use up_rust_core::platform::*;
+    pub(crate) mod atomic {
+        pub(crate) use core::sync::atomic::AtomicU32;
+    }
+}
 #[path = "../src/transport/tests.rs"]
 mod doubles;
 use communication::two_mode::{Publisher, RpcClient, RpcServer, Subscriber};
@@ -287,7 +295,7 @@ fn bounded_setup(capacity: usize) -> (TransportSetup, &'static Counts, memory::S
     let region = Box::leak(Box::new(Region(
         [core::mem::MaybeUninit::uninit(); 256 * 1024],
     )));
-    let memory = memory::StartupMemory::new(&mut region.0[..capacity]).unwrap();
+    let memory = memory::StartupMemory::new(region.0.get_mut(..capacity).unwrap_or_else(|| panic!("fixture capacity {capacity} exceeds reserved region"))).unwrap();
     let (setup, counts) = setup_response_in(&memory, false, false, false);
     (setup, counts, memory)
 }

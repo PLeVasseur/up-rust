@@ -2582,10 +2582,14 @@ impl<Req: 'static, Resp: Send + Sync + 'static, M: WireMode> RpcClient<Req, Resp
     fn reserve(&self, id: &UUID) -> Result<Call<Resp, M>, CallError> {
         let shared = self.request.shared;
         let deadline = deadline_after(shared.platform, self.ttl);
-        let incarnation = self.responses.common.peers.latest();
+        // A response-table observation does not identify this send's recipient.
+        // Neither handoff send nor lending publish binds a destination before
+        // publication. Keep the call unbound even when one peer was observed:
+        // loss/restart cannot terminate it; response correlation and TTL still can.
+        let peer = crate::transport::binding::PeerRef::UNKNOWN;
         let table = self.responses.table;
         let index = table
-            .reserve(id, deadline, incarnation)?;
+            .reserve(id, deadline, peer)?;
         // SAFETY: table.reserve just transferred the sole in-range live index
         // obligation. This same RpcClient owns its initialized response/shared
         // context; no other owner adopted or returned the index. Call consumes it.
@@ -2781,21 +2785,180 @@ mod retirement_integration_tests {
         assert_eq!(leases[33].as_ref().unwrap().bytes()[0], 33);
     }
 struct CountHeap;
-thread_local! {
-    static WINDOW: Cell<bool> = const { Cell::new(false) };
-    static ALLOCS: Cell<usize> = const { Cell::new(0) };
-    static FREES: Cell<usize> = const { Cell::new(0) };
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
+struct HeapCounts {
+    active: bool,
+    allocs: usize,
+    frees: usize,
+    saturated: bool,
 }
+impl HeapCounts {
+    /// # Safety-usable invariant
+    /// Performs only bounded scalar operations, with no panic, allocation,
+    /// destructor, callback or allocator reentry. Counters never wrap; losing
+    /// exactness latches saturated. Inactive measurements remain unchanged.
+    fn record(&mut self, allocs: usize, frees: usize) {
+        if self.active {
+            self.saturated |= self.allocs.checked_add(allocs).is_none()
+                || self.frees.checked_add(frees).is_none();
+            self.allocs = self.allocs.saturating_add(allocs);
+            self.frees = self.frees.saturating_add(frees);
+        }
+    }
+    fn is_quiet(self, unavailable: bool) -> bool {
+        !unavailable && !self.saturated && self.allocs == 0 && self.frees == 0
+    }
+}
+thread_local! {
+    static HEAP_COUNTS: Cell<HeapCounts> = const { Cell::new(HeapCounts {
+        active: false, allocs: 0, frees: 0, saturated: false,
+    }) };
+}
+// A failed TLS access may conceal an active window. Conservatively poison all
+// later observations; never clear this process-wide latch to manufacture a pass.
+static HEAP_UNAVAILABLE: crate::platform::atomic::AtomicBool = crate::platform::atomic::AtomicBool::new(false);
+
+/// # Safety-usable invariant
+/// Cannot unwind or invoke caller code: try_with uses a const no-drop Cell
+/// initializer, the local closure uses Copy Cell operations and HeapCounts::record,
+/// and an unavailable key only performs a valid Relaxed AtomicBool store.
+/// No allocation, pointer access or allocator recursion is introduced here.
+fn count_heap(allocs: usize, frees: usize) {
+    if HEAP_COUNTS.try_with(|cell| {
+        let mut counts = cell.get();
+        counts.record(allocs, frees);
+        cell.set(counts);
+    }).is_err() {
+        HEAP_UNAVAILABLE.store(true, crate::platform::atomic::Ordering::Relaxed);
+    }
+}
+
+// SAFETY: GlobalAlloc requires matching layouts/ownership and no unwinding.
+// Every allocation operation forwards its original arguments directly to System,
+// so blocks retain System identity and its success/failure ownership semantics.
+// count_heap's safety-usable invariant establishes nonpanicking instrumentation;
+// System implements GlobalAlloc's no-unwind contract. No hook calls user code.
+// The inherited alloc_zeroed uses this alloc plus the trait's zeroing default.
+// Measurements are host observations, never a premise that an allocation occurs.
 unsafe impl GlobalAlloc for CountHeap {
-    unsafe fn alloc(&self, l: Layout) -> *mut u8 { WINDOW.with(|w| if w.get() { ALLOCS.with(|v| v.set(v.get()+1)); }); unsafe { System.alloc(l) } }
-    unsafe fn dealloc(&self, p: *mut u8, l: Layout) { WINDOW.with(|w| if w.get() { FREES.with(|v| v.set(v.get()+1)); }); unsafe { System.dealloc(p,l); } }
-    unsafe fn realloc(&self,p:*mut u8,l:Layout,n:usize)->*mut u8 { WINDOW.with(|w| if w.get() { ALLOCS.with(|v| v.set(v.get()+1)); FREES.with(|v| v.set(v.get()+1)); }); unsafe {System.realloc(p,l,n)} }
+    /// # Safety
+    /// The caller must satisfy [`GlobalAlloc::alloc`]. Success returns a new
+    /// System-backed block; null transfers no ownership.
+    unsafe fn alloc(&self, layout: Layout) -> *mut u8 {
+        count_heap(1, 0);
+        // SAFETY: GlobalAlloc::alloc's caller supplies a nonzero valid Layout.
+        // The unchanged size/alignment reach System; its result transfers the
+        // block to the caller or returns null without creating an owner.
+        unsafe { System.alloc(layout) }
+    }
+    /// # Safety
+    /// The caller must satisfy [`GlobalAlloc::dealloc`]. This consumes the
+    /// allocation with its exact layout; no owner remains.
+    unsafe fn dealloc(&self, ptr: *mut u8, layout: Layout) {
+        count_heap(0, 1);
+        // SAFETY: GlobalAlloc::dealloc's caller supplies a currently allocated
+        // block from this allocator and its exact allocation Layout. All blocks
+        // originate from System; the hook neither accesses nor changes them.
+        // Forwarding consumes that allocation once, with no later pointer use.
+        unsafe { System.dealloc(ptr, layout) }
+    }
+    /// # Safety
+    /// The caller must satisfy [`GlobalAlloc::realloc`]. Nonnull success transfers
+    /// the old allocation and returns its replacement; null preserves the old one.
+    unsafe fn realloc(&self, ptr: *mut u8, layout: Layout, new_size: usize) -> *mut u8 {
+        count_heap(1, 1); // operation attempts, even when realloc returns null
+        // SAFETY: GlobalAlloc::realloc's caller supplies a live block and exact
+        // old Layout, nonzero new_size and the required isize-bounded rounded
+        // size. These unchanged arguments satisfy System's identical contract.
+        // Nonnull success consumes the old allocation; null leaves it owned by
+        // the caller. No pointer arithmetic, reference or extra owner is made.
+        unsafe { System.realloc(ptr, layout, new_size) }
+    }
 }
 #[global_allocator] static HEAP: CountHeap = CountHeap;
+struct HeapWindow;
+impl Drop for HeapWindow {
+    fn drop(&mut self) {
+        if HEAP_COUNTS.try_with(|cell| {
+            let mut counts = cell.get();
+            counts.active = false;
+            cell.set(counts);
+        }).is_err() {
+            HEAP_UNAVAILABLE.store(true, crate::platform::atomic::Ordering::Relaxed);
+        }
+    }
+}
+fn measure_heap(f: impl FnOnce()) -> HeapCounts {
+    HEAP_COUNTS.with(|cell| {
+        assert!(!cell.get().active, "heap measurement windows must not nest");
+        cell.set(HeapCounts { active: true, ..HeapCounts::default() });
+    });
+    let guard = HeapWindow;
+    f();
+    drop(guard); // also disables measurement if f unwinds
+    HEAP_COUNTS.with(Cell::get)
+}
 fn heap_window(f: impl FnOnce()) {
-    ALLOCS.with(|v|v.set(0)); FREES.with(|v|v.set(0)); WINDOW.with(|v|v.set(true));
-    f(); WINDOW.with(|v|v.set(false));
-    assert_eq!((ALLOCS.with(Cell::get),FREES.with(Cell::get)),(0,0));
+    let counts = measure_heap(f);
+    let unavailable = HEAP_UNAVAILABLE.load(crate::platform::atomic::Ordering::Relaxed);
+    // Diagnostics and assertion failure occur after the window, never inside
+    // a GlobalAlloc callback. Unknown/saturated measurements cannot pass.
+    assert!(counts.is_quiet(unavailable), "heap activity or invalid measurement: {counts:?}, unavailable={unavailable}");
+}
+
+// [utest->req~ssr-runtime-no-heap~1] Instrumentation control, host observations only.
+#[test]
+fn heap_counter_overflow_and_unavailable_cannot_pass() {
+    let mut counts = HeapCounts { active: true, allocs: usize::MAX, frees: usize::MAX, saturated: false };
+    counts.record(1, 1);
+    assert_eq!((counts.allocs, counts.frees), (usize::MAX, usize::MAX));
+    assert!(counts.saturated);
+    assert!(!counts.is_quiet(false));
+    assert!(!HeapCounts::default().is_quiet(true));
+    assert!(HeapCounts::default().is_quiet(false));
+    let mut inactive = HeapCounts::default();
+    inactive.record(usize::MAX, usize::MAX);
+    assert_eq!(inactive, HeapCounts::default());
+}
+
+// [utest->req~ssr-runtime-no-heap~1] A fixture unwind must not contaminate later windows.
+#[test]
+fn heap_window_disables_on_unwind() {
+    let result = std::panic::catch_unwind(|| measure_heap(|| { let observed = core::hint::black_box(false); assert!(observed, "fixture unwind"); }));
+    assert!(result.is_err());
+    assert!(!HEAP_COUNTS.with(Cell::get).active);
+    heap_window(|| {});
+}
+
+// [utest->req~ssr-runtime-no-heap~1] Exact forwarding/control observation, not a universal allocation claim.
+#[test]
+fn heap_forwarding_observes_all_three_operations() {
+    use crate::test_support::FixtureResult as _;
+    let layout = Layout::from_size_align(8, 8).require_fixture();
+    let grown = Layout::from_size_align(16, 8).require_fixture();
+    let counts = measure_heap(|| {
+        // SAFETY: layout is a valid nonzero Layout; this acquires a System-backed
+        // block or null. No reference is created before checking success.
+        let original = unsafe { HEAP.alloc(layout) };
+        assert!(!original.is_null(), "fixture allocation failed");
+        // SAFETY: original is the live uniquely owned allocation just returned
+        // by HEAP with exact layout; 16 is nonzero and fits the rounded bound.
+        let resized = unsafe { HEAP.realloc(original, layout, 16) };
+        if resized.is_null() {
+            // SAFETY: failed realloc retains original and its unchanged layout;
+            // this is its sole deallocation and no borrow or later access exists.
+            unsafe { HEAP.dealloc(original, layout) };
+        } else {
+            // SAFETY: successful realloc transfers ownership to resized with
+            // size 16 and original alignment 8. grown is that exact layout;
+            // original is no longer used and this consumes the sole owner.
+            unsafe { HEAP.dealloc(resized, grown) };
+        }
+        assert!(!resized.is_null(), "fixture reallocation failed");
+    });
+    assert_eq!((counts.allocs, counts.frees), (2, 2));
+    assert!(!counts.saturated);
+    assert!(!HEAP_UNAVAILABLE.load(crate::platform::atomic::Ordering::Relaxed));
 }
 
     // This is an SDK-owned retained frame, not an iceoryx2 Sample. Genuine

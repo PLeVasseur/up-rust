@@ -25,11 +25,11 @@ use core::fmt;
 use core::marker::PhantomData;
 use core::mem::{self, MaybeUninit};
 use core::ops::Deref;
-use crate::platform::atomic::{AtomicU32, AtomicU64, Ordering};
+use crate::platform::atomic::{AtomicU32, Ordering};
 use core::time::Duration;
 
 use super::binding::{
-    copy_frame, BindingRoute, InboundFrame, PayloadBytes, PeerRef, ReplyToken, StaticHeader,
+    copy_frame, BindingRoute, InboundFrame, PayloadBytes, PeerLossOutcome, PeerRef, ReplyToken, StaticHeader,
 };
 use super::envelope::{AdmittedWire, Envelope, ParsedFrame};
 use super::error::{ReceiveError, RouteName, StartupError};
@@ -47,197 +47,10 @@ use crate::uattributes::UMessageType;
 use crate::uri::UUri;
 use crate::wire::{Encoded, InPlace, RuntimeHeap, Wire, WireError, WireMode, WirePayloadIdentity};
 
-/// One entry per remote participant. Incarnations only move forward.
-///
-/// `state` decides who may write the other two words, so an entry never changes
-/// hands while a frame of its peer is being classified. A frame classifies as a
-/// *user* of the entry's current tenure. `forget` only marks the entry retiring;
-/// whoever sees it retiring with no user left frees it, and only then can another
-/// peer claim it. A claim takes the zero peer word by compare-exchange; before it
-/// publishes the entry as owned, `PeerTable::admit` checks that no other entry
-/// holds the same peer, so a peer never ends with two entries (R2-1). For the
-/// length of that check a peer can hold two words, and a third peer's frame can
-/// then be refused once (R3-1, documented on `PeerTable::admit`). The
-/// generation in `state` advances with every free, so a stale reading never
-/// matches a later tenure. Every step is a bounded compare-exchange; nothing waits.
-struct PeerEntry {
-    state: AtomicU64,
-    peer: AtomicU64,
-    incarnation: AtomicU64,
-}
-
-/// Frames of the owning peer being classified right now.
-const PEER_USERS: u64 = u32::MAX as u64;
-/// The words belong to the peer in `peer`.
-const PEER_OWNED: u64 = 1 << 32;
-/// Reported lost: no new user enters, and the last one out frees the entry.
-const PEER_RETIRING: u64 = 1 << 33;
-/// Where the generation starts in `state`.
-const PEER_GENERATION_SHIFT: u32 = 34;
-
-/// How the second pass of `admit` fared on one entry.
-enum PeerClaim {
-    /// This frame holds the free entry's peer word for its peer. The entry is not
-    /// owned yet: the caller publishes it, or gives it back.
-    Won,
-    /// The same peer owns this entry, or is claiming it right now.
-    SamePeer,
-    /// The entry serves another peer, or is between tenures.
-    Taken,
-}
-
-impl PeerEntry {
-    const fn new() -> Self {
-        Self {
-            state: AtomicU64::new(0),
-            peer: AtomicU64::new(0),
-            incarnation: AtomicU64::new(0),
-        }
-    }
-
-    /// Enters as a user if `peer` owns this entry and it is not retiring.
-    fn enter(&self, peer: u64) -> bool {
-        let mut state = self.state.load(Ordering::Acquire);
-        loop {
-            if state & (PEER_OWNED | PEER_RETIRING) != PEER_OWNED
-                || state & PEER_USERS == PEER_USERS
-            {
-                return false;
-            }
-            // Written before `PEER_OWNED` was published, and fixed for the tenure:
-            // if the entry was freed since, `state` has moved and the exchange fails.
-            if self.peer.load(Ordering::Relaxed) != peer {
-                return false;
-            }
-            match self.state.compare_exchange_weak(
-                state,
-                state.wrapping_add(1),
-                Ordering::AcqRel,
-                Ordering::Acquire,
-            ) {
-                Ok(_) => return true,
-                Err(actual) => state = actual,
-            }
-        }
-    }
-
-    /// Leaves; the last user out of a retiring entry frees it.
-    fn leave(&self) {
-        let previous = self.state.fetch_sub(1, Ordering::AcqRel);
-        if previous & PEER_RETIRING != 0 && previous & PEER_USERS == 1 {
-            self.free(previous);
-        }
-    }
-
-    /// Classifies a frame of the owning peer, as a user of this entry.
-    fn admit_known(&self, peer: PeerRef) -> Option<Result<PeerAdmission, ReceiveError>> {
-        if !self.enter(peer.peer) {
-            return None;
-        }
-        let admission = PeerTable::classify(self, peer);
-        self.leave();
-        Some(admission)
-    }
-
-    /// Takes this entry's peer word for `peer` if the entry is free. On `Won` the
-    /// entry is not owned yet: see [`PeerTable::admit`].
-    fn claim(&self, peer: PeerRef) -> PeerClaim {
-        let state = self.state.load(Ordering::Acquire);
-        if state & (PEER_OWNED | PEER_RETIRING | PEER_USERS) != 0 {
-            // Owned by this same peer since `admit_known` looked: classify there.
-            if state & (PEER_OWNED | PEER_RETIRING) == PEER_OWNED
-                && self.peer.load(Ordering::Relaxed) == peer.peer
-            {
-                return PeerClaim::SamePeer;
-            }
-            return PeerClaim::Taken;
-        }
-        // Sequentially consistent, as is the read in `holds`: of two claimers of
-        // one peer on two entries, each takes its word before it reads the
-        // other's, so at least one of them sees the other and gives its entry back.
-        match self
-            .peer
-            .compare_exchange(0, peer.peer, Ordering::SeqCst, Ordering::Acquire)
-        {
-            Ok(_) => PeerClaim::Won,
-            Err(actual) if actual == peer.peer => PeerClaim::SamePeer,
-            Err(_) => PeerClaim::Taken,
-        }
-    }
-
-    /// Publishes a won claim: the entry is owned by `peer` from here on.
-    fn publish(&self, peer: PeerRef) {
-        // A zero peer word means a free entry (`free` clears it last), and only
-        // the thread holding the peer word moves a free entry on: this one.
-        let free = self.state.load(Ordering::Acquire);
-        self.incarnation.store(peer.incarnation, Ordering::Relaxed);
-        self.state.store(free | PEER_OWNED, Ordering::Release);
-    }
-
-    /// Gives a won claim back unpublished. Only an owned entry admits users, so
-    /// nothing entered this one: it is free again, as it was.
-    fn give_back(&self) {
-        self.peer.store(0, Ordering::Release);
-    }
-
-    /// Whether this entry holds `peer`'s word outside a retirement: owned, or
-    /// claimed and not yet published. An entry being freed looks the same for a
-    /// moment; mistaking it costs a frame its entry, never a second one.
-    fn holds(&self, peer: u64) -> bool {
-        // A read-modify-write that adds nothing, so it reads the latest word, and
-        // the argument in `claim` does not rest on which older store a load may
-        // read. A sequentially consistent load would do in the language's model,
-        // but the zero a claim replaces is a release store, and Miri lets such a
-        // load read that zero after the claim, which the model forbids. It
-        // writes back the word it read.
-        self.peer.fetch_add(0, Ordering::SeqCst) == peer
-            && self.state.load(Ordering::SeqCst) & PEER_RETIRING == 0
-    }
-
-    /// Starts retiring this entry if `peer` owns it. Frees it now when no frame of
-    /// that peer is being classified; otherwise the last one out does.
-    fn retire(&self, peer: u64) {
-        let mut state = self.state.load(Ordering::Acquire);
-        loop {
-            if state & (PEER_OWNED | PEER_RETIRING) != PEER_OWNED {
-                return;
-            }
-            if self.peer.load(Ordering::Relaxed) != peer {
-                return;
-            }
-            match self.state.compare_exchange_weak(
-                state,
-                state | PEER_RETIRING,
-                Ordering::AcqRel,
-                Ordering::Acquire,
-            ) {
-                Ok(_) => {
-                    if state & PEER_USERS == 0 {
-                        self.free(state);
-                    }
-                    return;
-                }
-                Err(actual) => state = actual,
-            }
-        }
-    }
-
-    /// Frees the entry for its next tenure. Exactly one party calls this per
-    /// tenure: the one that saw the entry retiring with no user left.
-    fn free(&self, state: u64) {
-        let generation = (state >> PEER_GENERATION_SHIFT).wrapping_add(1);
-        self.incarnation.store(0, Ordering::Relaxed);
-        self.state
-            .store(generation << PEER_GENERATION_SHIFT, Ordering::Release);
-        // Last, so that a zero peer word always means a free entry.
-        self.peer.store(0, Ordering::Release);
-    }
-}
-
 /// A fixed table of the peers seen on one route.
 #[doc(hidden)]
 pub struct PeerTable {
-    entries: &'static [PeerEntry],
+    metadata: super::metadata::PeerMetadata,
 }
 
 impl fmt::Debug for PeerTable {
@@ -258,151 +71,40 @@ pub enum PeerAdmission {
 }
 
 impl PeerTable {
-    /// A table for `max_peers` peers, placed in `memory`.
-    ///
+    /// Places the fixed full-identity table in startup memory.
     /// # Errors
-    /// Refuses when memory is exhausted.
-    pub fn new_in(
-        memory: &crate::memory::StartupMemory,
-        max_peers: usize,
-    ) -> Result<Self, crate::memory::StartupError> {
-        let count = max_peers.max(1);
-        let mut entries = memory.fixed_vec::<PeerEntry>(count)?;
-        for _ in 0..count {
-            entries.push(PeerEntry::new())?;
-        }
-        Ok(Self {
-            entries: entries.into_static_slice(),
-        })
+    /// Refuses insufficient startup memory. The target image owns exclusion.
+    pub fn new_in(memory: &crate::memory::StartupMemory, max_peers: usize) -> Result<Self, crate::memory::StartupError> {
+        Ok(Self { metadata: super::metadata::PeerMetadata::new_in(memory, max_peers)? })
     }
-
-    /// Admits `peer`, classifying the frame as current, restarted or stale.
-    ///
-    /// A peer never keeps two entries, but it can hold two for a moment. When two
-    /// of its first frames race and an entry comes free during the race (another
-    /// peer reported lost, or a claim given back), each frame can claim an entry.
-    /// The peer then holds two words until the later claimer's check sees the
-    /// other and gives its entry back, which is the length of one scan of the
-    /// table. In that moment a frame of a third peer can find no entry free. It is
-    /// refused `PeerTableFull` and counted in the route's `refused`, and that
-    /// peer's next frame, once the claim is given back, is admitted. On a table
-    /// sized exactly to its peers, this one transient refusal is what a peer that
-    /// reconnects at once can cost another (R3-1).
-    ///
+    /// Classifies a full peer incarnation before any payload slot is claimed.
     /// # Errors
-    /// `StalePeer` for an older incarnation, `PeerTableFull` when no entry is free.
-    pub fn admit(&self, peer: PeerRef) -> Result<PeerAdmission, ReceiveError> {
-        if peer.peer == 0 {
-            return Ok(PeerAdmission::Unchecked);
-        }
-        // Look for the peer first: `forget` leaves holes, and a known peer must
-        // not take a hole ahead of its own entry.
-        for entry in self.entries {
-            if let Some(admission) = entry.admit_known(peer) {
-                return admission;
-            }
-        }
-        for entry in self.entries {
-            // Owned by this peer since the first pass looked: no second entry.
-            if let Some(admission) = entry.admit_known(peer) {
-                return admission;
-            }
-            match entry.claim(peer) {
-                PeerClaim::Won => {
-                    // This scan is not atomic: an entry it passed as taken may have
-                    // been freed and claimed for the same peer since, by a frame
-                    // that came after it (R2-1). Of two such claims at least one
-                    // sees the other here; it gives its entry back and classifies
-                    // against the other, so the peer never keeps two entries.
-                    let other = self
-                        .entries
-                        .iter()
-                        .any(|other| !core::ptr::eq(other, entry) && other.holds(peer.peer));
-                    if other {
-                        entry.give_back();
-                        return self
-                            .entries
-                            .iter()
-                            .find_map(|other| other.admit_known(peer))
-                            .unwrap_or(Ok(PeerAdmission::Current));
-                    }
-                    entry.publish(peer);
-                    return Ok(PeerAdmission::Current);
-                }
-                // A first sighting racing another first sighting of the same peer.
-                PeerClaim::SamePeer => {
-                    return entry
-                        .admit_known(peer)
-                        .unwrap_or(Ok(PeerAdmission::Current));
-                }
-                PeerClaim::Taken => {}
-            }
-        }
-        Err(ReceiveError::PeerTableFull)
-    }
-
-    /// Only a user of `entry`'s current tenure calls this, so the entry cannot be
-    /// freed or change hands while this raises its incarnation.
-    fn classify(entry: &PeerEntry, peer: PeerRef) -> Result<PeerAdmission, ReceiveError> {
-        let previous = entry
-            .incarnation
-            .fetch_max(peer.incarnation, Ordering::AcqRel);
-        match previous.cmp(&peer.incarnation) {
-            // Nothing recorded: the peer was first seen at incarnation 0. Its
-            // first numbered incarnation is a first sighting, not a restart.
-            core::cmp::Ordering::Less if previous == 0 => Ok(PeerAdmission::Current),
-            core::cmp::Ordering::Less => Ok(PeerAdmission::Restarted),
-            core::cmp::Ordering::Equal => Ok(PeerAdmission::Current),
-            core::cmp::Ordering::Greater => Err(ReceiveError::StalePeer),
-        }
-    }
-
-    /// Frees the entry of a peer the transport reported gone, so its place can
-    /// serve another peer. Bounded by the table.
-    ///
-    /// Safe to race a frame of that peer being admitted: the frame either is
-    /// classified against the old entry, which is freed only after it, or finds
-    /// the entry gone and is admitted as a first sighting. The next peer to take
-    /// the entry starts from its own incarnation.
-    pub fn forget(&self, peer: PeerRef) {
-        if peer.peer == 0 {
-            return;
-        }
-        for entry in self.entries {
-            entry.retire(peer.peer);
-        }
-    }
-
-    /// Records a peer event reported by the transport; true if it was a restart.
-    pub fn admit_event(&self, peer: PeerRef) -> bool {
-        matches!(self.admit(peer), Ok(PeerAdmission::Restarted))
-    }
-
-    /// The highest incarnation recorded so far, for calls being reserved.
+    /// Returns StalePeer or genuine PeerTableFull, never observer saturation.
+    pub fn admit(&self, peer: PeerRef) -> Result<PeerAdmission, ReceiveError> { self.metadata.admit(peer) }
+    /// Compatibility notification: removes only this exact nonzero identity.
+    /// Use `forget_exact` when the caller must observe whether anything was removed.
+    /// Unknown identities are not wildcards.
+    pub fn forget(&self, peer: PeerRef) { let _ = self.forget_exact(peer); }
+    /// Removes only this exact nonzero identity in one metadata region.
+    /// Returns whether that entry was removed. Unknown identities are not wildcards.
     #[must_use]
-    pub fn latest(&self) -> u64 {
-        self.entries
-            .iter()
-            .map(|entry| entry.incarnation.load(Ordering::Acquire))
-            .max()
-            .unwrap_or(0)
-    }
-
-    /// Test hook: makes free entry 0 owned by `peer` with no incarnation recorded,
-    /// as for a peer first seen at incarnation 0.
+    pub fn forget_exact(&self, peer: PeerRef) -> bool { self.metadata.forget(peer) }
+    /// Records an event and reports whether this operation advanced a known peer.
+    pub fn admit_event(&self, peer: PeerRef) -> bool { matches!(self.admit(peer), Ok(PeerAdmission::Restarted)) }
+    /// Returns the full highest incarnation in one table scan.
+    #[must_use]
+    pub fn latest(&self) -> u64 { self.metadata.latest() }
+    /// Copies the sole fully identified peer, or `PeerRef::UNKNOWN` when empty,
+    /// ambiguous or not yet at a nonzero incarnation. No arbitrary peer is selected.
+    /// The copy may immediately become stale; it confers no lifetime, actual
+    /// delivery-destination, loss-notification or storage authority. RpcClient
+    /// does not use this observation to bind a call to a send destination.
+    #[must_use]
+    pub fn single_peer(&self) -> PeerRef { self.metadata.single_peer() }
+    /// Test hook for a first sighting at zero incarnation.
     #[doc(hidden)]
     #[cfg(up_rust_test_hooks)]
-    pub fn __claim_first_entry(&self, peer: u64) {
-        let first = PeerRef {
-            peer,
-            incarnation: 0,
-        };
-        if let Some(entry) = self.entries.first() {
-            if let PeerClaim::Won = entry.claim(first) {
-                entry.publish(first);
-            }
-        }
-    }
+    pub fn __claim_first_entry(&self, peer: u64) { let _ = self.admit(PeerRef { peer, incarnation: 0 }); }
 }
 
 // The monitor lives in separately allocated, exclusively armed startup storage.
@@ -556,7 +258,16 @@ impl RxCommon {
     pub(crate) fn queue_arrived(&self, sampled: Monotonic) {
         self.monitor.arrival(sampled.0, &self.counters.deadline_missed);
         // Unconditional after the wrapper: successful rearm may return false.
-        // No second counter add. A delayed arrival winner remains a J obligation.
+        // The full report is already committed; the legacy mirror and wake
+        // remain separate visibility/J obligations. No second counter add.
+        self.shared.notify_deadline_service();
+        self.shared.notify();
+    }
+
+    pub(crate) fn queue_arrival_sample_missing(&self) {
+        self.monitor.sample_missing();
+        // Wake only after the protected record borrow has ended. Platform and
+        // binding callbacks never execute inside the metadata exclusion interval.
         self.shared.notify_deadline_service();
         self.shared.notify();
     }
@@ -1767,8 +1478,11 @@ impl<T: Send + Sync + 'static, M: WireMode> InboundDispatch for TypedInbound<T, 
         self.common.wake_waiters();
     }
 
-    fn peer_lost(&'static self, peer: PeerRef) {
-        self.common.peers.forget(peer);
+    fn peer_lost(&'static self, peer: PeerRef) -> PeerLossOutcome {
+        PeerLossOutcome::Applied {
+            peer_removed: self.common.peers.forget_exact(peer),
+            calls_failed: 0,
+        }
     }
 
     fn common(&self) -> &RxCommon { &self.common }
@@ -1931,7 +1645,7 @@ pub(crate) trait InboundDispatch: Send + Sync {
 
     fn peer_restarted(&'static self, _peer: PeerRef) {}
 
-    fn peer_lost(&'static self, _peer: PeerRef) {}
+    fn peer_lost(&'static self, _peer: PeerRef) -> PeerLossOutcome { PeerLossOutcome::Unsupported }
 
     /// Applies deadlines. Returns how many completed with an error.
     fn service(&'static self, _now: Monotonic) -> usize {
