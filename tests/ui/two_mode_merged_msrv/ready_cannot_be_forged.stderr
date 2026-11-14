@@ -1,0 +1,7 @@
+error[E0451]: fields `value` and `_lifetime` of struct `up_rust::two_mode::Ready` are private
+ --> tests/ui/two_mode_merged_msrv/ready_cannot_be_forged.rs:6:21
+  |
+6 |     let _ = Ready { value: &mut value, _lifetime: std::marker::PhantomData };
+  |                     ^^^^^              ^^^^^^^^^ private field
+  |                     |
+  |                     private field

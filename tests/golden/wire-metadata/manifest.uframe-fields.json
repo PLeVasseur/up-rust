@@ -1,0 +1,74 @@
+[
+  {
+    "file": "publish-no-payload.uframe-fields.hex",
+    "fixture": "publish-no-payload",
+    "hex_sha256": "fa28791273b4922908c0eeff80f64ec0c818c77840666fcaf13651849657d58d",
+    "len": 60,
+    "profile": "uframe-fields",
+    "sha256": "63ce0bb36948bd2b07699ea280c16b455baea2ba33d643177fdf993db7e3322f"
+  },
+  {
+    "file": "publish-raw-payload.uframe-fields.hex",
+    "fixture": "publish-raw-payload",
+    "hex_sha256": "6043543b57ee173dc957ac25326d2607738cecce7aa887b7b0f233dbb9554b5d",
+    "len": 64,
+    "profile": "uframe-fields",
+    "sha256": "96dba0e8652fec11466b7ac44eabcd1113c84f8b807888cf1c47ed4abf37e6b0"
+  },
+  {
+    "file": "publish-private-use-payload.uframe-fields.hex",
+    "fixture": "publish-private-use-payload",
+    "hex_sha256": "b841499016a0167cdcb0aad93ce8160b7a2f212ff017b9a344ad9809477c05f9",
+    "len": 64,
+    "profile": "uframe-fields",
+    "sha256": "9ba48acaab54f86a25816badbbcfe6bb3008d01baf6df74825d942d294a90375"
+  },
+  {
+    "file": "notification.uframe-fields.hex",
+    "fixture": "notification",
+    "hex_sha256": "759a3714a4c656e7cd0ebef34c555152d0034facc2dc867e19b06dceace2186e",
+    "len": 73,
+    "profile": "uframe-fields",
+    "sha256": "ee44fc0465f7c5e33878ee9fbe6e50ba6949055cf29f15ec9046b3840b66bfe7"
+  },
+  {
+    "file": "request.uframe-fields.hex",
+    "fixture": "request",
+    "hex_sha256": "f8b712a3d326ef85defd2a8a47a6e41ebb637159ee0e4f13ab2a4df04060b1bd",
+    "len": 81,
+    "profile": "uframe-fields",
+    "sha256": "6d03b5f5a91a02c57ef320df2b70c865155f73729e3fa25e9a177a1807e419ce"
+  },
+  {
+    "file": "response.uframe-fields.hex",
+    "fixture": "response",
+    "hex_sha256": "aecf23a89deccda2f2f3eb05956f8da00022125f509d25b8d4e5c772f3ca1e13",
+    "len": 89,
+    "profile": "uframe-fields",
+    "sha256": "0690643f03e3acd9e5f13cd8eb25a2aced9cca5ae05e4217e83f884167e21252"
+  },
+  {
+    "file": "publish-native-private-token.uframe-fields.hex",
+    "fixture": "publish-native-private-token",
+    "hex_sha256": "c03940393b9ed969ffb5ebba47a6d844cb78d041073301bd02fb82cb52695231",
+    "len": 68,
+    "profile": "uframe-fields",
+    "sha256": "dd0d7be4bf680efa3c55b9905009809eaf3a61371bd4baa669bb3955859917b7"
+  },
+  {
+    "file": "publish-native-contract-token-zero.uframe-fields.hex",
+    "fixture": "publish-native-contract-token-zero",
+    "hex_sha256": "ad58be3d458a310837a4646442ce1f8829b35aeee40dcf0df14b6ef1f3a836a3",
+    "len": 68,
+    "profile": "uframe-fields",
+    "sha256": "14bbd0344d16e3463c7a45a5378138cd1f7e022d8538447db479294df87d99c9"
+  },
+  {
+    "file": "publish-explicit-zero-ttl.uframe-fields.hex",
+    "fixture": "publish-explicit-zero-ttl",
+    "hex_sha256": "a2b2a9abdb69c59aa012e21a7d26ba4c14973b698aea5b9f47e7712e21683e68",
+    "len": 68,
+    "profile": "uframe-fields",
+    "sha256": "cf3fa78894f781e31aaaf3be8f0ad63822c321b63f91016df4acbdaee60223c0"
+  }
+]

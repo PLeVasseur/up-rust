@@ -13,6 +13,7 @@
 
 // [impl->dsn~communication-layer-impl-default~1]
 
+use crate::prelude::*;
 use std::sync::Arc;
 
 use async_trait::async_trait;
@@ -30,6 +31,12 @@ use crate::{
 pub struct SimpleNotifier<T, P> {
     transport: Arc<T>,
     uri_provider: Arc<P>,
+}
+
+impl<T, P> core::fmt::Debug for SimpleNotifier<T, P> {
+    fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
+        f.debug_struct("SimpleNotifier").finish_non_exhaustive()
+    }
 }
 
 impl<T: UTransport, P: LocalUriProvider> SimpleNotifier<T, P> {
@@ -112,7 +119,9 @@ mod tests {
     };
 
     fn new_uri_provider() -> Arc<StaticUriProvider> {
-        Arc::new(StaticUriProvider::new("", 0x0005, 0x02).expect("failed to create URI Provider"))
+        Arc::new(
+            StaticUriProvider::new("", 0x0001_0005, 0x02).expect("failed to create URI Provider"),
+        )
     }
 
     #[tokio::test]
@@ -122,7 +131,7 @@ mod tests {
         let uri_provider = new_uri_provider();
         let notifier = SimpleNotifier::new(Arc::new(transport), uri_provider);
 
-        let invalid_topic = UUri::try_from("up://my-vin/A15B/1/FFFF").unwrap();
+        let invalid_topic = UUri::try_from("up://my-vin/A15B/1/1/FFFF").unwrap();
         let mut listener = MockUListener::new();
         listener.expect_on_receive().never();
         let wrapped_listener = Arc::new(listener);
@@ -141,7 +150,7 @@ mod tests {
     #[tokio::test]
     async fn test_start_listening_succeeds() {
         let uri_provider = new_uri_provider();
-        let topic = UUri::try_from("up://my-vin/A15B/1/B10F").unwrap();
+        let topic = UUri::try_from("up://my-vin/A15B/1/1/B10F").unwrap();
         let expected_source_filter = topic.clone();
         let expected_sink_filter = uri_provider.get_source_uri();
         let mut transport = MockTransport::new();
@@ -164,7 +173,7 @@ mod tests {
     #[tokio::test]
     async fn test_stop_listening_succeeds() {
         let uri_provider = new_uri_provider();
-        let topic = UUri::try_from("up://my-vin/A15B/1/B10F").unwrap();
+        let topic = UUri::try_from("up://my-vin/A15B/1/1/B10F").unwrap();
         let expected_source_filter = topic.clone();
         let expected_sink_filter = uri_provider.get_source_uri();
         let mut transport = MockTransport::new();
@@ -190,7 +199,7 @@ mod tests {
         let value = b"Hello";
 
         let uri_provider = new_uri_provider();
-        let destination = UUri::try_from("up://other-vin/A15B/1/0").unwrap();
+        let destination = UUri::try_from("up://other-vin/A15B/1/1/0").unwrap();
         let expected_message_id = message_id.clone();
         let expected_sink = destination.clone();
         let expected_source = uri_provider.get_resource_uri(0xB10F);
@@ -210,7 +219,7 @@ mod tests {
             .return_const(Ok(()));
         let notifier = SimpleNotifier::new(Arc::new(transport), uri_provider);
 
-        let payload = UPayload::new(value.as_slice(), crate::UPayloadFormat::Raw);
+        let payload = UPayload::new(value.as_slice(), crate::PayloadEncoding::RAW);
         let options =
             CallOptions::for_notification(Some(10_000), Some(message_id), Some(UPriority::CS2));
         let result = notifier
@@ -222,7 +231,7 @@ mod tests {
     #[tokio::test]
     async fn test_publish_fails_for_transport_error() {
         let uri_provider = new_uri_provider();
-        let destination = UUri::try_from("up://other-vin/A15B/1/0").unwrap();
+        let destination = UUri::try_from("up://other-vin/A15B/1/1/0").unwrap();
         let mut transport = MockTransport::new();
         transport
             .expect_do_send()
@@ -236,7 +245,7 @@ mod tests {
         let options = CallOptions::for_notification(None, None, None);
         let result = notifier.notify(0xB10F, &destination, options, None).await;
         assert!(result.is_err_and(|e| match e {
-            NotificationError::NotifyError(status) => status.get_code() == UCode::Unavailable,
+            NotificationError::NotifyError(status) => status.code() == UCode::Unavailable,
             _ => false,
         }));
     }
@@ -245,7 +254,7 @@ mod tests {
     async fn test_publish_fails_for_invalid_destination() {
         let uri_provider = new_uri_provider();
         // destination has resource ID != 0
-        let destination = UUri::try_from("up://other-vin/A15B/1/10").unwrap();
+        let destination = UUri::try_from("up://other-vin/A15B/1/1/10").unwrap();
         let mut transport = MockTransport::new();
         transport.expect_do_send().never();
         let notifier = SimpleNotifier::new(Arc::new(transport), uri_provider);
@@ -258,7 +267,7 @@ mod tests {
     #[tokio::test]
     async fn test_publish_fails_for_invalid_resource_id() {
         let uri_provider = new_uri_provider();
-        let destination = UUri::try_from("up://other-vin/A15B/1/0").unwrap();
+        let destination = UUri::try_from("up://other-vin/A15B/1/1/0").unwrap();
         let mut transport = MockTransport::new();
         transport.expect_do_send().never();
         let notifier = SimpleNotifier::new(Arc::new(transport), uri_provider);

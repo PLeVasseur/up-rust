@@ -1,0 +1,39 @@
+error[E0277]: the trait bound `NoWire: RoleWire<u32, Encoded>` is not satisfied
+ --> tests/ui/two_mode_merged/no_wire_chosen.rs:5:59
+  |
+5 |     let _ = Publisher::<u32>::on(setup, provider, 0x8001).build();
+  |                                                           ^^^^^ the trait `up_rust::two_mode::Wire<u32>` is not implemented for `NoWire`
+  |
+help: the following other types implement trait `up_rust::two_mode::Wire<T>`
+ --> src/test_util/wires.rs
+  |
+  | impl Wire<DoorState> for DoorWire {
+  | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ `DoorWire`
+...
+  | impl Wire<DoorState> for LittleDoorWire {
+  | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ `LittleDoorWire`
+...
+  | impl Wire<DoorState> for AllocatingWire {
+  | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ `AllocatingWire`
+...
+  | impl Wire<DoorState> for VariableDoorWire {
+  | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ `VariableDoorWire`
+  = note: required for `NoWire` to implement `RoleWire<u32, Encoded>`
+note: required by a bound in `PublisherBuilder::<'a, T, W>::build`
+ --> core/src/communication/two_mode.rs
+  |
+  |               pub fn build<M: WireMode>(self) -> Result<$setup<T, M>, StartupError>
+  |                      ----- required by a bound in this associated function
+  |               where
+  |                   W: RoleWire<T, M>,
+  |                      ^^^^^^^^^^^^^^ required by this bound in `PublisherBuilder::<'a, T, W>::build`
+...
+  | / send_role! {
+  | |     /// Publishes events to subscribers of this entity's topic.
+  | |     ///
+  | |     /// Stored handles name domain types only (R28): `Publisher<DoorState>`.
+  | |     Publisher, PublisherSetup, PublisherBuilder, publish, publish_using, publish_encoded,
+  | |     publish_with, UMessageType::Publish
+  | | }
+  | |_- in this macro invocation
+  = note: this error originates in the macro `send_role` (in Nightly builds, run with -Z macro-backtrace for more info)

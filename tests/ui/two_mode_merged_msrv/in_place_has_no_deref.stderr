@@ -1,0 +1,5 @@
+error[E0614]: type `up_rust::two_mode::Received<u32, up_rust::two_mode::InPlace>` cannot be dereferenced
+ --> tests/ui/two_mode_merged_msrv/in_place_has_no_deref.rs:5:5
+  |
+5 |     *frame
+  |     ^^^^^^ can't be dereferenced

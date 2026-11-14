@@ -1,0 +1,15 @@
+error[E0382]: borrow of moved value: `setup`
+ --> tests/ui/two_mode_merged/carrier_route_after_enter_runtime.rs:6:13
+  |
+4 | fn late_route(setup: TransportSetup, route: &CarrierRoute<'_>) {
+  |               ----- move occurs because `setup` has type `up_rust::two_mode::TransportSetup`, which does not implement the `Copy` trait
+5 |     let _runtime = setup.enter_runtime();
+  |                          --------------- `setup` moved due to this method call
+6 |     let _ = setup.carrier_ingress(route);
+  |             ^^^^^ value borrowed here after move
+  |
+note: `up_rust::two_mode::TransportSetup::enter_runtime` takes ownership of the receiver `self`, which moves `setup`
+ --> core/src/transport/mode.rs
+  |
+  |     pub fn enter_runtime(self) -> Result<TransportRuntime, StartupError> {
+  |                          ^^^^

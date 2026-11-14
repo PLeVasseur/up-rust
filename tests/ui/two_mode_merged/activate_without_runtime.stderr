@@ -1,0 +1,25 @@
+error[E0061]: this method takes 1 argument but 0 arguments were supplied
+ --> tests/ui/two_mode_merged/activate_without_runtime.rs:5:23
+  |
+5 |     let _ = publisher.activate();
+  |                       ^^^^^^^^-- argument #1 of type `&TransportRuntime` is missing
+  |
+note: method defined here
+ --> core/src/communication/two_mode.rs
+  |
+  |               pub fn activate(self, runtime: &TransportRuntime) -> Result<$name<T, M>, StartupError> {
+  |                      ^^^^^^^^
+...
+  | / send_role! {
+  | |     /// Publishes events to subscribers of this entity's topic.
+  | |     ///
+  | |     /// Stored handles name domain types only (R28): `Publisher<DoorState>`.
+  | |     Publisher, PublisherSetup, PublisherBuilder, publish, publish_using, publish_encoded,
+  | |     publish_with, UMessageType::Publish
+  | | }
+  | |_- in this macro invocation
+  = note: this error originates in the macro `send_role` (in Nightly builds, run with -Z macro-backtrace for more info)
+help: provide the argument
+  |
+5 |     let _ = publisher.activate(/* &TransportRuntime */);
+  |                                +++++++++++++++++++++++

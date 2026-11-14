@@ -1,0 +1,5 @@
+error[E0599]: no method named `invoke_in_place` found for struct `up_rust::two_mode::RpcClientSetup` in the current scope
+ --> tests/ui/two_mode_merged_msrv/call_in_place_before_runtime.rs:6:19
+  |
+6 |     let _ = setup.invoke_in_place(|init| init);
+  |                   ^^^^^^^^^^^^^^^ method not found in `RpcClientSetup<DoorState, DoorState, InPlace>`

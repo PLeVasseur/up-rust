@@ -16,6 +16,7 @@ Types and helpers that allow implementing an Eclipse Symphony&trade; Target Prov
 exposed via the Communication Layer API's `RpcServer`.
 */
 
+use crate::prelude::*;
 use std::{collections::HashMap, sync::Arc};
 
 use async_trait::async_trait;
@@ -25,11 +26,14 @@ use tracing::{debug, error, trace, warn, Level};
 
 use crate::{
     communication::{RequestHandler, RpcServer, ServiceInvocationError, UPayload},
-    UAttributes, UPayloadFormat,
+    PayloadEncoding, UAttributes,
 };
 
+/// Resource id of the symphony `get` method.
 pub const METHOD_GET_RESOURCE_ID: u16 = 0x0001;
+/// Resource id of the symphony `update` method.
 pub const METHOD_UPDATE_RESOURCE_ID: u16 = 0x0002;
+/// Resource id of the symphony `delete` method.
 pub const METHOD_DELETE_RESOURCE_ID: u16 = 0x0003;
 
 /// Registers RPC endpoints for managing a deployment target via Eclipse Symphony's uProtocol
@@ -73,6 +77,7 @@ pub async fn register_target_provider_endpoints<R: RpcServer, T: DeploymentTarge
 
 #[cfg_attr(any(test, feature = "test-util"), mockall::automock)]
 #[async_trait]
+/// Deployment-side hooks a symphony target implements to apply resource changes.
 pub trait DeploymentTarget: Send + Sync {
     /// Retrieves the current status of components within a deployment.
     ///
@@ -133,8 +138,8 @@ pub trait DeploymentTarget: Send + Sync {
 fn extract_request_data(
     request_payload: Option<UPayload>,
 ) -> Result<Value, ServiceInvocationError> {
-    let Some(req_payload) =
-        request_payload.filter(|req_payload| req_payload.payload_format() == UPayloadFormat::Json)
+    let Some(req_payload) = request_payload
+        .filter(|req_payload| req_payload.payload_encoding() == PayloadEncoding::JSON)
     else {
         return Err(ServiceInvocationError::InvalidArgument(
             "request has no JSON payload".to_string(),
@@ -241,7 +246,7 @@ impl<T: DeploymentTarget> RequestHandler for GetOperation<T> {
                 serde_json::to_string_pretty(&result).expect("failed to serialize Value")
             );
         }
-        let response_payload = UPayload::new(serialized_response_data, UPayloadFormat::Json);
+        let response_payload = UPayload::new(serialized_response_data, PayloadEncoding::JSON);
         Ok(Some(response_payload))
     }
 }
@@ -361,7 +366,7 @@ impl<T: DeploymentTarget> RequestHandler for ApplyOperation<T> {
             ServiceInvocationError::Internal("failed to create response payload".to_string())
         })?;
 
-        let response_payload = UPayload::new(serialized_response_data, UPayloadFormat::Json);
+        let response_payload = UPayload::new(serialized_response_data, PayloadEncoding::JSON);
         Ok(Some(response_payload))
     }
 }
@@ -421,7 +426,7 @@ mod tests {
             source: UUri::try_from_parts("authority", 0x10AA1, 0x01, 0x0000)
                 .expect("failed to create source URI"),
             sink: Some(create_method_uri(resource_id)),
-            payload_format: Some(UPayloadFormat::Json),
+            payload_encoding_id: Some(PayloadEncoding::JSON),
             type_: crate::UMessageType::Request,
             priority: Some(crate::UPriority::CS4),
             permission_level: None,
@@ -461,7 +466,7 @@ mod tests {
         });
         let payload = UPayload::new(
             serde_json::to_vec(&request_data).expect("failed to create request payload"),
-            UPayloadFormat::Json,
+            PayloadEncoding::JSON,
         );
         assert!(get_op
             .handle_request(

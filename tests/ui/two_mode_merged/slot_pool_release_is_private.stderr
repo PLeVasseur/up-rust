@@ -1,0 +1,10 @@
+error[E0624]: method `release` is private
+ --> tests/ui/two_mode_merged/slot_pool_release_is_private.rs:6:10
+  |
+6 |     pool.release(first.index());
+  |          ^^^^^^^ private method
+  |
+ ::: core/src/transport/slots.rs
+  |
+  |     fn release(&self, index: u32) {
+  |     ----------------------------- private method defined here

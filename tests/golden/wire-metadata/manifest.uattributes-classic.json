@@ -1,0 +1,18 @@
+[
+  {
+    "file": "classic-publish-raw-payload.uattributes-classic.hex",
+    "fixture": "classic-publish-raw-payload",
+    "hex_sha256": "29d7e6c67226cb951870599a7294a695bd90710d2364dc2a91b968808af963b9",
+    "len": 47,
+    "profile": "uattributes-classic",
+    "sha256": "dbbca1858e687b1895ccf9660814e8b0cf064fd004eeb4758a2b6e3a93c977ed"
+  },
+  {
+    "file": "classic-publish-private-use-xcdr2-payload.uattributes-classic.hex",
+    "fixture": "classic-publish-private-use-xcdr2-payload",
+    "hex_sha256": "26a520e15eb05c0c4995e0acbac65fbfbbc8251446b3c6ea8095d24172e59161",
+    "len": 49,
+    "profile": "uattributes-classic",
+    "sha256": "45cb913e0c80ced792b1f9df1c3637517464e84d9d8a89535d8994528bf6328b"
+  }
+]

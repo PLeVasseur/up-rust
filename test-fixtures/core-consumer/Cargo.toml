@@ -1,0 +1,19 @@
+# SPDX-License-Identifier: Apache-2.0
+#
+# Compile-time gate for re-check finding R5: a crate that depends only on
+# up-rust-core and up-rust-macros, on the core-only ASIL path. It is checked by
+# tools/ci/check_core_gates.py and is not published.
+[package]
+name = "up-rust-core-consumer"
+version = "0.0.0"
+edition = "2021"
+rust-version = "1.88"
+publish = false
+license = "Apache-2.0"
+
+[dependencies]
+up-rust-core = { version = "0.10.0-SNAPSHOT", path = "../../core" }
+up-rust-macros = { version = "0.10.0-SNAPSHOT", path = "../../macros" }
+
+[lints]
+workspace = true

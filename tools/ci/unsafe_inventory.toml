@@ -1,0 +1,2740 @@
+# Every `unsafe` site in this repository, checked by tools/ci/check_unsafe_inventory.py.
+#
+# A site is identified by its file, its enclosing item and its normalized text.
+# Line numbers are never part of a site's identity.
+#
+# reason = "row:ID"            maps the site to a row of [rows] below, which is
+#                              the design's table of `unsafe` obligations.
+# reason = "test-only: WHY"    is a stated reason for test code. It is refused on
+#                              code outside test_paths and #[cfg(test)] items.
+#
+# When the gate fails: run the script with --update, write a reason for each new
+# entry, and review the change as you would the `unsafe` code itself.
+schema = 1
+
+test_paths = [
+    "tests/*",
+    "benches/*",
+    "test-fixtures/*",
+    "core/tests/*",
+    "core/verify/*",
+    "src/test_util/*",
+    "src/bench_fixtures/*",
+    "*/tests.rs",
+]
+
+[rows]
+binding-ffi = "A binding's own FFI or shared-memory code"
+carrier-slots = "Carrier ingress slots and `ParkedFrame`: one owner by index; a retained frame stays in its slot until the slot is released"
+envelope-writers = "Envelope writers (`as_uninit_mut`)"
+header-writers = "`frame/header.rs` uninitialized writers"
+heap-guard = "`heap_guard`, `heap_guard::c_level`"
+old-inline-dispatch = "Old path, no design row: `InlineFuture` inline erased-future storage for owned-frame and serialized dispatch"
+old-listener-admission = "Old path, no design row: `src/listener_admission.rs`, removed at design 8.2"
+old-zero-copy = "Old path, no design row: `src/zero_copy/{pool,pool_core,token,tx}.rs` slot pool, wipe-on-release and uninit TX buffers"
+platform = "Platform backends"
+prepared-tx = "`PreparedTxStorage`, `InitializedTx::from_initialized`"
+ready-queue = "`ReadyQueue` (`AtomicPtr`)"
+retained-frame = "`RetainedFrame` inline owner (`UnsafeCell` storage)"
+route-wake = "`RouteWake` in core: `Send`, `Sync`, and the hook transmute"
+running-cell = "Running-value cell for `RuntimePort`"
+slot-tables = "Slot tables, `Received<T>` deref, `SlotPool`, their `Send` and `Sync`"
+stable-payload = "`RxAdmission::check_frame`, `StablePayload`, `StablePayloadInit`, derives"
+startup-memory = "`StartupMemory` placement, `FixedVec`, `StaticSlots`' `Sync`"
+startup-region = "`StartupRegion`, `RegionHeader`, `Chain` `Sync`; `up-rust` `startup.rs` `set_len`"
+startup-slot = "`StartupSlot::zeroed`, `unsafe trait ZeroSlot`"
+transport-signal = "`TransportShared.signal` pointer read"
+truncate-payload = "`truncate_payload`"
+waker-cell = "`WakerCell` (`up-rust-tokio`)"
+writer = "`PayloadWriter::as_written`, `zeroed`"
+
+[[site]]
+file = "benches/payload_contract.rs"
+item = "main"
+text = "unsafe { InitializedTx::from_initialized(buffer) }"
+reason = "test-only: benchmark over the old prepared paths: assumes a payload it just initialized is initialized"
+
+[[site]]
+file = "benches/payload_contract.rs"
+item = "main"
+text = "unsafe { buffer.assume_payload_initialized() }"
+reason = "test-only: benchmark over the old prepared paths: assumes a payload it just initialized is initialized"
+
+[[site]]
+file = "benches/support/payload_heap_core.rs"
+item = "(file)"
+text = "unsafe impl PreparedTxStorage for HeapTx"
+reason = "test-only: benchmark double: an in-memory PreparedTxStorage for the heap-cost comparison"
+
+[[site]]
+file = "benches/support/payload_heap_core.rs"
+item = "impl Drop for HeapTx::drop"
+text = "unsafe { std::ptr::write_volatile(byte, MaybeUninit::new(0)); }"
+reason = "test-only: benchmark double: an in-memory PreparedTxStorage for the heap-cost comparison"
+
+[[site]]
+file = "benches/support/payload_heap_core.rs"
+item = "impl PreparedTransportCore for HeapCore::publish"
+text = "unsafe { std::slice::from_raw_parts(bytes.as_ptr().cast::<u8>(), bytes.len()) }"
+reason = "test-only: benchmark double: an in-memory PreparedTxStorage for the heap-cost comparison"
+
+[[site]]
+file = "benches/support/payload_heap_core.rs"
+item = "impl PreparedTransportCore for HeapCore::publish"
+text = "unsafe { std::slice::from_raw_parts(frame.bytes.as_ptr().cast::<u8>(), frame.metadata_len) }"
+reason = "test-only: benchmark double: an in-memory PreparedTxStorage for the heap-cost comparison"
+
+[[site]]
+file = "core/src/frame/header.rs"
+item = "write_header"
+text = "unsafe { &mut *(core::ptr::from_mut(out) as *mut [MaybeUninit<u8>]) }"
+reason = "row:header-writers"
+
+[[site]]
+file = "core/src/memory.rs"
+item = "(file)"
+text = "unsafe impl Sync for Chain"
+reason = "row:startup-region"
+
+[[site]]
+file = "core/src/memory.rs"
+item = "(file)"
+text = "unsafe impl Sync for RegionHeader"
+reason = "row:startup-region"
+
+[[site]]
+file = "core/src/memory.rs"
+item = "(file)"
+text = "unsafe impl<const N: usize> Sync for StartupRegion<N>"
+reason = "row:startup-region"
+
+[[site]]
+file = "core/src/memory.rs"
+item = "impl FixedVec::as_slice"
+text = "unsafe { core::slice::from_raw_parts(self.slots.as_ptr().cast::<T>(), self.len) }"
+reason = "row:startup-memory"
+
+[[site]]
+file = "core/src/memory.rs"
+item = "impl FixedVec::into_static_slice"
+text = "unsafe { core::slice::from_raw_parts(self.slots.as_ptr().cast::<T>(), self.len) }"
+reason = "row:startup-memory"
+
+[[site]]
+file = "core/src/memory.rs"
+item = "impl Iterator for FixedVecIter::next"
+text = "unsafe { slot.assume_init_read() }"
+reason = "row:startup-memory"
+
+[[site]]
+file = "core/src/memory.rs"
+item = "impl RegionHeader::bump"
+text = "unsafe { self.base.add(start) }"
+reason = "row:startup-region"
+
+[[site]]
+file = "core/src/memory.rs"
+item = "impl RegionHeader::place"
+text = "unsafe { &mut *base.add(offset).cast::<MaybeUninit<RegionHeader>>() }"
+reason = "row:startup-region"
+
+[[site]]
+file = "core/src/memory.rs"
+item = "impl StartupMemory::place"
+text = "unsafe { &mut *ptr.cast::<MaybeUninit<T>>() }"
+reason = "row:startup-memory"
+
+[[site]]
+file = "core/src/memory.rs"
+item = "impl StartupMemory::report"
+text = "unsafe { next.as_ref() }"
+reason = "row:startup-memory"
+
+[[site]]
+file = "core/src/memory.rs"
+item = "impl StartupMemory::reserve"
+text = "unsafe { &*current_ptr }"
+reason = "row:startup-memory"
+
+[[site]]
+file = "core/src/memory.rs"
+item = "impl StartupMemory::slice"
+text = "unsafe { core::slice::from_raw_parts_mut(ptr.cast::<MaybeUninit<T>>(), count) }"
+reason = "row:startup-memory"
+
+[[site]]
+file = "core/src/memory.rs"
+item = "impl StartupMemory::with_region"
+text = "unsafe { &mut *chain_ptr.cast::<MaybeUninit<Chain>>() }"
+reason = "row:startup-region"
+
+[[site]]
+file = "core/src/memory.rs"
+item = "impl StartupRegion::take"
+text = "unsafe { core::slice::from_raw_parts_mut(self.bytes.get().cast::<MaybeUninit<u8>>(), N) }"
+reason = "row:startup-region"
+
+[[site]]
+file = "core/src/payload/loan.rs"
+item = "(file)"
+text = "unsafe fn borrow_trusted<T: StablePayload>(src: &[u8]) -> Result<&T, BorrowError>"
+reason = "row:stable-payload"
+
+[[site]]
+file = "core/src/payload/loan.rs"
+item = "(file)"
+text = "unsafe fn cast_validated<T>(src: &[u8]) -> &T"
+reason = "row:stable-payload"
+
+[[site]]
+file = "core/src/payload/loan.rs"
+item = "borrow_checked"
+text = "unsafe { cast_validated(src) }"
+reason = "row:stable-payload"
+
+[[site]]
+file = "core/src/payload/loan.rs"
+item = "borrow_trusted"
+text = "unsafe { cast_validated(src) }"
+reason = "row:stable-payload"
+
+[[site]]
+file = "core/src/payload/loan.rs"
+item = "cast_validated"
+text = "unsafe { &*src.as_ptr().cast::<T>() }"
+reason = "row:stable-payload"
+
+[[site]]
+file = "core/src/payload/stable.rs"
+item = "(file)"
+text = "unsafe fn finish_stable_payload_init<'a, T>(payload: *mut T) -> InitializedStablePayload<'a, T> where T: StablePayload,"
+reason = "row:stable-payload"
+
+[[site]]
+file = "core/src/payload/stable.rs"
+item = "(file)"
+text = "unsafe fn write_stable_payload_array<T, E, const N: usize, F>(payload: *mut T, offset: usize, mut element: F) where F: FnMut(usize) -> E,"
+reason = "row:stable-payload"
+
+[[site]]
+file = "core/src/payload/stable.rs"
+item = "(file)"
+text = "unsafe fn write_stable_payload_array_from<T, E: Clone, const N: usize>(payload: *mut T, offset: usize, values: &[E; N])"
+reason = "row:stable-payload"
+
+[[site]]
+file = "core/src/payload/stable.rs"
+item = "(file)"
+text = "unsafe fn write_stable_payload_array_pattern<T, E: StablePayloadField, const N: usize>(payload: *mut T, offset: usize, pattern: &[E])"
+reason = "row:stable-payload"
+
+[[site]]
+file = "core/src/payload/stable.rs"
+item = "(file)"
+text = "unsafe fn write_stable_payload_field<T, F>(payload: *mut T, offset: usize, value: F)"
+reason = "row:stable-payload"
+
+[[site]]
+file = "core/src/payload/stable.rs"
+item = "(file)"
+text = "unsafe impl StablePayloadField for bool"
+reason = "row:stable-payload"
+
+[[site]]
+file = "core/src/payload/stable.rs"
+item = "(file)"
+text = "unsafe impl StablePayloadField for char"
+reason = "row:stable-payload"
+
+[[site]]
+file = "core/src/payload/stable.rs"
+item = "(file)"
+text = "unsafe impl<T, const N: usize> StablePayloadField for [T; N] where T: StablePayloadField,"
+reason = "row:stable-payload"
+
+[[site]]
+file = "core/src/payload/stable.rs"
+item = "(file)"
+text = "unsafe trait StablePayload: StablePayloadField+'static"
+reason = "row:stable-payload"
+
+[[site]]
+file = "core/src/payload/stable.rs"
+item = "(file)"
+text = "unsafe trait StablePayloadField: Sized"
+reason = "row:stable-payload"
+
+[[site]]
+file = "core/src/payload/stable.rs"
+item = "finish_stable_payload_init"
+text = "unsafe { &mut *payload }"
+reason = "row:stable-payload"
+
+[[site]]
+file = "core/src/payload/stable.rs"
+item = "impl InitializedStablePayload::as_bytes"
+text = "unsafe { core::slice::from_raw_parts(ptr::from_ref::<T>(self.value).cast::<u8>(), mem::size_of::<T>()) }"
+reason = "row:stable-payload"
+
+[[site]]
+file = "core/src/payload/stable.rs"
+item = "impl StablePayloadInitToken"
+text = "unsafe fn advance<S2>(self) -> StablePayloadInitToken<'a, T, S2>"
+reason = "row:stable-payload"
+
+[[site]]
+file = "core/src/payload/stable.rs"
+item = "impl StablePayloadInitToken"
+text = "unsafe fn new(payload: *mut T) -> Self"
+reason = "row:stable-payload"
+
+[[site]]
+file = "core/src/payload/stable.rs"
+item = "macro_rules! always_valid_field"
+text = "unsafe impl StablePayloadField for $ty"
+reason = "row:stable-payload"
+
+[[site]]
+file = "core/src/payload/stable.rs"
+item = "write_stable_payload_array"
+text = "unsafe { array.add(index).write(element(index)) }"
+reason = "row:stable-payload"
+
+[[site]]
+file = "core/src/payload/stable.rs"
+item = "write_stable_payload_array"
+text = "unsafe { payload.cast::<u8>().add(offset).cast::<E>() }"
+reason = "row:stable-payload"
+
+[[site]]
+file = "core/src/payload/stable.rs"
+item = "write_stable_payload_array_from"
+text = "unsafe { array.add(index).write(value.clone()) }"
+reason = "row:stable-payload"
+
+[[site]]
+file = "core/src/payload/stable.rs"
+item = "write_stable_payload_array_from"
+text = "unsafe { payload.cast::<u8>().add(offset).cast::<E>() }"
+reason = "row:stable-payload"
+
+[[site]]
+file = "core/src/payload/stable.rs"
+item = "write_stable_payload_array_pattern"
+text = "unsafe { payload.cast::<u8>().add(offset).cast::<E>() }"
+reason = "row:stable-payload"
+
+[[site]]
+file = "core/src/payload/stable.rs"
+item = "write_stable_payload_array_pattern"
+text = "unsafe { ptr::copy_nonoverlapping(destination, destination.add(initialized), count); }"
+reason = "row:stable-payload"
+
+[[site]]
+file = "core/src/payload/stable.rs"
+item = "write_stable_payload_array_pattern"
+text = "unsafe { ptr::copy_nonoverlapping(pattern.as_ptr(), destination, initialized); }"
+reason = "row:stable-payload"
+
+[[site]]
+file = "core/src/payload/stable.rs"
+item = "write_stable_payload_field"
+text = "unsafe { payload.cast::<u8>().add(offset).cast::<F>().write(value) }"
+reason = "row:stable-payload"
+
+[[site]]
+file = "core/src/platform/linux.rs"
+item = "errno"
+text = "unsafe { *__errno_location() }"
+reason = "row:platform"
+
+[[site]]
+file = "core/src/platform/linux.rs"
+item = "impl Platform for Native::wait"
+text = "unsafe { syscall(SYS_FUTEX, word_ptr(word), FUTEX_WAIT_BITSET|FUTEX_PRIVATE_FLAG, expected, timeout_ptr, core::ptr::null::<u32>(), FUTEX_BITSET_MATCH_ANY) }"
+reason = "row:platform"
+
+[[site]]
+file = "core/src/platform/linux.rs"
+item = "impl Platform for Native::wake_all"
+text = "unsafe { syscall(SYS_FUTEX, word_ptr(word), FUTEX_WAKE|FUTEX_PRIVATE_FLAG, i32::MAX) }"
+reason = "row:platform"
+
+[[site]]
+file = "core/src/platform/linux.rs"
+item = "impl Platform for Native::wake_one"
+text = "unsafe { syscall(SYS_FUTEX, word_ptr(word), FUTEX_WAKE|FUTEX_PRIVATE_FLAG, 1_i32) }"
+reason = "row:platform"
+
+[[site]]
+file = "core/src/platform/linux.rs"
+item = "impl PlatformInit for Native"
+text = "unsafe fn prefault(&self, ptr: *mut u8, len: usize) -> Result<(), PlatformError>"
+reason = "row:platform"
+
+[[site]]
+file = "core/src/platform/linux.rs"
+item = "impl PlatformInit for Native::entropy"
+text = "unsafe { getrandom(chunk.as_mut_ptr().cast(), chunk.len(), 0) }"
+reason = "row:platform"
+
+[[site]]
+file = "core/src/platform/linux.rs"
+item = "impl PlatformInit for Native::prefault"
+text = "unsafe { mlock(start as *const c_void, aligned_end.wrapping_sub(start)) }"
+reason = "row:platform"
+
+[[site]]
+file = "core/src/platform/linux.rs"
+item = "impl PlatformInit for Native::prefault"
+text = "unsafe { super::touch_pages(ptr as usize, end, mask.wrapping_add(1))? }"
+reason = "row:platform"
+
+[[site]]
+file = "core/src/platform/linux.rs"
+item = "impl PlatformInit for Native::prefault"
+text = "unsafe { sysconf(SC_PAGESIZE) }"
+reason = "row:platform"
+
+[[site]]
+file = "core/src/platform/linux.rs"
+item = "read_clock"
+text = "unsafe { clock_gettime(clock, &mut ts) }"
+reason = "row:platform"
+
+[[site]]
+file = "core/src/platform/macos.rs"
+item = "errno"
+text = "unsafe { *__error() }"
+reason = "row:platform"
+
+[[site]]
+file = "core/src/platform/macos.rs"
+item = "impl Platform for Native::now"
+text = "unsafe { clock_gettime_nsec_np(CLOCK_UPTIME_RAW) }"
+reason = "row:platform"
+
+[[site]]
+file = "core/src/platform/macos.rs"
+item = "impl Platform for Native::unix_time_ms"
+text = "unsafe { clock_gettime(CLOCK_REALTIME, &mut ts) }"
+reason = "row:platform"
+
+[[site]]
+file = "core/src/platform/macos.rs"
+item = "impl Platform for Native::wait"
+text = "unsafe { os_sync_wait_on_address(addr, u64::from(expected), 4, SYNC_FLAGS_NONE) }"
+reason = "row:platform"
+
+[[site]]
+file = "core/src/platform/macos.rs"
+item = "impl Platform for Native::wait"
+text = "unsafe { os_sync_wait_on_address_with_timeout(addr, u64::from(expected), 4, SYNC_FLAGS_NONE, OS_CLOCK_MACH_ABSOLUTE_TIME, remaining) }"
+reason = "row:platform"
+
+[[site]]
+file = "core/src/platform/macos.rs"
+item = "impl Platform for Native::wake_all"
+text = "unsafe { os_sync_wake_by_address_all(word_ptr(word), 4, SYNC_FLAGS_NONE) }"
+reason = "row:platform"
+
+[[site]]
+file = "core/src/platform/macos.rs"
+item = "impl Platform for Native::wake_one"
+text = "unsafe { os_sync_wake_by_address_any(word_ptr(word), 4, SYNC_FLAGS_NONE) }"
+reason = "row:platform"
+
+[[site]]
+file = "core/src/platform/macos.rs"
+item = "impl PlatformInit for Native"
+text = "unsafe fn prefault(&self, ptr: *mut u8, len: usize) -> Result<(), PlatformError>"
+reason = "row:platform"
+
+[[site]]
+file = "core/src/platform/macos.rs"
+item = "impl PlatformInit for Native::entropy"
+text = "unsafe { getentropy(chunk.as_mut_ptr().cast(), chunk.len()) }"
+reason = "row:platform"
+
+[[site]]
+file = "core/src/platform/macos.rs"
+item = "impl PlatformInit for Native::prefault"
+text = "unsafe { getpagesize() }"
+reason = "row:platform"
+
+[[site]]
+file = "core/src/platform/macos.rs"
+item = "impl PlatformInit for Native::prefault"
+text = "unsafe { mlock(start as *const c_void, aligned_end.wrapping_sub(start)) }"
+reason = "row:platform"
+
+[[site]]
+file = "core/src/platform/macos.rs"
+item = "impl PlatformInit for Native::prefault"
+text = "unsafe { super::touch_pages(ptr as usize, end, mask.wrapping_add(1))? }"
+reason = "row:platform"
+
+[[site]]
+file = "core/src/platform/mod.rs"
+item = "(file)"
+text = "unsafe fn touch_pages(start: usize, end: usize, page: usize) -> Result<(), PlatformError>"
+reason = "row:platform"
+
+[[site]]
+file = "core/src/platform/mod.rs"
+item = "touch_pages"
+text = "unsafe { core::ptr::write_volatile(cursor as *mut u8, 0) }"
+reason = "row:platform"
+
+[[site]]
+file = "core/src/platform/mod.rs"
+item = "touch_pages"
+text = "unsafe { core::ptr::write_volatile(end.wrapping_sub(1) as *mut u8, 0) }"
+reason = "row:platform"
+
+[[site]]
+file = "core/src/platform/mod.rs"
+item = "trait PlatformInit"
+text = "unsafe fn prefault(&self, ptr: *mut u8, len: usize) -> Result<(), PlatformError>"
+reason = "row:platform"
+
+[[site]]
+file = "core/src/platform/qnx.rs"
+item = "(file)"
+text = "unsafe impl Sync for Bucket"
+reason = "row:platform"
+
+[[site]]
+file = "core/src/platform/qnx.rs"
+item = "errno"
+text = "unsafe { *__get_errno_ptr() }"
+reason = "row:platform"
+
+[[site]]
+file = "core/src/platform/qnx.rs"
+item = "impl Platform for Native::now"
+text = "unsafe { clock_gettime(CLOCK_MONOTONIC, &mut ts) }"
+reason = "row:platform"
+
+[[site]]
+file = "core/src/platform/qnx.rs"
+item = "impl Platform for Native::unix_time_ms"
+text = "unsafe { clock_gettime(CLOCK_REALTIME, &mut ts) }"
+reason = "row:platform"
+
+[[site]]
+file = "core/src/platform/qnx.rs"
+item = "impl Platform for Native::wait"
+text = "unsafe { pthread_cond_timedwait(bucket.cond.get(), bucket.mutex.get(), abstime) }"
+reason = "row:platform"
+
+[[site]]
+file = "core/src/platform/qnx.rs"
+item = "impl Platform for Native::wait"
+text = "unsafe { pthread_mutex_lock(bucket.mutex.get()); }"
+reason = "row:platform"
+
+[[site]]
+file = "core/src/platform/qnx.rs"
+item = "impl Platform for Native::wait"
+text = "unsafe { pthread_mutex_unlock(bucket.mutex.get()); }"
+reason = "row:platform"
+
+[[site]]
+file = "core/src/platform/qnx.rs"
+item = "impl Platform for Native::wake_all"
+text = "unsafe { pthread_mutex_lock(bucket.mutex.get()); pthread_cond_broadcast(bucket.cond.get()); pthread_mutex_unlock(bucket.mutex.get()); }"
+reason = "row:platform"
+
+[[site]]
+file = "core/src/platform/qnx.rs"
+item = "impl Platform for Native::wake_one"
+text = "unsafe { pthread_mutex_lock(bucket.mutex.get()); pthread_cond_signal(bucket.cond.get()); pthread_mutex_unlock(bucket.mutex.get()); }"
+reason = "row:platform"
+
+[[site]]
+file = "core/src/platform/qnx.rs"
+item = "impl PlatformInit for Native"
+text = "unsafe fn prefault(&self, ptr: *mut u8, len: usize) -> Result<(), PlatformError>"
+reason = "row:platform"
+
+[[site]]
+file = "core/src/platform/qnx.rs"
+item = "impl PlatformInit for Native::entropy"
+text = "unsafe { close(fd) }"
+count = 2
+reason = "row:platform"
+
+[[site]]
+file = "core/src/platform/qnx.rs"
+item = "impl PlatformInit for Native::entropy"
+text = "unsafe { open(c\"/dev/urandom\".as_ptr().cast(), O_RDONLY) }"
+reason = "row:platform"
+
+[[site]]
+file = "core/src/platform/qnx.rs"
+item = "impl PlatformInit for Native::entropy"
+text = "unsafe { read(fd, rest.as_mut_ptr().cast(), rest.len()) }"
+reason = "row:platform"
+
+[[site]]
+file = "core/src/platform/qnx.rs"
+item = "impl PlatformInit for Native::prefault"
+text = "unsafe { core::ptr::write_volatile(cursor as *mut u8, 0) }"
+reason = "row:platform"
+
+[[site]]
+file = "core/src/platform/qnx.rs"
+item = "impl PlatformInit for Native::prefault"
+text = "unsafe { core::ptr::write_volatile(end.wrapping_sub(1) as *mut u8, 0) }"
+reason = "row:platform"
+
+[[site]]
+file = "core/src/platform/qnx.rs"
+item = "impl PlatformInit for Native::prefault"
+text = "unsafe { mlock(start as *const c_void, aligned_end.wrapping_sub(start)) }"
+reason = "row:platform"
+
+[[site]]
+file = "core/src/platform/qnx.rs"
+item = "impl PlatformInit for Native::prefault"
+text = "unsafe { sysconf(SC_PAGESIZE) }"
+reason = "row:platform"
+
+[[site]]
+file = "core/src/transport/carrier.rs"
+item = "(file)"
+text = "unsafe impl Send for CarrierInbound"
+reason = "row:carrier-slots"
+
+[[site]]
+file = "core/src/transport/carrier.rs"
+item = "(file)"
+text = "unsafe impl Send for ParkedFrame"
+reason = "row:carrier-slots"
+
+[[site]]
+file = "core/src/transport/carrier.rs"
+item = "(file)"
+text = "unsafe impl Sync for CarrierInbound"
+reason = "row:carrier-slots"
+
+[[site]]
+file = "core/src/transport/carrier.rs"
+item = "(file)"
+text = "unsafe impl Sync for ParkedFrame"
+reason = "row:carrier-slots"
+
+[[site]]
+file = "core/src/transport/carrier.rs"
+item = "impl CarriedFrame::park"
+text = "unsafe { core::mem::transmute::<RxHeader<'a>, RxHeader<'static>>(self.context.header.clone()) }"
+reason = "row:carrier-slots"
+
+[[site]]
+file = "core/src/transport/carrier.rs"
+item = "impl CarrierInbound::bytes"
+text = "unsafe { core::slice::from_raw_parts(range.start, range.len) }"
+reason = "row:carrier-slots"
+
+[[site]]
+file = "core/src/transport/carrier.rs"
+item = "impl CarrierInbound::carry_from_slot"
+text = "unsafe { (*slot.meta.get()).assume_init_ref() }"
+reason = "row:carrier-slots"
+
+[[site]]
+file = "core/src/transport/carrier.rs"
+item = "impl CarrierInbound::release_slot"
+text = "unsafe { (*slot.frame.get()).assume_init_drop() }"
+reason = "row:carrier-slots"
+
+[[site]]
+file = "core/src/transport/carrier.rs"
+item = "impl CarrierInbound::store"
+text = "unsafe { &*bytes }"
+reason = "row:carrier-slots"
+
+[[site]]
+file = "core/src/transport/carrier.rs"
+item = "impl CarrierInbound::store"
+text = "unsafe { &*owner.metadata_ptr() }"
+reason = "row:carrier-slots"
+
+[[site]]
+file = "core/src/transport/carrier.rs"
+item = "impl CarrierInbound::store"
+text = "unsafe { (*slot.frame.get()).assume_init_drop() }"
+count = 2
+reason = "row:carrier-slots"
+
+[[site]]
+file = "core/src/transport/carrier.rs"
+item = "impl CarrierInbound::store"
+text = "unsafe { (*slot.frame.get()).write(frame) }"
+reason = "row:carrier-slots"
+
+[[site]]
+file = "core/src/transport/carrier.rs"
+item = "impl CarrierInbound::store"
+text = "unsafe { (*slot.meta.get()).write(CarrierMeta { header, token, traceparent, metadata: ByteRange::of(head), payload, encoding, token_extent, reply: ReplyToken::default() }); }"
+reason = "row:carrier-slots"
+
+[[site]]
+file = "core/src/transport/carrier.rs"
+item = "impl InboundDispatch for CarrierInbound::deliver_retained"
+text = "unsafe { &*bytes }"
+reason = "row:carrier-slots"
+
+[[site]]
+file = "core/src/transport/carrier.rs"
+item = "impl InboundDispatch for CarrierInbound::deliver_retained"
+text = "unsafe { &*frame.metadata_ptr() }"
+reason = "row:carrier-slots"
+
+[[site]]
+file = "core/src/transport/envelope.rs"
+item = "impl AdmittedWire::admit"
+text = "unsafe { &*(core::ptr::from_ref(initialized) as *const [u8]) }"
+reason = "row:envelope-writers"
+
+[[site]]
+file = "core/src/transport/envelope.rs"
+item = "impl Envelope::write_head"
+text = "unsafe { &mut *(core::ptr::from_mut(head) as *mut [u8]) }"
+reason = "row:envelope-writers"
+
+[[site]]
+file = "core/src/transport/frame.rs"
+item = "(file)"
+text = "unsafe fn drop_owner_of<F: Frame>(frame: *mut u8)"
+reason = "row:retained-frame"
+
+[[site]]
+file = "core/src/transport/frame.rs"
+item = "(file)"
+text = "unsafe fn metadata_of<F: Frame>(frame: *const u8) -> *const [u8]"
+reason = "row:retained-frame"
+
+[[site]]
+file = "core/src/transport/frame.rs"
+item = "(file)"
+text = "unsafe fn payload_of<F: Frame>(frame: *const u8) -> RawPayload"
+reason = "row:retained-frame"
+
+[[site]]
+file = "core/src/transport/frame.rs"
+item = "(file)"
+text = "unsafe fn peer_of<F: Frame>(frame: *const u8) -> PeerRef"
+reason = "row:retained-frame"
+
+[[site]]
+file = "core/src/transport/frame.rs"
+item = "(file)"
+text = "unsafe impl Send for InlineFrame"
+reason = "row:retained-frame"
+
+[[site]]
+file = "core/src/transport/frame.rs"
+item = "drop_owner_of"
+text = "unsafe { ptr::drop_in_place(frame.cast::<F>()) }"
+reason = "row:retained-frame"
+
+[[site]]
+file = "core/src/transport/frame.rs"
+item = "impl Drop for RetainedFrame::drop"
+text = "unsafe { (self.ops.drop_owner)(self.storage.0.get().cast::<u8>()) }"
+reason = "row:retained-frame"
+
+[[site]]
+file = "core/src/transport/frame.rs"
+item = "impl Frame for RetainedFrame::encoded_metadata"
+text = "unsafe { &*(self.ops.metadata)(self.owner()) }"
+reason = "row:retained-frame"
+
+[[site]]
+file = "core/src/transport/frame.rs"
+item = "impl Frame for RetainedFrame::payload"
+text = "unsafe { &*bytes }"
+reason = "row:retained-frame"
+
+[[site]]
+file = "core/src/transport/frame.rs"
+item = "impl Frame for RetainedFrame::payload"
+text = "unsafe { (self.ops.payload)(self.owner()) }"
+reason = "row:retained-frame"
+
+[[site]]
+file = "core/src/transport/frame.rs"
+item = "impl Frame for RetainedFrame::peer"
+text = "unsafe { (self.ops.peer)(self.owner()) }"
+reason = "row:retained-frame"
+
+[[site]]
+file = "core/src/transport/frame.rs"
+item = "impl RetainedFrame::metadata_ptr"
+text = "unsafe { (self.ops.metadata)(self.owner()) }"
+reason = "row:retained-frame"
+
+[[site]]
+file = "core/src/transport/frame.rs"
+item = "impl RetainedFrame::new"
+text = "unsafe { ptr::write(storage.0.get().cast::<F>(), frame) }"
+reason = "row:retained-frame"
+
+[[site]]
+file = "core/src/transport/frame.rs"
+item = "impl RetainedFrame::payload_parts"
+text = "unsafe { (self.ops.payload)(self.owner()) }"
+reason = "row:retained-frame"
+
+[[site]]
+file = "core/src/transport/frame.rs"
+item = "impl RetainedFrame::peer"
+text = "unsafe { (self.ops.peer)(self.owner()) }"
+reason = "row:retained-frame"
+
+[[site]]
+file = "core/src/transport/frame.rs"
+item = "metadata_of"
+text = "unsafe { &*frame.cast::<F>() }"
+reason = "row:retained-frame"
+
+[[site]]
+file = "core/src/transport/frame.rs"
+item = "payload_of"
+text = "unsafe { &*frame.cast::<F>() }"
+reason = "row:retained-frame"
+
+[[site]]
+file = "core/src/transport/frame.rs"
+item = "peer_of"
+text = "unsafe { &*frame.cast::<F>() }"
+reason = "row:retained-frame"
+
+[[site]]
+file = "core/src/transport/frame.rs"
+item = "struct FrameOps"
+text = "unsafe fn(*const u8) -> *const [u8]"
+reason = "row:retained-frame"
+
+[[site]]
+file = "core/src/transport/frame.rs"
+item = "struct FrameOps"
+text = "unsafe fn(*const u8) -> PeerRef"
+reason = "row:retained-frame"
+
+[[site]]
+file = "core/src/transport/frame.rs"
+item = "struct FrameOps"
+text = "unsafe fn(*const u8) -> RawPayload"
+reason = "row:retained-frame"
+
+[[site]]
+file = "core/src/transport/frame.rs"
+item = "struct FrameOps"
+text = "unsafe fn(*mut u8)"
+reason = "row:retained-frame"
+
+[[site]]
+file = "core/src/transport/inbound.rs"
+item = "(file)"
+text = "unsafe impl<T: Send+Sync, M: WireMode> Send for Received<T, M>"
+reason = "row:slot-tables"
+
+[[site]]
+file = "core/src/transport/inbound.rs"
+item = "(file)"
+text = "unsafe impl<T: Send+Sync, M: WireMode> Send for TypedInbound<T, M>"
+reason = "row:slot-tables"
+
+[[site]]
+file = "core/src/transport/inbound.rs"
+item = "(file)"
+text = "unsafe impl<T: Send+Sync, M: WireMode> Sync for Received<T, M>"
+reason = "row:slot-tables"
+
+[[site]]
+file = "core/src/transport/inbound.rs"
+item = "(file)"
+text = "unsafe impl<T: Send+Sync, M: WireMode> Sync for TypedInbound<T, M>"
+reason = "row:slot-tables"
+
+[[site]]
+file = "core/src/transport/inbound.rs"
+item = "impl Deref for Received::deref"
+text = "unsafe { &*value.get() }"
+reason = "row:slot-tables"
+
+[[site]]
+file = "core/src/transport/inbound.rs"
+item = "impl Deref for Received::deref"
+text = "unsafe { core::hint::unreachable_unchecked() }"
+reason = "row:slot-tables"
+
+[[site]]
+file = "core/src/transport/inbound.rs"
+item = "impl Received::bytes"
+text = "unsafe { core::slice::from_raw_parts(range.start, range.len) }"
+reason = "row:slot-tables"
+
+[[site]]
+file = "core/src/transport/inbound.rs"
+item = "impl TypedInbound::copy_text"
+text = "unsafe { region.slot_mut(index) }"
+reason = "row:slot-tables"
+
+[[site]]
+file = "core/src/transport/inbound.rs"
+item = "impl TypedInbound::decode_into_slot"
+text = "unsafe { &mut *value.get() }"
+reason = "row:slot-tables"
+
+[[site]]
+file = "core/src/transport/inbound.rs"
+item = "impl TypedInbound::deliver_copied"
+text = "unsafe { frames.slot_mut(index) }"
+reason = "row:slot-tables"
+
+[[site]]
+file = "core/src/transport/inbound.rs"
+item = "impl TypedInbound::deliver_retained_inner"
+text = "unsafe { &*bytes }"
+reason = "row:slot-tables"
+
+[[site]]
+file = "core/src/transport/inbound.rs"
+item = "impl TypedInbound::deliver_retained_inner"
+text = "unsafe { &*frame.metadata_ptr() }"
+reason = "row:slot-tables"
+
+[[site]]
+file = "core/src/transport/inbound.rs"
+item = "impl TypedInbound::pop_ready"
+text = "unsafe { &(*slot.meta.get()).assume_init_ref().header }"
+reason = "row:slot-tables"
+
+[[site]]
+file = "core/src/transport/inbound.rs"
+item = "impl TypedInbound::release_lease"
+text = "unsafe { (*slot.frame.get()).assume_init_drop() }"
+reason = "row:slot-tables"
+
+[[site]]
+file = "core/src/transport/inbound.rs"
+item = "impl TypedInbound::release_lease"
+text = "unsafe { (*slot.meta.get()).assume_init_ref() }"
+reason = "row:slot-tables"
+
+[[site]]
+file = "core/src/transport/inbound.rs"
+item = "impl TypedInbound::release_slot"
+text = "unsafe { (*slot.frame.get()).assume_init_drop() }"
+reason = "row:slot-tables"
+
+[[site]]
+file = "core/src/transport/inbound.rs"
+item = "impl TypedInbound::release_slot"
+text = "unsafe { (*slot.meta.get()).assume_init_ref() }"
+reason = "row:slot-tables"
+
+[[site]]
+file = "core/src/transport/inbound.rs"
+item = "impl TypedInbound::retain_in_slot"
+text = "unsafe { &*bytes }"
+reason = "row:slot-tables"
+
+[[site]]
+file = "core/src/transport/inbound.rs"
+item = "impl TypedInbound::retain_in_slot"
+text = "unsafe { &*owner.metadata_ptr() }"
+reason = "row:slot-tables"
+
+[[site]]
+file = "core/src/transport/inbound.rs"
+item = "impl TypedInbound::retain_in_slot"
+text = "unsafe { (*slot.frame.get()).assume_init_drop() }"
+reason = "row:slot-tables"
+
+[[site]]
+file = "core/src/transport/inbound.rs"
+item = "impl TypedInbound::retain_in_slot"
+text = "unsafe { (*slot.frame.get()).write(frame) }"
+reason = "row:slot-tables"
+
+[[site]]
+file = "core/src/transport/inbound.rs"
+item = "impl TypedInbound::slot_meta"
+text = "unsafe { (*slot.meta.get()).assume_init_ref() }"
+reason = "row:slot-tables"
+
+[[site]]
+file = "core/src/transport/inbound.rs"
+item = "impl TypedInbound::slot_meta"
+text = "unsafe { core::hint::unreachable_unchecked() }"
+reason = "row:slot-tables"
+
+[[site]]
+file = "core/src/transport/inbound.rs"
+item = "impl TypedInbound::store_meta"
+text = "unsafe { (*slot.meta.get()).write(SlotMeta { header: parsed.header.clone().with_text(None, None), token, traceparent, payload, peer, reply, retained }); }"
+reason = "row:slot-tables"
+
+[[site]]
+file = "core/src/transport/inbound.rs"
+item = "init_values"
+text = "unsafe { &*(core::ptr::from_mut(slots) as *const [UnsafeCell<T>]) }"
+reason = "row:slot-tables"
+
+[[site]]
+file = "core/src/transport/mod.rs"
+item = "(file)"
+text = "unsafe trait PreparedTxStorage: Send"
+reason = "row:prepared-tx"
+
+[[site]]
+file = "core/src/transport/mod.rs"
+item = "impl InitializedTx"
+text = "unsafe fn from_initialized(storage: T) -> Self"
+reason = "row:prepared-tx"
+
+[[site]]
+file = "core/src/transport/mode.rs"
+item = "(file)"
+text = "unsafe impl Send for CoreCell"
+reason = "row:running-cell"
+
+[[site]]
+file = "core/src/transport/mode.rs"
+item = "(file)"
+text = "unsafe impl Sync for CoreCell"
+reason = "row:running-cell"
+
+[[site]]
+file = "core/src/transport/mode.rs"
+item = "(file)"
+text = "unsafe impl<S: BindingSetup> Send for HandoffCell<S>"
+reason = "row:running-cell"
+
+[[site]]
+file = "core/src/transport/mode.rs"
+item = "(file)"
+text = "unsafe impl<S: BindingSetup> Send for LendingCell<S>"
+reason = "row:running-cell"
+
+[[site]]
+file = "core/src/transport/mode.rs"
+item = "(file)"
+text = "unsafe impl<S: BindingSetup> Sync for HandoffCell<S>"
+reason = "row:running-cell"
+
+[[site]]
+file = "core/src/transport/mode.rs"
+item = "(file)"
+text = "unsafe impl<S: BindingSetup> Sync for LendingCell<S>"
+reason = "row:running-cell"
+
+[[site]]
+file = "core/src/transport/mode.rs"
+item = "impl ErasedBinding for HandoffCell::start"
+text = "unsafe { self.running.set(running) }"
+reason = "row:running-cell"
+
+[[site]]
+file = "core/src/transport/mode.rs"
+item = "impl ErasedBinding for LendingCell::start"
+text = "unsafe { self.running.set(running) }"
+reason = "row:running-cell"
+
+[[site]]
+file = "core/src/transport/mode.rs"
+item = "impl RunningCell"
+text = "unsafe fn set(&self, value: R)"
+reason = "row:running-cell"
+
+[[site]]
+file = "core/src/transport/mode.rs"
+item = "impl RunningCell::get"
+text = "unsafe { (*self.value.get()).assume_init_ref() }"
+reason = "row:running-cell"
+
+[[site]]
+file = "core/src/transport/mode.rs"
+item = "impl RunningCell::set"
+text = "unsafe { (*self.value.get()).write(value) }"
+reason = "row:running-cell"
+
+[[site]]
+file = "core/src/transport/mode.rs"
+item = "impl SetupCell::with"
+text = "unsafe { &mut *self.value.get() }"
+reason = "row:running-cell"
+
+[[site]]
+file = "core/src/transport/mode.rs"
+item = "impl TransportSetup::enter_runtime"
+text = "unsafe { &mut *core_cell.0.get() }"
+reason = "row:running-cell"
+
+[[site]]
+file = "core/src/transport/mode.rs"
+item = "impl TransportShared::signal"
+text = "unsafe { &*self.signal.load(Ordering::Acquire) }"
+reason = "row:transport-signal"
+
+[[site]]
+file = "core/src/transport/mode.rs"
+item = "lend_encoded"
+text = "unsafe { InitializedTx::from_initialized(tx) }"
+reason = "row:prepared-tx"
+
+[[site]]
+file = "core/src/transport/mode.rs"
+item = "lend_in_place"
+text = "unsafe { InitializedTx::from_initialized(tx) }"
+reason = "row:prepared-tx"
+
+[[site]]
+file = "core/src/transport/mode.rs"
+item = "lend_passthrough"
+text = "unsafe { InitializedTx::from_initialized(tx) }"
+reason = "row:prepared-tx"
+
+[[site]]
+file = "core/src/transport/mode.rs"
+item = "lend_value"
+text = "unsafe { InitializedTx::from_initialized(tx) }"
+reason = "row:prepared-tx"
+
+[[site]]
+file = "core/src/transport/rpc.rs"
+item = "(file)"
+text = "unsafe impl<Resp: Send+Sync, M: WireMode> Send for Reply<'_, Resp, M>"
+reason = "row:slot-tables"
+
+[[site]]
+file = "core/src/transport/rpc.rs"
+item = "(file)"
+text = "unsafe impl<Resp: Send+Sync, M: WireMode> Sync for Reply<'_, Resp, M>"
+reason = "row:slot-tables"
+
+[[site]]
+file = "core/src/transport/rpc.rs"
+item = "(file)"
+text = "unsafe impl<Resp: Send+Sync> Send for CallTable<Resp>"
+reason = "row:slot-tables"
+
+[[site]]
+file = "core/src/transport/rpc.rs"
+item = "(file)"
+text = "unsafe impl<Resp: Send+Sync> Sync for CallTable<Resp>"
+reason = "row:slot-tables"
+
+[[site]]
+file = "core/src/transport/rpc.rs"
+item = "impl Call::__taken_value"
+text = "unsafe { &*value.get() }"
+reason = "row:slot-tables"
+
+[[site]]
+file = "core/src/transport/rpc.rs"
+item = "impl CallTable::complete_copied"
+text = "unsafe { responses.slot_mut(index as u32) }"
+reason = "row:slot-tables"
+
+[[site]]
+file = "core/src/transport/rpc.rs"
+item = "impl CallTable::complete_retained"
+text = "unsafe { &*bytes }"
+reason = "row:slot-tables"
+
+[[site]]
+file = "core/src/transport/rpc.rs"
+item = "impl CallTable::complete_retained"
+text = "unsafe { &*owner.metadata_ptr() }"
+reason = "row:slot-tables"
+
+[[site]]
+file = "core/src/transport/rpc.rs"
+item = "impl CallTable::complete_retained"
+text = "unsafe { (*slot.frame.get()).write(frame) }"
+reason = "row:slot-tables"
+
+[[site]]
+file = "core/src/transport/rpc.rs"
+item = "impl CallTable::complete_retained"
+text = "unsafe { *slot.payload.get() = (pointer, len) }"
+reason = "row:slot-tables"
+
+[[site]]
+file = "core/src/transport/rpc.rs"
+item = "impl CallTable::decode_into_value"
+text = "unsafe { &mut *value.get() }"
+reason = "row:slot-tables"
+
+[[site]]
+file = "core/src/transport/rpc.rs"
+item = "impl CallTable::drop_retained"
+text = "unsafe { (*slot.frame.get()).assume_init_drop() }"
+reason = "row:slot-tables"
+
+[[site]]
+file = "core/src/transport/rpc.rs"
+item = "impl CallTable::outcome"
+text = "unsafe { *slot.payload.get() }"
+reason = "row:slot-tables"
+
+[[site]]
+file = "core/src/transport/rpc.rs"
+item = "impl CallTable::outcome"
+text = "unsafe { core::slice::from_raw_parts(pointer, stored) }"
+reason = "row:slot-tables"
+
+[[site]]
+file = "core/src/transport/rpc.rs"
+item = "impl CallTable::outcome"
+text = "unsafe { responses.slot(index) }"
+reason = "row:slot-tables"
+
+[[site]]
+file = "core/src/transport/rpc.rs"
+item = "impl CallTable::place"
+text = "unsafe { &*(core::ptr::from_mut(cells) as *const [UnsafeCell<Resp>]) }"
+reason = "row:slot-tables"
+
+[[site]]
+file = "core/src/transport/rpc.rs"
+item = "impl CallTable::release_any"
+text = "unsafe { (*slot.frame.get()).assume_init_drop() }"
+reason = "row:slot-tables"
+
+[[site]]
+file = "core/src/transport/rpc.rs"
+item = "impl CallTable::retained_bytes"
+text = "unsafe { *slot.payload.get() }"
+reason = "row:slot-tables"
+
+[[site]]
+file = "core/src/transport/rpc.rs"
+item = "impl CallTable::retained_bytes"
+text = "unsafe { core::slice::from_raw_parts(pointer, len) }"
+reason = "row:slot-tables"
+
+[[site]]
+file = "core/src/transport/rpc.rs"
+item = "impl Deref for Reply::deref"
+text = "unsafe { &*value.get() }"
+reason = "row:slot-tables"
+
+[[site]]
+file = "core/src/transport/rpc.rs"
+item = "impl Deref for Reply::deref"
+text = "unsafe { core::hint::unreachable_unchecked() }"
+reason = "row:slot-tables"
+
+[[site]]
+file = "core/src/transport/rpc.rs"
+item = "impl InboundDispatch for ClientResponses::deliver_retained"
+text = "unsafe { &*bytes }"
+reason = "row:slot-tables"
+
+[[site]]
+file = "core/src/transport/rpc.rs"
+item = "impl InboundDispatch for ClientResponses::deliver_retained"
+text = "unsafe { &*frame.metadata_ptr() }"
+reason = "row:slot-tables"
+
+[[site]]
+file = "core/src/transport/slots.rs"
+item = "(file)"
+text = "unsafe impl Send for ByteSlots"
+reason = "row:slot-tables"
+
+[[site]]
+file = "core/src/transport/slots.rs"
+item = "(file)"
+text = "unsafe impl Sync for ByteSlots"
+reason = "row:slot-tables"
+
+[[site]]
+file = "core/src/transport/slots.rs"
+item = "(file)"
+text = "unsafe impl Sync for SlotPool"
+reason = "row:slot-tables"
+
+[[site]]
+file = "core/src/transport/slots.rs"
+item = "as_uninit_mut"
+text = "unsafe { &mut *(core::ptr::from_mut(bytes) as *mut [MaybeUninit<u8>]) }"
+reason = "row:slot-tables"
+
+[[site]]
+file = "core/src/transport/slots.rs"
+item = "impl ByteSlots"
+text = "unsafe fn slot(&self, index: u32) -> &[u8]"
+reason = "row:slot-tables"
+
+[[site]]
+file = "core/src/transport/slots.rs"
+item = "impl ByteSlots"
+text = "unsafe fn slot_mut(&self, index: u32) -> &mut [u8]"
+reason = "row:slot-tables"
+
+[[site]]
+file = "core/src/transport/slots.rs"
+item = "impl ByteSlots::new_in"
+text = "unsafe { &*(core::ptr::from_mut(bytes) as *const [UnsafeCell<u8>]) }"
+reason = "row:slot-tables"
+
+[[site]]
+file = "core/src/transport/slots.rs"
+item = "impl ByteSlots::slot"
+text = "unsafe { core::slice::from_raw_parts(range.as_ptr().cast::<u8>(), range.len()) }"
+reason = "row:slot-tables"
+
+[[site]]
+file = "core/src/transport/slots.rs"
+item = "impl ByteSlots::slot_mut"
+text = "unsafe { core::slice::from_raw_parts_mut(range.as_ptr() as *mut u8, range.len()) }"
+reason = "row:slot-tables"
+
+[[site]]
+file = "core/src/transport/slots.rs"
+item = "impl SlotGuard::bytes"
+text = "unsafe { self.pool.fixed_slot(self.index) }"
+reason = "row:slot-tables"
+
+[[site]]
+file = "core/src/transport/slots.rs"
+item = "impl SlotGuard::bytes_mut"
+text = "unsafe { self.pool.fixed_slot_mut(self.index) }"
+reason = "row:slot-tables"
+
+[[site]]
+file = "core/src/transport/slots.rs"
+item = "impl SlotPool"
+text = "unsafe fn fixed_slot(&self, index: u32) -> &[u8]"
+reason = "row:slot-tables"
+
+[[site]]
+file = "core/src/transport/slots.rs"
+item = "impl SlotPool"
+text = "unsafe fn fixed_slot_mut(&self, index: u32) -> &mut [u8]"
+reason = "row:slot-tables"
+
+[[site]]
+file = "core/src/transport/slots.rs"
+item = "impl SlotPool::fixed_slot"
+text = "unsafe { core::slice::from_raw_parts(range.as_ptr().cast::<u8>(), range.len()) }"
+reason = "row:slot-tables"
+
+[[site]]
+file = "core/src/transport/slots.rs"
+item = "impl SlotPool::fixed_slot_mut"
+text = "unsafe { core::slice::from_raw_parts_mut(range.as_ptr() as *mut u8, range.len()) }"
+reason = "row:slot-tables"
+
+[[site]]
+file = "core/src/transport/slots.rs"
+item = "impl SlotPool::new_in"
+text = "unsafe { &*(core::ptr::from_mut(bytes) as *const [UnsafeCell<u8>]) }"
+reason = "row:slot-tables"
+
+[[site]]
+file = "core/src/transport/tests.rs"
+item = "(file)"
+text = "unsafe impl PreparedTxStorage for NoLoan"
+reason = "test-only: a `cfg(test)` core-only double, never compiled into the crate"
+
+[[site]]
+file = "core/src/transport/tests.rs"
+item = "impl PlatformInit for TestClock"
+text = "unsafe fn prefault(&self, _: *mut u8, _: usize) -> Result<(), PlatformError>"
+reason = "test-only: a `cfg(test)` core-only double, never compiled into the crate"
+
+[[site]]
+file = "core/src/transport/tests.rs"
+item = "whole_frame"
+text = "unsafe { &*(core::ptr::from_ref(&*bytes) as *const [u8]) }"
+reason = "test-only: a `cfg(test)` core-only double, never compiled into the crate"
+
+[[site]]
+file = "core/src/transport/tests.rs"
+item = "whole_frame"
+text = "unsafe { core::slice::from_raw_parts(fields.as_ptr().cast::<u8>(), fields_len) }"
+reason = "test-only: a `cfg(test)` core-only double, never compiled into the crate"
+
+[[site]]
+file = "core/src/transport/wake.rs"
+item = "(file)"
+text = "unsafe impl Send for RouteWake"
+reason = "row:route-wake"
+
+[[site]]
+file = "core/src/transport/wake.rs"
+item = "(file)"
+text = "unsafe impl Sync for RouteWake"
+reason = "row:route-wake"
+
+[[site]]
+file = "core/src/transport/wake.rs"
+item = "impl RouteWake"
+text = "unsafe fn state(&self) -> &AtomicUsize"
+reason = "row:route-wake"
+
+[[site]]
+file = "core/src/transport/wake.rs"
+item = "impl RouteWake::notify"
+text = "unsafe { core::mem::transmute(hook) }"
+reason = "row:route-wake"
+
+[[site]]
+file = "core/src/wire/slot.rs"
+item = "(file)"
+text = "unsafe impl<T: ZeroSlot, const N: usize> ZeroSlot for [T; N]"
+reason = "row:startup-slot"
+
+[[site]]
+file = "core/src/wire/slot.rs"
+item = "(file)"
+text = "unsafe impl<T> ZeroSlot for MaybeUninit<T>"
+reason = "row:startup-slot"
+
+[[site]]
+file = "core/src/wire/slot.rs"
+item = "(file)"
+text = "unsafe trait ZeroSlot: Sized"
+reason = "row:startup-slot"
+
+[[site]]
+file = "core/src/wire/slot.rs"
+item = "impl StartupSlot::zeroed"
+text = "unsafe { ptr::write_bytes(self.slot.as_mut_ptr(), 0, 1); self.slot.assume_init_mut() }"
+reason = "row:startup-slot"
+
+[[site]]
+file = "core/src/wire/slot.rs"
+item = "macro_rules! impl_zero_slot"
+text = "unsafe impl ZeroSlot for $ty"
+reason = "row:startup-slot"
+
+[[site]]
+file = "core/src/wire/writer.rs"
+item = "impl PayloadWriter::as_written"
+text = "unsafe { &*(core::ptr::from_ref(written) as *const [u8]) }"
+reason = "row:writer"
+
+[[site]]
+file = "core/src/wire/writer.rs"
+item = "impl PayloadWriter::zeroed"
+text = "unsafe { &mut *(core::ptr::from_mut(target) as *mut [u8]) }"
+reason = "row:writer"
+
+[[site]]
+file = "core/tests/first4a1.rs"
+item = "hook"
+text = "unsafe { ((*cell.storage_ptr())[0].assume_init(), (*cell.storage_ptr())[1].assume_init()) }"
+reason = "test-only: first4A1 single adapter protocol; acquire/release state grants exclusive initialized two-word storage access"
+
+[[site]]
+file = "core/tests/first4a1.rs"
+item = "hook"
+text = "unsafe { cell.state() }"
+reason = "test-only: first4A1 single adapter protocol; acquire/release state grants exclusive initialized two-word storage access"
+
+[[site]]
+file = "core/tests/first4a1.rs"
+item = "register"
+text = "unsafe { (*cell.storage_ptr())[0].write(value); (*cell.storage_ptr())[1].write(!value); }"
+reason = "test-only: first4A1 single adapter protocol; acquire/release state grants exclusive initialized two-word storage access"
+
+[[site]]
+file = "core/tests/first4a1.rs"
+item = "register"
+text = "unsafe { cell.state() }"
+reason = "test-only: first4A1 single adapter protocol; acquire/release state grants exclusive initialized two-word storage access"
+
+[[site]]
+file = "core/tests/memory.rs"
+item = "memory_stays_writable_across_regions"
+text = "unsafe { std::slice::from_raw_parts(ptr, len) }"
+reason = "test-only: StartupMemory tests: a placement through a surviving handle, and a region read back"
+
+[[site]]
+file = "core/tests/memory.rs"
+item = "placement_after_seal_refuses_through_a_surviving_handle"
+text = "unsafe { std::ptr::read(&memory) }"
+reason = "test-only: StartupMemory tests: a placement through a surviving handle, and a region read back"
+
+[[site]]
+file = "core/tests/platform_signal.rs"
+item = "prefault_refuses_an_impossible_range"
+text = "unsafe { Native.prefault(usize::MAX as *mut u8, 64) }"
+reason = "test-only: prefault contract tests on the real platform"
+
+[[site]]
+file = "core/tests/platform_signal.rs"
+item = "prefault_touches_and_locks_a_small_region"
+text = "unsafe { Native.prefault(pages.as_mut_ptr(), pages.len()) }"
+reason = "test-only: prefault contract tests on the real platform"
+
+[[site]]
+file = "core/tests/support/mod.rs"
+item = "(file)"
+text = "unsafe impl GlobalAlloc for CountingAllocator"
+reason = "test-only: a counting GlobalAlloc for the core crate's own heap tests"
+
+[[site]]
+file = "core/tests/support/mod.rs"
+item = "impl GlobalAlloc for CountingAllocator"
+text = "unsafe fn alloc(&self, layout: Layout) -> *mut u8"
+reason = "test-only: a counting GlobalAlloc for the core crate's own heap tests"
+
+[[site]]
+file = "core/tests/support/mod.rs"
+item = "impl GlobalAlloc for CountingAllocator"
+text = "unsafe fn alloc_zeroed(&self, layout: Layout) -> *mut u8"
+reason = "test-only: a counting GlobalAlloc for the core crate's own heap tests"
+
+[[site]]
+file = "core/tests/support/mod.rs"
+item = "impl GlobalAlloc for CountingAllocator"
+text = "unsafe fn dealloc(&self, ptr: *mut u8, layout: Layout)"
+reason = "test-only: a counting GlobalAlloc for the core crate's own heap tests"
+
+[[site]]
+file = "core/tests/support/mod.rs"
+item = "impl GlobalAlloc for CountingAllocator"
+text = "unsafe fn realloc(&self, ptr: *mut u8, layout: Layout, new_size: usize) -> *mut u8"
+reason = "test-only: a counting GlobalAlloc for the core crate's own heap tests"
+
+[[site]]
+file = "core/tests/support/mod.rs"
+item = "impl GlobalAlloc for CountingAllocator::alloc"
+text = "unsafe { System.alloc(layout) }"
+reason = "test-only: a counting GlobalAlloc for the core crate's own heap tests"
+
+[[site]]
+file = "core/tests/support/mod.rs"
+item = "impl GlobalAlloc for CountingAllocator::alloc_zeroed"
+text = "unsafe { System.alloc_zeroed(layout) }"
+reason = "test-only: a counting GlobalAlloc for the core crate's own heap tests"
+
+[[site]]
+file = "core/tests/support/mod.rs"
+item = "impl GlobalAlloc for CountingAllocator::dealloc"
+text = "unsafe { System.dealloc(ptr, layout) }"
+reason = "test-only: a counting GlobalAlloc for the core crate's own heap tests"
+
+[[site]]
+file = "core/tests/support/mod.rs"
+item = "impl GlobalAlloc for CountingAllocator::realloc"
+text = "unsafe { System.realloc(ptr, layout, new_size) }"
+reason = "test-only: a counting GlobalAlloc for the core crate's own heap tests"
+
+[[site]]
+file = "core/verify/panic_free.rs"
+item = "(file)"
+text = "unsafe extern \"C\" fn fixture_format_uri(ptr: *const u8, len: usize, out: *mut u8, out_len: usize) -> i64"
+reason = "test-only: link-time no-panic fixture, never part of a build that ships"
+
+[[site]]
+file = "core/verify/panic_free.rs"
+item = "(file)"
+text = "unsafe extern \"C\" fn fixture_memory(size: usize, value: u32) -> i64"
+reason = "test-only: link-time no-panic fixture, never part of a build that ships"
+
+[[site]]
+file = "core/verify/panic_free.rs"
+item = "(file)"
+text = "unsafe extern \"C\" fn fixture_parse_header(prefix: *const u8, prefix_len: usize, bytes: *const u8, len: usize) -> i64"
+reason = "test-only: link-time no-panic fixture, never part of a build that ships"
+
+[[site]]
+file = "core/verify/panic_free.rs"
+item = "(file)"
+text = "unsafe extern \"C\" fn fixture_parse_uri(ptr: *const u8, len: usize) -> i64"
+reason = "test-only: link-time no-panic fixture, never part of a build that ships"
+
+[[site]]
+file = "core/verify/panic_free.rs"
+item = "(file)"
+text = "unsafe extern \"C\" fn fixture_text_codes(ptr: *const u8, len: usize) -> i64"
+reason = "test-only: link-time no-panic fixture, never part of a build that ships"
+
+[[site]]
+file = "core/verify/panic_free.rs"
+item = "(file)"
+text = "unsafe extern \"C\" fn fixture_uuid(ptr: *const u8, len: usize, out: *mut u8) -> i64"
+reason = "test-only: link-time no-panic fixture, never part of a build that ships"
+
+[[site]]
+file = "core/verify/panic_free.rs"
+item = "(file)"
+text = "unsafe extern \"C\" fn fixture_wire_parts(ptr: *const u8, len: usize, entity: u32, version: u8, resource: u16) -> i64"
+reason = "test-only: link-time no-panic fixture, never part of a build that ships"
+
+[[site]]
+file = "core/verify/panic_free.rs"
+item = "(file)"
+text = "unsafe extern \"C\" fn fixture_write_header(uri_ptr: *const u8, uri_len: usize, id_msb: u64, id_lsb: u64, token: u32, out: *mut MaybeUninit<u8>, out_len: usize) -> i64"
+reason = "test-only: link-time no-panic fixture, never part of a build that ships"
+
+[[site]]
+file = "core/verify/panic_free.rs"
+item = "fixture_format_uri"
+text = "unsafe { core::slice::from_raw_parts_mut(out, out_len) }"
+reason = "test-only: link-time no-panic fixture, never part of a build that ships"
+
+[[site]]
+file = "core/verify/panic_free.rs"
+item = "fixture_parse_header"
+text = "unsafe { core::slice::from_raw_parts(bytes, len) }"
+reason = "test-only: link-time no-panic fixture, never part of a build that ships"
+
+[[site]]
+file = "core/verify/panic_free.rs"
+item = "fixture_parse_header"
+text = "unsafe { core::slice::from_raw_parts(prefix, prefix_len) }"
+reason = "test-only: link-time no-panic fixture, never part of a build that ships"
+
+[[site]]
+file = "core/verify/panic_free.rs"
+item = "fixture_uuid"
+text = "unsafe { core::ptr::copy_nonoverlapping(formatted.as_ptr(), out, 36) }"
+reason = "test-only: link-time no-panic fixture, never part of a build that ships"
+
+[[site]]
+file = "core/verify/panic_free.rs"
+item = "fixture_write_header"
+text = "unsafe { core::slice::from_raw_parts_mut(out, out_len) }"
+reason = "test-only: link-time no-panic fixture, never part of a build that ships"
+
+[[site]]
+file = "core/verify/panic_free.rs"
+item = "panic"
+text = "unsafe { __up_rust_core_panic_path_survived() }"
+reason = "test-only: link-time no-panic fixture, never part of a build that ships"
+
+[[site]]
+file = "core/verify/panic_free.rs"
+item = "text"
+text = "unsafe { core::slice::from_raw_parts(ptr, len) }"
+reason = "test-only: link-time no-panic fixture, never part of a build that ships"
+
+[[site]]
+file = "core/verify/panic_free_two_mode.rs"
+item = "(file)"
+text = "unsafe impl PreparedTxStorage for LendTx"
+reason = "test-only: link-time no-panic fixture: loopback and one-slot lending bindings, holding PreparedTxStorage's duty inside a fixture"
+
+[[site]]
+file = "core/verify/panic_free_two_mode.rs"
+item = "(file)"
+text = "unsafe impl Send for LendFrame"
+reason = "test-only: link-time no-panic fixture: loopback and one-slot lending bindings, holding PreparedTxStorage's duty inside a fixture"
+
+[[site]]
+file = "core/verify/panic_free_two_mode.rs"
+item = "(file)"
+text = "unsafe impl Send for LendTx"
+reason = "test-only: link-time no-panic fixture: loopback and one-slot lending bindings, holding PreparedTxStorage's duty inside a fixture"
+
+[[site]]
+file = "core/verify/panic_free_two_mode.rs"
+item = "(file)"
+text = "unsafe impl Sync for LendBuffer"
+reason = "test-only: link-time no-panic fixture: loopback and one-slot lending bindings, holding PreparedTxStorage's duty inside a fixture"
+
+[[site]]
+file = "core/verify/panic_free_two_mode.rs"
+item = "(file)"
+text = "unsafe impl Sync for Link"
+reason = "test-only: link-time no-panic fixture: loopback and one-slot lending bindings, holding PreparedTxStorage's duty inside a fixture"
+
+[[site]]
+file = "core/verify/panic_free_two_mode.rs"
+item = "impl BindingSetup for LendSetup::into_running"
+text = "unsafe { (*LENDING.port.get()).write(port) }"
+reason = "test-only: link-time no-panic fixture: loopback and one-slot lending bindings, holding PreparedTxStorage's duty inside a fixture"
+
+[[site]]
+file = "core/verify/panic_free_two_mode.rs"
+item = "impl BindingSetup for LoopbackSetup::into_running"
+text = "unsafe { (*HANDOFF.port.get()).write(port) }"
+reason = "test-only: link-time no-panic fixture: loopback and one-slot lending bindings, holding PreparedTxStorage's duty inside a fixture"
+
+[[site]]
+file = "core/verify/panic_free_two_mode.rs"
+item = "impl Frame for LendFrame::encoded_metadata"
+text = "unsafe { core::slice::from_raw_parts(self.metadata, self.metadata_len) }"
+reason = "test-only: link-time no-panic fixture: loopback and one-slot lending bindings, holding PreparedTxStorage's duty inside a fixture"
+
+[[site]]
+file = "core/verify/panic_free_two_mode.rs"
+item = "impl Frame for LendFrame::payload"
+text = "unsafe { core::slice::from_raw_parts(self.payload, len) }"
+reason = "test-only: link-time no-panic fixture: loopback and one-slot lending bindings, holding PreparedTxStorage's duty inside a fixture"
+
+[[site]]
+file = "core/verify/panic_free_two_mode.rs"
+item = "impl LendingRuntime for LendRunning::loan"
+text = "unsafe { base.add(2048) }"
+reason = "test-only: link-time no-panic fixture: loopback and one-slot lending bindings, holding PreparedTxStorage's duty inside a fixture"
+
+[[site]]
+file = "core/verify/panic_free_two_mode.rs"
+item = "impl LendingRuntime for LendRunning::receive"
+text = "unsafe { base.add(2048) }"
+reason = "test-only: the link-time no-panic fixture never runs; the binding's raw slot arithmetic is only reachable from the linker"
+
+[[site]]
+file = "core/verify/panic_free_two_mode.rs"
+item = "impl Link::port"
+text = "unsafe { (*self.port.get()).assume_init() }"
+reason = "test-only: link-time no-panic fixture: loopback and one-slot lending bindings, holding PreparedTxStorage's duty inside a fixture"
+
+[[site]]
+file = "core/verify/panic_free_two_mode.rs"
+item = "impl Link::route"
+text = "unsafe { (*self.inbound.get()).get(lane(kind)).copied().flatten() }"
+reason = "test-only: link-time no-panic fixture: loopback and one-slot lending bindings, holding PreparedTxStorage's duty inside a fixture"
+
+[[site]]
+file = "core/verify/panic_free_two_mode.rs"
+item = "impl Link::store"
+text = "unsafe { (*self.inbound.get()).get_mut(lane(kind)) }"
+reason = "test-only: link-time no-panic fixture: loopback and one-slot lending bindings, holding PreparedTxStorage's duty inside a fixture"
+
+[[site]]
+file = "core/verify/panic_free_two_mode.rs"
+item = "impl PreparedTxStorage for LendTx::metadata_uninit_mut"
+text = "unsafe { core::slice::from_raw_parts_mut(self.metadata, self.metadata_len) }"
+reason = "test-only: link-time no-panic fixture: loopback and one-slot lending bindings, holding PreparedTxStorage's duty inside a fixture"
+
+[[site]]
+file = "core/verify/panic_free_two_mode.rs"
+item = "impl PreparedTxStorage for LendTx::payload_uninit_mut"
+text = "unsafe { core::slice::from_raw_parts_mut(self.payload, len) }"
+reason = "test-only: link-time no-panic fixture: loopback and one-slot lending bindings, holding PreparedTxStorage's duty inside a fixture"
+
+[[site]]
+file = "core/verify/panic_free_two_mode.rs"
+item = "panic"
+text = "unsafe { __up_rust_core_panic_path_survived() }"
+reason = "test-only: link-time no-panic fixture: loopback and one-slot lending bindings, holding PreparedTxStorage's duty inside a fixture"
+
+[[site]]
+file = "macros/src/lib.rs"
+item = "derive_stable_payload_impl"
+text = "unsafe impl #impl_generics #krate::payload::stable::StablePayload for #name #ty_generics #where_clause"
+reason = "row:stable-payload"
+
+[[site]]
+file = "macros/src/lib.rs"
+item = "derive_stable_payload_impl"
+text = "unsafe impl #impl_generics #krate::payload::stable::StablePayloadField for #name #ty_generics #where_clause"
+reason = "row:stable-payload"
+
+[[site]]
+file = "macros/src/lib.rs"
+item = "derive_stable_payload_init_impl::#fill_pattern"
+text = "unsafe { #krate::payload::stable::write_stable_payload_array_pattern::<#name, #elem, #len>(self.token.payload(), ::core::mem::offset_of!(#name, #member), pattern); }"
+reason = "row:stable-payload"
+
+[[site]]
+file = "macros/src/lib.rs"
+item = "derive_stable_payload_init_impl::#fill_pattern"
+text = "unsafe { self.token.advance() }"
+reason = "row:stable-payload"
+
+[[site]]
+file = "macros/src/lib.rs"
+item = "derive_stable_payload_init_impl::#fill_with"
+text = "unsafe { #krate::payload::stable::write_stable_payload_array::<#name, #elem, #len, F>(self.token.payload(), ::core::mem::offset_of!(#name, #member), element); }"
+reason = "row:stable-payload"
+
+[[site]]
+file = "macros/src/lib.rs"
+item = "derive_stable_payload_init_impl::#fill_with"
+text = "unsafe { self.token.advance() }"
+reason = "row:stable-payload"
+
+[[site]]
+file = "macros/src/lib.rs"
+item = "derive_stable_payload_init_impl::#from_array"
+text = "unsafe { #krate::payload::stable::write_stable_payload_array_from::<#name, #elem, #len>(self.token.payload(), ::core::mem::offset_of!(#name, #member), values); }"
+reason = "row:stable-payload"
+
+[[site]]
+file = "macros/src/lib.rs"
+item = "derive_stable_payload_init_impl::#from_array"
+text = "unsafe { self.token.advance() }"
+reason = "row:stable-payload"
+
+[[site]]
+file = "macros/src/lib.rs"
+item = "derive_stable_payload_init_impl::#method"
+text = "unsafe { #krate::payload::stable::write_stable_payload_field::<#name, #ty>(self.token.payload(), ::core::mem::offset_of!(#name, #member), value); }"
+reason = "row:stable-payload"
+
+[[site]]
+file = "macros/src/lib.rs"
+item = "derive_stable_payload_init_impl::#method"
+text = "unsafe { self.token.advance() }"
+reason = "row:stable-payload"
+
+[[site]]
+file = "macros/src/lib.rs"
+item = "derive_stable_payload_init_impl::impl #builder::finish"
+text = "unsafe { #krate::payload::stable::finish_stable_payload_init(self.token.payload()) }"
+reason = "row:stable-payload"
+
+[[site]]
+file = "macros/src/lib.rs"
+item = "derive_stable_payload_init_impl::impl #krate::payload::stable::StablePayloadInit for #name::init"
+text = "unsafe { #krate::payload::stable::StablePayloadInitToken::new(payload) }"
+reason = "row:stable-payload"
+
+[[site]]
+file = "macros/src/lib.rs"
+item = "derive_zero_slot_impl"
+text = "unsafe impl #impl_generics #krate::__zero_slot::ZeroSlot for #name #ty_generics #where_clause"
+reason = "row:startup-slot"
+
+[[site]]
+file = "src/bench_fixtures/payload_contract.rs"
+item = "stable_owned_fixture_for_type"
+text = "unsafe { buffer.assume_payload_initialized() }"
+reason = "test-only: payload benchmark fixture behind the payload-contract-fixtures feature"
+
+[[site]]
+file = "src/heap_guard.rs"
+item = "(file)"
+text = "unsafe impl Sync for EventSlot"
+reason = "row:heap-guard"
+
+[[site]]
+file = "src/heap_guard.rs"
+item = "(file)"
+text = "unsafe impl<A: GlobalAlloc> GlobalAlloc for HeapGuard<A>"
+reason = "row:heap-guard"
+
+[[site]]
+file = "src/heap_guard.rs"
+item = "impl EventSlot::write"
+text = "unsafe { *self.backtrace.get() = capture_culprit() }"
+reason = "row:heap-guard"
+
+[[site]]
+file = "src/heap_guard.rs"
+item = "impl GlobalAlloc for HeapGuard"
+text = "unsafe fn alloc(&self, layout: Layout) -> *mut u8"
+reason = "row:heap-guard"
+
+[[site]]
+file = "src/heap_guard.rs"
+item = "impl GlobalAlloc for HeapGuard"
+text = "unsafe fn alloc_zeroed(&self, layout: Layout) -> *mut u8"
+reason = "row:heap-guard"
+
+[[site]]
+file = "src/heap_guard.rs"
+item = "impl GlobalAlloc for HeapGuard"
+text = "unsafe fn dealloc(&self, pointer: *mut u8, layout: Layout)"
+reason = "row:heap-guard"
+
+[[site]]
+file = "src/heap_guard.rs"
+item = "impl GlobalAlloc for HeapGuard"
+text = "unsafe fn realloc(&self, pointer: *mut u8, layout: Layout, new_size: usize) -> *mut u8"
+reason = "row:heap-guard"
+
+[[site]]
+file = "src/heap_guard.rs"
+item = "impl GlobalAlloc for HeapGuard::alloc"
+text = "unsafe { self.inner.alloc(layout) }"
+reason = "row:heap-guard"
+
+[[site]]
+file = "src/heap_guard.rs"
+item = "impl GlobalAlloc for HeapGuard::alloc_zeroed"
+text = "unsafe { self.inner.alloc_zeroed(layout) }"
+reason = "row:heap-guard"
+
+[[site]]
+file = "src/heap_guard.rs"
+item = "impl GlobalAlloc for HeapGuard::dealloc"
+text = "unsafe { self.inner.dealloc(pointer, layout) }"
+reason = "row:heap-guard"
+
+[[site]]
+file = "src/heap_guard.rs"
+item = "impl GlobalAlloc for HeapGuard::realloc"
+text = "unsafe { self.inner.realloc(pointer, layout, new_size) }"
+reason = "row:heap-guard"
+
+[[site]]
+file = "src/heap_guard.rs"
+item = "impl WindowSlot::take_events"
+text = "unsafe { (*event.backtrace.get()).take() }"
+reason = "row:heap-guard"
+
+[[site]]
+file = "src/heap_guard/c_level.rs"
+item = "(file)"
+text = "unsafe extern \"C\" fn() -> c_uint"
+count = 2
+reason = "row:heap-guard"
+
+[[site]]
+file = "src/heap_guard/c_level.rs"
+item = "(file)"
+text = "unsafe extern \"C\" fn(*mut u64, usize) -> usize"
+reason = "row:heap-guard"
+
+[[site]]
+file = "src/heap_guard/c_level.rs"
+item = "impl Observer::read"
+text = "unsafe { (self.snapshot)(words.as_mut_ptr(), HEADER_WORDS) }"
+reason = "row:heap-guard"
+
+[[site]]
+file = "src/heap_guard/c_level.rs"
+item = "impl Observer::resolve"
+text = "unsafe { (std::mem::transmute::<*mut c_void, ObserverMapped>(mapped_symbol), std::mem::transmute::<*mut c_void, ObserverSnapshot>(snapshot_symbol)) }"
+reason = "row:heap-guard"
+
+[[site]]
+file = "src/heap_guard/c_level.rs"
+item = "impl Observer::resolve"
+text = "unsafe { mapped() }"
+reason = "row:heap-guard"
+
+[[site]]
+file = "src/heap_guard/c_level.rs"
+item = "impl Observer::resolve"
+text = "unsafe { std::mem::transmute::<*mut c_void, ObserverVersion>(version_symbol) }"
+reason = "row:heap-guard"
+
+[[site]]
+file = "src/heap_guard/c_level.rs"
+item = "impl Observer::resolve"
+text = "unsafe { version() }"
+reason = "row:heap-guard"
+
+[[site]]
+file = "src/heap_guard/c_level.rs"
+item = "symbol"
+text = "unsafe { dlsym(RTLD_DEFAULT, name.as_ptr()) }"
+reason = "row:heap-guard"
+
+[[site]]
+file = "src/inline_dispatch.rs"
+item = "impl Drop for InlineFuture::drop"
+text = "unsafe { (self.drop)(UnsafeCell::raw_get(std::ptr::addr_of_mut!(self.storage.0)).cast()) }"
+reason = "row:old-inline-dispatch"
+
+[[site]]
+file = "src/inline_dispatch.rs"
+item = "impl Future for InlineFuture::poll"
+text = "unsafe { (this.poll)(UnsafeCell::raw_get(std::ptr::addr_of_mut!(this.storage.0)).cast(), context) }"
+reason = "row:old-inline-dispatch"
+
+[[site]]
+file = "src/inline_dispatch.rs"
+item = "impl Future for InlineFuture::poll"
+text = "unsafe { self.get_unchecked_mut() }"
+reason = "row:old-inline-dispatch"
+
+[[site]]
+file = "src/inline_dispatch.rs"
+item = "impl InlineFuture::new"
+text = "unsafe fn drop_future<F>(pointer: *mut u8)"
+reason = "row:old-inline-dispatch"
+
+[[site]]
+file = "src/inline_dispatch.rs"
+item = "impl InlineFuture::new"
+text = "unsafe fn poll<F: Future>(pointer: *mut u8, context: &mut Context<'_>) -> Poll<F::Output>"
+reason = "row:old-inline-dispatch"
+
+[[site]]
+file = "src/inline_dispatch.rs"
+item = "impl InlineFuture::new"
+text = "unsafe { UnsafeCell::raw_get(std::ptr::addr_of_mut!(erased.storage.0)).cast::<F>().write(future) }"
+reason = "row:old-inline-dispatch"
+
+[[site]]
+file = "src/inline_dispatch.rs"
+item = "impl InlineFuture::new::drop_future"
+text = "unsafe { pointer.cast::<F>().drop_in_place() }"
+reason = "row:old-inline-dispatch"
+
+[[site]]
+file = "src/inline_dispatch.rs"
+item = "impl InlineFuture::new::poll"
+text = "unsafe { Pin::new_unchecked(&mut *pointer.cast::<F>()).poll(context) }"
+reason = "row:old-inline-dispatch"
+
+[[site]]
+file = "src/inline_dispatch.rs"
+item = "struct InlineFuture"
+text = "unsafe fn(*mut u8)"
+reason = "row:old-inline-dispatch"
+
+[[site]]
+file = "src/inline_dispatch.rs"
+item = "struct InlineFuture"
+text = "unsafe fn(*mut u8, &mut Context<'_>) -> Poll<Output>"
+reason = "row:old-inline-dispatch"
+
+[[site]]
+file = "src/listener_admission.rs"
+item = "impl ListenerAdmission::is_current_callback"
+text = "unsafe { &*pointer }"
+reason = "row:old-listener-admission"
+
+[[site]]
+file = "src/payload/loan.rs"
+item = "(file)"
+text = "unsafe impl<T> BorrowPayload<T> for StableContainerPayload<T> where T: StablePayload,"
+reason = "row:stable-payload"
+
+[[site]]
+file = "src/payload/loan.rs"
+item = "(file)"
+text = "unsafe trait BorrowPayload<T>: PayloadCodec"
+reason = "row:stable-payload"
+
+[[site]]
+file = "src/payload/loan.rs"
+item = "impl BorrowPayload for StableContainerPayload"
+text = "unsafe fn borrow_payload_unchecked(src: &[u8]) -> Result<&T, UWireError>"
+reason = "row:stable-payload"
+
+[[site]]
+file = "src/payload/loan.rs"
+item = "impl BorrowPayload for StableContainerPayload::borrow_payload_unchecked"
+text = "unsafe { up_rust_core::payload::loan::borrow_trusted::<T>(src) }"
+reason = "row:stable-payload"
+
+[[site]]
+file = "src/payload/loan.rs"
+item = "tests::arbitrary_slice_borrow_checks_bits_and_alignment"
+text = "unsafe { core::slice::from_raw_parts(core::ptr::from_ref(&value).cast::<u8>(), mem::size_of::<Borrowed>()) }"
+reason = "test-only: unit test of the payload borrow path, reading a value as bytes"
+
+[[site]]
+file = "src/payload/loan.rs"
+item = "trait BorrowPayload"
+text = "unsafe fn borrow_payload_unchecked(src: &[u8]) -> Result<&T, UWireError>"
+reason = "row:stable-payload"
+
+[[site]]
+file = "src/payload/stable.rs"
+item = "tests"
+text = "unsafe impl StablePayload for LiesAboutSize"
+reason = "test-only: unit tests of the stable-payload checks, including a fixture that lies about its size on purpose"
+
+[[site]]
+file = "src/payload/stable.rs"
+item = "tests"
+text = "unsafe impl StablePayloadField for LiesAboutSize"
+reason = "test-only: unit tests of the stable-payload checks, including a fixture that lies about its size on purpose"
+
+[[site]]
+file = "src/payload/stable.rs"
+item = "tests::storage_for"
+text = "unsafe { core::slice::from_raw_parts_mut(core::ptr::from_mut(value).cast::<MaybeUninit<u8>>(), mem::size_of::<T>()) }"
+reason = "test-only: unit tests of the stable-payload checks, including a fixture that lies about its size on purpose"
+
+[[site]]
+file = "src/startup.rs"
+item = "impl RegionSource for LeakedHeapRegions::region"
+text = "unsafe { bytes.set_len(len) }"
+reason = "row:startup-region"
+
+[[site]]
+file = "src/test_util/contract.rs"
+item = "assert_wire_contract"
+text = "unsafe { (std::slice::from_raw_parts(first.as_ptr().cast::<u8>(), first_len), std::slice::from_raw_parts(second.as_ptr().cast::<u8>(), second_len)) }"
+reason = "test-only: assert_wire_contract reads back the bytes a wire encoded (test-util feature)"
+
+[[site]]
+file = "src/test_util/lending.rs"
+item = "(file)"
+text = "unsafe impl PreparedTxStorage for LendTx<'_>"
+reason = "test-only: in-memory lending binding (test-util feature): a test double holding PreparedTxStorage's duty"
+
+[[site]]
+file = "src/test_util/lending.rs"
+item = "(file)"
+text = "unsafe impl Send for LendFrame"
+reason = "test-only: in-memory lending binding (test-util feature): a test double holding PreparedTxStorage's duty"
+
+[[site]]
+file = "src/test_util/lending.rs"
+item = "(file)"
+text = "unsafe impl Send for LendTx<'_>"
+reason = "test-only: in-memory lending binding (test-util feature): a test double holding PreparedTxStorage's duty"
+
+[[site]]
+file = "src/test_util/lending.rs"
+item = "impl Frame for LendFrame::encoded_metadata"
+text = "unsafe { std::slice::from_raw_parts(self.metadata, self.metadata_len) }"
+reason = "test-only: in-memory lending binding (test-util feature): a test double holding PreparedTxStorage's duty"
+
+[[site]]
+file = "src/test_util/lending.rs"
+item = "impl Frame for LendFrame::payload"
+text = "unsafe { std::slice::from_raw_parts(self.payload, len) }"
+reason = "test-only: in-memory lending binding (test-util feature): a test double holding PreparedTxStorage's duty"
+
+[[site]]
+file = "src/test_util/lending.rs"
+item = "impl LendingBus::take_raw"
+text = "unsafe { std::slice::from_raw_parts(base, slot.metadata_len) }"
+reason = "test-only: in-memory lending binding (test-util feature): a test double holding PreparedTxStorage's duty"
+
+[[site]]
+file = "src/test_util/lending.rs"
+item = "impl LendingBus::take_raw"
+text = "unsafe { std::slice::from_raw_parts(base.add(slot.payload_offset), len) }"
+reason = "test-only: in-memory lending binding (test-util feature): a test double holding PreparedTxStorage's duty"
+
+[[site]]
+file = "src/test_util/lending.rs"
+item = "impl LendingRuntime for RunningLender::loan"
+text = "unsafe { base.add(slot.payload_offset) }"
+reason = "test-only: in-memory lending binding (test-util feature): a test double holding PreparedTxStorage's duty"
+
+[[site]]
+file = "src/test_util/lending.rs"
+item = "impl PreparedTxStorage for LendTx::metadata_uninit_mut"
+text = "unsafe { std::slice::from_raw_parts_mut(self.metadata, self.metadata_len) }"
+reason = "test-only: in-memory lending binding (test-util feature): a test double holding PreparedTxStorage's duty"
+
+[[site]]
+file = "src/test_util/lending.rs"
+item = "impl PreparedTxStorage for LendTx::payload_uninit_mut"
+text = "unsafe { std::slice::from_raw_parts_mut(self.payload, len) }"
+reason = "test-only: in-memory lending binding (test-util feature): a test double holding PreparedTxStorage's duty"
+
+[[site]]
+file = "src/test_util/lending.rs"
+item = "impl RunningLender::make_frame"
+text = "unsafe { base.add(slot.payload_offset) }"
+reason = "test-only: in-memory lending binding (test-util feature): a test double holding PreparedTxStorage's duty"
+
+[[site]]
+file = "src/test_util/mod.rs"
+item = "impl PlatformInit for TestClock"
+text = "unsafe fn prefault(&self, _ptr: *mut u8, _len: usize) -> Result<(), PlatformError>"
+reason = "test-only: TestClock's prefault, a no-op test double (test-util feature)"
+
+[[site]]
+file = "src/two_mode.rs"
+item = "startup_values"
+text = "unsafe { &mut *(core::ptr::from_mut(slots) as *mut [T]) }"
+reason = "row:slot-tables"
+
+[[site]]
+file = "src/wire_transport/rx.rs"
+item = "impl UWireRx"
+text = "unsafe fn borrow_payload_unchecked<T>(&self) -> Result<&T, UWireError> where W: UWirePayload<T>, <W as UWirePayload<T>>::Codec: BorrowPayload<T>,"
+reason = "row:stable-payload"
+
+[[site]]
+file = "src/wire_transport/rx.rs"
+item = "impl UWireRx::borrow_payload_unchecked"
+text = "unsafe { <<W as UWirePayload<T>>::Codec as BorrowPayload<T>>::borrow_payload_unchecked(payload.bytes()) }"
+reason = "row:stable-payload"
+
+[[site]]
+file = "src/wire_transport/tests.rs"
+item = "(file)"
+text = "unsafe impl BorrowPayload<WireBool> for CheckedDefaultCodec"
+reason = "test-only: unit tests of the old selected-wire path"
+
+[[site]]
+file = "src/wire_transport/tests.rs"
+item = "impl BorrowPayload for CheckedDefaultCodec::borrow_payload"
+text = "unsafe { &*src.as_ptr().cast::<WireBool>() }"
+reason = "test-only: unit tests of the old selected-wire path"
+
+[[site]]
+file = "src/wire_transport/tests.rs"
+item = "inherited_unchecked_default_remains_checked"
+text = "unsafe { <CheckedDefaultCodec as BorrowPayload<WireBool>>::borrow_payload_unchecked(&[2]) }"
+reason = "test-only: unit tests of the old selected-wire path"
+
+[[site]]
+file = "src/wire_transport/tests.rs"
+item = "native_bytes_without_route_context_remain_opaque"
+text = "unsafe { frame.borrow_payload_unchecked::<WireBool>() }"
+reason = "test-only: unit tests of the old selected-wire path"
+
+[[site]]
+file = "src/wire_transport/tests.rs"
+item = "native_identity_is_checked_in_both_borrow_lanes"
+text = "unsafe { frame.borrow_payload_unchecked::<WireBool>() }"
+reason = "test-only: unit tests of the old selected-wire path"
+
+[[site]]
+file = "src/wire_transport/tests.rs"
+item = "selected_stable_wire_unchecked_lane_accepts_caller_proven_payload"
+text = "unsafe { rx.borrow_payload_unchecked::<WireBool>() }"
+reason = "test-only: unit tests of the old selected-wire path"
+
+[[site]]
+file = "src/zero_copy/frame.rs"
+item = "impl RxAdmission::check_frame"
+text = "unsafe { &*bytes.as_ptr().cast::<P>() }"
+reason = "row:stable-payload"
+
+[[site]]
+file = "src/zero_copy/mod.rs"
+item = "tests::aligned_initialized_and_uninitialized_buffers_preserve_layout"
+text = "unsafe { uninit.assume_payload_initialized() }"
+reason = "test-only: unit test of the old zero-copy TX buffers"
+
+[[site]]
+file = "src/zero_copy/opaque.rs"
+item = "transmit::impl OpaqueRoute::write_bytes"
+text = "unsafe { InitializedTx::from_initialized(storage) }"
+reason = "row:prepared-tx"
+
+[[site]]
+file = "src/zero_copy/pool.rs"
+item = "(file)"
+text = "unsafe impl Sync for Slot"
+reason = "row:old-zero-copy"
+
+[[site]]
+file = "src/zero_copy/pool.rs"
+item = "impl Drop for SlotRef::drop"
+text = "unsafe { (*slot.layout.get()).token }"
+reason = "row:old-zero-copy"
+
+[[site]]
+file = "src/zero_copy/pool.rs"
+item = "impl SlotLoan"
+text = "unsafe fn publish(mut self, payload_offset: usize, payload_len: usize) -> Result<SlotRef, PoolError>"
+reason = "row:old-zero-copy"
+
+[[site]]
+file = "src/zero_copy/pool.rs"
+item = "impl SlotLoan::bytes_uninit"
+text = "unsafe { &mut *slot.bytes.get() }"
+reason = "row:old-zero-copy"
+
+[[site]]
+file = "src/zero_copy/pool.rs"
+item = "impl SlotLoan::publish"
+text = "unsafe { *slot.layout.get() = layout }"
+reason = "row:old-zero-copy"
+
+[[site]]
+file = "src/zero_copy/pool.rs"
+item = "impl SlotPool::reclaim"
+text = "unsafe { &mut *slot.bytes.get() }"
+reason = "row:old-zero-copy"
+
+[[site]]
+file = "src/zero_copy/pool.rs"
+item = "impl SlotPool::reclaim"
+text = "unsafe { byte.as_mut_ptr().write_volatile(0) }"
+reason = "row:old-zero-copy"
+
+[[site]]
+file = "src/zero_copy/pool.rs"
+item = "impl SlotRef::initialized"
+text = "unsafe { &*slot.bytes.get() }"
+reason = "row:old-zero-copy"
+
+[[site]]
+file = "src/zero_copy/pool.rs"
+item = "impl SlotRef::initialized"
+text = "unsafe { std::slice::from_raw_parts(bytes.as_ptr().cast::<u8>(), bytes.len()) }"
+reason = "row:old-zero-copy"
+
+[[site]]
+file = "src/zero_copy/pool.rs"
+item = "impl SlotRef::layout"
+text = "unsafe { *slot.layout.get() }"
+reason = "row:old-zero-copy"
+
+[[site]]
+file = "src/zero_copy/pool.rs"
+item = "tests::hostile_capacities_and_layouts_are_rejected"
+text = "unsafe { loan.publish(1, 0) }"
+reason = "test-only: unit tests of the old zero-copy slot pool"
+
+[[site]]
+file = "src/zero_copy/pool.rs"
+item = "tests::last_reader_reclaims_and_wipes_token"
+text = "unsafe { byte.assume_init() }"
+reason = "test-only: unit tests of the old zero-copy slot pool"
+
+[[site]]
+file = "src/zero_copy/pool.rs"
+item = "tests::last_reader_reclaims_and_wipes_token"
+text = "unsafe { loan.publish(256, 4) }"
+reason = "test-only: unit tests of the old zero-copy slot pool"
+
+[[site]]
+file = "src/zero_copy/pool_core.rs"
+item = "(file)"
+text = "unsafe impl PreparedTxStorage for PoolTx"
+reason = "row:prepared-tx"
+
+[[site]]
+file = "src/zero_copy/pool_core.rs"
+item = "impl Drop for PoolTx::drop"
+text = "unsafe { byte.as_mut_ptr().write_volatile(0) }"
+reason = "row:old-zero-copy"
+
+[[site]]
+file = "src/zero_copy/pool_core.rs"
+item = "impl PreparedTransportCore for PoolCore::publish"
+text = "unsafe { slot.publish(tx.payload_offset, tx.layout.payload_len.unwrap_or(0)) }"
+reason = "row:old-zero-copy"
+
+[[site]]
+file = "src/zero_copy/pool_core.rs"
+item = "tests::initialized"
+text = "unsafe { InitializedTx::from_initialized(tx) }"
+reason = "test-only: unit test helper of the old zero-copy core"
+
+[[site]]
+file = "src/zero_copy/route.rs"
+item = "impl TxRoute::prepare_parts"
+text = "unsafe { InitializedTx::from_initialized(storage) }"
+reason = "row:prepared-tx"
+
+[[site]]
+file = "src/zero_copy/route.rs"
+item = "impl TxRoute::send_status"
+text = "unsafe { InitializedTx::from_initialized(storage) }"
+reason = "row:prepared-tx"
+
+[[site]]
+file = "src/zero_copy/token.rs"
+item = "impl TokenBuffer::wipe"
+text = "unsafe { std::ptr::write_volatile(byte, 0) }"
+reason = "row:old-zero-copy"
+
+[[site]]
+file = "src/zero_copy/tx.rs"
+item = "impl AlignedBytes::new"
+text = "unsafe { core::ptr::write_bytes(allocation.as_mut_ptr(), 0, capacity); allocation.set_len(capacity); }"
+reason = "row:old-zero-copy"
+
+[[site]]
+file = "src/zero_copy/tx.rs"
+item = "impl UUninitTxBuffer for UVecUninitTxBuffer"
+text = "unsafe fn assume_payload_initialized(self) -> Self::Initialized"
+reason = "row:old-zero-copy"
+
+[[site]]
+file = "src/zero_copy/tx.rs"
+item = "impl UUninitTxBuffer for UVecUninitTxBuffer::payload_uninit_mut"
+text = "unsafe { core::slice::from_raw_parts_mut(payload.as_mut_ptr().cast::<MaybeUninit<u8>>(), payload.len()) }"
+reason = "row:old-zero-copy"
+
+[[site]]
+file = "src/zero_copy/tx.rs"
+item = "trait UUninitTxBuffer"
+text = "unsafe fn assume_payload_initialized(self) -> Self::Initialized"
+reason = "row:old-zero-copy"
+
+[[site]]
+file = "tests/heap_guard_c_level.rs"
+item = "assertion_fails_on_c_level_heap_use"
+text = "unsafe { free(c_malloc(16)) }"
+reason = "test-only: calls the C allocator directly, to prove the C-level heap observer sees it"
+
+[[site]]
+file = "tests/heap_guard_c_level.rs"
+item = "c_malloc"
+text = "unsafe { malloc(size) }"
+reason = "test-only: calls the C allocator directly, to prove the C-level heap observer sees it"
+
+[[site]]
+file = "tests/heap_guard_c_level.rs"
+item = "direct_c_malloc_free_is_seen_below_the_rust_guard"
+text = "unsafe { free(pointer) }"
+reason = "test-only: calls the C allocator directly, to prove the C-level heap observer sees it"
+
+[[site]]
+file = "tests/heap_guard_c_level.rs"
+item = "free_of_null_is_counted_and_fails_the_window"
+text = "unsafe { free(core::ptr::null_mut()) }"
+reason = "test-only: calls the C allocator directly, to prove the C-level heap observer sees it"
+
+[[site]]
+file = "tests/heap_guard_c_level.rs"
+item = "main"
+text = "unsafe { calloc(usize::MAX, 2) }"
+reason = "test-only: calls the C allocator directly, to prove the C-level heap observer sees it"
+
+[[site]]
+file = "tests/heap_guard_c_level.rs"
+item = "main"
+text = "unsafe { free(c_malloc(8)) }"
+reason = "test-only: calls the C allocator directly, to prove the C-level heap observer sees it"
+
+[[site]]
+file = "tests/heap_guard_c_level.rs"
+item = "realloc_outcomes_are_accounted"
+text = "unsafe { calloc(4, 8) }"
+reason = "test-only: calls the C allocator directly, to prove the C-level heap observer sees it"
+
+[[site]]
+file = "tests/heap_guard_c_level.rs"
+item = "realloc_outcomes_are_accounted"
+text = "unsafe { free(blocker) }"
+reason = "test-only: calls the C allocator directly, to prove the C-level heap observer sees it"
+
+[[site]]
+file = "tests/heap_guard_c_level.rs"
+item = "realloc_outcomes_are_accounted"
+text = "unsafe { free(pointer) }"
+reason = "test-only: calls the C allocator directly, to prove the C-level heap observer sees it"
+
+[[site]]
+file = "tests/heap_guard_c_level.rs"
+item = "realloc_outcomes_are_accounted"
+text = "unsafe { free(result) }"
+reason = "test-only: calls the C allocator directly, to prove the C-level heap observer sees it"
+
+[[site]]
+file = "tests/heap_guard_c_level.rs"
+item = "realloc_outcomes_are_accounted"
+text = "unsafe { free(same) }"
+reason = "test-only: calls the C allocator directly, to prove the C-level heap observer sees it"
+
+[[site]]
+file = "tests/heap_guard_c_level.rs"
+item = "realloc_outcomes_are_accounted"
+text = "unsafe { realloc(moved, 0) }"
+reason = "test-only: calls the C allocator directly, to prove the C-level heap observer sees it"
+
+[[site]]
+file = "tests/heap_guard_c_level.rs"
+item = "realloc_outcomes_are_accounted"
+text = "unsafe { realloc(pointer, 1<<22) }"
+reason = "test-only: calls the C allocator directly, to prove the C-level heap observer sees it"
+
+[[site]]
+file = "tests/heap_guard_c_level.rs"
+item = "realloc_outcomes_are_accounted"
+text = "unsafe { realloc(pointer, usable) }"
+reason = "test-only: calls the C allocator directly, to prove the C-level heap observer sees it"
+
+[[site]]
+file = "tests/heap_guard_c_level.rs"
+item = "rust_system_call_is_seen_below_the_rust_guard"
+text = "unsafe { System.alloc(layout) }"
+reason = "test-only: calls the C allocator directly, to prove the C-level heap observer sees it"
+
+[[site]]
+file = "tests/heap_guard_c_level.rs"
+item = "rust_system_call_is_seen_below_the_rust_guard"
+text = "unsafe { System.dealloc(pointer, layout) }"
+reason = "test-only: calls the C allocator directly, to prove the C-level heap observer sees it"
+
+[[site]]
+file = "tests/heap_guard_c_level.rs"
+item = "usable_size"
+text = "unsafe { malloc_size(pointer) }"
+reason = "test-only: calls the C allocator directly, to prove the C-level heap observer sees it"
+
+[[site]]
+file = "tests/heap_guard_c_level.rs"
+item = "usable_size"
+text = "unsafe { malloc_usable_size(pointer) }"
+reason = "test-only: calls the C allocator directly, to prove the C-level heap observer sees it"
+
+[[site]]
+file = "tests/native_path_zero_alloc.rs"
+item = "(file)"
+text = "unsafe impl StablePayload for BorrowProbe"
+reason = "test-only: native-path heap test: hand-written StablePayload fixtures, a lying descriptor and a byte view"
+
+[[site]]
+file = "tests/native_path_zero_alloc.rs"
+item = "(file)"
+text = "unsafe impl StablePayload for Liar"
+reason = "test-only: native-path heap test: hand-written StablePayload fixtures, a lying descriptor and a byte view"
+
+[[site]]
+file = "tests/native_path_zero_alloc.rs"
+item = "(file)"
+text = "unsafe impl StablePayload for Probe"
+reason = "test-only: native-path heap test: hand-written StablePayload fixtures, a lying descriptor and a byte view"
+
+[[site]]
+file = "tests/native_path_zero_alloc.rs"
+item = "(file)"
+text = "unsafe impl StablePayloadField for BorrowProbe"
+reason = "test-only: native-path heap test: hand-written StablePayload fixtures, a lying descriptor and a byte view"
+
+[[site]]
+file = "tests/native_path_zero_alloc.rs"
+item = "(file)"
+text = "unsafe impl StablePayloadField for Liar"
+reason = "test-only: native-path heap test: hand-written StablePayload fixtures, a lying descriptor and a byte view"
+
+[[site]]
+file = "tests/native_path_zero_alloc.rs"
+item = "(file)"
+text = "unsafe impl StablePayloadField for Probe"
+reason = "test-only: native-path heap test: hand-written StablePayload fixtures, a lying descriptor and a byte view"
+
+[[site]]
+file = "tests/native_path_zero_alloc.rs"
+item = "a_lying_manual_descriptor_is_rejected_at_the_byte_level_entry_points"
+text = "unsafe { StableContainerPayload::<Liar>::borrow_payload_unchecked(bytes_of(&liar)) }"
+reason = "test-only: native-path heap test: hand-written StablePayload fixtures, a lying descriptor and a byte view"
+
+[[site]]
+file = "tests/native_path_zero_alloc.rs"
+item = "bytes_of"
+text = "unsafe { core::slice::from_raw_parts(core::ptr::from_ref(value).cast::<u8>(), core::mem::size_of::<T>()) }"
+reason = "test-only: native-path heap test: hand-written StablePayload fixtures, a lying descriptor and a byte view"
+
+[[site]]
+file = "tests/prepared_paths_zero_alloc.rs"
+item = "(file)"
+text = "unsafe impl GlobalAlloc for WipeObserver"
+reason = "test-only: prepared-path heap test: a wiping GlobalAlloc observer and an uninitialized pattern buffer"
+
+[[site]]
+file = "tests/prepared_paths_zero_alloc.rs"
+item = "impl GlobalAlloc for WipeObserver"
+text = "unsafe fn alloc(&self, layout: Layout) -> *mut u8"
+reason = "test-only: prepared-path heap test: a wiping GlobalAlloc observer and an uninitialized pattern buffer"
+
+[[site]]
+file = "tests/prepared_paths_zero_alloc.rs"
+item = "impl GlobalAlloc for WipeObserver"
+text = "unsafe fn alloc_zeroed(&self, layout: Layout) -> *mut u8"
+reason = "test-only: prepared-path heap test: a wiping GlobalAlloc observer and an uninitialized pattern buffer"
+
+[[site]]
+file = "tests/prepared_paths_zero_alloc.rs"
+item = "impl GlobalAlloc for WipeObserver"
+text = "unsafe fn dealloc(&self, pointer: *mut u8, layout: Layout)"
+reason = "test-only: prepared-path heap test: a wiping GlobalAlloc observer and an uninitialized pattern buffer"
+
+[[site]]
+file = "tests/prepared_paths_zero_alloc.rs"
+item = "impl GlobalAlloc for WipeObserver"
+text = "unsafe fn realloc(&self, pointer: *mut u8, layout: Layout, size: usize) -> *mut u8"
+reason = "test-only: prepared-path heap test: a wiping GlobalAlloc observer and an uninitialized pattern buffer"
+
+[[site]]
+file = "tests/prepared_paths_zero_alloc.rs"
+item = "impl GlobalAlloc for WipeObserver::alloc"
+text = "unsafe { System.alloc(layout) }"
+reason = "test-only: prepared-path heap test: a wiping GlobalAlloc observer and an uninitialized pattern buffer"
+
+[[site]]
+file = "tests/prepared_paths_zero_alloc.rs"
+item = "impl GlobalAlloc for WipeObserver::alloc_zeroed"
+text = "unsafe { System.alloc_zeroed(layout) }"
+reason = "test-only: prepared-path heap test: a wiping GlobalAlloc observer and an uninitialized pattern buffer"
+
+[[site]]
+file = "tests/prepared_paths_zero_alloc.rs"
+item = "impl GlobalAlloc for WipeObserver::dealloc"
+text = "unsafe { System.dealloc(pointer, layout) }"
+reason = "test-only: prepared-path heap test: a wiping GlobalAlloc observer and an uninitialized pattern buffer"
+
+[[site]]
+file = "tests/prepared_paths_zero_alloc.rs"
+item = "impl GlobalAlloc for WipeObserver::dealloc"
+text = "unsafe { std::slice::from_raw_parts(pointer, len) }"
+reason = "test-only: prepared-path heap test: a wiping GlobalAlloc observer and an uninitialized pattern buffer"
+
+[[site]]
+file = "tests/prepared_paths_zero_alloc.rs"
+item = "impl GlobalAlloc for WipeObserver::realloc"
+text = "unsafe { System.realloc(pointer, layout, size) }"
+reason = "test-only: prepared-path heap test: a wiping GlobalAlloc observer and an uninitialized pattern buffer"
+
+[[site]]
+file = "tests/prepared_paths_zero_alloc.rs"
+item = "main"
+text = "unsafe { std::slice::from_raw_parts_mut(std::ptr::from_mut(&mut pattern_storage).cast::<MaybeUninit<u8>>(), std::mem::size_of::<Pattern>()) }"
+reason = "test-only: prepared-path heap test: a wiping GlobalAlloc observer and an uninitialized pattern buffer"
+
+[[site]]
+file = "tests/support/prepared_send_rejection_alloc.rs"
+item = "(file)"
+text = "unsafe impl PreparedTxStorage for FaultTx<'_>"
+reason = "test-only: send-rejection heap test: hand-written StablePayload and PreparedTxStorage fixtures"
+
+[[site]]
+file = "tests/support/prepared_send_rejection_alloc.rs"
+item = "(file)"
+text = "unsafe impl StablePayload for Conservative"
+reason = "test-only: send-rejection heap test: hand-written StablePayload and PreparedTxStorage fixtures"
+
+[[site]]
+file = "tests/support/prepared_send_rejection_alloc.rs"
+item = "(file)"
+text = "unsafe impl StablePayloadField for Conservative"
+reason = "test-only: send-rejection heap test: hand-written StablePayload and PreparedTxStorage fixtures"
+
+[[site]]
+file = "tests/support/prepared_send_rejection_alloc.rs"
+item = "run"
+text = "unsafe { &mut *foreign }"
+reason = "test-only: send-rejection heap test: hand-written StablePayload and PreparedTxStorage fixtures"
+
+[[site]]
+file = "tests/support/prepared_send_rejection_alloc.rs"
+item = "run"
+text = "unsafe { drop(Box::from_raw(foreign)); }"
+reason = "test-only: send-rejection heap test: hand-written StablePayload and PreparedTxStorage fixtures"
+
+[[site]]
+file = "tests/support/review_doubles.rs"
+item = "(file)"
+text = "unsafe impl PreparedTxStorage for NoTx"
+reason = "test-only: test doubles (a loan type never built, a clock's prefault no-op, reading bytes the writer initialized)"
+
+[[site]]
+file = "tests/support/review_doubles.rs"
+item = "impl PlatformInit for Clock"
+text = "unsafe fn prefault(&self, _: *mut u8, _: usize) -> Result<(), PlatformError>"
+reason = "test-only: test doubles (a loan type never built, a clock's prefault no-op, reading bytes the writer initialized)"
+
+[[site]]
+file = "tests/support/review_doubles.rs"
+item = "whole_frame"
+text = "unsafe { byte.assume_init() }"
+reason = "test-only: test doubles (a loan type never built, a clock's prefault no-op, reading bytes the writer initialized)"
+
+[[site]]
+file = "tests/two_mode_contract.rs"
+item = "(file)"
+text = "unsafe impl PreparedTxStorage for NoTx"
+reason = "test-only: two-mode contract test fixtures: a custom envelope, a loan that refuses, and a large value built in place"
+
+[[site]]
+file = "tests/two_mode_contract.rs"
+item = "a_48_mb_value_never_crosses_the_stack_during_setup"
+text = "unsafe { boxed.as_mut_ptr().write_bytes(0, 1); boxed.assume_init() }"
+reason = "test-only: two-mode contract test fixtures: a custom envelope, a loan that refuses, and a large value built in place"
+
+[[site]]
+file = "tests/two_mode_contract.rs"
+item = "impl CustomEnvelope for Upf1Envelope::write_head"
+text = "unsafe { &mut *(std::ptr::from_mut(rest) as *mut [MaybeUninit<u8>]) }"
+reason = "test-only: two-mode contract test fixtures: a custom envelope, a loan that refuses, and a large value built in place"
+
+[[site]]
+file = "tests/two_mode_contract.rs"
+item = "the_selected_wire_prefix_matches_the_classic_prefix"
+text = "unsafe { byte.assume_init() }"
+reason = "test-only: two-mode contract test fixtures: a custom envelope, a loan that refuses, and a large value built in place"
+
+[[site]]
+file = "tests/ui/selected_wire_payload_pass/unchecked_borrow_explicit_unsafe.rs"
+item = "borrow"
+text = "unsafe { frame.borrow_payload_unchecked::<Payload>() }"
+reason = "test-only: trybuild fixture: the unsafe is part of what the case compiles or is refused for"
+
+[[site]]
+file = "tests/ui/stable_payload/stable_payload_array_by_value.rs"
+item = "main"
+text = "unsafe { core::slice::from_raw_parts_mut(core::ptr::from_mut(&mut storage).cast::<MaybeUninit<u8>>(), size_of::<ArrayByValue>()) }"
+reason = "test-only: trybuild fixture: the unsafe is part of what the case compiles or is refused for"
+
+[[site]]
+file = "tests/ui/stable_payload/stable_payload_field_missing_validity_const.rs"
+item = "(file)"
+text = "unsafe impl StablePayloadField for Manual"
+reason = "test-only: trybuild fixture: the unsafe is part of what the case compiles or is refused for"
+
+[[site]]
+file = "tests/ui/stable_payload/stable_payload_init_duplicate_setter.rs"
+item = "main"
+text = "unsafe { core::slice::from_raw_parts_mut(core::ptr::from_mut(&mut storage).cast::<MaybeUninit<u8>>(), size_of::<InitDuplicateSetter>()) }"
+reason = "test-only: trybuild fixture: the unsafe is part of what the case compiles or is refused for"
+
+[[site]]
+file = "tests/ui/stable_payload/stable_payload_init_missing_field.rs"
+item = "main"
+text = "unsafe { core::slice::from_raw_parts_mut(core::ptr::from_mut(&mut storage).cast::<MaybeUninit<u8>>(), size_of::<InitMissingField>()) }"
+reason = "test-only: trybuild fixture: the unsafe is part of what the case compiles or is refused for"
+
+[[site]]
+file = "tests/ui/stable_payload/stable_payload_nested_array_by_value.rs"
+item = "main"
+text = "unsafe { core::slice::from_raw_parts_mut(core::ptr::from_mut(&mut storage).cast::<MaybeUninit<u8>>(), size_of::<Parent>()) }"
+reason = "test-only: trybuild fixture: the unsafe is part of what the case compiles or is refused for"
+
+[[site]]
+file = "tests/ui/stable_payload/stable_payload_rejects_drop_glue.rs"
+item = "(file)"
+text = "unsafe impl StablePayloadField for Handle"
+reason = "test-only: trybuild fixture: the unsafe is part of what the case compiles or is refused for"
+
+[[site]]
+file = "tests/ui/stable_payload_pass/stable_payload_init.rs"
+item = "main"
+text = "unsafe { core::slice::from_raw_parts_mut(core::ptr::from_mut(&mut storage).cast::<MaybeUninit<u8>>(), size_of::<Payload>()) }"
+reason = "test-only: trybuild fixture: the unsafe is part of what the case compiles or is refused for"
+
+[[site]]
+file = "tests/wire_metadata_golden.rs"
+item = "canonical_field_block_golden_vectors"
+text = "unsafe { byte.assume_init() }"
+reason = "test-only: golden-vector test reads back a header it wrote"
+
+[[site]]
+file = "tests/wire_metadata_golden.rs"
+item = "canonical_field_block_golden_vectors"
+text = "unsafe { std::slice::from_raw_parts(uninit.as_ptr().cast::<u8>(), header.len) }"
+reason = "test-only: golden-vector test reads back a header it wrote"
+
+[[site]]
+file = "up-rust-tokio/src/wake.rs"
+item = "hook"
+text = "unsafe { storage(cell).read() }"
+reason = "row:waker-cell"
+
+[[site]]
+file = "up-rust-tokio/src/wake.rs"
+item = "register"
+text = "unsafe { if state&OCCUPIED != 0 { let existing = &mut *storage(cell); existing.clone_from(waker); } else { storage(cell).write(waker.clone()); } }"
+reason = "row:waker-cell"
+
+[[site]]
+file = "up-rust-tokio/src/wake.rs"
+item = "register"
+text = "unsafe { storage(cell).read() }"
+reason = "row:waker-cell"
+
+[[site]]
+file = "up-rust-tokio/src/wake.rs"
+item = "state_word"
+text = "unsafe { cell.state() }"
+reason = "row:waker-cell"
+
+[[site]]
+file = "src/test_util/lending.rs"
+item = "impl LendingRuntime for RunningLender::publish"
+text = "unsafe { std::slice::from_raw_parts(tx.metadata.cast::<u8>(), tx.metadata_len) }"
+reason = "test-only: LendingBus reads initialized metadata from the exclusive InitializedTx loan before publication; no payload or uninitialized bytes are read"
+
+[[site]]
+file = "src/test_util/lending_routing_tests.rs"
+item = "send"
+text = "unsafe { InitializedTx::from_initialized(tx) }"
+reason = "test-only: validated write_header output fully initializes the exclusive metadata-only loan; private-layout rejection tests cancellation without publishing invalid bytes"

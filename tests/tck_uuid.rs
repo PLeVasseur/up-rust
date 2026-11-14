@@ -11,10 +11,13 @@
  * SPDX-License-Identifier: Apache-2.0
  ********************************************************************************/
 
+//! uProtocol TCK conformance rows for UUID behavior.
+
 use std::str::FromStr;
+use up_rust::prelude::*;
 
 use cucumber::{given, then, when};
-use up_rust::{ProtobufMappable, UUID};
+use up_rust::UUID;
 
 mod common;
 

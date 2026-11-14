@@ -13,44 +13,10 @@
 
 use crate::uattributes::UAttributesError;
 
-#[derive(Debug, Clone, Copy, PartialEq, PartialOrd)]
-#[repr(C)]
-pub enum UPriority {
-    CS0,
-    CS1,
-    CS2,
-    CS3,
-    CS4,
-    CS5,
-    CS6,
-}
+pub use up_rust_core::uattributes::UPriority;
 
-impl UPriority {
-    /// Encodes this priority to a string.
-    ///
-    /// The encoding of priorities to strings is defined in the
-    /// [uProtocol Core API](https://github.com/eclipse-uprotocol/up-core-api/blob/main/uprotocol/uattributes.proto).
-    ///
-    /// # Examples
-    ///
-    /// ```
-    /// use up_rust::UPriority;
-    ///
-    /// assert_eq!(UPriority::CS2.to_priority_code(), "CS2");
-    /// ```
-    #[must_use]
-    pub fn to_priority_code(self) -> &'static str {
-        match self {
-            UPriority::CS0 => "CS0",
-            UPriority::CS1 => "CS1",
-            UPriority::CS2 => "CS2",
-            UPriority::CS3 => "CS3",
-            UPriority::CS4 => "CS4",
-            UPriority::CS5 => "CS5",
-            UPriority::CS6 => "CS6",
-        }
-    }
-
+/// The classic conversion on [`UPriority`], with its classic error type.
+pub trait UPriorityExt: Sized {
     /// Gets the priority for a string.
     ///
     /// The encoding of priorities to strings is defined in the
@@ -63,34 +29,31 @@ impl UPriority {
     /// # Examples
     ///
     /// ```
-    /// use up_rust::UPriority;
+    /// use up_rust::{prelude::*, UPriority};
     ///
     /// let priority = UPriority::try_from_priority_code("CS2").unwrap();
     /// assert_eq!(priority, UPriority::CS2);
     ///
     /// assert!(UPriority::try_from_priority_code("not-supported").is_err());
     /// ```
-    pub fn try_from_priority_code<T>(code: T) -> Result<Self, UAttributesError>
+    fn try_from_priority_code<T>(code: T) -> Result<Self, UAttributesError>
+    where
+        T: Into<String>;
+}
+
+impl UPriorityExt for UPriority {
+    fn try_from_priority_code<T>(code: T) -> Result<Self, UAttributesError>
     where
         T: Into<String>,
     {
         let prio: String = code.into();
-        match prio.as_str() {
-            "CS0" => Ok(UPriority::CS0),
-            "CS1" => Ok(UPriority::CS1),
-            "CS2" => Ok(UPriority::CS2),
-            "CS3" => Ok(UPriority::CS3),
-            "CS4" => Ok(UPriority::CS4),
-            "CS5" => Ok(UPriority::CS5),
-            "CS6" => Ok(UPriority::CS6),
-            _ => Err(UAttributesError::parsing_error(format!(
-                "unknown priority code [{prio}]"
-            ))),
-        }
+        UPriority::from_priority_code(prio.as_str()).ok_or_else(|| {
+            UAttributesError::parsing_error(format!("unknown priority code [{prio}]"))
+        })
     }
 }
 
-#[cfg(feature = "up-core-types")]
+#[cfg(feature = "up-core-api")]
 mod core_types_support {
     use super::*;
     use crate::up_core_api::uattributes::UPriority as UPriorityProto;
@@ -126,6 +89,29 @@ mod core_types_support {
                     value as i32
                 ))),
             }
+        }
+    }
+}
+
+#[cfg(test)]
+mod wire_code_tests {
+    use super::UPriority;
+    use test_case::test_case;
+
+    #[test_case(1, Some(UPriority::CS0); "CS0")]
+    #[test_case(2, Some(UPriority::CS1); "CS1")]
+    #[test_case(3, Some(UPriority::CS2); "CS2")]
+    #[test_case(4, Some(UPriority::CS3); "CS3")]
+    #[test_case(5, Some(UPriority::CS4); "CS4")]
+    #[test_case(6, Some(UPriority::CS5); "CS5")]
+    #[test_case(7, Some(UPriority::CS6); "CS6")]
+    #[test_case(0, None; "absent priority")]
+    #[test_case(8, None; "first reserved priority")]
+    #[test_case(255, None; "last reserved priority")]
+    fn wire_priority_codes(code: u8, expected: Option<UPriority>) {
+        assert_eq!(UPriority::from_wire_code(code), expected);
+        if let Some(priority) = expected {
+            assert_eq!(priority.wire_code(), code);
         }
     }
 }

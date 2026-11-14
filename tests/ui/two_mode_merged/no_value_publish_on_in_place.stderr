@@ -1,0 +1,7 @@
+error[E0599]: no method named `publish` found for struct `up_rust::two_mode::Publisher<u32, up_rust::two_mode::InPlace>` in the current scope
+ --> tests/ui/two_mode_merged/no_value_publish_on_in_place.rs:5:23
+  |
+5 |     let _ = publisher.publish(&1);
+  |                       ^^^^^^^ method not found in `up_rust::two_mode::Publisher<u32, up_rust::two_mode::InPlace>`
+  |
+  = note: the method was found for `up_rust::two_mode::Publisher<T>`

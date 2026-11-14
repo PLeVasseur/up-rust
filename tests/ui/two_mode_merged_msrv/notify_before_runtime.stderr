@@ -1,0 +1,5 @@
+error[E0599]: no method named `notify` found for struct `up_rust::two_mode::NotifierSetup` in the current scope
+ --> tests/ui/two_mode_merged_msrv/notify_before_runtime.rs:5:19
+  |
+5 |     let _ = setup.notify(&1);
+  |                   ^^^^^^ method not found in `NotifierSetup<u32>`

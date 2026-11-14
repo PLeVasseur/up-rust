@@ -1,0 +1,11 @@
+error[E0599]: no method named `has_capacity` found for reference `&up_rust::two_mode::TransportSetup` in the current scope
+ --> tests/ui/two_mode_merged/carrier_capacity_before_runtime.rs:5:19
+  |
+5 |     let _ = setup.has_capacity(route);
+  |                   ^^^^^^^^^^^^
+  |
+help: there is a method `as_any` with a similar name, but with different arguments
+ --> $CARGO/downcast-$VERSION/src/lib.rs
+  |
+  |     fn as_any(&self) -> &dyn StdAny;
+  |     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^

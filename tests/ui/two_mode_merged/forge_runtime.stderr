@@ -1,0 +1,22 @@
+warning: unreachable expression
+ --> tests/ui/two_mode_merged/forge_runtime.rs:5:13
+  |
+5 |     let _ = TransportRuntime { core: todo!() };
+  |             ^^^^^^^^^^^^^^^^^^^^^^^^^-------^^
+  |             |                        |
+  |             |                        any code following this expression is unreachable
+  |             unreachable expression
+  |
+  = note: `#[warn(unreachable_code)]` (part of `#[warn(unused)]`) on by default
+
+error[E0451]: field `core` of struct `TransportRuntime` is private
+ --> tests/ui/two_mode_merged/forge_runtime.rs:5:32
+  |
+5 |     let _ = TransportRuntime { core: todo!() };
+  |                                ^^^^ private field
+
+error: type `mode::RuntimeCore` is private
+ --> tests/ui/two_mode_merged/forge_runtime.rs:5:38
+  |
+5 |     let _ = TransportRuntime { core: todo!() };
+  |                                      ^^^^^^^ private type

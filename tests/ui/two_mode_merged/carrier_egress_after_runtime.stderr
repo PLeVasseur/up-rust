@@ -1,0 +1,5 @@
+error[E0599]: no method named `carrier_egress` found for struct `up_rust::two_mode::TransportRuntime` in the current scope
+ --> tests/ui/two_mode_merged/carrier_egress_after_runtime.rs:5:21
+  |
+5 |     let _ = runtime.carrier_egress(route);
+  |                     ^^^^^^^^^^^^^^ method not found in `up_rust::two_mode::TransportRuntime`

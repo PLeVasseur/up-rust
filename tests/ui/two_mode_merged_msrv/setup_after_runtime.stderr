@@ -1,0 +1,15 @@
+error[E0382]: borrow of moved value: `setup`
+ --> tests/ui/two_mode_merged_msrv/setup_after_runtime.rs:6:34
+  |
+4 | fn add_route_after_runtime(setup: TransportSetup, provider: &dyn LocalUriProvider) {
+  |                            ----- move occurs because `setup` has type `up_rust::two_mode::TransportSetup`, which does not implement the `Copy` trait
+5 |     let _runtime = setup.enter_runtime();
+  |                          --------------- `setup` moved due to this method call
+6 |     let _ = Publisher::<u32>::on(&setup, provider, 0x8001);
+  |                                  ^^^^^^ value borrowed here after move
+  |
+note: `up_rust::two_mode::TransportSetup::enter_runtime` takes ownership of the receiver `self`, which moves `setup`
+ --> core/src/transport/mode.rs
+  |
+  |     pub fn enter_runtime(self) -> Result<TransportRuntime, StartupError> {
+  |                          ^^^^

@@ -1,0 +1,16 @@
+error[E0382]: borrow of moved value: `frame`
+ --> tests/ui/two_mode_merged/carrier_frame_used_after_park.rs:8:38
+  |
+5 |     let _ = runtime.receive(route, &mut |frame: CarriedFrame<'_>| {
+  |                                          ----- move occurs because `frame` has type `up_rust::two_mode::CarriedFrame<'_>`, which does not implement the `Copy` trait
+6 |         let kept = frame.park();
+  |                          ------ `frame` moved due to this method call
+7 |         drop(kept);
+8 |         let _ = runtime.send(egress, &frame);
+  |                                      ^^^^^^ value borrowed here after move
+  |
+note: `up_rust::two_mode::CarriedFrame::<'a>::park` takes ownership of the receiver `self`, which moves `frame`
+ --> core/src/transport/carrier.rs
+  |
+  |     pub fn park(self) -> Result<ParkedFrame, Self> {
+  |                 ^^^^

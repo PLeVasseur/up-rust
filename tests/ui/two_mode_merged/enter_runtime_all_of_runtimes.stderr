@@ -1,0 +1,16 @@
+error[E0271]: type mismatch resolving `<Vec<TransportRuntime> as IntoIterator>::Item == TransportSetup`
+ --> tests/ui/two_mode_merged/enter_runtime_all_of_runtimes.rs:5:76
+  |
+5 |     let _: Result<Vec<TransportRuntime>, StartupError> = enter_runtime_all(running);
+  |                                                          ----------------- ^^^^^^^ expected `TransportSetup`, found `TransportRuntime`
+  |                                                          |
+  |                                                          required by a bound introduced by this call
+  |
+note: required by a bound in `up_rust::two_mode::enter_runtime_all`
+ --> core/src/transport/mode.rs
+  |
+  | pub fn enter_runtime_all<C, I>(setups: I) -> Result<C, StartupError>
+  |        ----------------- required by a bound in this function
+  | where
+  |     I: IntoIterator<Item = TransportSetup>,
+  |                     ^^^^^^^^^^^^^^^^^^^^^ required by this bound in `enter_runtime_all`

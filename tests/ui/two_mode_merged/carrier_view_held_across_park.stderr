@@ -1,0 +1,12 @@
+error[E0505]: cannot move out of `frame` because it is borrowed
+ --> tests/ui/two_mode_merged/carrier_view_held_across_park.rs:7:20
+  |
+5 |     let _ = runtime.receive(route, &mut |frame: CarriedFrame<'_>| {
+  |                                          ----- binding `frame` declared here
+6 |         let view: &[u8] = frame.metadata();
+  |                           ----- borrow of `frame` occurs here
+7 |         let kept = frame.park();
+  |                    ^^^^^ move out of `frame` occurs here
+8 |         drop(kept);
+9 |         let _ = view[0];
+  |                 ------- borrow later used here

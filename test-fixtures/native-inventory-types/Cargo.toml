@@ -1,0 +1,21 @@
+[package]
+name = "native-inventory-fixture-types"
+version = "0.0.0"
+edition = "2021"
+rust-version = "1.88"
+license = "Apache-2.0"
+publish = false
+description = "Application-linked type fixtures for native inventory validation"
+readme = "README.md"
+
+[features]
+default = ["seat"]
+seat = []
+air = []
+
+[dependencies]
+up-rust = { path = "../..", version = "=0.10.0-SNAPSHOT", default-features = false, features = ["native-inventory"] }
+
+[lints.rust]
+missing_docs = "deny"
+unsafe_code = "forbid"

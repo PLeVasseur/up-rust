@@ -1,0 +1,5 @@
+error[E0599]: no method named `receive` found for reference `&up_rust::two_mode::TransportSetup` in the current scope
+ --> tests/ui/two_mode_merged/carrier_receive_before_runtime.rs:5:19
+  |
+5 |     let _ = setup.receive(route, &mut |_frame: CarriedFrame<'_>| Flow::Continue);
+  |                   ^^^^^^^ method not found in `&up_rust::two_mode::TransportSetup`

@@ -1,0 +1,26 @@
+error[E0277]: the trait bound `up_rust::two_mode::TransportRuntime: TransportSource` is not satisfied
+ --> tests/ui/two_mode_merged_msrv/role_on_runtime.rs:6:35
+  |
+6 |     let _ = Subscriber::<u32>::on(runtime, topic);
+  |             --------------------- ^^^^^^^ the trait `TransportSource` is not implemented for `up_rust::two_mode::TransportRuntime`
+  |             |
+  |             required by a bound introduced by this call
+  |
+  = help: the following other types implement trait `TransportSource`:
+            TransportSetup
+            Wired<'_, W>
+note: required by a bound in `up_rust::two_mode::Subscriber::<T>::on`
+ --> core/src/communication/two_mode.rs
+  |
+  |     pub fn on<'a, S: TransportSource>(
+  |                      ^^^^^^^^^^^^^^^ required by this bound in `Subscriber::<T>::on`
+
+error[E0277]: the trait bound `up_rust::two_mode::TransportRuntime: TransportSource` is not satisfied
+ --> tests/ui/two_mode_merged_msrv/role_on_runtime.rs:6:13
+  |
+6 |     let _ = Subscriber::<u32>::on(runtime, topic);
+  |             ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ the trait `TransportSource` is not implemented for `up_rust::two_mode::TransportRuntime`
+  |
+  = help: the following other types implement trait `TransportSource`:
+            TransportSetup
+            Wired<'_, W>

@@ -1,0 +1,9 @@
+error[E0521]: borrowed data escapes outside of closure
+ --> tests/ui/two_mode_merged/carrier_frame_escapes_the_sink.rs:7:9
+  |
+5 |     let mut kept = None;
+  |         -------- `kept` declared here, outside of the closure body
+6 |     let _ = runtime.receive(route, &mut |frame: CarriedFrame<'_>| {
+  |                                          ----- `frame` is a reference that is only valid in the closure body
+7 |         kept = Some(frame);
+  |         ^^^^^^^^^^^^^^^^^^ `frame` escapes the closure body here

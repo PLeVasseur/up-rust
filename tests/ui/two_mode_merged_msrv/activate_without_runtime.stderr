@@ -1,0 +1,22 @@
+error[E0061]: this method takes 1 argument but 0 arguments were supplied
+ --> tests/ui/two_mode_merged_msrv/activate_without_runtime.rs:5:23
+  |
+5 |     let _ = publisher.activate();
+  |                       ^^^^^^^^-- argument #1 of type `&TransportRuntime` is missing
+  |
+note: method defined here
+ --> core/src/communication/two_mode.rs
+  |
+  | / send_role! {
+  | |     /// Publishes events to subscribers of this entity's topic.
+  | |     ///
+  | |     /// Stored handles name domain types only (R28): `Publisher<DoorState>`.
+  | |     Publisher, PublisherSetup, PublisherBuilder, publish, publish_using, publish_encoded,
+  | |     publish_with, UMessageType::Publish
+  | | }
+  | |_^
+  = note: this error originates in the macro `send_role` (in Nightly builds, run with -Z macro-backtrace for more info)
+help: provide the argument
+  |
+5 |     let _ = publisher.activate(/* &TransportRuntime */);
+  |                                +++++++++++++++++++++++

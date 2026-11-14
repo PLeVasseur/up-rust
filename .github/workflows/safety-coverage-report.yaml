@@ -1,0 +1,61 @@
+# Report-only safety coverage. A red trace is reported as red, never a pass.
+name: Safety coverage report
+on:
+  workflow_dispatch:
+  schedule:
+    - cron: '30 3 * * *'
+permissions:
+  contents: read
+jobs:
+  report:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          submodules: recursive
+          persist-credentials: false
+      - name: Load current trace configuration
+        uses: xom9ikk/dotenv@d0a56edc74279820eabbe34477511327e710d0de
+        with:
+          mode: oft-current
+          load-mode: strict
+      - name: Trace once to authoritative aspec
+        id: trace
+        continue-on-error: true
+        uses: itsallcode/openfasttrace-github-action@cfe57e0a005bdc3197dfe4da60da1973a1ab8e9c
+        with:
+          file-patterns: ${{ env.OFT_FILE_PATTERNS }}
+          tags: ${{ env.OFT_REPORT_TAGS }}
+          report-filename: safety-trace.xml
+          report-format: aspec
+      - name: Record the engine result without gating uncovered requirements
+        if: always()
+        env:
+          OFT_ENGINE_RC: ${{ steps.trace.outputs.oft-exit-code }}
+        run: |
+          python3 - <<'PY'
+          import json, os, pathlib, xml.etree.ElementTree as ET
+          raw = os.environ.get('OFT_ENGINE_RC', '')
+          if raw not in ('0', '1'):
+              raise SystemExit('Missing or abnormal OFT result: ' + repr(raw))
+          report = pathlib.Path('safety-trace.xml')
+          tree = ET.parse(report)
+          if tree.getroot().tag != 'specdocument' or not tree.findall('.//specobject'):
+              raise SystemExit('Missing or empty authoritative aspec report')
+          receipt = {'oft_exit': int(raw), 'report_only': True, 'acceptance': False,
+                     'authoritative_output': str(report)}
+          pathlib.Path('safety-trace-receipt.json').write_text(json.dumps(receipt, indent=2) + '\n')
+          with open(os.environ['GITHUB_STEP_SUMMARY'], 'a') as summary:
+              summary.write('Safety report only: engine exit **' + raw + '**. ' +
+                            ('Uncovered requirements remain. ' if raw == '1' else '') +
+                            'This job grants no acceptance credit.\n')
+          PY
+      - name: Preserve trace and genuine result
+        if: always()
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a
+        with:
+          name: safety-report-only
+          path: |
+            safety-trace.xml
+            safety-trace-receipt.json
+          if-no-files-found: error

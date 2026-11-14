@@ -1,0 +1,17 @@
+error[E0599]: no method named `with_wire` found for struct `up_rust::two_mode::TransportRuntime` in the current scope
+ --> tests/ui/two_mode_merged/runtime_has_no_setup.rs:6:21
+  |
+6 |     let _ = runtime.with_wire(DoorWire);
+  |                     ^^^^^^^^^ method not found in `up_rust::two_mode::TransportRuntime`
+
+error[E0599]: no method named `with_waiver` found for struct `up_rust::two_mode::TransportRuntime` in the current scope
+ --> tests/ui/two_mode_merged/runtime_has_no_setup.rs:7:21
+  |
+7 |     let _ = runtime.with_waiver(waiver);
+  |                     ^^^^^^^^^^^ method not found in `up_rust::two_mode::TransportRuntime`
+
+error[E0599]: no method named `signal_on` found for struct `up_rust::two_mode::TransportRuntime` in the current scope
+ --> tests/ui/two_mode_merged/runtime_has_no_setup.rs:8:13
+  |
+8 |     runtime.signal_on(Box::leak(Box::new(Signal::new())));
+  |             ^^^^^^^^^ method not found in `up_rust::two_mode::TransportRuntime`

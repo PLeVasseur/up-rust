@@ -1,0 +1,5 @@
+error[E0599]: no method named `send` found for reference `&up_rust::two_mode::TransportSetup` in the current scope
+ --> tests/ui/two_mode_merged_msrv/carrier_send_before_runtime.rs:5:19
+  |
+5 |     let _ = setup.send(route, frame);
+  |                   ^^^^ method not found in `&TransportSetup`

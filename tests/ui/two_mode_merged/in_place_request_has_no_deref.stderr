@@ -1,0 +1,5 @@
+error[E0614]: type `up_rust::two_mode::Request<u32, u32, up_rust::two_mode::InPlace>` cannot be dereferenced
+ --> tests/ui/two_mode_merged/in_place_request_has_no_deref.rs:5:5
+  |
+5 |     *request
+  |     ^^^^^^^^ can't be dereferenced

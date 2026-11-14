@@ -1,0 +1,23 @@
+error[E0560]: struct `__UpRustStablePayloadInitForForged<'_, StablePayloadInitSet, StablePayloadInitSet>` has no field named `payload`
+  --> tests/ui/two_mode_merged_msrv/stable_init_builder_cannot_be_forged.rs:20:13
+   |
+20 |             payload: start.payload,
+   |             ^^^^^^^ `__UpRustStablePayloadInitForForged<'_, _, _>` does not have this field
+   |
+   = note: available fields are: `token`
+
+error[E0609]: no field `payload` on type `__UpRustStablePayloadInitForForged<'_, StablePayloadInitUnset, StablePayloadInitUnset>`
+  --> tests/ui/two_mode_merged_msrv/stable_init_builder_cannot_be_forged.rs:20:28
+   |
+20 |             payload: start.payload,
+   |                            ^^^^^^^ unknown field
+   |
+   = note: available field is: `token`
+
+error[E0560]: struct `__UpRustStablePayloadInitForForged<'_, StablePayloadInitSet, StablePayloadInitSet>` has no field named `marker`
+  --> tests/ui/two_mode_merged_msrv/stable_init_builder_cannot_be_forged.rs:21:13
+   |
+21 |             marker: core::marker::PhantomData,
+   |             ^^^^^^ `__UpRustStablePayloadInitForForged<'_, _, _>` does not have this field
+   |
+   = note: available fields are: `token`

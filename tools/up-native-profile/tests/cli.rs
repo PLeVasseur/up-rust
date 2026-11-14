@@ -1,0 +1,435 @@
+// Copyright (c) 2026 Contributors to the Eclipse Foundation
+// SPDX-License-Identifier: Apache-2.0
+//! Execute the linked exporter and all deployment-tool subcommands.
+use std::path::{Path, PathBuf};
+use std::process::Command;
+use up_native_profile::{
+    read_artifact, write_artifact, AgreementArtifact, DeploymentEndpoint, DeploymentRoute,
+    IdentityDeclarations, InventoryArtifact, Target, WireDeclaration, WireNamespace, WireReference,
+};
+use up_rust::{StableContainerWire, UFrameFieldsMetadataCodec, UWire};
+
+fn run(executable: &Path, args: &[&str], expected_code: i32) -> String {
+    let output = Command::new(executable).args(args).output().unwrap();
+    eprintln!(
+        "CLI {:?} {:?}: exit={:?}\nstdout={}\nstderr={}",
+        executable,
+        args,
+        output.status.code(),
+        String::from_utf8_lossy(&output.stdout),
+        String::from_utf8_lossy(&output.stderr)
+    );
+    assert_eq!(output.status.code(), Some(expected_code));
+    if expected_code == 0 {
+        String::from_utf8(output.stdout).unwrap()
+    } else {
+        String::from_utf8(output.stderr).unwrap()
+    }
+}
+
+fn exporter() -> (PathBuf, Option<tempfile::TempDir>) {
+    if let Some(path) = std::env::var_os("UP_NATIVE_PROFILE_EXPORTER") {
+        let path = PathBuf::from(path);
+        assert!(
+            path.is_file(),
+            "the supplied exporter must be a built executable"
+        );
+        return (path, None);
+    }
+    // A direct cargo-test invocation gets a real build in an isolated target
+    // directory, never a nested build waiting for the parent target's lock.
+    let target = tempfile::tempdir().unwrap();
+    let root = Path::new(env!("CARGO_MANIFEST_DIR")).join("../..");
+    let output = Command::new(env!("CARGO"))
+        .args([
+            "build",
+            "--locked",
+            "-p",
+            "native-inventory-fixture-export",
+            "--bin",
+            "native-inventory-fixture-export",
+            "--message-format=json",
+        ])
+        .current_dir(root)
+        .env("CARGO_TARGET_DIR", target.path())
+        .env_remove("CARGO_MAKEFLAGS")
+        .output()
+        .unwrap();
+    assert!(
+        output.status.success(),
+        "{}",
+        String::from_utf8_lossy(&output.stderr)
+    );
+    let executable = String::from_utf8(output.stdout)
+        .unwrap()
+        .lines()
+        .find_map(|line| {
+            let value: serde_json::Value = serde_json::from_str(line).ok()?;
+            if value.get("reason")?.as_str()? != "compiler-artifact"
+                || value.get("target")?.get("name")?.as_str()? != "native-inventory-fixture-export"
+            {
+                return None;
+            }
+            value.get("executable")?.as_str().map(PathBuf::from)
+        })
+        .expect("Cargo must identify the actual exporter executable");
+    (executable, Some(target))
+}
+
+#[test]
+fn exported_inventory_drives_all_five_cli_subcommands() {
+    let tool = Path::new(env!("CARGO_BIN_EXE_up-native-profile"));
+    let (exporter, _isolated_build) = exporter();
+    let directory = tempfile::tempdir().unwrap();
+    let inventory_path = directory.path().join("inventory.json");
+    let identities_path = directory.path().join("identities.json");
+    let agreement_path = directory.path().join("agreement.json");
+    let zero_path = directory.path().join("zero.json");
+    let successor_path = directory.path().join("agreement-2.json");
+    let endpoints_path = directory.path().join("endpoints.json");
+    let routes_path = directory.path().join("routes.json");
+    let manifest_path = directory.path().join("manifest.json");
+    let target = Target::current();
+
+    run(
+        &exporter,
+        &[
+            "--output",
+            inventory_path.to_str().unwrap(),
+            "--expect-target",
+            &target.triple,
+            "--require-type",
+            "example.DoorState",
+        ],
+        0,
+    );
+    let inventory: InventoryArtifact = read_artifact(&inventory_path).unwrap();
+    assert_eq!(inventory.target, target);
+    assert!(inventory
+        .types
+        .iter()
+        .any(|value| value.key.name == "example.DoorState"));
+    run(
+        tool,
+        &[
+            "verify-inventory",
+            "--inventory",
+            inventory_path.to_str().unwrap(),
+            "--expect-target",
+            &target.triple,
+        ],
+        0,
+    );
+    let identities = IdentityDeclarations {
+        wires: [
+            (WireNamespace::Wire, StableContainerWire::WIRE_ID),
+            (
+                WireNamespace::PayloadFamily,
+                StableContainerWire::PAYLOAD_FAMILY_ID,
+            ),
+        ]
+        .into_iter()
+        .map(|(namespace, identity)| WireDeclaration {
+            namespace,
+            literal: identity.literal_id().into(),
+            compact_id: identity.compact_id(),
+            owner: "example".into(),
+            version: 1,
+            reference: WireReference::Literal,
+        })
+        .collect(),
+        ..Default::default()
+    };
+    write_artifact(&identities_path, &identities).unwrap();
+    run(
+        tool,
+        &[
+            "generate",
+            "--inventory",
+            inventory_path.to_str().unwrap(),
+            "--domain",
+            "example.cli",
+            "--encoding",
+            "0xF100",
+            "--identities",
+            identities_path.to_str().unwrap(),
+            "--output",
+            agreement_path.to_str().unwrap(),
+        ],
+        0,
+    );
+    run(
+        tool,
+        &["verify", "--agreement", agreement_path.to_str().unwrap()],
+        0,
+    );
+    run(
+        tool,
+        &[
+            "generate",
+            "--inventory",
+            inventory_path.to_str().unwrap(),
+            "--domain",
+            "example.cli",
+            "--encoding",
+            "0",
+            "--output",
+            zero_path.to_str().unwrap(),
+        ],
+        0,
+    );
+    run(
+        tool,
+        &["verify", "--agreement", zero_path.to_str().unwrap()],
+        0,
+    );
+    let zero: AgreementArtifact = read_artifact(&zero_path).unwrap();
+    assert!(zero.native.types.len() > 1);
+    assert_eq!(
+        zero.profile().unwrap().representations().count(),
+        inventory.types.len()
+    );
+    assert_eq!(zero.native.encoding_id, 0);
+    let zero_json = serde_json::to_value(&zero).unwrap();
+    let native = zero_json.get("native").unwrap();
+    assert!(native.get("mode").is_none());
+    assert!(native.get("operation").is_none());
+    let error = run(tool, &["contract", "--help"], 2);
+    assert!(error.contains("unrecognized subcommand 'contract'"));
+    let error = run(tool, &["single-type", "--help"], 2);
+    assert!(error.contains("unrecognized subcommand 'single-type'"));
+    let error = run(tool, &["generate", "--help"], 0);
+    assert!(error.contains("--encoding <ENCODING>"));
+    for removed in ["--first", "--last", "--seeds", "--type-name", "--operation"] {
+        let error = run(tool, &["generate", removed, "unused"], 2);
+        assert!(error.contains(&format!("unexpected argument '{removed}'")));
+    }
+    let missing_encoding = directory.path().join("missing-encoding.json");
+    let error = run(
+        tool,
+        &[
+            "generate",
+            "--inventory",
+            inventory_path.to_str().unwrap(),
+            "--domain",
+            "example.cli",
+            "--output",
+            missing_encoding.to_str().unwrap(),
+        ],
+        2,
+    );
+    assert!(error.contains("--encoding <ENCODING>"));
+    assert!(!missing_encoding.exists());
+    for encoding in ["1", "0xEFFF", "0xFFFF", "0x10000", "-1", "not-an-id"] {
+        let error = run(
+            tool,
+            &[
+                "generate",
+                "--inventory",
+                inventory_path.to_str().unwrap(),
+                "--domain",
+                "example.cli",
+                "--encoding",
+                encoding,
+                "--output",
+                missing_encoding.to_str().unwrap(),
+            ],
+            if matches!(encoding, "1" | "0xEFFF" | "0xFFFF") {
+                1
+            } else {
+                2
+            },
+        );
+        assert!(!error.is_empty());
+        assert!(!missing_encoding.exists());
+    }
+    run(
+        tool,
+        &[
+            "generate",
+            "--inventory",
+            inventory_path.to_str().unwrap(),
+            "--domain",
+            "example.cli",
+            "--generation",
+            "2",
+            "--encoding",
+            "61696",
+            "--previous",
+            agreement_path.to_str().unwrap(),
+            "--output",
+            successor_path.to_str().unwrap(),
+        ],
+        0,
+    );
+    run(
+        tool,
+        &[
+            "verify",
+            "--agreement",
+            successor_path.to_str().unwrap(),
+            "--previous",
+            agreement_path.to_str().unwrap(),
+        ],
+        0,
+    );
+    let successor: AgreementArtifact = read_artifact(&successor_path).unwrap();
+    assert_eq!(successor.native.encoding_id, 0xF100);
+    assert_eq!(successor.identities, identities);
+    let error = run(
+        tool,
+        &["verify", "--agreement", successor_path.to_str().unwrap()],
+        1,
+    );
+    assert!(error.contains("actual --previous agreement"));
+    let error = run(
+        tool,
+        &[
+            "verify",
+            "--agreement",
+            successor_path.to_str().unwrap(),
+            "--previous",
+            zero_path.to_str().unwrap(),
+        ],
+        1,
+    );
+    assert!(error.contains("previous-agreement"));
+    let error = run(
+        tool,
+        &[
+            "generate",
+            "--inventory",
+            inventory_path.to_str().unwrap(),
+            "--domain",
+            "example.cli",
+            "--generation",
+            "2",
+            "--encoding",
+            "0",
+            "--previous",
+            agreement_path.to_str().unwrap(),
+            "--output",
+            missing_encoding.to_str().unwrap(),
+        ],
+        1,
+    );
+    assert!(error.contains("preserve domain/target/encoding"));
+    assert!(!missing_encoding.exists());
+
+    let invalid_directory = tempfile::tempdir().unwrap();
+    let invalid_path = invalid_directory.path().join("unsupported.json");
+    for mode in ["contract_defined", "future_mode"] {
+        let mut value = zero_json.clone();
+        let native = value
+            .get_mut("native")
+            .and_then(serde_json::Value::as_object_mut)
+            .unwrap();
+        native.insert("mode".into(), serde_json::json!(mode));
+        native.insert("operation".into(), serde_json::json!("door.event"));
+        std::fs::write(&invalid_path, serde_json::to_vec(&value).unwrap()).unwrap();
+        let error = run(
+            tool,
+            &["verify", "--agreement", invalid_path.to_str().unwrap()],
+            1,
+        );
+        assert!(error.contains("unknown field `mode`"));
+    }
+    for version in [0, 1, 99, u64::MAX] {
+        let mut value = zero_json.clone();
+        *value.get_mut("format_version").unwrap() = serde_json::json!(version);
+        std::fs::write(&invalid_path, serde_json::to_vec(&value).unwrap()).unwrap();
+        let error = run(
+            tool,
+            &["verify", "--agreement", invalid_path.to_str().unwrap()],
+            1,
+        );
+        assert!(error.contains(&format!("unsupported artifact format_version {version}")));
+    }
+
+    let agreement: AgreementArtifact = read_artifact(&agreement_path).unwrap();
+    agreement
+        .require_wire::<StableContainerWire, UFrameFieldsMetadataCodec>()
+        .unwrap();
+    let endpoints: Vec<_> = ["sender", "receiver"]
+        .into_iter()
+        .map(|id| DeploymentEndpoint {
+            id: id.into(),
+            agreement_path: format!("{id}.json"),
+            content_sha256: agreement.content_sha256.clone(),
+            target: agreement.target.clone(),
+            domain: agreement.domain.clone(),
+            generation: agreement.generation,
+        })
+        .collect();
+    for endpoint in &endpoints {
+        write_artifact(&directory.path().join(&endpoint.agreement_path), &agreement).unwrap();
+    }
+    write_artifact(&endpoints_path, &endpoints).unwrap();
+    write_artifact(
+        &routes_path,
+        &vec![DeploymentRoute {
+            id: "direct".into(),
+            endpoints: vec!["sender".into(), "receiver".into()],
+        }],
+    )
+    .unwrap();
+    run(
+        tool,
+        &[
+            "manifest",
+            "--endpoints",
+            endpoints_path.to_str().unwrap(),
+            "--routes",
+            routes_path.to_str().unwrap(),
+            "--output",
+            manifest_path.to_str().unwrap(),
+        ],
+        0,
+    );
+    let admitted = run(
+        tool,
+        &[
+            "admit",
+            "--profile-root",
+            directory.path().to_str().unwrap(),
+            "--manifest",
+            manifest_path.to_str().unwrap(),
+            "--route",
+            "direct",
+            "--local",
+            "sender",
+            "--peer",
+            "receiver",
+        ],
+        0,
+    );
+    let admitted: serde_json::Value = serde_json::from_str(&admitted).unwrap();
+    assert_eq!(
+        admitted
+            .get("configuration_admission")
+            .and_then(serde_json::Value::as_str),
+        Some("passed")
+    );
+
+    let absent = directory.path().join("missing-agreement.json");
+    let error = run(
+        tool,
+        &["verify", "--agreement", absent.to_str().unwrap()],
+        1,
+    );
+    assert!(error.contains(absent.to_str().unwrap()) && error.contains("profile file I/O"));
+    assert!(
+        !error.contains("Io {"),
+        "the CLI must print Display, not Debug"
+    );
+
+    if let Some(destination) = std::env::var_os("UP_NATIVE_PROFILE_PROOF_DIR") {
+        let destination = PathBuf::from(destination);
+        std::fs::create_dir_all(&destination).unwrap();
+        for entry in std::fs::read_dir(directory.path()).unwrap() {
+            let entry = entry.unwrap();
+            assert!(entry.file_type().unwrap().is_file());
+            std::fs::copy(entry.path(), destination.join(entry.file_name())).unwrap();
+        }
+    }
+}

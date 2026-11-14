@@ -1,0 +1,22 @@
+error[E0308]: mismatched types
+ --> tests/ui/two_mode_merged_msrv/activate_on_setup.rs:5:32
+  |
+5 |     let _ = publisher.activate(setup);
+  |                       -------- ^^^^^ expected `&TransportRuntime`, found `&TransportSetup`
+  |                       |
+  |                       arguments to this method are incorrect
+  |
+  = note: expected reference `&TransportRuntime`
+             found reference `&up_rust::two_mode::TransportSetup`
+note: method defined here
+ --> core/src/communication/two_mode.rs
+  |
+  | / send_role! {
+  | |     /// Publishes events to subscribers of this entity's topic.
+  | |     ///
+  | |     /// Stored handles name domain types only (R28): `Publisher<DoorState>`.
+  | |     Publisher, PublisherSetup, PublisherBuilder, publish, publish_using, publish_encoded,
+  | |     publish_with, UMessageType::Publish
+  | | }
+  | |_^
+  = note: this error originates in the macro `send_role` (in Nightly builds, run with -Z macro-backtrace for more info)

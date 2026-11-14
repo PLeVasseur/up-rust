@@ -1,0 +1,8 @@
+error[E0599]: no method named `publish_in_place` found for struct `up_rust::two_mode::Publisher<DoorState>` in the current scope
+ --> tests/ui/two_mode_merged_msrv/no_in_place_on_encoded.rs:6:23
+  |
+6 |     let _ = publisher.publish_in_place(|init| init);
+  |                       ^^^^^^^^^^^^^^^^ method not found in `Publisher<DoorState>`
+  |
+  = note: the method was found for
+          - `up_rust::two_mode::Publisher<T, InPlace>`

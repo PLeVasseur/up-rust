@@ -1,0 +1,11 @@
+error[E0599]: no method named `qos` found for struct `up_rust::two_mode::PublisherSetup` in the current scope
+ --> tests/ui/two_mode_merged_msrv/qos_after_runtime.rs:5:19
+  |
+5 |     let _ = setup.qos(Qos::DEFAULT);
+  |                   ^^^ method not found in `PublisherSetup<u32>`
+
+error[E0599]: no method named `qos` found for struct `up_rust::two_mode::Publisher` in the current scope
+ --> tests/ui/two_mode_merged_msrv/qos_after_runtime.rs:9:23
+  |
+9 |     let _ = publisher.qos(Qos::DEFAULT);
+  |                       ^^^ method not found in `Publisher<u32>`

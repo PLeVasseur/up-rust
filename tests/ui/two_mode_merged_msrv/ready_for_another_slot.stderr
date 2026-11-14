@@ -1,0 +1,33 @@
+error: lifetime may not live long enough
+ --> tests/ui/two_mode_merged_msrv/ready_for_another_slot.rs:6:5
+  |
+4 | fn other<'a, 'b>(slot: StartupSlot<'a, u32>, other: StartupSlot<'b, u32>) -> Ready<'a, u32> {
+  |          --  -- lifetime `'b` defined here
+  |          |
+  |          lifetime `'a` defined here
+5 |     let _ = slot;
+6 |     other.write(1)
+  |     ^^^^^^^^^^^^^^ function was supposed to return data with lifetime `'b` but it is returning data with lifetime `'a`
+  |
+  = help: consider adding the following bound: `'a: 'b`
+  = note: requirement occurs because of the type `up_rust::two_mode::Ready<'_, u32>`, which makes the generic argument `'_` invariant
+  = note: the struct `up_rust::two_mode::Ready<'s, T>` is invariant over the parameter `'s`
+  = help: see <https://doc.rust-lang.org/nomicon/subtyping.html> for more information about variance
+
+error: lifetime may not live long enough
+ --> tests/ui/two_mode_merged_msrv/ready_for_another_slot.rs:6:5
+  |
+4 | fn other<'a, 'b>(slot: StartupSlot<'a, u32>, other: StartupSlot<'b, u32>) -> Ready<'a, u32> {
+  |          --  -- lifetime `'b` defined here
+  |          |
+  |          lifetime `'a` defined here
+5 |     let _ = slot;
+6 |     other.write(1)
+  |     ^^^^^^^^^^^^^^ function was supposed to return data with lifetime `'a` but it is returning data with lifetime `'b`
+  |
+  = help: consider adding the following bound: `'b: 'a`
+  = note: requirement occurs because of the type `up_rust::two_mode::Ready<'_, u32>`, which makes the generic argument `'_` invariant
+  = note: the struct `up_rust::two_mode::Ready<'s, T>` is invariant over the parameter `'s`
+  = help: see <https://doc.rust-lang.org/nomicon/subtyping.html> for more information about variance
+
+help: `'a` and `'b` must be the same: replace one with the other

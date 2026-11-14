@@ -1,0 +1,8 @@
+error[E0599]: no method named `respond_in_place` found for struct `up_rust::two_mode::Request<DoorState, DoorState>` in the current scope
+ --> tests/ui/two_mode_merged_msrv/no_in_place_respond_on_encoded.rs:6:21
+  |
+6 |     let _ = request.respond_in_place(|init| init);
+  |                     ^^^^^^^^^^^^^^^^ method not found in `Request<DoorState, DoorState>`
+  |
+  = note: the method was found for
+          - `up_rust::two_mode::Request<Req, Resp, InPlace>`

@@ -1,0 +1,8 @@
+error: lifetime may not live long enough
+  --> tests/ui/two_mode_merged/wire_out_of_a_startup_slot_is_impossible.rs:15:20
+   |
+13 |     fn init_slot<'s>(&self, slot: StartupSlot<'s, u32>) -> Ready<'s, u32> {
+   |                  -- lifetime `'s` defined here
+14 |         let ready = slot.write(1);
+15 |         let _kept: Ready<'static, u32> = ready;
+   |                    ^^^^^^^^^^^^^^^^^^^ type annotation requires that `'s` must outlive `'static`

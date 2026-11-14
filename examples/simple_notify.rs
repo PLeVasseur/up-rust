@@ -11,13 +11,15 @@
  * SPDX-License-Identifier: Apache-2.0
  ********************************************************************************/
 
+//! Send a targeted notification through the Communication Layer.
+
 use std::sync::Arc;
 
-use bytes::Bytes;
+use protobuf::well_known_types::wrappers::StringValue;
 use up_rust::{
     communication::{CallOptions, Notifier, SimpleNotifier, UPayload},
     local_transport::LocalTransport,
-    LocalUriProvider, StaticUriProvider, UListener, UMessage,
+    LocalUriProvider, StaticUriProvider, UEntityId, UListener, UMessage,
 };
 
 struct ConsolePrinter {}
@@ -25,22 +27,25 @@ struct ConsolePrinter {}
 #[async_trait::async_trait]
 impl UListener for ConsolePrinter {
     async fn on_receive(&self, msg: UMessage) {
-        if let Some(payload) = msg.payload() {
-            let msg = String::from_utf8_lossy(payload.as_ref());
-            println!("received notification: {}", msg);
+        if let Ok(payload) = msg.extract_protobuf::<StringValue>() {
+            println!("received notification: {}", payload.value);
         }
     }
 }
 
+/// Runs the targeted-notification example.
 #[tokio::main]
 pub async fn main() -> Result<(), Box<dyn std::error::Error>> {
     const ORIGIN_RESOURCE_ID: u16 = 0xd100;
 
-    let uri_provider = Arc::new(StaticUriProvider::new("my-vehicle", 0xa34b, 0x01)?);
+    let uri_provider = Arc::new(StaticUriProvider::for_entity(
+        "my-vehicle",
+        UEntityId::first_instance(0xA34B),
+        0x01,
+    )?);
     // using the LocalTransport here allows us to run the client and server in the same process
     // without any network communication, which is useful for testing purposes
-    // in a real application, you would use a transport that employs the network to communicate
-    // between the client and server, such as the MQTT5 or the Eclipse Zenoh transport
+    // A networked deployment can supply another UTransport implementation.
     let transport = Arc::new(LocalTransport::default());
     let notifier = SimpleNotifier::new(transport, uri_provider.clone());
     let topic = uri_provider.get_resource_uri(ORIGIN_RESOURCE_ID);
@@ -48,7 +53,11 @@ pub async fn main() -> Result<(), Box<dyn std::error::Error>> {
 
     notifier.start_listening(&topic, listener.clone()).await?;
 
-    let payload = UPayload::new(Bytes::from("Hello"), up_rust::UPayloadFormat::Text);
+    let value = StringValue {
+        value: "Hello".to_string(),
+        ..Default::default()
+    };
+    let payload = UPayload::try_from_protobuf(value)?;
     notifier
         .notify(
             ORIGIN_RESOURCE_ID,
@@ -58,12 +67,6 @@ pub async fn main() -> Result<(), Box<dyn std::error::Error>> {
         )
         .await?;
 
-    // At this point we can be sure that all notifications have been processed already.
-    // This is because the LocalTransport dispatches all messages to listeners on the same
-    // thread that has been used to send the messages.
-    // When using an asynchronous transport, such as MQTT5 or Eclipse Zenoh, we would need to
-    // notify the sender from within the listener, e.g. by means of a Channel, before stopping
-    // the listener.
     notifier.stop_listening(&topic, listener).await?;
     Ok(())
 }

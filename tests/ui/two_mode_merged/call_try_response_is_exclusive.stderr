@@ -1,0 +1,43 @@
+error[E0596]: cannot borrow `call` as mutable, as it is not declared as mutable
+ --> tests/ui/two_mode_merged/call_try_response_is_exclusive.rs:8:24
+  |
+8 |         scope.spawn(|| call.try_response().map(|reply| reply.is_some()));
+  |                        ^^^^ cannot borrow as mutable
+  |
+help: consider changing this to be mutable
+  |
+6 |     let mut call = client.invoke(value).expect("invoke");
+  |         +++
+
+error[E0524]: two closures require unique access to `call` at the same time
+ --> tests/ui/two_mode_merged/call_try_response_is_exclusive.rs:9:21
+  |
+7 |     std::thread::scope(|scope| {
+  |                         ----- has type `&'1 std::thread::Scope<'1, '_>`
+8 |         scope.spawn(|| call.try_response().map(|reply| reply.is_some()));
+  |         ----------------------------------------------------------------
+  |         |           |  |
+  |         |           |  first borrow occurs due to use of `call` in closure
+  |         |           first closure is constructed here
+  |         argument requires that `call` is borrowed for `'1`
+9 |         scope.spawn(|| call.try_response().map(|reply| reply.is_some()));
+  |                     ^^ ---- second borrow occurs due to use of `call` in closure
+  |                     |
+  |                     second closure is constructed here
+  |
+note: requirement that the value outlives `'1` introduced here
+ --> $RUST/std/src/thread/scoped.rs
+  |
+  |         F: FnOnce() -> T + Send + 'scope,
+  |                                   ^^^^^^
+
+error[E0596]: cannot borrow `call` as mutable, as it is not declared as mutable
+ --> tests/ui/two_mode_merged/call_try_response_is_exclusive.rs:9:24
+  |
+9 |         scope.spawn(|| call.try_response().map(|reply| reply.is_some()));
+  |                        ^^^^ cannot borrow as mutable
+  |
+help: consider changing this to be mutable
+  |
+6 |     let mut call = client.invoke(value).expect("invoke");
+  |         +++

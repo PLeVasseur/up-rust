@@ -13,6 +13,7 @@
 
 // [impl->dsn~communication-layer-impl-default~1]
 
+use crate::prelude::*;
 use std::collections::hash_map::Entry;
 use std::collections::HashMap;
 use std::sync::Arc;
@@ -43,12 +44,16 @@ impl<T: UTransport> RequestListener<T> {
 
         let request_message_id = request_message.id().to_hyphenated_string();
         let request_timeout = request_message.ttl_unchecked();
-        let payload_format = request_message
-            .payload_format()
-            .unwrap_or(crate::UPayloadFormat::Unspecified);
-        let request_payload = request_message
-            .payload()
-            .map(|data| UPayload::new(data, payload_format));
+        let request_payload = match (
+            request_message.payload(),
+            request_message.payload_encoding(),
+        ) {
+            (Some(data), Some(encoding)) => Some(UPayload::new(data, encoding)),
+            // This dispatcher has no error return; an undeclared payload
+            // cannot be exposed as a valid UPayload to the request handler.
+            (Some(_), None) => None,
+            (None, _) => None,
+        };
 
         debug!(
             ttl = request_timeout,
@@ -78,7 +83,7 @@ impl<T: UTransport> RequestListener<T> {
             Err(e) => {
                 let error = UStatus::from(e);
                 response_builder
-                    .with_comm_status(error.get_code())
+                    .with_comm_status(error.code())
                     .build_with_protobuf_payload(&error)
             }
         };
@@ -86,10 +91,7 @@ impl<T: UTransport> RequestListener<T> {
         match response {
             Ok(response_message) => {
                 if let Err(e) = transport_clone.send(response_message).await {
-                    info!(
-                        ucode = e.get_code().value(),
-                        "failed to send response message"
-                    );
+                    info!(ucode = e.code().value(), "failed to send response message");
                 }
             }
             Err(e) => {
@@ -128,6 +130,12 @@ pub struct InMemoryRpcServer<T, P> {
     transport: Arc<T>,
     uri_provider: Arc<P>,
     request_listeners: tokio::sync::Mutex<HashMap<u16, Arc<dyn UListener>>>,
+}
+
+impl<T, P> core::fmt::Debug for InMemoryRpcServer<T, P> {
+    fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
+        f.debug_struct("InMemoryRpcServer").finish_non_exhaustive()
+    }
 }
 
 impl<T: UTransport, P: LocalUriProvider> InMemoryRpcServer<T, P> {
@@ -253,14 +261,14 @@ mod tests {
 
     fn new_uri_provider() -> Arc<StaticUriProvider> {
         Arc::new(
-            StaticUriProvider::new("", 0x0005, 0x02)
+            StaticUriProvider::new("", 0x0001_0005, 0x02)
                 .expect("should have been able to create URI provider"),
         )
     }
 
     #[test_case(None, 0x4A10; "for empty origin filter")]
-    #[test_case(Some(UUri::try_from_parts("authority", 0xBF1A, 0x01, 0x0000).unwrap()), 0x4A10; "for specific origin filter")]
-    #[test_case(Some(UUri::try_from_parts("*", 0xFFFF, 0x01, 0x0000).unwrap()), 0x7091; "for wildcard origin filter")]
+    #[test_case(Some(UUri::try_from_parts("authority", 0x0001_BF1A, 0x01, 0x0000).unwrap()), 0x4A10; "for specific origin filter")]
+    #[test_case(Some(UUri::try_from_parts("*", 0x0001_FFFF, 0x01, 0x0000).unwrap()), 0x7091; "for wildcard origin filter")]
     #[tokio::test]
     async fn test_register_endpoint_succeeds(origin_filter: Option<UUri>, resource_id: u16) {
         // GIVEN an RpcServer for a transport
@@ -307,7 +315,7 @@ mod tests {
 
     #[test_case(None, 0x0000; "for resource ID 0")]
     #[test_case(None, 0x8000; "for resource ID out of range")]
-    #[test_case(Some(UUri::try_from_parts("*", 0xFFFF, 0xFF, 0x0001).unwrap()), 0x4A10; "for source filter with invalid resource ID")]
+    #[test_case(Some(UUri::try_from_parts("*", 0x0001_FFFF, 0xFF, 0x0001).unwrap()), 0x4A10; "for source filter with invalid resource ID")]
     #[tokio::test]
     async fn test_register_endpoint_fails(origin_filter: Option<UUri>, resource_id: u16) {
         // GIVEN an RpcServer for a transport
@@ -391,7 +399,7 @@ mod tests {
         let value = b"Hello";
         let message_id = UUID::build();
         let message_id_clone = message_id.clone();
-        let message_source = UUri::try_from("up://localhost/A100/1/0").unwrap();
+        let message_source = UUri::try_from("up://localhost/A100/1/1/0").unwrap();
         let message_source_clone = message_source.clone();
 
         request_handler
@@ -406,7 +414,7 @@ mod tests {
                 })
             })
             .returning(|_resource_id, _message_attributes, _request_payload| {
-                let response_payload = UPayload::new(value.as_slice(), crate::UPayloadFormat::Raw);
+                let response_payload = UPayload::new(value.as_slice(), crate::PayloadEncoding::RAW);
                 Ok(Some(response_payload))
             });
         transport
@@ -425,12 +433,12 @@ mod tests {
                 Ok(())
             });
         let request_message = UMessageBuilder::request(
-            UUri::try_from("up://localhost/A200/1/7000").unwrap(),
+            UUri::try_from("up://localhost/A200/1/1/7000").unwrap(),
             message_source,
             5_000,
         )
         .with_message_id(message_id)
-        .build_with_payload(value.as_slice(), crate::UPayloadFormat::Raw)
+        .build_with_payload(value.as_slice(), crate::PayloadEncoding::RAW)
         .unwrap();
 
         let request_listener = RequestListener {
@@ -465,9 +473,9 @@ mod tests {
             .once()
             .withf(move |response_message| {
                 let error: UStatus = response_message.extract_protobuf().unwrap();
-                error.get_code() == UCode::NotFound
+                error.code() == UCode::NotFound
                     && response_message.is_response()
-                    && response_message.commstatus_unchecked() == error.get_code()
+                    && response_message.commstatus_unchecked() == error.code()
                     && response_message.request_id_unchecked() == &message_id_clone
             })
             .returning(move |_msg| {
@@ -475,8 +483,8 @@ mod tests {
                 Ok(())
             });
         let request_message = UMessageBuilder::request(
-            UUri::try_from("up://localhost/A200/1/7000").unwrap(),
-            UUri::try_from("up://localhost/A100/1/0").unwrap(),
+            UUri::try_from("up://localhost/A200/1/1/7000").unwrap(),
+            UUri::try_from("up://localhost/A100/1/1/0").unwrap(),
             5_000,
         )
         .with_message_id(message_id)
@@ -527,9 +535,9 @@ mod tests {
             .once()
             .withf(move |response_message| {
                 let error: UStatus = response_message.extract_protobuf().unwrap();
-                error.get_code() == UCode::DeadlineExceeded
+                error.code() == UCode::DeadlineExceeded
                     && response_message.is_response()
-                    && response_message.commstatus_unchecked() == error.get_code()
+                    && response_message.commstatus_unchecked() == error.code()
                     && response_message.request_id_unchecked() == &message_id_clone
             })
             .returning(move |_msg| {
@@ -537,8 +545,8 @@ mod tests {
                 Ok(())
             });
         let request_message = UMessageBuilder::request(
-            UUri::try_from("up://localhost/A200/1/7000").unwrap(),
-            UUri::try_from("up://localhost/A100/1/0").unwrap(),
+            UUri::try_from("up://localhost/A200/1/1/7000").unwrap(),
+            UUri::try_from("up://localhost/A100/1/1/0").unwrap(),
             // make sure this request times out very quickly
             100,
         )

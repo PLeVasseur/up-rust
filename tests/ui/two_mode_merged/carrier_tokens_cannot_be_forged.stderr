@@ -1,0 +1,7 @@
+error: cannot construct `up_rust::two_mode::IngressRoute` with struct literal syntax due to private fields
+ --> tests/ui/two_mode_merged/carrier_tokens_cannot_be_forged.rs:5:13
+  |
+5 |     let _ = IngressRoute { owner: 0 };
+  |             ^^^^^^^^^^^^   -------- private field
+  |
+  = note: ...and other private field `route` that was not provided

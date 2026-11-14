@@ -10,6 +10,7 @@
  *
  * SPDX-License-Identifier: Apache-2.0
  ********************************************************************************/
+use crate::prelude::*;
 use std::sync::Arc;
 
 use async_trait::async_trait;
@@ -34,7 +35,7 @@ use crate::{
 fn udiscovery_uri(resource_id: u16) -> UUri {
     UUri::try_from_parts(
         "",
-        UDISCOVERY_TYPE_ID,
+        0x0001_0000 | UDISCOVERY_TYPE_ID,
         UDISCOVERY_VERSION_MAJOR,
         resource_id,
     )
@@ -77,6 +78,13 @@ impl TryFrom<&ServiceTopicInfo> for TopicInfo {
 /// The client requires an [`RpcClient`] for performing the remote procedure calls.
 pub struct RpcClientUDiscovery {
     rpc_client: Arc<dyn RpcClient>,
+}
+
+impl core::fmt::Debug for RpcClientUDiscovery {
+    fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
+        f.debug_struct("RpcClientUDiscovery")
+            .finish_non_exhaustive()
+    }
 }
 
 impl RpcClientUDiscovery {
@@ -208,7 +216,8 @@ mod tests {
                     uris: Some(UUriBatch {
                         uris: vec![UUriProto {
                             authority_name: "other".to_string(),
-                            ue_id: 0x0004_D5A3,
+                            ue_type_id: 0xD5A3,
+                            ue_instance_id: 0x0004,
                             ue_version_major: 0x01,
                             resource_id: 0xD3FE,
                             ..Default::default()
@@ -226,7 +235,7 @@ mod tests {
         assert!(udiscovery_client
             .find_services(service_pattern_uri.clone(), false)
             .await
-            .is_err_and(|e| e.get_code() == UCode::Internal));
+            .is_err_and(|e| e.code() == UCode::Internal));
         assert!(udiscovery_client
             .find_services(service_pattern_uri.clone(), false)
             .await
@@ -273,7 +282,8 @@ mod tests {
                 let topic_info = ServiceTopicInfo {
                     topic: Some(UUriProto {
                         authority_name: "other".to_string(),
-                        ue_id: 0x0004_D5A3,
+                        ue_type_id: 0xD5A3,
+                        ue_instance_id: 0x0004,
                         ue_version_major: 0x01,
                         resource_id: 0xD3FE,
                         ..Default::default()
@@ -301,7 +311,7 @@ mod tests {
         assert!(udiscovery_client
             .get_service_topics(topic_pattern_uri.clone(), false)
             .await
-            .is_err_and(|e| e.get_code() == UCode::Internal));
+            .is_err_and(|e| e.code() == UCode::Internal));
         assert!(udiscovery_client
             .get_service_topics(topic_pattern_uri.clone(), false)
             .await

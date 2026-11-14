@@ -1,0 +1,11 @@
+error[E0599]: no method named `invoke` found for struct `up_rust::two_mode::RpcClient<u32, u32, up_rust::two_mode::InPlace>` in the current scope
+ --> tests/ui/two_mode_merged/no_value_invoke_on_in_place.rs:5:20
+  |
+5 |     let _ = client.invoke(&1);
+  |                    ^^^^^^
+  |
+help: there is a method `into` with a similar name, but with different arguments
+ --> $RUST/core/src/convert/mod.rs
+  |
+  |     fn into(self) -> T;
+  |     ^^^^^^^^^^^^^^^^^^^

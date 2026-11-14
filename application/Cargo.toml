@@ -1,0 +1,18 @@
+[package]
+name = "up-rust-application"
+version = "0.10.0-SNAPSHOT"
+edition = "2021"
+rust-version = "1.88"
+license = "Apache-2.0"
+description = "Common bounded application publisher for the uProtocol Rust SDK"
+
+[dependencies]
+up-rust-core = { version = "0.10.0-SNAPSHOT", path = "../core" }
+
+[lints]
+workspace = true
+
+[[example]]
+name = "independent_publishers"
+path = "examples/independent_publishers.rs"
+crate-type = ["lib"]

@@ -14,6 +14,8 @@
 use super::SerializationError;
 use protobuf::{well_known_types::any::Any, Message, MessageFull};
 
+/// *Role: standalone utility letting protobuf-generated types ride as payloads implicitly; blanket-implemented for `protobuf` types — see the trait map.*
+///
 /// A type that can be mapped to and from a protobuf.
 pub trait ProtobufMappable: Sized {
     /// Parses an instance of this type from the given protobuf bytes.
@@ -26,6 +28,7 @@ pub trait ProtobufMappable: Sized {
     ///
     /// Returns an error if the given bytes cannot be parsed as a protobuf.
     fn parse_from_protobuf_bytes(proto: &[u8]) -> Result<Self, SerializationError>;
+
     /// Parses an instance of this type from the given packed protobuf bytes.
     ///
     /// # Arguments
@@ -37,12 +40,14 @@ pub trait ProtobufMappable: Sized {
     /// Returns an error if the given bytes cannot be parsed to a protobuf _Any_ message
     /// or if the contained message cannot be unpacked to the expected type.
     fn parse_from_packed_protobuf_bytes(proto: &[u8]) -> Result<Self, SerializationError>;
+
     /// Serializes this instance to protobuf bytes.
     ///
     /// # Errors
     ///
     /// Returns an error if this instance cannot be serialized to protobuf bytes.
     fn write_to_protobuf_bytes(&self) -> Result<Vec<u8>, SerializationError>;
+
     /// Serializes this instance to packed protobuf bytes.
     ///
     /// # Errors

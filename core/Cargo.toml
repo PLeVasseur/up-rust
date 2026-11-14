@@ -1,0 +1,37 @@
+################################################################################
+# Copyright (c) 2026 Contributors to the Eclipse Foundation
+#
+# See the NOTICE file(s) distributed with this work for additional
+# information regarding copyright ownership.
+#
+# This program and the accompanying materials are made available under the
+# terms of the Apache License Version 2.0 which is available at
+# https://www.apache.org/licenses/LICENSE-2.0
+#
+# SPDX-License-Identifier: Apache-2.0
+################################################################################
+
+# The safety-critical path of up-rust (R34, R48). The rules that make this
+# crate useful are mechanical and checked by `tools/ci/check_core_gates.py`:
+#
+# * `#![no_std]`, no `alloc`.
+# * This manifest has no `[features]` and no `[dependencies]` section, because
+#   Cargo unifies features across a build, so any other crate could switch on
+#   something that taints the safety path.
+#
+# Do not add either section. Anything that needs `std` lives in `up-rust`.
+
+[package]
+name = "up-rust-core"
+version = "0.10.0-SNAPSHOT"
+edition = "2021"
+rust-version = "1.88"
+license = "Apache-2.0"
+description = "The heap-free, dependency-free core of the Eclipse uProtocol Rust SDK."
+repository = "https://github.com/eclipse-uprotocol/up-rust"
+
+[lib]
+path = "src/lib.rs"
+
+[lints]
+workspace = true

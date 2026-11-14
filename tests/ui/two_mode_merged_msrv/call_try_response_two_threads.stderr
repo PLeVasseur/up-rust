@@ -1,0 +1,15 @@
+error[E0499]: cannot borrow `call` as mutable more than once at a time
+ --> tests/ui/two_mode_merged_msrv/call_try_response_two_threads.rs:9:21
+  |
+7 |     std::thread::scope(|scope| {
+  |                         ----- has type `&'1 std::thread::Scope<'1, '_>`
+8 |         scope.spawn(|| call.try_response().map(|reply| reply.is_some()));
+  |         ----------------------------------------------------------------
+  |         |           |  |
+  |         |           |  first borrow occurs due to use of `call` in closure
+  |         |           first mutable borrow occurs here
+  |         argument requires that `call` is borrowed for `'1`
+9 |         scope.spawn(|| call.try_response().map(|reply| reply.is_some()));
+  |                     ^^ ---- second borrow occurs due to use of `call` in closure
+  |                     |
+  |                     second mutable borrow occurs here

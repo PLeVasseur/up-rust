@@ -13,36 +13,17 @@
 
 use crate::uattributes::UAttributesError;
 
-const CE_TYPE_PUBLISH: &str = "up-pub.v1";
-const CE_TYPE_NOTIFICATION: &str = "up-not.v1";
-const CE_TYPE_REQUEST: &str = "up-req.v1";
-const CE_TYPE_RESPONSE: &str = "up-res.v1";
+pub use up_rust_core::uattributes::UMessageType;
 
-#[derive(Debug, Clone, Copy, PartialEq)]
-#[repr(C)]
-pub enum UMessageType {
-    Publish,
-    Request,
-    Response,
-    Notification,
-}
-
-impl UMessageType {
+/// The classic CloudEvent conversions on [`UMessageType`], with owned strings.
+pub trait UMessageTypeExt: Sized {
     /// Gets this message type's CloudEvent type name.
     ///
     /// # Returns
     ///
     /// The value to use for the *type* property when mapping to a CloudEvent.
     #[must_use]
-    pub fn to_cloudevent_type(&self) -> String {
-        match self {
-            UMessageType::Publish => CE_TYPE_PUBLISH,
-            UMessageType::Request => CE_TYPE_REQUEST,
-            UMessageType::Response => CE_TYPE_RESPONSE,
-            UMessageType::Notification => CE_TYPE_NOTIFICATION,
-        }
-        .to_string()
-    }
+    fn to_cloudevent_type(&self) -> String;
 
     /// Gets the message type for a CloudEvent type name.
     ///
@@ -50,21 +31,23 @@ impl UMessageType {
     ///
     /// Returns a [`UAttributesError::ParsingError`] if the given name does not match
     /// any of the supported message types.
-    pub fn try_from_cloudevent_type<S: Into<String>>(value: S) -> Result<Self, UAttributesError> {
+    fn try_from_cloudevent_type<S: Into<String>>(value: S) -> Result<Self, UAttributesError>;
+}
+
+impl UMessageTypeExt for UMessageType {
+    fn to_cloudevent_type(&self) -> String {
+        self.cloudevent_type().to_string()
+    }
+
+    fn try_from_cloudevent_type<S: Into<String>>(value: S) -> Result<Self, UAttributesError> {
         let type_string = value.into();
-        match type_string.as_str() {
-            CE_TYPE_PUBLISH => Ok(UMessageType::Publish),
-            CE_TYPE_NOTIFICATION => Ok(UMessageType::Notification),
-            CE_TYPE_REQUEST => Ok(UMessageType::Request),
-            CE_TYPE_RESPONSE => Ok(UMessageType::Response),
-            _ => Err(UAttributesError::parsing_error(format!(
-                "unknown message type: {type_string}"
-            ))),
-        }
+        UMessageType::from_cloudevent_type(type_string.as_str()).ok_or_else(|| {
+            UAttributesError::parsing_error(format!("unknown message type: {type_string}"))
+        })
     }
 }
 
-#[cfg(feature = "up-core-types")]
+#[cfg(feature = "up-core-api")]
 mod core_types_support {
     use super::*;
     use crate::up_core_api::uattributes::UMessageType as UMessageTypeProto;
@@ -102,12 +85,27 @@ mod core_types_support {
 mod tests {
     use test_case::test_case;
 
+    use super::UMessageTypeExt;
     use crate::{UAttributesError, UMessageType};
 
     const TYPE_PUBLISH: &str = "up-pub.v1";
     const TYPE_NOTIFICATION: &str = "up-not.v1";
     const TYPE_REQUEST: &str = "up-req.v1";
     const TYPE_RESPONSE: &str = "up-res.v1";
+
+    #[test_case(1, Some(UMessageType::Publish); "publish code")]
+    #[test_case(2, Some(UMessageType::Request); "request code")]
+    #[test_case(3, Some(UMessageType::Response); "response code")]
+    #[test_case(4, Some(UMessageType::Notification); "notification code")]
+    #[test_case(0, None; "absent kind is invalid")]
+    #[test_case(5, None; "first reserved kind")]
+    #[test_case(255, None; "last reserved kind")]
+    fn wire_kind_codes(code: u8, expected: Option<UMessageType>) {
+        assert_eq!(UMessageType::from_wire_code(code), expected);
+        if let Some(kind) = expected {
+            assert_eq!(kind.wire_code(), code);
+        }
+    }
 
     #[test_case(UMessageType::Publish, TYPE_PUBLISH; "for PUBLISH")]
     #[test_case(UMessageType::Notification, TYPE_NOTIFICATION; "for NOTIFICATION")]

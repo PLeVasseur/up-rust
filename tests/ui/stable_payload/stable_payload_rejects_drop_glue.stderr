@@ -1,0 +1,19 @@
+error[E0080]: evaluation panicked: StablePayload cannot have drop glue
+  --> tests/ui/stable_payload/stable_payload_rejects_drop_glue.rs:26:10
+   |
+26 | #[derive(StablePayload)]
+   |          ^^^^^^^^^^^^^ evaluation of `<DropGlue as up_rust::StablePayloadField>::FIELD_BITS_ALWAYS_VALID` failed here
+
+note: erroneous constant encountered
+  --> tests/ui/stable_payload/stable_payload_rejects_drop_glue.rs:26:10
+   |
+26 | #[derive(StablePayload)]
+   |          ^^^^^^^^^^^^^
+   |
+   = note: this note originates in the derive macro `StablePayload` (in Nightly builds, run with -Z macro-backtrace for more info)
+
+note: erroneous constant encountered
+  --> tests/ui/stable_payload/stable_payload_rejects_drop_glue.rs:33:13
+   |
+33 |     let _ = DropGlue::FIELD_BITS_ALWAYS_VALID;
+   |             ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^

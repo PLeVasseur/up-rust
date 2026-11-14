@@ -11,10 +11,13 @@
  * SPDX-License-Identifier: Apache-2.0
  ********************************************************************************/
 
+//! uProtocol TCK conformance rows for UUri behavior.
+
 use std::str::FromStr;
+use up_rust::prelude::*;
 
 use cucumber::{given, then, when};
-use up_rust::{ProtobufMappable, UUri};
+use up_rust::UUri;
 
 mod common;
 
@@ -42,9 +45,14 @@ async fn with_authority(w: &mut UUriWorld, authority_name: String) {
     w.authority_name = authority_name;
 }
 
-#[given(expr = "having entity identifier {word}")]
-async fn with_entity_id(w: &mut UUriWorld, entity_id: String) {
-    w.ue_id = common::value_as_u32(entity_id);
+#[given(expr = "having entity type {word}")]
+async fn with_entity_type(world: &mut UUriWorld, entity_type: String) {
+    world.ue_id = (world.ue_id & 0xFFFF_0000) | u32::from(common::value_as_u16(entity_type));
+}
+
+#[given(expr = "having entity instance {word}")]
+async fn with_entity_instance(world: &mut UUriWorld, entity_instance: String) {
+    world.ue_id = (world.ue_id & 0xFFFF) | (u32::from(common::value_as_u16(entity_instance)) << 16);
 }
 
 #[given(expr = "having major version {word}")]
@@ -168,12 +176,12 @@ async fn assert_uuri_does_not_match_pattern(w: &mut UUriWorld, pattern: String) 
 }
 
 // [utest->req~uri-data-model-proto~1]
-// [utest->dsn~uri-pattern-matching~2]
+// [utest->dsn~uri-pattern-matching~3]
 // [utest->req~uri-serialization~1]
 // [utest->dsn~uri-scheme~1]
 // [utest->dsn~uri-host-only~2]
 // [utest->dsn~uri-authority-mapping~1]
-// [utest->dsn~uri-path-mapping~2]
+// [utest->dsn~uri-path-mapping~3]
 #[tokio::main]
 async fn main() -> Result<(), std::io::Error> {
     common::run::<UUriWorld>(FEATURES_GLOB_PATTERN, "uuri").await

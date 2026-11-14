@@ -30,6 +30,12 @@ pub struct SimplePublisher<T, P> {
     uri_provider: Arc<P>,
 }
 
+impl<T, P> core::fmt::Debug for SimplePublisher<T, P> {
+    fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
+        f.debug_struct("SimplePublisher").finish_non_exhaustive()
+    }
+}
+
 impl<T: UTransport, P: LocalUriProvider> SimplePublisher<T, P> {
     /// Creates a new client.
     ///
@@ -71,6 +77,7 @@ impl<T: UTransport, P: LocalUriProvider> Publisher for SimplePublisher<T, P> {
 
 #[cfg(test)]
 mod tests {
+    use crate::prelude::*;
 
     // [utest->dsn~communication-layer-impl-default~1]
 
@@ -79,7 +86,9 @@ mod tests {
     use crate::{utransport::MockTransport, StaticUriProvider, UCode, UPriority, UStatus, UUID};
 
     fn new_uri_provider() -> Arc<StaticUriProvider> {
-        Arc::new(StaticUriProvider::new("", 0x0005, 0x02).expect("failed to create URI provider"))
+        Arc::new(
+            StaticUriProvider::new("", 0x0001_0005, 0x02).expect("failed to create URI provider"),
+        )
     }
 
     #[tokio::test]
@@ -163,7 +172,7 @@ mod tests {
             .publish(
                 0x9A00,
                 call_options,
-                Some(UPayload::new(value.as_slice(), crate::UPayloadFormat::Raw)),
+                Some(UPayload::new(value.as_slice(), crate::PayloadEncoding::RAW)),
             )
             .await;
 

@@ -11,9 +11,15 @@
  * SPDX-License-Identifier: Apache-2.0
  ********************************************************************************/
 
-#[cfg(feature = "up-core-types")]
+#![allow(missing_docs)] // build script, not public API
+
+#[cfg(feature = "up-core-api")]
+const UPROTOCOL_BASE_URI: &str = "up-spec/up-core-api/";
+#[cfg(feature = "payload-contract-fixtures")]
+const PAYLOAD_CONTRACT_PROTO_BASE_URI: &str = "test-fixtures/proto/";
+
+#[cfg(feature = "up-core-api")]
 fn proto_api() -> Result<(), Box<dyn std::error::Error>> {
-    const UPROTOCOL_BASE_URI: &str = "up-spec/up-core-api/";
     let files = vec![
         // uProtocol-project proto definitions
         format!("{}uprotocol/uoptions.proto", UPROTOCOL_BASE_URI),
@@ -23,13 +29,12 @@ fn proto_api() -> Result<(), Box<dyn std::error::Error>> {
         // [impl->req~uri-data-model-proto~1]
         format!("{}uprotocol/v1/uri.proto", UPROTOCOL_BASE_URI),
         // [impl->req~uattributes-data-model-impl~1]
-        // [impl->req~uattributes-data-model-proto~1]
+        // [impl->req~uattributes-data-model-proto~2]
         format!("{}uprotocol/v1/uattributes.proto", UPROTOCOL_BASE_URI),
         format!("{}uprotocol/v1/ucode.proto", UPROTOCOL_BASE_URI),
         // [impl->req~umessage-data-model-impl~1]
         // [impl->req~umessage-data-model-proto~1]
         format!("{}uprotocol/v1/umessage.proto", UPROTOCOL_BASE_URI),
-        // [impl->req~ustatus-data-model-impl~1]
         // [impl->req~ustatus-data-model-proto~1]
         format!("{}uprotocol/v1/ustatus.proto", UPROTOCOL_BASE_URI),
         // not used in the SDK yet, but for completeness sake
@@ -69,14 +74,54 @@ fn cloudevents() -> Result<(), Box<dyn std::error::Error>> {
         .inputs(["proto/io/cloudevents/v1/cloudevents.proto"])
         .cargo_out_dir("cloudevents")
         .run_from_script();
+
+    Ok(())
+}
+
+#[cfg(feature = "payload-contract-fixtures")]
+fn payload_contract_fixtures() -> Result<(), Box<dyn std::error::Error>> {
+    let inputs = [
+        format!("{PAYLOAD_CONTRACT_PROTO_BASE_URI}uprotocol/bench/v1/common.proto"),
+        format!("{PAYLOAD_CONTRACT_PROTO_BASE_URI}uprotocol/bench/v1/can.proto"),
+        format!("{PAYLOAD_CONTRACT_PROTO_BASE_URI}uprotocol/bench/v1/someip_signal_batch.proto"),
+        format!("{PAYLOAD_CONTRACT_PROTO_BASE_URI}uprotocol/bench/v1/stream_chunk.proto"),
+        format!(
+            "{PAYLOAD_CONTRACT_PROTO_BASE_URI}uprotocol/bench/v1/radar_ars548_detection_list.proto"
+        ),
+        format!("{PAYLOAD_CONTRACT_PROTO_BASE_URI}uprotocol/bench/v1/lidar_point_cloud.proto"),
+        format!("{PAYLOAD_CONTRACT_PROTO_BASE_URI}uprotocol/bench/v1/camera_bayer_frame.proto"),
+        format!(
+            "{PAYLOAD_CONTRACT_PROTO_BASE_URI}uprotocol/bench/v1/camera_carla_bgra_frame.proto"
+        ),
+    ];
+
+    for input in &inputs {
+        println!("cargo:rerun-if-changed={input}");
+    }
+
+    protobuf_codegen::Codegen::new()
+        .protoc()
+        .protoc_path(&protoc_bin_vendored::protoc_bin_path()?)
+        .customize(protobuf_codegen::Customize::default())
+        .include(PAYLOAD_CONTRACT_PROTO_BASE_URI)
+        .inputs(inputs)
+        .cargo_out_dir("payload_contract_fixtures")
+        .run_from_script();
+
     Ok(())
 }
 
 fn main() -> Result<(), Box<dyn std::error::Error>> {
-    #[cfg(feature = "up-core-types")]
+    let target = std::env::var("TARGET")?;
+    println!("cargo:rustc-env=UP_RUST_TARGET_TRIPLE={target}");
+    #[cfg(feature = "up-core-api")]
     proto_api()?;
 
     #[cfg(feature = "cloudevents")]
     cloudevents()?;
+
+    #[cfg(feature = "payload-contract-fixtures")]
+    payload_contract_fixtures()?;
+
     Ok(())
 }

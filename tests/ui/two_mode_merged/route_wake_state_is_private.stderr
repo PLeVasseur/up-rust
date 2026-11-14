@@ -1,0 +1,10 @@
+error[E0616]: field `state` of struct `up_rust::transport::RouteWake` is private
+ --> tests/ui/two_mode_merged/route_wake_state_is_private.rs:7:10
+  |
+7 |     cell.state.store(4, Ordering::SeqCst);
+  |          ^^^^^ private field
+  |
+help: a method `state` also exists, call it with parentheses
+  |
+7 |     cell.state().store(4, Ordering::SeqCst);
+  |               ++

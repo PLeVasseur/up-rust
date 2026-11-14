@@ -1,0 +1,28 @@
+{
+  "schema": "uprotocol.owned-context.provisional.v1",
+  "wire": {
+    "namespace": "wire",
+    "literal": "example.vehicle.door.fields-json-v1",
+    "compact_id": 61698,
+    "owner": "door-adoption fixture only; deployment must provision its own ownership",
+    "version": 1,
+    "reference": "literal"
+  },
+  "payload_family": {
+    "namespace": "payload_family",
+    "literal": "example.vehicle.door.json-v1",
+    "compact_id": 61697,
+    "owner": "door-adoption fixture only; deployment must provision its own ownership",
+    "version": 1,
+    "reference": "literal"
+  },
+  "metadata_layout": {
+    "namespace": "metadata_layout",
+    "literal": "org.eclipse.uprotocol.metadata.uframe-fields",
+    "compact_id": 2,
+    "owner": "SDK provisional identity policy",
+    "version": 1,
+    "reference": "registered_compact"
+  },
+  "format_version": 1
+}

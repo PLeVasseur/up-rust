@@ -1,0 +1,9 @@
+error[E0382]: use of moved value: `parked`
+ --> tests/ui/two_mode_merged_msrv/parked_frame_is_not_copy.rs:6:18
+  |
+4 | fn twice(parked: ParkedFrame) {
+  |          ------ move occurs because `parked` has type `up_rust::two_mode::ParkedFrame`, which does not implement the `Copy` trait
+5 |     let first = parked;
+  |                 ------ value moved here
+6 |     let second = parked;
+  |                  ^^^^^^ value used here after move

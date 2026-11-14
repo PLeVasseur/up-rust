@@ -1,0 +1,5 @@
+error[E0599]: no method named `try_recv` found for struct `up_rust::two_mode::RpcServerSetup` in the current scope
+ --> tests/ui/two_mode_merged_msrv/serve_before_runtime.rs:5:19
+  |
+5 |     let _ = setup.try_recv();
+  |                   ^^^^^^^^ method not found in `RpcServerSetup<u32, u32>`

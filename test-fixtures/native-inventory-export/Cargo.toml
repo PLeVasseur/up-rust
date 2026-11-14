@@ -1,0 +1,24 @@
+[package]
+name = "native-inventory-fixture-export"
+version = "0.0.0"
+edition = "2021"
+rust-version = "1.88"
+license = "Apache-2.0"
+publish = false
+description = "Actual-target linked native inventory exporter fixture"
+readme = "README.md"
+
+[features]
+default = ["linked-types", "seat"]
+linked-types = ["dep:native-inventory-fixture-types"]
+seat = ["native-inventory-fixture-types?/seat"]
+air = ["native-inventory-fixture-types?/air"]
+
+[dependencies]
+clap = { version = "4.6.6", features = ["derive"] }
+native-inventory-fixture-types = { path = "../native-inventory-types", version = "=0.0.0", default-features = false, optional = true }
+up-native-profile = { path = "../../tools/up-native-profile", version = "=0.1.0" }
+
+[lints.rust]
+missing_docs = "deny"
+unsafe_code = "forbid"

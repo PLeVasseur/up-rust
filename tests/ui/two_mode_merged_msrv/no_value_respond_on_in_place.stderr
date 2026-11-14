@@ -1,0 +1,8 @@
+error[E0599]: no method named `respond` found for struct `up_rust::two_mode::Request<u32, u32, up_rust::two_mode::InPlace>` in the current scope
+ --> tests/ui/two_mode_merged_msrv/no_value_respond_on_in_place.rs:5:21
+  |
+5 |     let _ = request.respond(&1);
+  |                     ^^^^^^^ method not found in `Request<u32, u32, InPlace>`
+  |
+  = note: the method was found for
+          - `up_rust::two_mode::Request<Req, Resp>`

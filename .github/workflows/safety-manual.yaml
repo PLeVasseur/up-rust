@@ -1,0 +1,22 @@
+# SPDX-License-Identifier: Apache-2.0
+name: Safety manual consistency
+on:
+  push:
+    branches: [main]
+  pull_request: {}
+  workflow_dispatch: {}
+  workflow_call: {}
+permissions:
+  contents: read
+jobs:
+  safety-manual:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          submodules: recursive
+          persist-credentials: false
+      - name: Qualify the document checker with small independent fixtures
+        run: python3 -B -m unittest discover -s tools/ci -p test_check_safety_manual.py -v
+      - name: Check the pinned manual and specification
+        run: python3 tools/ci/check_safety_manual.py

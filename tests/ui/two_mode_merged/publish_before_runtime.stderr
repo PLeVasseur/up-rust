@@ -1,0 +1,5 @@
+error[E0599]: no method named `publish` found for struct `up_rust::two_mode::PublisherSetup<T, M>` in the current scope
+ --> tests/ui/two_mode_merged/publish_before_runtime.rs:5:19
+  |
+5 |     let _ = setup.publish(&1);
+  |                   ^^^^^^^ method not found in `up_rust::two_mode::PublisherSetup<u32>`

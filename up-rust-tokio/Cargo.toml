@@ -1,0 +1,23 @@
+# The async layer of the two-mode API. It sits outside the no-heap claim (R45):
+# it depends on Tokio and adds nothing to `up-rust-core`.
+
+[package]
+name = "up-rust-tokio"
+version = "0.10.0-SNAPSHOT"
+edition = "2021"
+rust-version = "1.88"
+license = "Apache-2.0"
+description = "Tokio-based async layer over the Eclipse uProtocol Rust SDK's two-mode transports."
+repository = "https://github.com/eclipse-uprotocol/up-rust"
+
+[dependencies]
+pin-project-lite = "0.2"
+tokio = { version = "1", default-features = false, features = ["rt", "time"] }
+up-rust = { path = "..", version = "0.10.0-SNAPSHOT" }
+
+[dev-dependencies]
+tokio = { version = "1", default-features = false, features = ["macros", "rt", "rt-multi-thread", "time"] }
+up-rust = { path = "..", version = "0.10.0-SNAPSHOT", features = ["native-identity", "test-util", "zero-copy-transport"] }
+
+[lints]
+workspace = true

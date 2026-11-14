@@ -1,0 +1,22 @@
+# A wire and a wrapper written with no `unsafe` at all (R46). This crate's
+# `forbid(unsafe_code)` is the proof; the tests show the result actually works.
+
+[package]
+name = "forbid-unsafe-wire"
+version = "0.0.0"
+edition = "2021"
+rust-version = "1.88"
+publish = false
+
+[dependencies]
+up-rust = { path = "../..", features = ["zero-copy-transport"] }
+
+[dev-dependencies]
+up-rust = { path = "../..", features = ["zero-copy-transport", "test-util"] }
+
+[lints]
+workspace = true
+
+[[test]]
+name = "forbid_unsafe"
+harness = false
