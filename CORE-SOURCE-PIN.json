@@ -18,5 +18,6 @@
   ],
   "source_content_bytes_recorded_by_owner": 26379715,
   "source_content_bytes_verified_against_manifest": 26379932,
-  "up_spec_commit": "733b006bed71baafb2fa4ee4369cd1164323f8c9"
+  "up_spec_commit": "733b006bed71baafb2fa4ee4369cd1164323f8c9",
+  "up_spec_packaging": "Exact exported source is included directly because recorded spec commit is not reachable from the configured fork; no spec contents changed."
 }

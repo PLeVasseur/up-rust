@@ -1,3 +1,2 @@
-[submodule "up-spec"]
-	path = up-spec
-	url = https://github.com/PLeVasseur/up-spec.git
+# up-spec is a pinned source snapshot in this integration branch.
+# See CORE-SOURCE-PIN.json for its origin and content verification.
