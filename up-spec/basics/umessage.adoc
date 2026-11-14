@@ -1,0 +1,57 @@
+= uProtocol Message (UMessage)
+:toc:
+:sectnums:
+
+The key words "*MUST*", "*MUST NOT*", "*REQUIRED*", "*SHALL*", "*SHALL NOT*", "*SHOULD*", "*SHOULD NOT*", "*RECOMMENDED*", "*MAY*", and "*OPTIONAL*" in this document are to be interpreted as described in https://www.rfc-editor.org/info/bcp14[IETF BCP14 (RFC2119 & RFC8174)]
+
+----
+SPDX-FileCopyrightText: 2023 Contributors to the Eclipse Foundation
+
+See the NOTICE file(s) distributed with this work for additional
+information regarding copyright ownership.
+
+This program and the accompanying materials are made available under
+the terms of the Apache License Version 2.0 which is available at
+https://www.apache.org/licenses/LICENSE-2.0
+ 
+SPDX-FileType: DOCUMENTATION
+SPDX-License-Identifier: Apache-2.0
+----
+
+== Overview 
+
+uProtocol entities communicate with each other by means of exchanging `UMessages`. A uEntity can for example publish an event to a topic or invoke a remote service provider's operations using a UMessage. Please refer to the xref:../up-l2/README.adoc[uProtocol Communication Layer API] for details.
+
+[#data-model-definition]
+== Data Model
+
+A UMessage consists of xref:uattributes.adoc[UAttributes] holding the message's meta data and (optional) payload as shown in the class diagram below (using UML2 notation).
+
+Payload presence is determined by whether the optional `payload` field is
+explicitly set, not by the number of bytes it contains. An explicitly set
+zero-length byte sequence is therefore a present payload.
+
+.UMessage Data Model
+[#umessage-data-model]
+[mermaid]
+ifdef::env-github[[source,mermaid]]
+----
+classDiagram
+
+class UMessage {
+  attributes: UAttributes
+  payload : byte[0..*]
+}
+----
+
+Each xref:../languages.adoc[uProtocol Language Library]
+
+[.specitem,oft-sid="req~umessage-data-model-impl~1",oft-needs="impl,utest",oft-tags="LanguageLibrary"]
+--
+* *MUST* implement the <<umessage-data-model>> using the language specific type system.
+--
+
+[.specitem,oft-sid="req~umessage-data-model-proto~1",oft-needs="impl,utest",oft-tags="LanguageLibrary"]
+--
+* *MUST* support writing and reading of an instance of the <<umessage-data-model>> to/from a protobuf as defined in link:../up-core-api/uprotocol/v1/umessage.proto[umessage.proto].
+--

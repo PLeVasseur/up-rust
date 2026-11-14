@@ -1,0 +1,92 @@
+= up-rust SEooC: Refusal, errors and reporting
+:toc: preamble
+
+The key words "*MUST*", "*MUST NOT*", "*REQUIRED*", "*SHALL*", "*SHALL NOT*", "*SHOULD*", "*SHOULD NOT*", "*RECOMMENDED*", "*MAY*", and "*OPTIONAL*" in this document are to be interpreted as described in https://www.rfc-editor.org/info/bcp14[IETF BCP14 (RFC2119 & RFC8174)]
+
+Conventions, tags and status words: xref:../README.adoc[the safety area's README]. Scope and element boundary: xref:README.adoc[the SEooC's README].
+
+== Refuse before touching the heap
+
+[.specitem,oft-sid="req~ssr-refuse-before-heap~1",oft-title="Refuse before touching the heap",oft-needs="impl,utest",oft-tags="SafetyUpRustCore"]
+--
+An operation that cannot proceed in runtime mode *MUST* return an error before it touches the heap. Exhaustion of slots, depth, held messages, the peer table or the call table, a payload or token that is too long, an expired TTL, an unreadable clock and a bounded wait that ran out *MUST* all be errors. Each of them *MUST NOT* allocate, abort or panic.
+--
+
+[horizontal]
+ASIL:: B
+Allocated to:: the element
+Verification:: heap-window (every refusal inside the window), test
+Status:: Draft
+ISO 26262:: 6-7.4.12 (part-clause numbers only)
+
+*Rationale.* A refusal that needed the heap, or that panicked, would turn an ordinary condition such as a full queue into a failure, at the moment the system is most loaded. Runtime errors are fixed-size values with no heap data (`+req~ssr-error-fixed-size~1+`), so returning one needs no allocation.
+
+== No panic on runtime paths
+
+[.specitem,oft-sid="req~ssr-refuse-no-panic~1",oft-title="No panic on runtime paths",oft-needs="impl,utest",oft-tags="SafetyUpRustCore"]
+--
+Element code reachable in runtime mode *MUST NOT* panic or abort: not for any bytes, length or sequence a peer sends, not for any clock reading, and not for any sequence of calls through the public API. Arithmetic on runtime paths *MUST* be checked, saturating or wrapping by intent, and *MUST NOT* reach an overflow panic.
+--
+
+[horizontal]
+ASIL:: B
+Allocated to:: the element
+Verification:: gate (the panic-link check over the runtime path on both compilers, with the inbound metadata, payload, peer reference and TTL fed as opaque inputs, so that no panic branch can be proven dead from constant inputs; and the workspace lints), fault-injection (malformed and truncated frames), test
+Status:: Draft
+ISO 26262:: 6-Table 1 (part-clause numbers only)
+
+*Rationale.* In the build that ships, a panic aborts the process (`+req~ssr-build-panic-abort~3+`), so a panic reachable in runtime mode is a crash that a peer's bytes or a clock reading could set off. No waiver can cover a panic: a waiver covers allocation inside middleware only (`+core/src/transport/waiver.rs+`). The crate denies `+clippy::panic+`, `+clippy::unwrap_used+` and `+clippy::indexing_slicing+` (`+core/src/lib.rs+`), and the workspace's lint table denies `+indexing_slicing+` (`+Cargo.toml+`).
+
+== Errors are fixed-size diagnoses
+
+[.specitem,oft-sid="req~ssr-error-fixed-size~1",oft-title="Errors are fixed-size diagnoses",oft-needs="impl,utest",oft-tags="SafetyUpRustCore"]
+--
+Every error and report the element returns in runtime mode *MUST* be a fixed-size value that can be copied, name its cause, and name the route and the setting where there is one. Producing it *MUST* format nothing, log nothing and allocate nothing. Text for people *MUST* be formatted only in initialization mode.
+--
+
+[horizontal]
+ASIL:: B
+Allocated to:: the element
+Verification:: gate (a compile-time `+Copy+` assertion for each runtime error type), heap-window (the error paths), review
+Status:: Draft
+ISO 26262:: 6-7.4.12 (part-clause numbers only)
+
+*Rationale.* Runtime errors are `+Copy+` and carry no heap data, so reporting a refused send cannot touch the heap (`+core/src/transport/error.rs+`). An error that names its cause, its route and the setting at fault tells the integrator what to change, with no log to search. `+up-rust+` turns only initialization errors (`+StartupError+`) into a `+UStatus+` with text (`+core/src/transport/error.rs+`).
+
+== No silent loss, and each loss counted once
+
+[.specitem,oft-sid="req~ssr-error-no-silent-loss~3",oft-title="No silent loss, and each loss counted once",oft-needs="impl,utest",oft-tags="SafetyUpRustCore"]
+--
+Every frame the element refuses, drops, evicts or expires in runtime mode *MUST* be either returned to its caller as an error, or counted exactly once in its route's fixed counters, under a counter that names the cause. A retry is not a drop. The counters can be read in runtime mode without heap. A loss entirely inside middleware that the binding cannot observe is not a counted event; that route's report *MUST* explicitly disclose the unobservable-loss limitation. Observable overflow discards *MUST* be counted as specified by `+req~ssr-qos-overflow~2+`; this exception does not excuse missing observable counts. A fault counter saturates at 2^32^ − 1 and stays there, and an increment below that is never dropped. A flow counter (`+carried+`, `+busy+`, `+parked+`) wraps, and readers take differences (`+aou~seooc-application-reacts~3+`). A free slot released twice with no take between the two releases is counted as a fault, never absorbed silently; one released, taken and released again is not detected. A pull binding's failure to read its own queue is counted on the route (`+receive_failed+`), and so is a data connection that its middleware drops or fails to set up without an error, as iceoryx2's default handler does. An E2E client counts a response with no E2E header in a route counter of its own, `+unprotected+`, never in the E2E counter.
+--
+
+[horizontal]
+ASIL:: B
+Allocated to:: the element
+Verification:: test (one counter per cause; each observable loss counted once or returned as specified, under contention and under `+Wait+` too; unobservable middleware losses disclosed rather than represented as complete counts), heap-window (counters read inside the window)
+Status:: Draft
+ISO 26262:: 6-Annex D.2.4 (part-clause numbers only)
+
+*Rationale.* The E2E wire's figures count, as lost, each frame of the reference's incarnation that left the receiver's window without arriving, or was still open when the reference changed (`+req~ssr-e2e-figures~2+`). An end-to-end refusal is counted in its own route counter, not in `+refused+` (`+req~ssr-e2e-refusal-counted~2+`). A named count or an error gives each observable local loss an observation point, while saturating fault counts avoid turning an overflow into apparent recovery. A declared middleware visibility limit is not a measurement of its losses, and counter fields alone do not establish that every discard is observable.
+
+== Each route reports what it got
+
+[.specitem,oft-sid="req~ssr-error-route-report~2",oft-title="Each route reports what it got",oft-needs="impl,utest",oft-tags="SafetyUpRustCore"]
+--
+For every route, the element *MUST* report in runtime mode, without heap:
+
+* the send mode it got (lent or handed off);
+* the QoS in force;
+* its reserved storage;
+* its heap class, naming the permit where middleware allocates.
+
+The transport's waiver list *MUST* map every such permit to the waiver that admitted it. A report *MUST NOT* state a setting the route does not have.
+--
+
+[horizontal]
+ASIL:: B
+Allocated to:: the element
+Verification:: test (the send mode, QoS, reserved storage, heap class and permit, and the join to the waiver list, each asserted)
+Status:: Draft
+
+*Rationale.* Each report names its permit through its heap class (`+RouteReport+` in `+core/src/transport/report.rs+`), and the runtime keeps the waivers it recorded, so each permit joins to the waiver that admitted it.

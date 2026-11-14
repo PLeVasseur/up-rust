@@ -1,0 +1,38 @@
+= up-rust SEooC: Allocated to each wire
+:toc: preamble
+
+The key words "*MUST*", "*MUST NOT*", "*REQUIRED*", "*SHALL*", "*SHALL NOT*", "*SHOULD*", "*SHOULD NOT*", "*RECOMMENDED*", "*MAY*", and "*OPTIONAL*" in this document are to be interpreted as described in https://www.rfc-editor.org/info/bcp14[IETF BCP14 (RFC2119 & RFC8174)]
+
+Conventions, tags and status words: xref:../README.adoc[the safety area's README]. Scope and element boundary: xref:README.adoc[the SEooC's README].
+
+Each wire meets these in its own crate, and covers them in its own repository (tag `SafetyWire`).
+
+== Encoding and decoding never panic
+
+[.specitem,oft-sid="req~ssr-wire-no-panic~1",oft-title="Encoding and decoding never panic",oft-needs="impl,utest",oft-tags="SafetyWire"]
+--
+A wire's encode and decode *MUST NOT* panic on any input. A malformed, truncated, oversized or empty frame *MUST* be an error.
+--
+
+[horizontal]
+ASIL:: B
+Allocated to:: each wire
+Verification:: test (the wire contract suite's truncated, oversized and empty frames, plus a property test over arbitrary byte strings, run under `+catch_unwind+` on the unwinding diagnostic profile and inside the heap guard), fault-injection
+Status:: Draft
+
+*Rationale.* Decoding reads bytes a peer sent, so a panic on bad input would let any faulty peer end the receiving process (`+req~ssr-refuse-no-panic~1+`). The wire trait states the same rule: `+encode+` and `+decode+` must not panic on any input, and a malformed frame is `+Err+` (`+core/src/wire/mod.rs+`).
+
+== A heap-free claim passes the wire contract
+
+[.specitem,oft-sid="req~ssr-wire-heap-claim-tested~2",oft-title="A heap-free claim passes the wire contract",oft-needs="impl,utest",oft-tags="SafetyWire"]
+--
+A wire that declares no heap use in a direction *MUST* pass its contract suite inside a heap window for that direction: describing, sizing, encoding and decoding allocate and free nothing; an exact size is honest; and decoding does not depend on what the slot held before. Encoding is repeatable: every encode, for an ordinary wire, which passes the wire contract suite; and from equal starting states, for a sequenced wire, which passes the sequenced wire contract and is checked for its sequence instead.
+--
+
+[horizontal]
+ASIL:: B
+Allocated to:: each wire
+Verification:: heap-window, test (both contract suites, with their negative controls: an ordinary wire fails the sequenced check, a wire that never resynchronizes fails its restart check, a wire that draws a random value per encode fails determinism, and the E2E wire fails the ordinary check; the sequenced check's interface: a sender factory that is given a start value, a receiver factory and the restart bound, with receivers' slot storage made outside the heap windows)
+Status:: Draft
+
+*Rationale.* A sequenced wire deliberately changes its encoding, so its contract tests must check that sequence rather than require identical bytes on every encode.

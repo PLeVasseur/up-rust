@@ -1,0 +1,31 @@
+= uDiscovery
+:toc: preamble
+:sectnums:
+:source-highlighter: highlight.js
+
+The key words "*MUST*", "*MUST NOT*", "*REQUIRED*", "*SHALL*", "*SHALL NOT*", "*SHOULD*", "*SHOULD NOT*", "*RECOMMENDED*", "*MAY*", and "*OPTIONAL*" in this document are to be interpreted as described in https://www.rfc-editor.org/info/bcp14[IETF BCP14 (RFC2119 & RFC8174)]
+
+----
+SPDX-FileCopyrightText: 2024 Contributors to the Eclipse Foundation
+
+See the NOTICE file(s) distributed with this work for additional
+information regarding copyright ownership.
+
+This program and the accompanying materials are made available under
+the terms of the Apache License Version 2.0 which is available at
+https://www.apache.org/licenses/LICENSE-2.0
+ 
+SPDX-FileType: DOCUMENTATION
+SPDX-License-Identifier: Apache-2.0
+----
+
+== Overview
+
+The purpose of uDiscovery Service is for uEntities to be able to find services (their location, version, instances, etc...), and lookup a service's topic metadata (ex. message format, id, name, permission level, etc...). 
+
+The specification shall be split up into two parts:
+
+1. xref:client.adoc[Client APIs]: APIs used by uEntities to find services and their topic metadata
+2. xref:service.adoc[Service Implementation]: Internal design and implementation details for how UDiscovery service will serve the client APIs and replicate the information between the local, domain, and central service instances.
+
+

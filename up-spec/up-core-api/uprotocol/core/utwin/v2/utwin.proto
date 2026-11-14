@@ -1,0 +1,70 @@
+/*
+ * SPDX-FileCopyrightText: 2023 Contributors to the Eclipse Foundation
+ *
+ * See the NOTICE file(s) distributed with this work for additional
+ * information regarding copyright ownership.
+ * 
+ * This program and the accompanying materials are made available under
+ * the terms of the Apache License Version 2.0 which is available at
+ * https://www.apache.org/licenses/LICENSE-2.0
+ *
+ * SPDX-FileType: SOURCE
+ * SPDX-License-Identifier: Apache-2.0
+ */
+syntax = "proto3";
+
+package uprotocol.core.utwin.v2;
+
+import "uprotocol/uoptions.proto";
+import "uprotocol/v1/ustatus.proto";
+import "uprotocol/v1/uri.proto";
+import "uprotocol/v1/umessage.proto";
+
+option java_package = "org.eclipse.uprotocol.core.utwin.v2";
+option java_outer_classname = "UTwinProto";
+option java_multiple_files = true;
+
+// Enables generation of generic service attributes in C++
+option cc_generic_services = true;
+
+// uTwin Service interface definition
+service uTwin {
+  option (uprotocol.service_name) = "core.utwin"; // Service name
+  option (uprotocol.service_version_major) = 2;
+  option (uprotocol.service_version_minor) = 0;
+  option (uprotocol.service_id) = 3;
+
+  // A uEntity calls this API to retrieve the last uMessages for a given set of topics.<br>
+  // What is returned is a list of MessageResponse with the status for message retrieval
+  // and the event itself if uTwin was able to fetch it. uTwin will also return
+  // status for those messages that it was unable to fetch (i.e. due to NOT_FOUND
+  // or PERMISSION_DENIED.<br>
+  rpc GetLastMessages(GetLastMessagesRequest) returns (GetLastMessagesResponse) {
+    option (uprotocol.method_id) = 1;
+  }
+}
+
+
+// Response that contains the status and message per topic
+message MessageResponse {
+  // Topic that was requested to be fetched
+  uprotocol.v1.UUri topic = 1;
+
+  // Status (success or not) when fetching the last event for said topic
+  uprotocol.v1.UStatus status = 2;
+
+  // message when the topic has been fetched successfully, otherwise empty
+  uprotocol.v1.UMessage message = 3;
+}
+
+// The request message for the GetLastMessage operation.
+message GetLastMessagesRequest {
+  // The topics to get the last message for
+  uprotocol.v1.UUriBatch topics = 1;
+}
+
+// Message returned by the rpc GetLastMessages.
+message GetLastMessagesResponse {
+  // List of one or more messages and the results for fetching the message per topic
+  repeated MessageResponse responses = 2;
+}

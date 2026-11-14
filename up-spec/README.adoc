@@ -1,0 +1,72 @@
+= Eclipse uProtocol Specification
+:toc: preamble
+:sectnums:
+:showtitle!:
+
+image:https://github.com/eclipse-uprotocol/.github/blob/main/logo/uprotocol_logo.png?raw=true[uProtocol Logo,width=640]
+
+The key words "*MUST*", "*MUST NOT*", "*REQUIRED*", "*SHALL*", "*SHALL NOT*", "*SHOULD*", "*SHOULD NOT*", "*RECOMMENDED*", "*MAY*", and "*OPTIONAL*" in this document are to be interpreted as described in https://www.rfc-editor.org/info/bcp14[IETF BCP14 (RFC2119 & RFC8174)]
+
+----
+SPDX-FileCopyrightText: 2023 Contributors to the Eclipse Foundation
+
+See the NOTICE file(s) distributed with this work for additional
+information regarding copyright ownership.
+
+This program and the accompanying materials are made available under
+the terms of the Apache License Version 2.0 which is available at
+https://www.apache.org/licenses/LICENSE-2.0
+ 
+SPDX-FileType: DOCUMENTATION
+SPDX-License-Identifier: Apache-2.0
+----
+
+== Overview
+
+uProtocol is a communication protocol that enables software applications (uEntities) to easily communicate with each other running in distributed systems. The protocol is designed to be lightweight, efficient, easy to use, and run on top of any other communication middleware (transport) such as SOME/IP, MQTT, zenoh, HTTP, etc...
+
+To achieve the above mentioned objectives, we have split the specifications into sections (folders) that are:
+
+ * xref:basics/README.adoc[*The Basics:*] Foundational principles and concepts of uProtocol (ex. such as addressing, IDs, message header definitions, etc...). 
+
+ * xref:up-l1/README.adoc[*Transport layer (uP-L1):*] Common interface for sending and receiving of messages intended to be implemented employing a particular communication middleware technology (ex. MQTT, SOME/IP, HTTP, Zenoh, etc...).
+
+ * xref:up-l2/README.adoc[*Communication Layer (uP-L2):*] The common transport agnostic, programming language specific, API for the publisher/subscriber, notification, and RPC messaging patterns used by application/service developers to communicate with each other.
+
+* xref:up-l3/README.adoc[*Application Layer (uP-L3):*] Service contracts for subscription management, service/device discovery, and event caching that is common across all deployments (implementations) of uProtocol.
+
+
+== How to get started?
+
+It is always best to start with xref:basics/README.adoc[_the basics_] to familiarize yourself with common terminology used with uProtocol. 
+
+If you're a developer who would like to use uProtocol in your application or service, please refer to the appropriate language library's (ex. up-cpp, up-java, up-rust, etc..) `README.adoc`.
+
+If you would like to contribute to uProtocol to develop a new language library or transport implementation, please checkout the xref:CONTRIBUTING.adoc[CONTRIBUTING.adoc].
+
+== Tracing Requirements
+
+Implementers of the uProtocol specification are encouraged to use link:https://github.com/itsallcode/openfasttrace[OpenFastTrace] (OFT) for making sure that they actually cover all requirements from the specification that are relevant for the implemented component.
+
+The link:https://github.com/eclipse-uprotocol/ci-cd[uProtocol CI/CD repository] contains a reusable GitHub Action workflow for link:https://github.com/eclipse-uprotocol/ci-cd/.github/workflows/trace-requirements.yaml[tracing requirements] which can be used for that purpose. The link:https://github.com/eclipse-uprotocol/up-rust[uProtocol Rust Language Library] also makes use of this workflow in its link:https://github.com/eclipse-uprotocol/up-rust/.github/workflows/nightly.yaml[nightly build] and can serve as a blueprint.
+
+The uProtocol specification documents contain a lot of requirements that are defined as OFT specification items, which cover all aspects of uProtocol. In most cases, only of a subset of these requirements will be relevant/applicable for specific components. In order to make it easier for component developers to filter out these relevant requirements, the specification items that define more specific aspects of uProtocol have been _tagged_ with corresponding labels. When running OpenFastTrace to trace the requirements, these labels can be used to filter out the relevant specification items.
+
+.OpenFastTrace Specification Item Tags
+[cols="1,3"]
+|===
+| Tag Value | Description
+
+| `CommunicationLayerImpl` | Requirements that need to be covered by concrete implementations of xref:up-l2/api.adoc[uProtocol's Communication Layer API]
+| `LanguageLibrary` | Requirements that need to be covered by xref:languages.adoc[uProtocol Language Libraries]
+| `ServiceConsumer` | Requirements that need to be covered by uEntities that invoke service operations via uProtocol
+| `ServiceProvider` | Requirements that need to be covered by uEntities that provide service operations to be invoked via uProtocol
+| `TransportLayerImpl` | Requirements that need to be covered by all concrete implementations of xref:up-l1/README.adoc[uProtocol's Transport Layer API]
+| `TransportLayerImplPull` | Requirements that need to be covered by concrete implementations of xref:up-l1/README.adoc[uProtocol's Transport Layer API] supporting the the xref:up-l1/README.adoc#delivery-method[pull message delivery] method
+| `TransportLayerImplPush` | Requirements that need to be covered by concrete implementations of xref:up-l1/README.adoc[uProtocol's Transport Layer API] supporting the the xref:up-l1/README.adoc#delivery-method[push message delivery] method
+
+|===
+
+=== Gherkin Feature Files
+
+Along with the specification itself, this repository contains Gherkin Features and Scenarios, defined in files with a `.feature` suffix, which can be used with test frameworks like https://cucumber.io/[Cucumber] to assert compliance of implementations with the uProtocol specification. Not all parts of the specification are covered (yet), but we intend to add Scenario descriptions so that more and more of the requirements defined in the specification will be covered over time.

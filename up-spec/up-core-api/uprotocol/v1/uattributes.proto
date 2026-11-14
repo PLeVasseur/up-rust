@@ -1,0 +1,129 @@
+/*
+ * SPDX-FileCopyrightText: 2023 Contributors to the Eclipse Foundation
+ *
+ * See the NOTICE file(s) distributed with this work for additional
+ * information regarding copyright ownership.
+ * 
+ * This program and the accompanying materials are made available under
+ * the terms of the Apache License Version 2.0 which is available at
+ * https://www.apache.org/licenses/LICENSE-2.0
+ *
+ * SPDX-FileType: SOURCE
+ * SPDX-License-Identifier: Apache-2.0
+ */
+syntax = "proto3";
+
+package uprotocol.v1;
+
+import "uprotocol/v1/uri.proto";
+import "uprotocol/v1/uuid.proto";
+import "uprotocol/v1/ucode.proto";
+import "uprotocol/uoptions.proto";
+
+option java_package = "org.eclipse.uprotocol.v1";
+option java_outer_classname = "UAttributesProto";
+option java_multiple_files = true;
+
+// Metadata describing a particular message's purpose, content and processing requirements.
+// Each type of message is described by a set of mandatory and optional attributes.
+message UAttributes {
+    // A unique message identifier.
+    UUID id = 1;
+
+    // This message's type which also indicates its purpose and determines constraints on the other properties.
+    UMessageType type = 2;
+
+    // The origin (address) of this message.
+    UUri source = 3;
+
+    // The destination (address) of this message.
+    UUri sink = 4;
+
+    // The QoS level that this message should be processed/delivered with.
+    UPriority priority = 5;
+
+    // The amount of time (in milliseconds) after which this message MUST NOT be delivered/processed anymore.
+    uint32 ttl = 6;
+
+    // The service consumer's permission level.
+    // Declared as optional because only RPC Request messages may carry it.
+    optional uint32 permission_level = 7;
+
+    // A code indicating an error that has occurred during a remote procedure call.
+    // This is mandatory for RPC Response messages only.
+    optional UCode commstatus = 8;
+
+    // The identifier that a service consumer can use to correlate an RPC Response message with its RPC Request.
+    // This is mandatory for RPC Request messages only.
+    optional UUID reqid = 9;
+
+    // The service consumer's access token.
+    // Declared as optional because only RPC Request messages may carry it.
+    optional string token = 10;
+
+    // A tracing identifier to use for correlating messages across the system.
+    // Intended to be compatible with https://github.com/cloudevents/spec/blob/main/cloudevents/extensions/distributed-tracing.md
+    optional string traceparent = 11;
+
+    // The payload encoding identifier. See the uProtocol payload-encoding registry:
+    // https://github.com/eclipse-uprotocol/up-spec/blob/main/basics/payload_encoding_registry.adoc
+    optional uint32 payload_encoding_id = 12;
+}
+
+
+// uProtocol defines different types of messages.
+// Using the message type, validation can be performed to ensure transport
+// validity of the data in the {@link UAttributes}.
+//
+// The "up-" prefix in each uprotocol.ce_name value identifies the event as an
+// Eclipse uProtocol CloudEvent.
+enum UMessageType {
+    // Unspecified message type
+    UMESSAGE_TYPE_UNSPECIFIED = 0;
+
+    // Publish
+    // A message that is used to notify all interested consumers of an event that has occurred.
+    UMESSAGE_TYPE_PUBLISH = 1 [(uprotocol.ce_name) = "up-pub.v1"];
+
+    // RPC Request
+    // A message that is used by a service consumer to invoke one of a service provider's methods with some input data, expecting the service
+    // provider to reply with a response message.
+    UMESSAGE_TYPE_REQUEST = 2 [(uprotocol.ce_name) = "up-req.v1"];
+
+    // RPC Response
+    // A message that is used by a service provider to send the outcome of processing a request message
+    // from a servcice consumer.
+    UMESSAGE_TYPE_RESPONSE = 3 [(uprotocol.ce_name) = "up-res.v1"];
+
+    // Notification
+    // A message that is used to inform a specific consumer about an event that has occurred.
+    UMESSAGE_TYPE_NOTIFICATION = 4 [(uprotocol.ce_name) = "up-not.v1"];
+}
+
+
+// Message priority levels.
+enum UPriority {
+    // Unspecified priority
+    UPRIORITY_UNSPECIFIED = 0;
+
+    // Low Priority. No bandwidth assurance such as File Transfer.
+    UPRIORITY_CS0 = 1 [(uprotocol.ce_name) = "CS0"];
+
+    // Standard, undifferentiated application such as General (unclassified).
+    UPRIORITY_CS1 = 2 [(uprotocol.ce_name) = "CS1"];
+
+    // Operations, Administration, and Management such as Streamer messages (sub, connect, etc…)
+    UPRIORITY_CS2 = 3 [(uprotocol.ce_name) = "CS2"];
+
+    // Multimedia streaming such as Video Streaming
+    UPRIORITY_CS3 = 4 [(uprotocol.ce_name) = "CS3"];
+
+    // Real-time interactive such as High priority (rpc events)
+    UPRIORITY_CS4 = 5 [(uprotocol.ce_name) = "CS4"];
+
+    // Signaling such as Important
+    UPRIORITY_CS5 = 6 [(uprotocol.ce_name) = "CS5"];
+
+    // Network control such as Safety Critical
+    UPRIORITY_CS6 = 7 [(uprotocol.ce_name) = "CS6"];
+}

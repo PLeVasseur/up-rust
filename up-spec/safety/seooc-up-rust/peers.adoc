@@ -1,0 +1,158 @@
+= up-rust SEooC: Peers, RPC and message identity
+:toc: preamble
+
+The key words "*MUST*", "*MUST NOT*", "*REQUIRED*", "*SHALL*", "*SHALL NOT*", "*SHOULD*", "*SHOULD NOT*", "*RECOMMENDED*", "*MAY*", and "*OPTIONAL*" in this document are to be interpreted as described in https://www.rfc-editor.org/info/bcp14[IETF BCP14 (RFC2119 & RFC8174)]
+
+Conventions, tags and status words: xref:../README.adoc[the safety area's README]. Scope and element boundary: xref:README.adoc[the SEooC's README].
+
+== Peer failure is normal input
+
+[.specitem,oft-sid="req~ssr-peer-failure-normal~1",oft-title="Peer failure is normal input",oft-needs="impl,utest",oft-tags="SafetyUpRustCore"]
+--
+A peer process that dies at any instruction, or restarts, *MUST NOT* cause a panic, heap use in element code or an unbounded wait in any process that stays up. Those processes *MUST* see it only as silence, counted deadline misses, call errors, or a reported peer loss or restart.
+--
+
+[horizontal]
+ASIL:: B
+Allocated to:: the element
+Verification:: fault-injection inside a heap-window (a peer killed and restarted during traffic, on real iceoryx2 and on in-memory bindings of both families)
+Status:: Draft
+ISO 26262:: 9-7.4.4 g, 6-Annex D.2.4 (part-clause numbers only)
+
+*Rationale.* Peers run in other processes, often over middleware this project does not control, so each process has to protect itself from their failures rather than rely on them. In the code, a peer dying or restarting is normal input to a transport (`+core/src/transport/mod.rs+`), and a frame from an earlier incarnation of a peer is refused as stale (`+ReceiveError::StalePeer+`).
+
+== RPC calls always end
+
+[.specitem,oft-sid="req~ssr-peer-rpc-ends~1",oft-title="RPC calls always end",oft-needs="impl,utest",oft-tags="SafetyUpRustCore"]
+--
+Every RPC call *MUST* have a deadline, so a call whose server has vanished or never answers completes with an error by its TTL, and its slot returns to the table. A server can answer a request only within the request's TTL, counted from when the request was created.
+--
+
+[horizontal]
+ASIL:: B
+Allocated to:: the element
+Verification:: test, fault-injection (a server killed during a call)
+Status:: Draft
+
+*Rationale.* A vanished server cannot release its client resources, so the client needs its own expiration path and a reusable call slot.
+
+== A response reaches only its own call
+
+[.specitem,oft-sid="req~ssr-peer-rpc-correlation~2",oft-title="A response reaches only its own call",oft-needs="impl,utest",oft-tags="SafetyUpRustCore"]
+--
+A response *MUST* be delivered only to the call that sent its request. A response that arrives after its call has ended, including one that arrives at a slot a later call now uses, is refused and counted, and is never delivered to the later call. After it takes a call's slot, the element compares the response's request ID again, and gives the slot back, recording nothing, if it differs, so a response that a generation wrap brought to a later call is refused on every route. That check comes before any wire check, so on an E2E route the echo never sees such a response. On an RPC route with the E2E wire, a response *MUST* also answer its call exactly (`+req~ssr-e2e-rpc-echo~1+`, `+req~ssr-rpc-check-at-arrival~1+`). It relies on request IDs being unique within the window (`+req~ssr-ids-unique~3+`).
+--
+
+[horizontal]
+ASIL:: B
+Allocated to:: the element
+Verification:: test (a response after expiry, at a reused slot; a response that a generation wrap brings to a later call, given back with nothing recorded)
+Status:: Draft
+ISO 26262:: 6-Annex D.2.4 (part-clause numbers only)
+
+*Rationale.* A reused slot can carry a later call; checking its full request identity after claiming it prevents a delayed response from completing that later call.
+
+== A response completes its call only once its wire accepts it
+
+[.specitem,oft-sid="req~ssr-rpc-check-at-arrival~1",oft-title="A response completes its call only once its wire accepts it",oft-needs="impl,utest",oft-tags="SafetyUpRustCore"]
+--
+When a response arrives, the element *MUST* first check that the call slot it claimed still holds the request the response names, and otherwise gives the slot back, recording nothing. It then runs the route's wire check on the bytes the call keeps, before the call completes. A refused response completes nothing: it is counted on its route, and the call stays open for another copy. A call that receives no accepted response ends at its TTL, naming the last refusal it recorded. A refusal answer is checked like any response: a final one completes the call at once as rejected, naming the refusal's kind, and an advisory one is given back, so the call stays open and, if it ends at its TTL, names that kind. The element records the call's tag before its request is sent, and refuses a response that arrives before then. The arrival checks of one response route run one at a time, so a copy is never refused because another copy of the same response is being checked. A peer failure that finds a call's response being checked fails the call at once if that response is refused.
+--
+
+[horizontal]
+ASIL:: B
+Allocated to:: the element
+Verification:: test (two polling threads on one response route; a refusal racing the call's drop, its TTL, a peer's loss and its restart; a final answer that completes its call at once, and an advisory one that leaves it open), miri (the give-back and the delivering phases, with threads), heap-window
+Status:: Draft
+
+*Rationale.* Completing a call before checking its wire would let a corrupt first copy exclude a later intact response.
+
+== A native representation never crosses an ABI
+
+[.specitem,oft-sid="req~ssr-native-abi-agreed~1",oft-title="A native representation never crosses an ABI",oft-needs="impl,utest",oft-tags="SafetyUpRustCore,SafetyBinding"]
+--
+The element *MUST* state an ABI fingerprint of its target: its byte order, its pointer width, and the size and alignment of each scalar its stable payloads admit, `+u128+` and `+i128+` included. At setup, a route whose wire carries a native representation is refused when a peer's fingerprint differs, and the refusal names both ABIs and the copying route as the fix. Every peer of a route that admits a native wire records its fingerprint when it creates its side, and a native peer refuses one that records none, by name. A serialized wire is not affected. Each binding that carries native frames between processes exchanges the fingerprint at setup.
+--
+
+[horizontal]
+ASIL:: B
+Allocated to:: the element; each binding that carries native frames between processes
+Verification:: test (the binding contract's refusal of an ABI mismatch at setup, on the test doubles and on iceoryx2 with two processes; the fingerprint's unit tests; each Miri lane's logged fingerprint, on three targets with three values)
+Status:: Draft
+
+*Rationale.* Equal message identity does not imply equal in-memory layout; an explicit ABI agreement prevents interpreting one target layout as another.
+
+== Stale peers are rejected
+
+[.specitem,oft-sid="req~ssr-peer-stale-rejected~2",oft-title="Stale peers are rejected",oft-needs="impl,utest",oft-tags="SafetyUpRustCore"]
+--
+A frame from an earlier incarnation of a peer *MUST* be recognized by incarnation or generation and is not treated as current. A peer's identity is stable across its restarts, and its incarnation only rises. A frame that needs to raise its peer's incarnation while another thread holds that entry's raise is refused as contention, and counted. Frames of the current incarnation are classified during a raise, including in an interrupt handler on the raiser's core. A binding's restart report whose raise is refused this way still fails the calls bound to older incarnations, and is counted. A frame beyond 255 concurrent classifications of one peer on one route is refused and counted. No frame is admitted as current from a stale incarnation.
+--
+
+[horizontal]
+ASIL:: B
+Allocated to:: the element
+Verification:: test (a raise refused while another thread holds the entry's raise; a reader that runs while a raise is stopped between its halves; the latest incarnation read against a free and a publish of the entry; a refused restart report; the 256th classification), fault-injection (a restart on real iceoryx2, and a test double that restarts)
+Status:: Draft
+
+*Rationale.* A restarted peer must not inherit frames or calls from its predecessor, and contention must not turn a stale incarnation into a current one.
+
+== Undeclared peers cannot lock out declared ones
+
+[.specitem,oft-sid="req~ssr-peer-admission~2",oft-title="Undeclared peers cannot lock out declared ones",oft-needs="impl,utest",oft-tags="SafetyUpRustCore"]
+--
+On a route with a declared list of peers, a frame from an undeclared source *MUST* be refused and counted before it takes a peer-table entry. The table is sized from the declaration, and a declaration that the table or the binding cannot hold is refused at setup. A lost peer's entry is returned. Returning it never makes a later peer's frames be refused as stale, whatever frames of the lost peer are in flight at that moment.
+--
+
+[horizontal]
+ASIL:: B
+Allocated to:: the element
+Verification:: fault-injection (strangers first, then declared clients; a lost peer racing its own last frame, on two threads), miri, test
+Status:: Draft
+
+*Rationale.* Undeclared sources must not consume the entries reserved for declared peers; concurrent reuse must preserve the identity of each entry.
+
+== An undecodable request is answered
+
+[.specitem,oft-sid="req~ssr-peer-rpc-undecodable-answered~4",oft-title="An undecodable request is answered",oft-needs="impl,utest",oft-tags="SafetyUpRustCore"]
+--
+A server that receives a request whose header it can parse, but whose payload it cannot decode for a reason other than an end-to-end check, or whose encoding it does not admit, *MUST* answer it through the request's reply token, without heap, with commstatus `+InvalidArgument+`, and counts it. The answer is sent as any response on that route is, under the route's overflow policy, including a bounded wait where the route declares one. The client's call then ends with that error instead of waiting out its TTL. A request whose header cannot be parsed has no reply address: it is refused and counted, and its call ends at its TTL. So does a call whose answer cannot be sent, and that is counted too. A request that an end-to-end check refuses is counted (`+req~ssr-e2e-refusal-counted~2+`) and answered by the wire's refusal answer, final or advisory (`+req~ssr-e2e-refusal-answered~1+`), except a corrupt one, which is never answered. The server cannot tell a corrupted or duplicated copy from the only one, and an error answer to a copy could end a call it is still serving, so an end-to-end refusal never gets an error answer: an advisory refusal answer leaves the call open, and the call ends with the server's real response, or at its TTL. A request whose end-to-end data ID was not declared is answered `+InvalidArgument+`, as an undecodable one is. A request that passes the end-to-end check, and then fails the inner wire's decode, is answered. Every answer, the element's and the application's, is stamped by the route's wire with its request's tag, so on an E2E route it echoes that request. Another server's answer to a misaddressed copy carries that server's data ID, which the client refuses when it declares one server for the method. Every refused request's frame is released at once.
+--
+
+[horizontal]
+ASIL:: B
+Allocated to:: the element
+Verification:: test (an undecodable request is answered `+InvalidArgument+` on both binding families; a duplicated request that arrives before the real response gets an advisory answer, and its call ends with the real response; a corrupted only copy gets no answer, and its call ends at its TTL; a request with an undeclared data ID is answered `+InvalidArgument+`; a request that passes the end-to-end check and fails the inner decode is answered `+InvalidArgument+`; a refused request whose server never delivered its tag gets a final answer, and its call ends at once as rejected), heap-window
+Status:: Draft
+
+*Rationale.* A known decoding failure can be reported immediately, but an answer to a duplicate must not falsely terminate the call whose original request may still produce a response.
+
+== A call with no server fails at once
+
+[.specitem,oft-sid="req~ssr-peer-rpc-no-server~1",oft-title="A call with no server fails at once",oft-needs="impl,utest",oft-tags="SafetyUpRustCore"]
+--
+On a binding that declares that it counts its receivers exactly, a call whose request reached no server *MUST* fail at once, with an error that names the cause, instead of waiting out its TTL. On any other binding, the call *MUST* end at its TTL.
+--
+
+[horizontal]
+ASIL:: B
+Allocated to:: the element
+Verification:: test (with and without the capability), heap-window
+Status:: Draft
+
+*Rationale.* Waiting out the TTL of a request that no server received only delays an error the binding already knows, and holds the call's slot until then.
+
+== Message IDs are unique
+
+[.specitem,oft-sid="req~ssr-ids-unique~3",oft-title="Message IDs are unique",oft-needs="impl,utest,uman",oft-tags="SafetyUpRustCore"]
+--
+Every message ID the element generates *MUST* be a UUIDv7, as up-spec's rules require, and its 74 bits beyond the millisecond come from one generator per route, seeded once from initialization-only entropy. Two IDs of one source can therefore collide by chance. The element states that residual, with its derivation: the probability that two IDs collide, per pair within one millisecond, within one route, across a source's routes, and across the source process's restarts, including while the wall clock cannot be read and the last good time is reused. Generating an ID uses no heap and does not panic, also when the wall clock cannot be read, and the first ID on a thread needs no first-use setup. Within one route, an ID's input repeats only when the same millisecond recurs and a multiple of 2^32^ IDs separates the two IDs. Generation is refused, and counted, after 2^31^ IDs within one 64 ms bucket of the time the IDs carry, whether the wall clock cannot be read or reads but does not move; a refused call does not advance the sequence. The bucket's changes are detected on a value of their own. The last good time is kept to 64 ms from the clock's reading at the route's setup, and saturates at a ±4.36-year offset of the wall clock from that reading; while it is saturated, an ID needed while the clock cannot be read is refused, and counted.
+--
+
+[horizontal]
+ASIL:: B
+Allocated to:: the element
+Verification:: review (the stated residual and its derivation), test (no repeat in a large sample, across a restart, and while the clock is unreadable; an outage of 2^31^ IDs and then 2^31^ refused calls through a hook, with no repeated input; a stuck clock, a clock read only now and then, and a saturated last good time; a clock step back; a route seeded at 0 whose clock is then set to the present), heap-window (the first ID on a cold thread)
+Status:: Draft
+
+*Rationale.* up-spec `+dsn~uuid-spec~1+`. Correlation depends on distinguishing requests across time and reuse; a finite generator needs explicit refusal bounds when its clock cannot advance.

@@ -1,0 +1,52 @@
+= uProtocol Core Service APIs
+:toc:
+
+----
+SPDX-FileCopyrightText: 2023 Contributors to the Eclipse Foundation
+
+See the NOTICE file(s) distributed with this work for additional
+information regarding copyright ownership.
+
+This program and the accompanying materials are made available under
+the terms of the Apache License Version 2.0 which is available at
+https://www.apache.org/licenses/LICENSE-2.0
+ 
+SPDX-FileType: DOCUMENTATION
+SPDX-License-Identifier: Apache-2.0
+----
+
+Core uProtocol services interfaces are defined using asyncapi, with pointers to supported message serialization formats. Core uProtocol services API request and response messages can be defined to support any desired serialization format. The current default format is protobuf.
+
+---
+
+NOTE: Not all core services are implemented using asyncapi specifications yet. Some services still use the legacy format, where protobuf is used to define the entire API surface.
+
+---
+
+[%autowidth]
+|===
+| Service | Description | API definition | Message definitions
+
+| uDiscovery
+| Contract for dynamically discovering uThings (other uEntities, uDevices, uDomains, uResources, uMethods, etc...), for example what topics a service in another device shall publish, properties of a service, etc...
+| link:udiscovery/v3/udiscovery.proto[*udiscovery.proto*]
+| link:udiscovery/v3/udiscovery.proto[*udiscovery.proto*]
+
+| uSubscription
+| Contract for publishers and subscribers to subscribe/publish to topics
+| link:usubscription/v4/usubscription-asyncapi.yaml[*usubscription-asyncapi.yaml*]
+| link:usubscription/v4/usubscription.proto[*usubscription.proto*]
+
+| uTwin
+a|
+--
+ * Device-to-device Twin:
+  ** enable remote Apps to access last published state (and received by the device)
+  ** remain accessible even if connectivity is lost
+* In-vehicle Twin:
+  ** avoid re-sending (re-publishing) data when apps are launched/subscribed
+--
+| link:utwin/v2/utwin.proto[*utwin.proto*]
+| link:utwin/v2/utwin.proto[*utwin.proto*]
+
+|===

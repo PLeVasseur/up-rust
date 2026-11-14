@@ -1,0 +1,95 @@
+= uProtocol Language Library
+:toc:
+:sectnums:
+:up-l1-ref: xref:up-l1/README.adoc[uProtocol Transport Layer API]
+:up-l2-ref: xref:up-l2/README.adoc[uProtocol Communication Layer API]
+
+The key words "*MUST*", "*MUST NOT*", "*REQUIRED*", "*SHALL*", "*SHALL NOT*", "*SHOULD*", "*SHOULD NOT*", "*RECOMMENDED*", "*MAY*", and "*OPTIONAL*" in this document are to be interpreted as described in https://www.rfc-editor.org/info/bcp14[IETF BCP14 (RFC2119 & RFC8174)]
+
+----
+SPDX-FileCopyrightText: 2023 Contributors to the Eclipse Foundation
+
+See the NOTICE file(s) distributed with this work for additional
+information regarding copyright ownership.
+
+This program and the accompanying materials are made available under
+the terms of the Apache License Version 2.0 which is available at
+https://www.apache.org/licenses/LICENSE-2.0
+ 
+SPDX-FileType: DOCUMENTATION
+SPDX-License-Identifier: Apache-2.0
+----
+
+== Overview 
+
+uProtocol _Language Libraries_ are written for specific programming languages like Java, C++ or Rust to provide the basic data types and functionality that is needed by uEntities like Applications and Services to interact with each other. The libraries declare the API for the uProtocol Transport and Communication Layers and provide a generic implementation of the Communication Layer API.
+
+.Class Diagram
+[#up-libraries]
+image:up_libraries.drawio.svg[width=100%]
+
+uProtocol _Transport Libraries_ are written for specific programming languages to provide the binding of uProtocol to concrete transport protocols like MQTT, Eclipse Zenoh or SOME/IP.
+
+== Requirements
+
+=== Content
+
+A language library
+
+[.specitem,oft-sid="dsn~up-language-naming~1",oft-title="Library follows naming pattern",oft-tags="LanguageLibrary"]
+--
+* *MUST* be named according to pattern `up-[LANGUAGE]`, e.g. `up-rust` or `up-python`.
+--
+
+[.specitem,oft-sid="dsn~up-language-structure~1",oft-title="Library uses uProtocol namespace",oft-tags="LanguageLibrary"]
+--
+* *MUST* use the programming language specific namespace concept, if availabe, to indicate that the library belongs to the _uProtocol_ project. If the language supports hierarchical namespaces (like Java does), then `org.eclipse.uprotocol` *SHOULD* be used. Otherwise, a namespace of `uprotocol` *MUST* be used.
+--
+
+[.specitem,oft-sid="req~up-language-documentation~1",oft-needs="uman",oft-title="Library contains adequate README file",oft-tags="LanguageLibrary"]
+--
+* *MUST* contain a `README` file that explains how to build and use the library.
+--
+
+=== Build
+
+A language library
+
+[.specitem,oft-sid="req~up-language-build-sys~1",oft-needs="impl",oft-title="Library uses common build system",oft-tags="LanguageLibrary"]
+--
+* *MUST* employ an existing build system that is commonly used for the given programming language.
+--
+
+[.specitem,oft-sid="req~up-language-build-deps~1",oft-needs="impl",oft-title="Library build system resolves dependencies",oft-tags="LanguageLibrary"]
+--
+* *MUST* resolve and include external dependencies as part of the build process only.
+--
+
+=== Test & CI
+
+A language library
+
+[.specitem,oft-sid="req~up-language-ci-build~1",oft-needs="impl",oft-title="CI asserts that library can be built",oft-tags="LanguageLibrary"]
+--
+* *MUST* use a CI workflow that prevents pull requests from being merged if they cannot be built.
+--
+
+[.specitem,oft-sid="req~up-language-ci-test~1",oft-needs="impl",oft-title="CI asserts that test suite passes",oft-tags="LanguageLibrary"]
+--
+* *MUST* use a CI workflow that prevents pull requests from being merged if the library's test suite does not pass.
+--
+
+[.specitem,oft-sid="req~up-language-ci-linter~1",oft-needs="impl",oft-title="CI asserts that code complies with linting rules",oft-tags="LanguageLibrary"]
+--
+* *MUST* use a CI workflow that prevents pull requests from being merged if the library's source code does not comply with the project's code linting rules.
+--
+
+[.specitem,oft-sid="req~up-language-ci-api-docs~1",oft-needs="impl",oft-title="CI asserts that code contains API documentation",oft-tags="LanguageLibrary"]
+--
+* *MUST* use a CI workflow that prevents pull requests from being merged if the library's source code does not contain proper API documentation.
+--
+
+[.specitem,oft-sid="req~up-language-test-coverage~1",oft-title="CI determines code coverage",oft-tags="LanguageLibrary"]
+--
+* *MUST* use a CI workflow that determines the code coverage of the test suite on a regular basis and fails if the coverage falls below a configured threshold. Implementers *SHOULD* strive for 100% coverage.
+--

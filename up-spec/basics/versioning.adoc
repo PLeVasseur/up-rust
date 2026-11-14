@@ -1,0 +1,59 @@
+= Versioning
+:toc:
+:sectnums:
+
+The key words "*MUST*", "*MUST NOT*", "*REQUIRED*", "*SHALL*", "*SHALL NOT*", "*SHOULD*", "*SHOULD NOT*", "*RECOMMENDED*", "*MAY*", and "*OPTIONAL*" in this document are to be interpreted as described in https://www.rfc-editor.org/info/bcp14[IETF BCP14 (RFC2119 & RFC8174)]
+
+----
+SPDX-FileCopyrightText: 2023 Contributors to the Eclipse Foundation
+
+See the NOTICE file(s) distributed with this work for additional
+information regarding copyright ownership.
+
+This program and the accompanying materials are made available under
+the terms of the Apache License Version 2.0 which is available at
+https://www.apache.org/licenses/LICENSE-2.0
+ 
+SPDX-FileType: DOCUMENTATION
+SPDX-License-Identifier: Apache-2.0
+----
+
+Built into the protocol will be a mechanism to version different parts of the protocol and system. Since different components need to be versioned by different mechanisms and at different frequency, we will discuss the types in this section.
+
+== Format
+
+* Versioning *MUST* follow https://semver.org/[Semantic Versioning 2.0.0] definitions with the format `MAJOR.MINOR.PATCH`
+
+=== MAJOR
+
+The `MAJOR` part of an artifact's version
+
+* *MUST* be `1` for its initial release
+
+* *MUST* be incremented when the artifact is being changed in a not backwards compatible way
+
+=== MINOR
+
+The `MINOR` part of an artifact's version
+
+* *MUST* be incremented when artifact is being changed in a backwards compatible way
+
+Backwards compatibility is baked into the protobuf specifications and as such updating the service proto file should only force an update to the MINOR
+
+== What Must be Versioned
+
+=== Messages
+
+xref:../up-l2/README.adoc[uP-L2 Messages] *MUST* contain a version such that the serialization and deserialization between devices of said message can be done.
+
+=== uEntities
+
+Interfaces for uEntities are declared in proto files. Protobuf builds in backwards and forwards compatibility support into the IDL so a server and client may be updated independently of each other without breaking the communication or serialization/deserialization of generated code.
+
+If the uEntity declares an interface in proto:
+* *MUST* have their `MAJOR.MINOR` version values specified (declared) inside their proto file per xref:../up-l3/README.adoc[uP-L3 Specifications]
+
+
+=== Distribution
+
+_Section removed as this is implementation specific and not part of the protocol_

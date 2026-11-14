@@ -1,0 +1,121 @@
+= up-rust SEooC: QoS, TTL and deadlines
+:toc: preamble
+
+The key words "*MUST*", "*MUST NOT*", "*REQUIRED*", "*SHALL*", "*SHALL NOT*", "*SHOULD*", "*SHOULD NOT*", "*RECOMMENDED*", "*MAY*", and "*OPTIONAL*" in this document are to be interpreted as described in https://www.rfc-editor.org/info/bcp14[IETF BCP14 (RFC2119 & RFC8174)]
+
+Conventions, tags and status words: xref:../README.adoc[the safety area's README]. Scope and element boundary: xref:README.adoc[the SEooC's README].
+
+== QoS is declared per route at setup
+
+[.specitem,oft-sid="req~ssr-qos-declared~1",oft-title="QoS is declared per route at setup",oft-needs="impl,utest",oft-tags="SafetyUpRustCore"]
+--
+Every route's QoS (reliability, overflow, depth, history, deadline, and whether priority is required) *MUST* be declared during initialization in transport-agnostic terms, or take the one documented default. Priority and TTL stay per message.
+--
+
+[horizontal]
+ASIL:: B
+Allocated to:: the element
+Verification:: test, compile-fail (QoS set after runtime)
+Status:: Draft
+
+*Rationale.* 
+
+== QoS is honored or refused, never weakened
+
+[.specitem,oft-sid="req~ssr-qos-no-downgrade~1",oft-title="QoS is honored or refused, never weakened",oft-needs="impl,utest",oft-tags="SafetyUpRustCore"]
+--
+Each route's QoS *MUST* be checked at setup against its binding's declared capability, before any resource is reserved. If it cannot be honored, setup is refused, naming the route and the setting. No QoS setting is weakened silently, at setup or in runtime mode.
+--
+
+[horizontal]
+ASIL:: B
+Allocated to:: the element
+Verification:: test (the QoS contract suite on real iceoryx2 and on in-memory bindings; iceoryx2 tests `+t01+` to `+t14+`; the native lanes)
+Status:: Draft
+
+*Rationale.* Silently substituting a supported policy would leave the application relying on a guarantee the route does not provide.
+
+== Overflow acts as declared
+
+[.specitem,oft-sid="req~ssr-qos-overflow~2",oft-title="Overflow acts as declared",oft-needs="impl,utest",oft-tags="SafetyUpRustCore"]
+--
+In runtime mode a full route *MUST* apply exactly its declared overflow policy (drop the oldest, drop the newest, or wait within a bound), without heap, and *MUST* count every discard observable to the element or its binding, exactly once under its cause. If a discard occurs entirely inside middleware and the binding cannot observe it, the route's report *MUST* explicitly disclose that limitation instead of claiming to count it (`+req~ssr-error-no-silent-loss~3+`). This exception concerns observation only; it does not permit a different overflow policy or excuse an observable discard from counting.
+--
+
+[horizontal]
+ASIL:: B
+Allocated to:: the element
+Verification:: test (the QoS contract suite, observing what an application receives from the documented read call alone, with no drain loop first; observable discards counted once under their cause; a binding with middleware-unobservable discards explicitly discloses the limitation and makes no complete-count claim), heap-window (every overflow policy inside the window)
+Status:: Draft
+
+*Rationale.* Counting observable discards gives the application a local congestion signal. Discards hidden inside middleware require an explicit route-report limitation; the presence of counter fields does not establish that a binding can observe the events needed to increment them.
+
+== Deadlines are monitored
+
+[.specitem,oft-sid="req~ssr-qos-deadline~3",oft-title="Deadlines are monitored",oft-needs="impl,utest",oft-tags="SafetyUpRustCore"]
+--
+A route that declares a deadline *MUST* count one miss for every gap between arrivals that is longer than its threshold: the deadline plus its binding's declared arrival latency, which is zero on a push binding.
+
+An arrival is every frame that reaches the route's queue, including one the overflow policy discards and one refused when it is read; bad data is reported by its own refusal counters. On a push binding the element records an arrival at delivery, and on a pull binding when the binding reports it. Neither a read nor a carrier's take records one, and a wake hint is not one. A frame refused before it enters the queue is not an arrival; on a push binding that includes a frame whose time-to-live has already run out.
+
+Each gap longer than the threshold is counted exactly once: by a check during the gap, or by the arrival that ends it.
+
+Measured between recorded arrival times, the element never counts a miss for a gap no longer than the threshold, and so never for a true gap no longer than the deadline while each arrival is recorded within the declared latency. It always counts one for a gap longer than the threshold by more than the monitor's resolution, at most 1/512 of the threshold, while the route is serviced at least every 2^29^ ticks of its monitor (`+aou~seooc-application-reacts~3+`) and every wait inside the element is under 2^28^ ticks (`+aou~seooc-timing-budgets~5+`). The transport's `+wait+` services its routes between inner waits of at most 2^28^ ticks of the shortest-scaled route on the transport.
+
+The count is current whenever the route's counters are read after the transport's receive, wait or service operations, so it does not depend on the application polling that route.
+
+A monitored route's report states its detection bound: the deadline, plus twice the declared latency, plus the resolution. The deadlines setup refuses are stated in `+req~ssr-qos-invalid-refused~2+`. On an ASIL deployment the binding turns its middleware's own event deadlines off; the element's deadline monitor is the receiver's mechanism.
+--
+
+[horizontal]
+ASIL:: B
+Allocated to:: the element
+Verification:: test (a silent publisher; hints with no frames; a route nobody polls, read after a service call; the QoS contract's deadline checks, on the test doubles, on a carrier ingress and on iceoryx2, with their negative controls; iceoryx2's failed data connection; one count per gap with two checkers and two reporters; a gap closed between checks, counted by its arrival; a preempted reporter that does not move the tick back; gaps at the threshold plus and minus one tick, and a silence across the tick wrap and past the refresh, through a hook; `+wait+`'s inner loop), miri (an arrival racing a refresh), fault-injection (the publisher killed)
+Status:: Draft
+
+*Rationale.* Arrival-based monitoring observes communication independently of application reads; an overflowed or undecodable frame still arrived, with observable discards or refusals reported separately. On a shared route another peer can keep this aggregate deadline refreshed while one peer is starved; absence of a deadline miss is not evidence of that peer's progress (`+aou~seooc-peer-rates~2+`).
+
+== Expired messages are not processed
+
+[.specitem,oft-sid="req~ssr-qos-ttl~4",oft-title="Expired messages are not processed",oft-needs="impl,utest",oft-tags="SafetyUpRustCore"]
+--
+A frame whose TTL has expired *MUST NOT* be delivered to the application or forwarded by a carrier, and *MUST* be counted as expired. Expiry *MUST* be judged in whole milliseconds of wall time, from the time the frame's message ID records. Measured from that time, a frame *MUST NOT* be refused before its TTL has passed, and *MUST* always be refused once its TTL, rounded up to a whole millisecond, plus one more millisecond has passed. An ID made while the sender's wall clock could not be read records the last good time, so its frame can be refused before its TTL has passed in real time. If the wall clock cannot be read at the check, the frame *MUST* be refused and counted, never processed with an unknown expiry. Expiry *MUST* be checked when a frame reaches its route, before its wire decodes it, as well as when it is taken, so that an expired frame is never decoded and changes no wire state.
+--
+
+[horizontal]
+ASIL:: B
+Allocated to:: the element
+Verification:: test (at receive and before forwarding; at the bound, for sub-millisecond and whole-millisecond TTLs; with the clock unavailable; an expired frame refused when it reaches its route, never decoded, with no end-to-end state changed)
+Status:: Draft
+
+*Rationale.* The check also reads the current time in whole milliseconds, so it can see up to one millisecond less than has passed, and the bound allows for that millisecond. A sender that cannot read its clock reuses the last good time in its IDs, so they keep working (`+core/src/transport/ids.rs+`), and the statement discloses the early refusal this can cause.
+
+== Meaningless QoS is refused at setup
+
+[.specitem,oft-sid="req~ssr-qos-invalid-refused~2",oft-title="Meaningless QoS is refused at setup",oft-needs="impl,utest",oft-tags="SafetyUpRustCore"]
+--
+Six QoS declarations cannot be honored as written, and each *MUST* be refused at setup, naming the route and the setting: a zero deadline; a deadline under 1,024 ns; a deadline on a pull route whose binding cannot report arrivals; a deadline shorter than the route's binding's declared arrival latency; a wait policy with a zero timeout; and history on an RPC route.
+--
+
+[horizontal]
+ASIL:: B
+Allocated to:: the element
+Verification:: test (each of the six refusals)
+Status:: Draft
+
+*Rationale.* A declaration outside the monitor or binding capability must be diagnosed before activation instead of becoming a different policy at runtime.
+
+== Two declarations of one route agree
+
+[.specitem,oft-sid="req~ssr-qos-consistent-declarations~1",oft-title="Two declarations of one route agree",oft-needs="impl,utest",oft-tags="SafetyUpRustCore"]
+--
+On one transport, two declarations of the same route that differ in reliability, overflow or history *MUST* be refused at setup, naming the route and the setting.
+--
+
+[horizontal]
+ASIL:: B
+Allocated to:: the element
+Verification:: test
+Status:: Draft
+
+*Rationale.* The refusal names the setting `+QosSetting::PeerMismatch+` (`+core/src/transport/qos.rs+`).

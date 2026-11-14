@@ -1,0 +1,66 @@
+= up-rust SEooC: Crate isolation
+:toc: preamble
+
+The key words "*MUST*", "*MUST NOT*", "*REQUIRED*", "*SHALL*", "*SHALL NOT*", "*SHOULD*", "*SHOULD NOT*", "*RECOMMENDED*", "*MAY*", and "*OPTIONAL*" in this document are to be interpreted as described in https://www.rfc-editor.org/info/bcp14[IETF BCP14 (RFC2119 & RFC8174)]
+
+Conventions, tags and status words: xref:../README.adoc[the safety area's README]. Scope and element boundary: xref:README.adoc[the SEooC's README].
+
+== The safety crate cannot be tainted
+
+[.specitem,oft-sid="req~ssr-crate-isolated~1",oft-title="The safety crate cannot be tainted",oft-needs="impl,utest",oft-tags="SafetyUpRustCore"]
+--
+The crate that holds the element's runtime path *MUST* be `+no_std+`, use no `+alloc+`, have no dependencies and declare no Cargo features, so no other crate in a build can switch `+std+` or `+alloc+` on inside it. Tokio, Protobuf and anything else that needs `+std+` *MUST* live in other crates.
+--
+
+[horizontal]
+ASIL:: B
+Allocated to:: the element
+Verification:: gate (the manifest has no `+[features]+` and no `+[dependencies]+`; the crate builds on a sysroot with neither `+alloc+` nor `+std+`)
+Status:: Draft
+
+*Rationale.* Cargo turns a crate's feature on for the whole build once any crate asks for it, so only a crate with no features and no dependencies cannot have `+std+` switched on inside it by another (`+core/src/lib.rs+`). CI checks the manifest and builds the crate against a sysroot that holds only `+core+` (`+core/src/lib.rs+`, `+tools/ci/check_core_gates.py+`). With no `+alloc+`, the crate's URIs keep their authority inline (`+UUri+` in `+core/src/uri/mod.rs+`), so this crate does not allocate a separate heap-owned authority representation. That representation does not determine where a caller stores an enclosing object.
+
+== Traffic is synchronous or polled
+
+[.specitem,oft-sid="req~ssr-crate-sync-path~1",oft-title="Traffic is synchronous or polled",oft-needs="impl,utest",oft-tags="SafetyUpRustCore"]
+--
+The runtime path *MUST* offer every traffic operation in synchronous or polled form, and *MUST* use none of `+core::future+`, `+core::task+` or `+core::pin+`. Any async layer *MUST* sit above it, in a separate crate.
+--
+
+[horizontal]
+ASIL:: B
+Allocated to:: the element
+Verification:: gate (a token scan for `+async+`, `+.await+`, `+Future+`, `+Pin+`, `+Poll+`, `+Waker+` and `+Context+`, and for grouped `+use core::{…}+` paths, with a negative control for each)
+Status:: Draft
+
+*Rationale.* The runtime path keeps to a smaller part of `+core+`, with no futures, tasks or pinning, and leaves async scheduling to a layer above it. CI checks that `+core::task+`, `+core::future+` and `+core::pin+` are absent from the crate (`+core/src/lib.rs+`, `+tools/ci/check_core_gates.py+`). Only a subset of Rust's core library is certified at ASIL B today (https://ferrous-systems.com/blog/ferrocene-26-05-0/[the Ferrocene 26.05.0 release notes]).
+
+== An ASIL binary needs no QM crate at run time
+
+[.specitem,oft-sid="req~ssr-crate-core-only-binary~1",oft-title="An ASIL binary needs no QM crate at run time",oft-needs="impl,utest",oft-tags="SafetyUpRustCore"]
+--
+Everything a runtime-mode application on the ASIL path needs *MUST* be in the safety crate, so its final image depends on no QM crate at run time. Derives come from `+up-rust-macros+` at compile time, and the `+unsafe+` they generate *MUST* be held to the same inventory.
+--
+
+[horizontal]
+ASIL:: B
+Allocated to:: the element
+Verification:: gate (a symbols check on a final image), test (a link fixture that uses only the safety crate)
+Status:: Draft
+
+*Rationale.* A QM crate in the final image would run beside the element without meeting its requirements. An ASIL application depends directly on `+up-rust-core+` and imports its `+up_rust_core::+` paths (`+core/src/lib.rs+`). An explicit dependency alias may change that local spelling. The re-exports in the separate `+up-rust+` package do not make its crate root available without linking that package. A derive runs at compile time and leaves only generated code in the image, and that code's `+unsafe+` is inventoried like the crate's own (`+req~ssr-unsafe-inventory~3+`).
+
+== The ASIL Streamer is its own untaintable crate
+
+[.specitem,oft-sid="req~ssr-crate-streamer-isolated~3",oft-title="The ASIL Streamer is its own untaintable crate",oft-needs="impl,utest",oft-tags="SafetyStreamer"]
+--
+The ASIL Streamer's route table, admission, validation and forwarding loop *MUST* live in their own crate: `+no_std+`, no `+alloc+`, no Cargo features, no dependency other than `+up-rust-core+`, and no 64-bit atomic type. No feature, dependency or build setting outside it can bring classic routes, `+std+`-only paths or heap use into it. The `+std+` loader only parses deployment data, and validation happens in this crate. Bindings and wires are linked by the binary that uses the crate, not by the crate.
+--
+
+[horizontal]
+ASIL:: B
+Allocated to:: the Streamer
+Verification:: gate (the same gates as `+up-rust-core+`: manifest, restricted sysroot, token scan, and its own panic-link fixture; a build for `+thumbv7m-none-eabi+`)
+Status:: Draft
+
+*Rationale.* Separating the data plane prevents convenience dependencies or feature unification from introducing heap use into the safety path.

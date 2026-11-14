@@ -1,0 +1,53 @@
+= up-rust SEooC: Bounded work and waiting
+:toc: preamble
+
+The key words "*MUST*", "*MUST NOT*", "*REQUIRED*", "*SHALL*", "*SHALL NOT*", "*SHOULD*", "*SHOULD NOT*", "*RECOMMENDED*", "*MAY*", and "*OPTIONAL*" in this document are to be interpreted as described in https://www.rfc-editor.org/info/bcp14[IETF BCP14 (RFC2119 & RFC8174)]
+
+Conventions, tags and status words: xref:../README.adoc[the safety area's README]. Scope and element boundary: xref:README.adoc[the SEooC's README].
+
+== Work per call is bounded by setup data
+
+[.specitem,oft-sid="req~ssr-bound-work~2",oft-title="Work per call is bounded by setup data",oft-needs="impl,utest",oft-tags="SafetyUpRustCore"]
+--
+Each runtime operation *MUST* examine at most a number of frames, slots and loop iterations fixed by setup data: route depth, slot count and table capacity. However much a peer sends, it cannot make one call run longer than that bound. No documented use requires repeating an operation until a peer stops sending. The documented drain makes at most a number of calls set by setup data. Frames still queued after it stay with the transport, under the route's policy. Lock-free retry loops depend only on other threads' progress, never on a peer's data.
+--
+
+[horizontal]
+ASIL:: B
+Allocated to:: the element
+Verification:: fault-injection (a flood on every receive kind, through the documented read and drain calls alone), review (every loop on the runtime path and in the documented usage)
+Status:: Draft
+ISO 26262:: 6-Annex D.2.2, 6-7.4.13 (part-clause numbers only)
+
+*Rationale.* Bounding one call is insufficient if the documented service loop repeats forever while a peer supplies more work.
+
+== Every wait is bounded
+
+[.specitem,oft-sid="req~ssr-bound-wait~1",oft-title="Every wait is bounded",oft-needs="impl,utest",oft-tags="SafetyUpRustCore"]
+--
+A runtime operation *MUST NOT* block without a bound. A wait *MUST* take a timeout, and *MUST* return on a wake, on the timeout, or when the peer it waits for has died. A QoS wait on overflow *MUST* be bounded by its declared limit; it *MUST* be refused at setup where a binding cannot bound it, and on every carrier egress. Idle waiters *MUST NOT* wake each other.
+--
+
+[horizontal]
+ASIL:: B
+Allocated to:: the element
+Verification:: test (several idle waiters), heap-window (the failure path of a QoS wait), fault-injection (a peer killed while a sender waits)
+Status:: Draft
+ISO 26262:: 6-Annex D.2.2 (part-clause numbers only)
+
+*Rationale.* A survivor that waited without a bound for a peer that has died would never return, so one failed process would stop those that stayed up (`+req~ssr-peer-failure-normal~1+`). A QoS wait gives up after its declared timeout and reports failure (`+Overflow::Wait+` in `+core/src/transport/qos.rs+`). A carrier egress refuses it at setup, because the carrier's worker would be the one waiting (`+core/src/transport/carrier.rs+`). A route with nothing to report stays quiet, since a service tick that woke waiters regardless would make idle waiters wake each other for ever (`+TransportRuntime::service+` in `+core/src/transport/mode.rs+`).
+
+== No lock shared with another process
+
+[.specitem,oft-sid="req~ssr-bound-no-cross-process-lock~1",oft-title="No lock shared with another process",oft-needs="impl,utest",oft-tags="SafetyUpRustCore"]
+--
+Element code *MUST NOT* take a lock or other blocking primitive shared with another process, and a runtime operation *MUST NOT* need another process to make progress in order to return.
+--
+
+[horizontal]
+ASIL:: B
+Allocated to:: the element
+Verification:: review (an inventory of synchronization primitives), fault-injection (a peer killed at arbitrary points never hangs a survivor)
+Status:: Draft
+
+*Rationale.* A process can die at any instruction (`+req~ssr-peer-failure-normal~1+`), so a lock it shares can be left held, with the state it guards half changed and no process left to finish the change. Eclipse S-CORE's LoLa middleware gave up an inter-process mutex for this reason: its error handling grew too complex when a process died while holding it (https://github.com/eclipse-score/communication/blob/f5e8f2c8a9247b025b1d425af399588e0264698a/score/mw/com/impl/bindings/lola/dependability/partial_restart/README.md[LoLa's partial-restart notes]). In the code, the Linux backend's waits are private to the process: it uses no shared-memory futex and no robust list (`+core/src/platform/linux.rs+`).

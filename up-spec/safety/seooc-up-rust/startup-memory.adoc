@@ -1,0 +1,53 @@
+= up-rust SEooC: Startup memory
+:toc: preamble
+
+The key words "*MUST*", "*MUST NOT*", "*REQUIRED*", "*SHALL*", "*SHALL NOT*", "*SHOULD*", "*SHOULD NOT*", "*RECOMMENDED*", "*MAY*", and "*OPTIONAL*" in this document are to be interpreted as described in https://www.rfc-editor.org/info/bcp14[IETF BCP14 (RFC2119 & RFC8174)]
+
+Conventions, tags and status words: xref:../README.adoc[the safety area's README]. Scope and element boundary: xref:README.adoc[the SEooC's README].
+
+== ASIL-path storage is static or caller-provided
+
+[.specitem,oft-sid="req~ssr-memory-static~1",oft-title="ASIL-path storage is static or caller-provided",oft-needs="impl,utest",oft-tags="SafetyUpRustCore"]
+--
+On the ASIL path, all storage the runtime path uses *MUST* be placed during initialization from static or caller-provided memory, with its size, alignment and arithmetic checked when it is placed. That covers slots, startup slots, queues, peer and call tables, waker storage, route state and the Streamer's route table. Heap-backed startup memory *MUST* exist only on the `+std+` path.
+--
+
+[horizontal]
+ASIL:: B
+Allocated to:: the element
+Verification:: test (a runtime path over static memory only), gate (the crate builds on a sysroot without `+alloc+`), review
+Status:: Draft
+ISO 26262:: 6-Table 6 1b (part-clause numbers only)
+
+*Rationale.* The ASIL crate is `+no_std+` with no `+alloc+` (`+core/src/lib.rs+`), so its storage can come only from a `+static+` region or from bytes the caller provides (`+StartupRegion+` and `+StartupMemory::new+` in `+core/src/memory.rs+`). Every placement goes through `+StartupMemory::reserve+`, which checks bounds, alignment and exclusivity (`+core/src/memory.rs+`).
+
+== Startup memory is sealed
+
+[.specitem,oft-sid="req~ssr-memory-sealed~3",oft-title="Startup memory is sealed",oft-needs="impl,utest",oft-tags="SafetyUpRustCore"]
+--
+A startup memory *MUST* be sealed when the last live setup that uses it enters runtime mode, and in any case when `+enter_runtime_all+` returns. Once it is sealed, no further placement from it succeeds, a refused placement asks no region source for memory, and a setup built on it is refused. `+enter_runtime_all+` reports any setup that is still alive on that memory and has not entered runtime mode. A failed `+enter_runtime_all+` seals the memory as well, so setup cannot be retried on it in the process (`+aou~seooc-supervisor-restart~3+`).
+--
+
+[horizontal]
+ASIL:: B
+Allocated to:: the element
+Verification:: test (including a setup kept alive with `+mem::forget+`), heap-window
+Status:: Draft
+
+*Rationale.* A shared startup allocator must stop serving new requests once initialization ends, including failure paths that leave some transports active.
+
+== Startup storage is computable before start
+
+[.specitem,oft-sid="req~ssr-memory-computable~2",oft-title="Startup storage is computable before start",oft-needs="impl,utest",oft-tags="SafetyUpRustCore"]
+--
+The element *MUST* provide a computation that gives, from a deployment's data alone and before the process starts, the startup memory that deployment needs. Placement at startup *MUST NOT* need more than the computation gives.
+--
+
+[horizontal]
+ASIL:: B
+Allocated to:: the element
+Verification:: test (the computation against what placement used, for each route kind and for whole deployments), review
+Status:: Draft
+ISO 26262:: 6-7.4.13 (part-clause numbers only)
+
+*Rationale.* An integrator who places startup memory in a static region or a linker section has to size it before the process starts, and a request that does not fit is refused only at startup (`+StartupMemory::new+` in `+core/src/memory.rs+`). A size that anyone could work out in principle helps no one, so the element provides the computation itself. Each route's reserved storage is reported under `+req~ssr-error-route-report~2+`.

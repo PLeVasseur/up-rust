@@ -1,0 +1,106 @@
+= up-rust SEooC: Platform
+:toc: preamble
+
+The key words "*MUST*", "*MUST NOT*", "*REQUIRED*", "*SHALL*", "*SHALL NOT*", "*SHOULD*", "*SHOULD NOT*", "*RECOMMENDED*", "*MAY*", and "*OPTIONAL*" in this document are to be interpreted as described in https://www.rfc-editor.org/info/bcp14[IETF BCP14 (RFC2119 & RFC8174)]
+
+Conventions, tags and status words: xref:../README.adoc[the safety area's README]. Scope and element boundary: xref:README.adoc[the SEooC's README].
+
+== Every platform backend keeps the platform's rules
+
+[.specitem,oft-sid="req~ssr-platform-contract~1",oft-title="Every platform backend keeps the platform's rules",oft-needs="impl,utest",oft-tags="SafetyUpRustCore"]
+--
+Every runtime platform backend *MUST NOT* use the heap, panic, create a thread, or need global state that requires first-use setup. Its monotonic clock *MUST NOT* fail. Its wall clock *MUST* report a failed read instead of panicking. Its wait *MUST NOT* lose a wake that happens after the caller observed the expected value.
+--
+
+[horizontal]
+ASIL:: B
+Allocated to:: each platform backend
+Verification:: test (a platform contract test in `+test-util+`, run inside heap windows), review
+Status:: Draft
+
+*Rationale.* `+core/src/platform/mod.rs+`, the trait's stated rules: "no heap, no panic, no thread creation, no global state that needs first-use setup, and `+wait+` must not lose a wake", with a monotonic clock that is "Infallible by contract". Runtime code reaches the operating system only through a backend, so a backend that broke one of these rules would break the element's runtime requirements from below, such as `+req~ssr-heap-none~1+` and `+req~ssr-refuse-no-panic~1+`.
+
+== Entropy and prefault stay in initialization
+
+[.specitem,oft-sid="req~ssr-platform-init-only~1",oft-title="Entropy and prefault stay in initialization",oft-needs="impl,utest",oft-tags="SafetyUpRustCore"]
+--
+The initialization-only platform services, entropy and prefault, *MUST NOT* be reachable from runtime mode: runtime code holds a platform value that offers neither.
+--
+
+[horizontal]
+ASIL:: B
+Allocated to:: the element
+Verification:: compile-fail
+Status:: Draft
+
+*Rationale.* `+core/src/platform/mod.rs+`: "`+PlatformInit::runtime+` hands runtime code a value that cannot reach back". Both services belong to setup: entropy seeds the message-ID generators once, and prefault makes memory resident before anything is placed in it, so that no write in runtime mode takes a page fault (`+core/src/platform/mod.rs+`).
+
+== Initialization entropy differs at each start
+
+[.specitem,oft-sid="req~ssr-platform-entropy~1",oft-title="Initialization entropy differs at each start",oft-needs="impl,utest",oft-tags="SafetyUpRustCore"]
+--
+Every shipped platform backend's initialization entropy *MUST* come from the OS's entropy source, so that it differs at each start of the process. A read that fails *MUST* be reported, and *MUST NOT* be replaced by a fixed value.
+--
+
+[horizontal]
+ASIL:: B
+Allocated to:: each platform backend
+Verification:: test (two processes started one after the other read different entropy; a failed read is reported, through a fault-injected backend), review (each backend's source, against its OS's documentation)
+Status:: Draft
+
+*Rationale.* Entropy is read once, to seed the message-ID generators (`+PlatformInit::entropy+` in `+core/src/platform/mod.rs+`), so a fixed or repeated seed could repeat IDs from one start to the next. The shipped backends read the OS's source: `+getrandom+` on Linux, `+getentropy+` on macOS and `+/dev/urandom+` on QNX (`+core/src/platform/linux.rs+`, `+core/src/platform/macos.rs+`, `+core/src/platform/qnx.rs+`). The integrator's platforms carry the same duty in `+aou~seooc-integrator-platform~3+`.
+
+== Every runtime behaviour is classified
+
+[.specitem,oft-sid="req~ssr-platform-classified~1",oft-title="Every runtime behaviour is classified",oft-needs="uman",oft-tags="SafetyUpRustCore"]
+--
+Every runtime behaviour of the element *MUST* be classified as mandated by a platform or chosen by the library, and the classification *MUST* be recorded.
+--
+
+[horizontal]
+ASIL:: B
+Allocated to:: the element
+Verification:: review
+Status:: Draft
+
+*Rationale.* A behaviour that a platform mandates holds only where the platform keeps that rule, while one the library chooses can be changed and tested in the library, so the two need different arguments and different tests. The platform layer is the only part of the crate that talks to an operating system (`+core/src/platform/mod.rs+`), which keeps the two kinds apart in the code.
+
+== The element needs no 64-bit atomic
+
+[.specitem,oft-sid="req~ssr-atomic-width~1",oft-title="The element needs no 64-bit atomic",oft-needs="impl,utest",oft-tags="SafetyUpRustCore"]
+--
+The element's code *MUST NOT* use any 64-bit atomic type. It needs only 32-bit and pointer-sized atomics with compare-and-swap, in one implementation on every target. It reaches every atomic, loads and stores included, through one module of its own, the atomics facade. Its pointer-sized atomics hold only lengths and indices, whose meaning does not depend on their width. Every word that one of its protocols shares between threads is a 32-bit atomic or narrower, and it reads memory shared with another process in 32-bit words and bytes. It builds for a 32-bit target without 64-bit atomics.
+--
+
+[horizontal]
+ASIL:: B
+Allocated to:: the element
+Verification:: gate (core builds for `+thumbv7m-none-eabi+`; no `+AtomicU64+`, `+AtomicI64+`, `+target_has_atomic+` or `+target_pointer_width+` in core; no `+core::sync::atomic+` or `+std::sync::atomic+` import in core outside the facade), test (the suite under Miri, both models, on `+armv5te-unknown-linux-gnueabi+` and `+powerpc-unknown-linux-gnu+`)
+Status:: Draft
+
+*Rationale.* One implementation with 32-bit shared protocol words avoids requiring atomic operations that some supported cores do not provide.
+
+== Every narrowed value states its window
+
+[.specitem,oft-sid="req~ssr-atomic-windows~1",oft-title="Every narrowed value states its window",oft-needs="impl,utest,uman",oft-tags="SafetyUpRustCore"]
+--
+Every value the element keeps narrower than what it stands for, or lets wrap or saturate, *MUST* have a stated window and the event rate that would defeat it, documented with the element. That covers:
+
+* a call slot's generation, 2^28^ reuses of one slot during one stalled call. A delivery checks again the request ID after it claims the slot, so a wrap never delivers a response to another call; a stalled `+expire+` or `+fail_older+` can still time out or fail a later call early;
+* a peer-table entry's generation, 2^22^ reuses of one entry during one stalled call. `+enter+` checks again the entry's full ID after it claims it; a stalled `+retire+` can still retire a later tenure, which acts as a spurious `+peer_lost+` for its peer;
+* a peer entry's 8 bits of users, 255 concurrent classifications of one peer, beyond which a frame is refused;
+* the incarnation latch's sequence word: a torn read needs 2^32^ increments, 2^31^ raises, during one stalled read;
+* a flow counter's wrap: fewer than 2^32^ increments between two reads that are compared;
+* the message-ID period, 2^32^ IDs of one route;
+* the ID guard, 2^31^ IDs within one 64 ms bucket, whose changes a word of their own detects; after a stale store of the bucket, one bucket's IDs stay below 2^31^ + 2 × `+T_wd+` × the ID rate;
+* the last good time's saturation, at a ±4.36-year offset of the wall clock from its reading at the route's setup, beyond which an ID needed while the clock cannot be read is refused;
+* the deadline monitor's tick, wrap-aware over 2^30^ ticks, refreshed into the past, to now − 2^28^, by any check that finds a counted gap 2^29^ ticks old, the counting check included. It needs the route serviced at least every 2^29^ ticks (`+aou~seooc-application-reacts~3+`) and every wait inside the element, checks as well as arrivals, under 2^28^ ticks (`+aou~seooc-timing-budgets~5+`).
+--
+
+[horizontal]
+ASIL:: B
+Allocated to:: the element
+Verification:: test (each boundary driven through a test hook; an arrival racing a refresh, under Miri; the ID guard seeded at 0 and then set to the present), review (the documented list against the code)
+Status:: Draft
+
+*Rationale.* Narrowed and wrapping state is correct only inside its reuse and observation windows; those bounds must be visible to the integrator rather than implicit in the representation.

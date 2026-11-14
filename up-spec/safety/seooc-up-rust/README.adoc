@@ -1,0 +1,177 @@
+= up-rust SEooC: scope, modes and verification
+:toc: preamble
+
+The software safety requirements and assumptions of use of one safety element out of context (SEooC): up-rust's runtime data path, with the Streamer's data plane, the end-to-end protection wire and strict mode. The element claims ASIL B capability. No item is known yet, so the requirements are assumed ones, and the assumptions of use say what an integrator has to provide (10-9).
+
+The conventions, tags and status words are in xref:../README.adoc[the safety area's README]. Every item is still Draft.
+
+== The element
+
+[cols="2,5,3",options="header"]
+|===
+| Part | What it is | Where
+
+| E1. The runtime path of `up-rust-core`
+a|
+* The two mode types and the transition between them.
+* The L2 handles once activated: publisher, subscriber, notifier, notification listener, RPC client and server.
+* The L1 carrier routes: receive, send, park and the capacity check.
+* Inbound slots, ready queues, the RPC call table, the peer table, QoS checks, TTL checks, the deadline monitor, message IDs, waiver records, route reports and counters, heap-free errors.
+* Header and envelope parsing.
+* The SDK side of the wire contract: the checked payload writer, and decoding into startup slots.
+* Core's end-to-end protection hooks, opaque call tag, protected refusal answers and route counters, with unprotected responses counted separately.
+| `up-rust-core`: `transport/`, `wire/`, `communication::two_mode`, `frame`, `payload`, identifiers
+
+| E2. The lending and handoff runtime contracts
+| The traits a binding implements (binding setup, lending runtime, handoff runtime, frame, lent transmit storage), and the SDK services a binding calls (the runtime port). The contract is in the element. Each binding's implementation of it is not.
+| `up-rust-core::transport`
+
+| E3. Startup memory
+| Startup memory, its regions, placement and seal.
+| `up-rust-core::memory`
+
+| E4. Platform
+a|
+* The runtime platform: `now`, `unix_time_ms`, `wait`, `wake_one`, `wake_all`.
+* The initialization-only platform: `entropy`, `prefault`.
+* The shipped backends, chosen by `cfg`: Linux; QNX, source only; macOS, for development only, with no safety claim.
+* The shared signal.
+| `up-rust-core::platform`, `signal`
+
+| E5. The Streamer's data plane
+a|
+* The ASIL Streamer's route table, admission, validation and forwarding loop, in a `no_std` crate of their own.
+* The `std` binary that creates its worker threads.
+* The SDK side: the carrier primitives.
+| The carrier primitives in `up-rust-core`; the ASIL Streamer crate and its binary in `up-streamer-rust`
+
+| E6. The end-to-end protection wire
+| `E2e<W>`, an opt-in wire that wraps any other wire. It carries a data ID, a counter, its sender's incarnation and a CRC in the payload, and uses the route's deadline as its timeout. Whether and where to use it is the integrator's choice (`+aou~seooc-e2e-protection~6+`).
+| `up-wire-e2e`, a `no_std` member of `up-rust` that depends only on `up-rust-core`
+
+| E7. Strict mode
+| An opt-in check, in initialization mode only, of the integrator's setup against the rules that the assumptions of use name. It has four states: Off, the default; Report; Enforce; and Locked, which is Enforce alone, under `+--cfg up_rust_strict+`. Its findings name the rule, the route, the requirement IDs and the fix; it accepts a deviation only when it is acknowledged by ID and revision; and every run produces a compliance report (`+req~ssr-strict-init-only~1+`, `+req~ssr-strict-report~1+`).
+| `up-rust-strict`, a `no_std` member of `up-rust` that depends only on `up-rust-core`; in core, read-only views of each route's declarations and one hook
+|===
+
+The initialization-mode code of E1 to E7 is part of the element too: builders, admission, the validation of deployment data, and the transition. Its faults show before traffic starts, but a wrong admission decision becomes a runtime fault, so the transition is safety-relevant.
+
+== Outside the element
+
+* *Classic routes.* `UTransport`, `UMessage` routes and the classic L2 building blocks allocate in the SDK's own code, so no waiver can admit them, and they never enter runtime mode. They stay QM.
+* *The Tokio layer*, `up-rust-tokio`.
+* *Middleware internals*: iceoryx2, Zenoh, vSomeIP, DDS, MQTT, LoLa. Allocation inside middleware needs a declared permit and a named waiver, and each binding's README says what its middleware cannot guarantee.
+* *QM convenience crates*: `up-rust` itself (the classic API, heap-backed startup memory, configuration helpers, the prelude), `up-wire-protobuf` and the other `std` wires, and `test-util`. On the ASIL path an application does not link `up-rust`.
+* *The classic `UStreamer`*, its dynamic routes and its cross-family adapters.
+* *Wires and bindings from elsewhere* with `unsafe` code of their own. Their integrator qualifies that code.
+* *A platform backend the integrator supplies*, held to the platform's rules by `+aou~seooc-integrator-platform~3+`.
+* *The application's own logic and the item's safety function.* The element carries data. What the data means, and how the item reacts to a failure, are the integrator's.
+* *The OS, hardware, supervisor, clock source and deployment data, and the choice of routes that need end-to-end protection*: these are assumptions of use.
+
+== What the element relies on but does not contain
+
+* *Bindings and wires* are separate elements. Their code runs inside the element's calls, but each is developed and verified on its own, against the contract suites in `test-util`. The items allocated to them are in `bindings.adoc` and `wires.adoc`, and `+aou~seooc-qualified-bindings-and-wires~4+` restricts an integrator to those that pass. The end-to-end protection wire is a wire too, but it is shipped as the element's safety mechanism, so it is part E6, with its own items.
+* *Derive macros* (`up-rust-macros`: `ZeroSlot`, `StablePayload`, `StablePayloadInit`) are tools. The code they generate becomes part of the element and is held to its requirements.
+* *`test-util`* (the heap guard, the C-level observer, the contract suites, the in-memory bindings) is verification tooling. The in-memory bindings are test doubles, not bindings, so evidence that rests on one says which.
+
+== Operating modes
+
+Runtime mode belongs to a transport. A transport is in runtime mode from the moment its own transition returns. Every requirement stated for runtime mode binds that transport from then on, whatever the process's other transports are doing. A process is in runtime mode once every transport it built is, and for the Streamer when `enter_runtime_all` returns. The process-level definition is used for three things only: sealing shared startup memory, the Streamer's startup report, and process-level statements for integrators.
+
+[cols="1,2,2,3,2",options="header"]
+|===
+| Mode | Begins | Ends | Allowed | Impossible
+
+| Initialization
+| Process start, or a restart
+| The transport's transition succeeds, or the process exits
+| Construction; route declaration and admission; startup memory placement; waivers; forcing lazy state; cleaning up after a dead predecessor. Heap only on the `std` path. On the ASIL path, only startup memory
+| Traffic
+
+| Transition
+| `enter_runtime` on a transport's setup, or `enter_runtime_all` on several
+| Success gives runtime mode. Failure gives an error, still in initialization
+| Checks and refusals, one way only
+| Going back
+
+| Runtime
+| The transport's transition returns
+| Process exit, crash or kill, and nothing else
+| Activating the handles, and the Streamer, without heap; traffic; refusals and counters; bounded waits; deadline service; the Streamer's route gates
+| Setup; acquiring or releasing heap; releasing anything
+|===
+
+There is no shutdown mode: in runtime mode a process leaves by exit, crash or kill, and in the ASIL build a panic aborts it. There is no degraded mode with rules of its own. A refusal, a counted drop, a missed deadline or a lost peer affects one route, and the others carry on. The Streamer's "degraded" is a reported state: its safe state is fail-silent per route, through its route gates.
+
+== Interfaces at the boundary
+
+[cols="2,3,3",options="header"]
+|===
+| Direction | Interface | Items
+
+| Provided to applications | L2 handles, the transition, bounded waits, route reports, counters and waiver records | the files from `runtime-modes.adoc` to `waivers.adoc`
+| Provided to the Streamer | Carrier routes, the capacity check, park, the shared signal | `bounded-work.adoc`, `qos.adoc`, `integrity.adoc`, `streamer.adoc`
+| Provided to integrators | The end-to-end protection wire; strict mode and its compliance report; the Streamer's operator interface, mode report, watchdog hook and startup report | `streamer.adoc`, `e2e-wire.adoc`, `build.adoc`
+| Required from bindings | The lending or handoff contract, and the bindings' duties | `bindings.adoc`; `+aou~seooc-qualified-bindings-and-wires~4+`
+| Required from wires | The wire contract, and the wires' duties | `wires.adoc`
+| Required from each platform backend | The platform's rules | `platform.adoc`; `+aou~seooc-integrator-platform~3+`
+| Required from the OS and hardware | Address-space isolation, threads, wait and wake, a monotonic clock, a wall clock, 32-bit atomics with compare-and-swap, atomic and coherent on every core that shares them | `assumptions-of-use.adoc`
+| Required from the integrator | Supervisor and deployment data; waiver approval and timing budgets; the choice of routes that need end-to-end protection; peer rates; the build order and the build profile; operator access | `assumptions-of-use.adoc`
+|===
+
+== Verification methods
+
+Each item's "Verification" names methods from this table. A method runs on its default lanes unless brackets after it name others, for example `+heap-window[linux-stable, macos-stable]+`.
+
+[cols="2,5,3",options="header"]
+|===
+| Method | Meaning | Default lanes
+
+| `compile-fail` | A trybuild case that must not compile, with its `.stderr` checked. It shows that an operation is absent from a type | `stable`, `1.88`
+| `heap-window` | A test that counts every allocation and every free on all threads, with the Rust guard (`heap_guard`) and the C-level observer (`heap_guard::c_level`). The window opens when that transport's own transition returns, and a positive control shows that the gate fires | `linux-stable`, `linux-1.88`, `macos-stable`, each with both observers
+| `miri` | The test run under Miri | `miri-sb`, `miri-tb`: Stacked Borrows and Tree Borrows, on Linux, with nightly as a tool only
+| `fault-injection` | A test that injects the fault the item covers: a peer process killed or restarted, a malformed or hostile frame, a flood, a publisher writing to a sample while it is read, a primitive left lazy on purpose | `linux-stable`
+| `test` | A requirements-based test of behaviour, with boundary values | `linux-stable`, `linux-1.88`
+| `gate` | A static check in CI over source or build output: a sysroot without `alloc` or `std`, the panic-link check, a symbols check, the `unsafe` inventory, a token scan, manifest checks, compile-time assertions, workspace lints | `stable`, `1.88`
+| `review` | An inspection, recorded in a review log | a record
+|===
+
+The lane names are `linux-stable`, `linux-1.88`, `macos-stable`, `miri-sb`, `miri-tb`, `miri-strict-provenance`, `stable` and `1.88`.
+
+*The shipped profile.* Evidence lanes (heap windows, fault injection and the panic-link gate) run the ASIL profile: `panic = "abort"` and `overflow-checks = true`. Contract suites that rely on catching a panic run on an unwinding test profile, for diagnosis only, and their evidence counts only as part of an item's evidence.
+
+*macOS* is a development target with no safety claim. Its lanes are pthread evidence: they catch lazy first-use allocation that Linux futexes hide.
+
+An item is verified only when each method it lists has evidence for the paths it names. A test that passes on another path is not evidence.
+
+*How a test names what it verifies.* With OFT's own coverage tag, and the method after it on the same line, for example `+// [utest->req~ssr-qos-ttl~4] method: test+`. OFT reads the bracket. The method is for the check that each listed method has its evidence, which OFT does not do. Code that meets an item carries `+// [impl->req~ssr-qos-ttl~4]+`.
+
+== Files
+
+148 items in 20 files.
+
+[cols="4,1,3",options="header"]
+|===
+| File | Items | Tags
+
+| xref:assumptions-of-use.adoc[Assumptions of use] | 19 | `SafetyManual`
+| xref:runtime-modes.adoc[Modes and the transition] | 14 | `SafetyUpRustCore`
+| xref:heap.adoc[Heap] | 4 | `SafetyUpRustCore`
+| xref:errors.adoc[Refusal, errors and reporting] | 5 | `SafetyUpRustCore`
+| xref:bounded-work.adoc[Bounded work and waiting] | 3 | `SafetyUpRustCore`
+| xref:peers.adoc[Peers, RPC and message identity] | 10 | `SafetyUpRustCore`, `SafetyBinding`
+| xref:release.adoc[No release path] | 3 | `SafetyUpRustCore`
+| xref:startup-memory.adoc[Startup memory] | 3 | `SafetyUpRustCore`
+| xref:qos.adoc[QoS, TTL and deadlines] | 7 | `SafetyUpRustCore`
+| xref:integrity.adoc[Integrity levels] | 5 | `SafetyUpRustCore`
+| xref:waivers.adoc[Waivers] | 3 | `SafetyUpRustCore`
+| xref:crate-isolation.adoc[Crate isolation] | 4 | `SafetyUpRustCore`, `SafetyStreamer`
+| xref:deployment-data.adoc[Deployment data] | 5 | `SafetyUpRustCore`, `SafetyStreamer`
+| xref:memory-safety.adoc[Memory safety] | 4 | `SafetyUpRustCore`
+| xref:platform.adoc[Platform] | 6 | `SafetyUpRustCore`
+| xref:build.adoc[Build and shipped content] | 8 | `SafetyStreamer`, `SafetyUpRustCore`
+| xref:bindings.adoc[Allocated to each binding] | 12 | `SafetyBinding`, `SafetyBindingPull`, `SafetyIceoryx2`
+| xref:wires.adoc[Allocated to each wire] | 2 | `SafetyWire`
+| xref:e2e-wire.adoc[The end-to-end protection wire] | 14 | `SafetyE2eWire`, `SafetyUpRustCore`, `SafetyStreamer`
+| xref:streamer.adoc[Streamer] | 17 | `SafetyStreamer`
+|===

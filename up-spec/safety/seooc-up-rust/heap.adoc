@@ -1,0 +1,68 @@
+= up-rust SEooC: Heap
+:toc: preamble
+
+The key words "*MUST*", "*MUST NOT*", "*REQUIRED*", "*SHALL*", "*SHALL NOT*", "*SHOULD*", "*SHOULD NOT*", "*RECOMMENDED*", "*MAY*", and "*OPTIONAL*" in this document are to be interpreted as described in https://www.rfc-editor.org/info/bcp14[IETF BCP14 (RFC2119 & RFC8174)]
+
+Conventions, tags and status words: xref:../README.adoc[the safety area's README]. Scope and element boundary: xref:README.adoc[the SEooC's README].
+
+== No heap in runtime mode
+
+[.specitem,oft-sid="req~ssr-heap-none~1",oft-title="No heap in runtime mode",oft-needs="impl,utest",oft-tags="SafetyUpRustCore"]
+--
+In runtime mode, element code *MUST NOT* acquire or release heap memory on any path: traffic, refusals and error returns, lease drops, waits and wake-ups, deadline service, a peer dying and a peer restarting. A free counts as heap use.
+--
+
+[horizontal]
+ASIL:: B
+Allocated to:: the element
+Verification:: heap-window (Rust guard and C-level observer, all threads, allocations and frees, on Linux and on macOS), gate (the crate builds without `+alloc+`)
+Status:: Draft
+ISO 26262:: 6-Table 6 1b (part-clause numbers only)
+
+*Rationale.* Taking or returning heap memory while traffic flows could crash the process or corrupt the memory that runtime traffic relies on. Runtime mode works instead in startup memory, placed during initialization and never freed (`+core/src/memory.rs+`: "Objects placed here are never dropped or freed").
+
+== Lazy state is forced before runtime mode
+
+[.specitem,oft-sid="req~ssr-heap-lazy-forced~1",oft-title="Lazy state is forced before runtime mode",oft-needs="impl,utest",oft-tags="SafetyUpRustCore"]
+--
+Every primitive that would allocate or initialize itself on first use *MUST* be forced during initialization, or be absent from the runtime path: the first lock of an OS lock on pthread targets, thread-local state, caches, message ID state and wake hooks.
+--
+
+[horizontal]
+ASIL:: B
+Allocated to:: the element
+Verification:: heap-window on a pthread target (macOS) over first traffic, fault-injection (a control that leaves one primitive lazy must make the window fail, on every target)
+Status:: Draft
+ISO 26262:: 6-9.4.5, 6-10.4.7 (part-clause numbers only)
+
+*Rationale.* A primitive that sets itself up on first use moves that work, and any allocation in it, from initialization into the first message, where `+req~ssr-heap-none~1+` forbids it. In the code, the platform layer needs no state with first-use setup, and message IDs need no thread-local generator (`+core/src/platform/mod.rs+`, `+core/src/transport/ids.rs+`).
+
+== The heap class is declared, with no default
+
+[.specitem,oft-sid="req~ssr-heap-declared~1",oft-title="The heap class is declared, with no default",oft-needs="impl,utest",oft-tags="SafetyUpRustCore"]
+--
+Every wire *MUST* state its runtime heap class for each direction, and every prepared route *MUST* state its own: none, or allocation inside middleware under a named permit. Neither has a default. The transition *MUST* refuse a route whose wire declares allocation in a direction the route uses, naming the route and the reason.
+--
+
+[horizontal]
+ASIL:: B
+Allocated to:: the element
+Verification:: test (refusal at the transition), review (no default in the declaration)
+Status:: Draft
+
+*Rationale.* A claim of no heap use can be checked only if it is stated, so `+WireInfo::new+` takes the heap class of both directions, with no default (`+core/src/wire/mod.rs+`). A default would let a wire that allocates pass as one that does not, and the transition could not refuse it. The transition refuses such a route with `+StartupError::RouteNeedsHeapAtRuntime+`, which carries the route and the wire's reason (`+core/src/transport/error.rs+`).
+
+== Decoded types run no destructor
+
+[.specitem,oft-sid="req~ssr-heap-slot-types~1",oft-title="Decoded types run no destructor",oft-needs="impl,utest",oft-tags="SafetyUpRustCore"]
+--
+A message type whose values need dropping *MUST* be refused at setup on any route that decodes into a startup slot, so overwriting a slot in runtime mode never runs a destructor.
+--
+
+[horizontal]
+ASIL:: B
+Allocated to:: the element
+Verification:: test
+Status:: Draft
+
+*Rationale.* A value that needs dropping usually owns heap memory, so overwriting it in a slot would free that memory in runtime mode, which `+req~ssr-heap-none~1+` forbids. A receive route's startup check refuses such a type with the reason "the decoded type owns heap memory" (`+core/src/transport/inbound.rs+`).

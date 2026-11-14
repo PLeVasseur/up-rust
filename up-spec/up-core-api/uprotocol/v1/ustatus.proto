@@ -1,0 +1,39 @@
+/*
+ * SPDX-FileCopyrightText: 2023 Contributors to the Eclipse Foundation
+ *
+ * See the NOTICE file(s) distributed with this work for additional
+ * information regarding copyright ownership.
+ * 
+ * This program and the accompanying materials are made available under
+ * the terms of the Apache License Version 2.0 which is available at
+ * https://www.apache.org/licenses/LICENSE-2.0
+ *
+ * SPDX-FileType: SOURCE
+ * SPDX-License-Identifier: Apache-2.0
+ */
+syntax = "proto3";
+
+package uprotocol.v1;
+
+import "google/protobuf/any.proto";
+import "uprotocol/v1/ucode.proto";
+
+option java_package = "org.eclipse.uprotocol.v1";
+option java_outer_classname = "UStatusProto";
+option java_multiple_files = true;
+
+// uProtocol Error model for all uProtocol APIs that is loosely based off
+// google.rpc.Status
+message UStatus {
+  // The status code.
+  uprotocol.v1.UCode code = 1;
+
+  // A developer-facing error message, which should be in English. Any
+  // user-facing error message should be localized and sent in the
+  // details field, or localized by the client.
+  optional string message = 2;
+
+  // A list of messages that carry the error details. There is a common set of
+  // message types for APIs to use.
+  repeated google.protobuf.Any details = 3;
+}

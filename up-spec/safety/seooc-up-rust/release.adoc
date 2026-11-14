@@ -1,0 +1,52 @@
+= up-rust SEooC: No release path
+:toc: preamble
+
+The key words "*MUST*", "*MUST NOT*", "*REQUIRED*", "*SHALL*", "*SHALL NOT*", "*SHOULD*", "*SHOULD NOT*", "*RECOMMENDED*", "*MAY*", and "*OPTIONAL*" in this document are to be interpreted as described in https://www.rfc-editor.org/info/bcp14[IETF BCP14 (RFC2119 & RFC8174)]
+
+Conventions, tags and status words: xref:../README.adoc[the safety area's README]. Scope and element boundary: xref:README.adoc[the SEooC's README].
+
+== Nothing is released in runtime mode
+
+[.specitem,oft-sid="req~ssr-release-none~2",oft-title="Nothing is released in runtime mode",oft-needs="impl,utest",oft-tags="SafetyUpRustCore"]
+--
+In runtime mode each route, role, slot table, binding resource, worker and transport *MUST* remain allocated and attached for the life of the process. Workers created during initialization keep running and are never joined in runtime mode. A route keeps its slots and its binding resources when its gate disables it. A route gate (`+req~ssr-streamer-route-gate~2+`) may change the route's state, and nothing else about it.
+--
+
+[horizontal]
+ASIL:: B
+Allocated to:: the element
+Verification:: compile-fail (for the Streamer, a delete after activation), review
+Status:: Draft
+ISO 26262:: 6-Table 6 1b (part-clause numbers only)
+
+*Rationale.* A gate changes forwarding state without changing storage reservations or releasing resources, so disabling a route remains compatible with retaining its runtime storage.
+
+== Dropping a runtime handle does nothing
+
+[.specitem,oft-sid="req~ssr-release-inert-drop~1",oft-title="Dropping a runtime handle does nothing",oft-needs="impl,utest",oft-tags="SafetyUpRustCore"]
+--
+Every runtime-mode handle type *MUST* hold only `+'static+` data and indices, and *MUST NOT* have drop glue: the transport runtime, every activated L2 handle, the carrier routes, and the Streamer with its gate and counter handles. This *MUST* be proved for each type at compile time.
+--
+
+[horizontal]
+ASIL:: B
+Allocated to:: the element
+Verification:: gate (the const assertion for each handle type)
+Status:: Draft
+
+*Rationale.* A handle that held a reference count, such as an `+Arc+`, could free memory when the last one is dropped, which runtime mode forbids (`+req~ssr-heap-none~1+`). Each handle type carries a compile-time assertion that it needs no drop, such as the one on `+TransportRuntime+` in `+core/src/transport/mode.rs+`.
+
+== A lease gives back its slot and nothing else
+
+[.specitem,oft-sid="req~ssr-release-lease-drop~2",oft-title="A lease gives back its slot and nothing else",oft-needs="impl,utest",oft-tags="SafetyUpRustCore"]
+--
+Dropping a per-message lease (a received message, an RPC call, a request, a parked frame, a loan) *MUST* return its slot to a fixed table and does nothing else: it frees no heap, never blocks and cannot panic. It takes no lock that can wait; a lock-free retry, bounded by other threads' progress, is allowed. A binding's frame destructor has the same duty (`+req~ssr-binding-frame-drop~3+`).
+--
+
+[horizontal]
+ASIL:: B
+Allocated to:: the element
+Verification:: heap-window (lease drops inside the window), test (release order), miri, review (no lock on the release path)
+Status:: Draft
+
+*Rationale.* Returning a slot permits reuse within the fixed reservation; destroying that reservation would introduce a runtime release path.

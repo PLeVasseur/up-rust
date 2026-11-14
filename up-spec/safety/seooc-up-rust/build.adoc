@@ -1,0 +1,127 @@
+= up-rust SEooC: Build and shipped content
+:toc: preamble
+
+The key words "*MUST*", "*MUST NOT*", "*REQUIRED*", "*SHALL*", "*SHALL NOT*", "*SHOULD*", "*SHOULD NOT*", "*RECOMMENDED*", "*MAY*", and "*OPTIONAL*" in this document are to be interpreted as described in https://www.rfc-editor.org/info/bcp14[IETF BCP14 (RFC2119 & RFC8174)]
+
+Conventions, tags and status words: xref:../README.adoc[the safety area's README]. Scope and element boundary: xref:README.adoc[the SEooC's README].
+
+== The ASIL build aborts on panic and checks overflow
+
+[.specitem,oft-sid="req~ssr-build-panic-abort~3",oft-title="The ASIL build aborts on panic and checks overflow",oft-needs="impl,utest",oft-tags="SafetyStreamer"]
+--
+The ASIL release profile *MUST* set `+panic = "abort"+` and `+overflow-checks = true+`. A build of the ASIL Streamer binary *MUST* refuse to compile unless `+cfg(panic = "abort")+` holds. The refusal sits in that binary, which has `+test = false+` and no integration tests in its package, so that no test build compiles it: Cargo builds tests, and every dependency of a test, with unwinding. Every other build of the workspace *MUST* still compile, `+cargo build+`, `+cargo clippy --all-targets+` and `+cargo doc+` among them. Cargo cannot set `+panic+` for one package, so the development profile *MUST* set `+panic = "abort"+` as well, or the binary's package *MUST* be left out of the workspace's default members.
+--
+
+[horizontal]
+ASIL:: B
+Allocated to:: the Streamer binary
+Verification:: gate (a build of the binary with unwinding fails to compile; the release profile's settings; `+cargo test+` on the workspace still compiles; `+cargo build+`, `+cargo clippy --all-targets+` and `+cargo doc+` on the workspace still compile)
+Status:: Draft
+
+*Rationale.* With `+panic = "abort"+`, a panic ends the process at once instead of unwinding through code that may hold half-changed state, and overflow checks turn an arithmetic overflow into that panic instead of a wrong value. The refusal sits in the binary because Cargo builds tests with unwinding: in a library crate, it would stop that crate's tests, and every test that uses the crate, from compiling. Unless the development profile aborts on panic too, or the binary is left out of the default members, a development build of the workspace compiles the binary with unwinding, and fails. Confirm Cargo's behaviour against the toolchain in use.
+
+== The ASIL build contains only specified functions
+
+[.specitem,oft-sid="req~ssr-build-specified-functions-only~1",oft-title="The ASIL build contains only specified functions",oft-needs="impl,utest",oft-tags="SafetyUpRustCore,SafetyStreamer"]
+--
+The ASIL build *MUST* contain only specified functions. Instrumentation, benchmark code and test hooks *MUST* be absent from it, or be specified and shown unable to affect any software safety requirement.
+--
+
+[horizontal]
+ASIL:: B
+Allocated to:: the element; the Streamer
+Verification:: gate (a symbols check on a final ASIL image, for test and benchmark entry points), review
+Status:: Draft
+ISO 26262:: 6-10.4.6 (part-clause numbers only)
+
+*Rationale.* Code in an image that no requirement specifies is code that no requirement's verification covers, yet it can still run and change state. `+up-rust-core+` has hidden test hooks today, such as `+__admit_for_tests+` in `+core/src/transport/envelope.rs+` and `+__slice_for_tests+` in `+core/src/memory.rs+`, which an ASIL image would contain unless they are removed or specified.
+
+== The shipped element contains no test hook
+
+[.specitem,oft-sid="req~ssr-no-test-hooks~1",oft-title="The shipped element contains no test hook",oft-needs="impl,utest",oft-tags="SafetyUpRustCore"]
+--
+Every item of the element that exists only for tests *MUST* compile only under the `+up_rust_test_hooks+` configuration, which no shipped build sets. The async layer's seam is not a test hook; `+req~ssr-async-seam~1+` states it.
+--
+
+[horizontal]
+ASIL:: B
+Allocated to:: the element
+Verification:: gate (the source scan refuses a hidden `+pub fn __+` that is neither under the configuration nor one of the seam's names; built without the configuration, a probe naming each test hook fails to resolve)
+Status:: Draft
+
+*Rationale.* A test hook that changes hidden protocol state must not become an operation available in a shipped build.
+
+== The async seam has a written contract
+
+[.specitem,oft-sid="req~ssr-async-seam~1",oft-title="The async seam has a written contract",oft-needs="impl,utest,uman",oft-tags="SafetyUpRustCore"]
+--
+The element's seam for executor adapters, the five functions that give an async layer a route's or a call's waker storage, the call's time-to-live and its taken response, and the `+RouteWake+` type they return, *MUST* have a written contract stated with the element. For each, the contract says what it returns and for how long, which threads may call it, that it neither blocks nor allocates in the element, and what an adapter *MUST* do: register its waker before it waits, treat a wake as a hint and poll again, and clear the storage when its call or receive drops. Tests verify the contract. From the API freeze, the seam is a documented part of the element's API.
+--
+
+[horizontal]
+ASIL:: B
+Allocated to:: the element
+Verification:: test (the contract's sequence against core, inside heap windows), miri (`+RouteWake+`'s storage), review (the contract against the code)
+Status:: Draft
+
+*Rationale.* An executor adapter can miss a notification or retain storage incorrectly unless registration, polling, lifetime and cleanup responsibilities are explicit.
+
+== Strict mode checks in initialization only
+
+[.specitem,oft-sid="req~ssr-strict-init-only~1",oft-title="Strict mode checks in initialization only",oft-needs="impl,utest",oft-tags="SafetyUpRustCore"]
+--
+Every strict-mode policy check *MUST* run in initialization mode, before the transition: at a route's build for the rules that concern one route, and at the transition for the rest. Its findings are fixed-size values that can be copied, its reports are written into storage the caller provides, and nothing it does allocates, blocks or panics. Runtime paths do not execute the strict-policy checker, consult its policy or produce its findings. Settings fixed during initialization may select runtime behavior explicitly required elsewhere, including the strict ASIL RPC older-incarnation refusal in `+req~ssr-e2e-resync~4+`. That E2E behavior retains the runtime no-heap and bounded-work requirements; initialization-only policy checking does not mean identical E2E receive semantics in every configuration.
+--
+
+[horizontal]
+ASIL:: B
+Allocated to:: the element's strict mode
+Verification:: test (each rule's finding at setup, with a negative control per rule), heap-window (setup and the transition in the Enforce state), review (no runtime path runs the policy checker or reads its policy; initialization-selected E2E behavior is distinguished from policy checking and retains the runtime bounds)
+Status:: Draft
+
+*Rationale.* Admission findings must be complete before runtime starts, so policy checking cannot add runtime allocation or configuration work. The admitted configuration can still select a specified E2E receive rule that executes during runtime.
+
+== The locked build allows only enforcement
+
+[.specitem,oft-sid="req~ssr-strict-lock~1",oft-title="The locked build allows only enforcement",oft-needs="impl,utest",oft-tags="SafetyUpRustCore"]
+--
+Under `+--cfg up_rust_strict+`, set only in the integrator's build configuration, strict mode *MUST* have only its Enforce state: code that names another state fails to compile, and deployment data that names one is refused at setup. Every transport carries a strict-mode policy. The QM-only runtime crates fail to compile under the configuration, each naming its replacement: `+up-rust+`, `+up-rust-tokio+`, the wires that use the heap, and the classic Streamer.
+--
+
+[horizontal]
+ASIL:: B
+Allocated to:: the element's strict mode
+Verification:: gate (each QM-only crate fails to compile under the configuration, naming its replacement; a probe naming another state fails to compile), test (deployment data naming another state is refused at setup; a transport without a policy is refused)
+Status:: Draft
+
+*Rationale.* An integrator-selected build lock prevents a development setting or convenience dependency from silently restoring an unsupported runtime surface.
+
+== An acknowledgement names a deviation by ID and revision
+
+[.specitem,oft-sid="req~ssr-strict-ack-revision~1",oft-title="An acknowledgement names a deviation by ID and revision",oft-needs="impl,utest",oft-tags="SafetyUpRustCore"]
+--
+A strict-mode acknowledgement *MUST* name one deviation by its ID and its revision, never by its type, with a reference, an approver and a date. When a deviation's revision rises, an acknowledgement of its earlier revision no longer holds, so its finding refuses again in the Enforce state until it is acknowledged anew. A known failure is refused whatever is acknowledged.
+--
+
+[horizontal]
+ASIL:: B
+Allocated to:: the element's strict mode
+Verification:: test (an acknowledgement of an earlier revision refuses again; one that names an unknown ID is refused; a known failure refuses whatever is acknowledged)
+Status:: Draft
+
+*Rationale.* Acknowledging an earlier deviation cannot establish acceptance of a later change to its scope or consequences.
+
+== Strict mode reports on every run
+
+[.specitem,oft-sid="req~ssr-strict-report~1",oft-title="Strict mode reports on every run",oft-needs="impl,utest",oft-tags="SafetyUpRustCore"]
+--
+Whenever strict mode is in its Report or Enforce state, setup *MUST* produce a compliance report: every finding, with its rule, its route, the requirement IDs it serves and its fix; the acknowledged deviations; the bounds it computes for detection, servicing and the watchdog; the assumptions of use that apply to the features configured; and each cited item's revision and status, so that a run before the requirements are signed off says that its rules rest on draft items. In the Enforce state every finding is still reported, so one run shows everything to fix.
+--
+
+[horizontal]
+ASIL:: B
+Allocated to:: the element's strict mode
+Verification:: test (a run's report with findings of every severity; the cited-items line before and after sign-off), review (the report's fields against this item)
+Status:: Draft
+
+*Rationale.* A compliance report makes declarations, deviations and outstanding duties inspectable; a Draft citation must remain distinguishable from a signed-off requirement.

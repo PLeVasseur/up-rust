@@ -1,0 +1,115 @@
+/*
+ * SPDX-FileCopyrightText: 2023 Contributors to the Eclipse Foundation
+ *
+ * See the NOTICE file(s) distributed with this work for additional
+ * information regarding copyright ownership.
+ * 
+ * This program and the accompanying materials are made available under
+ * the terms of the Apache License Version 2.0 which is available at
+ * https://www.apache.org/licenses/LICENSE-2.0
+ *
+ * SPDX-FileType: SOURCE
+ * SPDX-License-Identifier: Apache-2.0
+ */
+syntax = "proto3";
+
+package uprotocol.core.udiscovery.v3;
+import "uprotocol/uoptions.proto";
+import "uprotocol/v1/uri.proto";
+
+option java_package = "org.eclipse.uprotocol.core.udiscovery.v3";
+option java_outer_classname = "UDiscoveryProto";
+option java_multiple_files = true;
+
+// Enables generation of generic service attributes in C++
+option cc_generic_services = true;
+
+// Client facing APIs to the uProtocol Discovery Service.
+// 
+// The uDiscovery service is used to store information about devices and services namely their
+// addresses (in URI format), and properties of topics. This API is used by clients (uEntities) to
+// access the information within the database. Clients talk to their local uDiscovery service
+// which, if unable to find what it is looking for, queries the central database to find the information.
+// The UDiscovery service instances form a hierarchy where the local uDiscovery service is the first point of contact
+// and the domain level service (for information about devices within a domain), and then central service
+// is the last point of contact.
+//
+// NOTE: the internal uDiscovery communication protocol (for how data is replicated between the local, domain,
+// and central) is NOT covered in this interface as this is ONLY the client APIs.
+service uDiscovery {
+  option (uprotocol.service_name) = "core.udiscovery"; // Service name
+  option (uprotocol.service_version_major) = 3;
+  option (uprotocol.service_version_minor) = 0;
+  option (uprotocol.service_id) = 1;
+
+
+  // Find Services. 
+  //
+  // Discover authorities, instances, and versions of services based on the passed URI.
+  rpc FindServices(FindServicesRequest) returns (FindServicesResponse) {
+    option (uprotocol.method_id) = 1;
+  }
+
+
+  // Get information about one or more topics served by a service.
+  //
+  // The UUri identifies the topics. Wildcards in ue_id or resource_id select
+  // multiple topics. UServiceTopic defines the topic identifier, topic name,
+  // message type, resources, and permission level.
+  //
+  rpc GetServiceTopics(GetServiceTopicsRequest) returns (GetServiceTopicsResponse) {
+    option (uprotocol.method_id) = 2;
+  }
+
+}
+
+
+// Request to get information about a topic
+// Example might be to get information about a specific topic, all topics for a service (using wildcard resource_id),
+// or all topics for all services for a given device (using wildcard ue_id and resource_id)
+message GetServiceTopicsRequest {
+  // The URI of the topics that we would like to query.
+  uprotocol.v1.UUri topic = 1;
+
+  // Recursively search up to the root node of the uDiscovery tree
+  bool recursive = 2;
+}
+
+
+// Response to GetTopicInfoRequest
+message GetServiceTopicsResponse {
+  repeated ServiceTopicInfo topics = 1;
+}
+
+
+// Message that stores the metadata about a topic and the topic URI so 
+// it can be passed back in GetServiceTopicsResponse.
+message ServiceTopicInfo {
+  // The URI of the topic
+  uprotocol.v1.UUri topic = 1;
+  
+  // The topic metadata
+  UServiceTopic info = 2;
+
+  // How long the topic metadata is valid for in seconds.
+  // If the metadata is older than this value, the client SHOULD re-fetch the metadata.
+  // Metadata lives forever if the value is 0 (default).
+  uint32 ttl = 3;
+}
+
+
+// The URI containing the service that we would like to find.
+message FindServicesRequest {
+  // The Uri to look up
+  uprotocol.v1.UUri uri = 1;
+
+  // Recursively search up to the root node of the uDiscovery tree
+  bool recursive = 2;
+}
+
+
+// Return value from FindService API that contains a batch of all services that match the search criteria
+message FindServicesResponse {
+  // Batch of URIs
+  uprotocol.v1.UUriBatch uris = 1;
+}
