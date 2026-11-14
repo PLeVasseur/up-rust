@@ -1,0 +1,11 @@
+{
+  "schema": "up-rust-shared-core-feature-pin-v1",
+  "source": "owner-export-v2/up-rust",
+  "owner_export_pin": [510070, "1cb2e9b507dd6558eab57de33971c763bbeefe6a1f66b9fa2bec40b3ea87935a"],
+  "source_files": 852,
+  "source_content_bytes": 26379715,
+  "core_manifest": "core/Cargo.toml",
+  "contract": ["BindingSetup", "LendingRuntime", "PreparedTxStorage", "Frame", "RuntimePort"],
+  "import_policy": "Pinned owner export copied as a complete source snapshot; no transport-specific API was added.",
+  "status": "source-imported-awaiting-core-gate-and-push"
+}
