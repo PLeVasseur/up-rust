@@ -60,6 +60,10 @@ pub struct RouteReport {
     pub qos: Qos,
     /// What the route's middleware does with the heap.
     pub heap: RuntimeHeap,
+    /// Whether any admitted payload is native, including a native member of a
+    /// mixed carrier route. This classifies heap policy independently of the
+    /// physical loan mode; forwarding native bytes does not serialize them.
+    pub native_payload: bool,
     /// Binding deviations that apply to this route.
     pub deviations: &'static [&'static super::Deviation],
 }

@@ -283,6 +283,8 @@ impl TxRoute {
             envelope: self.envelope,
             qos: self.qos,
             heap: self.heap,
+            native_payload: self.native
+                || self.admitted.iter().any(|wire| wire.native_type_token.is_some()),
             deviations: self.deviations,
             lifetime_policy: self.shared.lifetime_policy(),
             deadline_timing: super::DeadlineTimingReport::pending(None),
@@ -2394,11 +2396,16 @@ impl TransportSetup {
                     });
                 }
             }
-            if let RuntimeHeap::Allocates(reason) = report.heap {
-                return Err(StartupError::RouteNeedsHeapAtRuntime {
-                    route: report.route.clone(),
-                    wire: reason,
-                });
+            // Serialized transport paths may declare allocation. Any native
+            // member keeps the whole route subject to the native heap rule.
+            // Named middleware waivers above remain independently enforced.
+            if report.native_payload {
+                if let RuntimeHeap::Allocates(reason) = report.heap {
+                    return Err(StartupError::RouteNeedsHeapAtRuntime {
+                        route: report.route.clone(),
+                        wire: reason,
+                    });
+                }
             }
         }
         for waiver in inner.waivers.slice() {

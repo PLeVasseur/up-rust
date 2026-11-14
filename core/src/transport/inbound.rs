@@ -600,6 +600,7 @@ impl RxCommon {
             envelope: self.envelope,
             qos: self.qos,
             heap: self.heap,
+            native_payload: self.admitted.iter().any(|wire| wire.native_type_token.is_some()),
             deviations: self.deviations,
             lifetime_policy: self.shared.lifetime_policy(),
             deadline_timing: self.monitor.get().map_or_else(
