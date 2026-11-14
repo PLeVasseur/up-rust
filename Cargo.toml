@@ -39,7 +39,8 @@ version = "0.10.0-SNAPSHOT"
 resolver = "2"
 
 [workspace]
-members = ["application", "core", "macros", "up-rust-tokio", "tools/up-native-profile", "test-fixtures/native-inventory-types", "test-fixtures/native-inventory-export", "test-fixtures/core-consumer", "test-fixtures/forbid-unsafe-wire"]
+exclude = ["alloc"]
+members = ["application", "core", "macros", "std", "up-rust-tokio", "tools/up-native-profile", "test-fixtures/native-inventory-types", "test-fixtures/native-inventory-export", "test-fixtures/core-consumer", "test-fixtures/forbid-unsafe-wire"]
 
 [features]
 default = []
@@ -108,6 +109,7 @@ thiserror = { version = "2.0.21" }
 tokio = { version = "1.54.1", default-features = false, optional = true }
 tracing = { version = "0.1.44", default-features = false, features = ["log", "std"] }
 up-rust-core = { version = "0.10.0-SNAPSHOT", path = "core" }
+up-rust-std = { version = "0.10.0-SNAPSHOT", path = "std" }
 up-rust-application = { version = "0.10.0-SNAPSHOT", path = "application" }
 up-rust-macros = { version = "0.10.0-SNAPSHOT", path = "macros", optional = true }
 

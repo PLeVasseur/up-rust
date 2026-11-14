@@ -522,12 +522,26 @@ impl StartupMemory {
         Ok(unsafe { core::slice::from_raw_parts_mut(ptr.cast::<MaybeUninit<T>>(), count) })
     }
 
-    /// Reserves a permanently owned, explicitly aligned worker stack.
+    /// Reserves permanently owned bytes with an explicit alignment.
+    ///
+    /// This checked reservation can back a caller-selected allocator or an
+    /// explicitly aligned worker stack. It returns no initialized byte values.
+    /// Padding is charged by the same core reservation path as typed placement.
+    ///
+    /// # Errors
+    /// Returns `InvalidAlignment` unless alignment is a nonzero power of two,
+    /// `RegionSealed` after initialization, or `MemoryExhausted` when the full
+    /// aligned extent cannot be reserved. Zero count still requires alignment.
     /// # Safety-usable invariant
     /// Success supplies the sole exclusive static byte range in one allocation,
     /// with the requested power-of-two alignment and extent <= isize::MAX. No
     /// initialized objects occupy it; forgetting the slice does not reclaim it.
-    pub(crate) fn aligned_bytes(&self, count: usize, alignment: usize)
+    /// For fixed memory created by `StartupRegion::claim` or `StartupMemory::new`,
+    /// this executes no user callback, allocation or destructor, and cannot
+    /// unwind: the fixed-source path uses checked arithmetic and atomics only
+    /// before its already-proved pointer operations. A custom RegionSource can
+    /// execute user code; this no-unwind guarantee does not extend to that path.
+    pub fn aligned_bytes(&self, count: usize, alignment: usize)
         -> Result<&'static mut [MaybeUninit<u8>], StartupError>
     {
         if !alignment.is_power_of_two() { return Err(StartupError::InvalidAlignment { alignment }); }

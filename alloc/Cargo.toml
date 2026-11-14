@@ -1,0 +1,15 @@
+[package]
+name = "up-rust-alloc"
+version = "0.0.0-experimental.1"
+edition = "2021"
+rust-version = "1.100"
+license = "Apache-2.0"
+description = "Experimental explicit-allocator helpers for the uProtocol SDK"
+repository = "https://github.com/PLeVasseur/up-rust"
+publish = false
+
+[dependencies]
+# Optional Rust1.100 experiment; existing SDK workspace keeps its1.88 MSRV.
+up-rust-core = { path = "../core" }
+
+[workspace]

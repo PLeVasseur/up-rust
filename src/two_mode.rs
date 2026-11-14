@@ -64,52 +64,9 @@ pub use up_rust_core::{runtime_waiver, wire_table};
 #[cfg(feature = "zero-copy-transport")]
 pub use up_rust_macros::ZeroSlot;
 
-use crate::startup::LEAKED_HEAP_REGIONS;
-
-/// The classic heap-backed constructors of [`TransportSetup`] (R15).
-///
-/// In the prelude: `TransportSetup::lending(binding)` and
-/// `TransportSetup::handoff(binding)` use one heap block per request, so no size
-/// is needed up front. An ASIL binary uses `lending_in` with a static region.
-pub trait TransportSetupExt: Sized {
-    /// A lending transport on heap startup memory and the native platform.
-    ///
-    /// # Errors
-    /// As [`TransportSetup::lending_in`].
-    fn lending<S>(binding: S) -> Result<Self, StartupError>
-    where
-        S: BindingSetup,
-        S::Running: LendingRuntime;
-
-    /// A handoff transport on heap startup memory and the native platform.
-    ///
-    /// # Errors
-    /// As [`TransportSetup::handoff_in`].
-    fn handoff<S>(binding: S) -> Result<Self, StartupError>
-    where
-        S: BindingSetup,
-        S::Running: HandoffRuntime;
-}
-
-impl TransportSetupExt for TransportSetup {
-    fn lending<S>(binding: S) -> Result<Self, StartupError>
-    where
-        S: BindingSetup,
-        S::Running: LendingRuntime,
-    {
-        let memory = StartupMemory::from_source(&LEAKED_HEAP_REGIONS, 64 * 1024)?;
-        TransportSetup::lending_in(&memory, binding)
-    }
-
-    fn handoff<S>(binding: S) -> Result<Self, StartupError>
-    where
-        S: BindingSetup,
-        S::Running: HandoffRuntime,
-    {
-        let memory = StartupMemory::from_source(&LEAKED_HEAP_REGIONS, 64 * 1024)?;
-        TransportSetup::handoff_in(&memory, binding)
-    }
-}
+// Preserve the facade's existing extension-trait path while allowing slim
+// consumers to depend directly on up-rust-std.
+pub use up_rust_std::TransportSetupExt;
 
 /// Bridges a classic [`crate::LocalUriProvider`] to the core trait.
 #[derive(Debug)]

@@ -1,0 +1,19 @@
+[package]
+name = "up-rust-std"
+version = "0.10.0-SNAPSHOT"
+edition = "2021"
+rust-version = "1.88"
+license = "Apache-2.0"
+description = "Standard-library startup conveniences for the uProtocol Rust core"
+repository = "https://github.com/eclipse-uprotocol/up-rust"
+
+[dependencies]
+up-rust-core = { version = "0.10.0-SNAPSHOT", path = "../core" }
+
+[lints]
+workspace = true
+
+[[example]]
+name = "automatic_setup"
+path = "examples/automatic_setup.rs"
+crate-type = ["lib"]

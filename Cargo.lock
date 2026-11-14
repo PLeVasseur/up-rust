@@ -1984,6 +1984,7 @@ dependencies = [
  "up-rust-application",
  "up-rust-core",
  "up-rust-macros",
+ "up-rust-std",
  "uuid-simd",
 ]
 
@@ -2013,6 +2014,13 @@ dependencies = [
  "proc-macro2",
  "quote",
  "syn 2.0.119",
+]
+
+[[package]]
+name = "up-rust-std"
+version = "0.10.0-SNAPSHOT"
+dependencies = [
+ "up-rust-core",
 ]
 
 [[package]]
