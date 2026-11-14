@@ -17,7 +17,7 @@
 //! A free list holds free slots and a ready queue holds queued ones, both private
 //! to the crate; a slot held by an application lease is in neither, so it can
 //! never be evicted.
-//! Frames are decoded into startup-initialized `T` slots, or, for a native route,
+//! Frames are decoded into permanently reserved `T` slots, or, for a native route,
 //! the retained frame itself is kept and borrowed through a checked typed view.
 
 use core::cell::UnsafeCell;
@@ -707,10 +707,10 @@ pub(crate) enum RxKind<T: 'static> {
 pub struct TypedInbound<T: 'static, M: WireMode = Encoded> {
     pub(crate) common: RxCommon,
     kind: RxKind<T>,
-    // Safety invariant: encoded slots contain valid initialized T at each index;
-    // only their current producer may mutate, current Received leases may read.
-    // InPlace has no values and never uses encoded accessors.
-    values: &'static [UnsafeCell<T>],
+    // Safety invariant: encoded slots are valid/vacant as tracked by DecodedSlot;
+    // only the current producer/releaser may mutate. Published Received leases
+    // read an initialized value. InPlace has no decoded values/accessors.
+    values: &'static [super::decoded::DecodedSlot<T>],
     // Safety invariant: RX-owner: free, ready and slots have equal capacity.
     // One raw pool obligation is held by producer, queue, or Received. Initialized
     // meta is published before transfer; retained=true means one live frame at
@@ -736,6 +736,31 @@ pub struct TypedInbound<T: 'static, M: WireMode = Encoded> {
     _mode: PhantomData<fn() -> M>,
 }
 
+/// Unpublished receive owner. Its seed cleanup cannot outlive installation or
+/// coexist with a usable route handle: callers get reports until install consumes
+/// the guard, and the route reference is returned only after seed ownership moves.
+pub(crate) struct PreparedInbound<T: 'static, M: WireMode> {
+    route: &'static TypedInbound<T, M>,
+    seeds: Option<super::decoded::InitialValues<T>>,
+}
+
+impl<T: Send + Sync + 'static, M: WireMode> PreparedInbound<T, M> {
+    pub(crate) fn report(&self) -> RouteReport { self.route.report() }
+
+    /// # Safety-usable invariant
+    /// On success adds the complete route and consumes seed cleanup before a
+    /// usable route handle escapes. add_rx has no fallible step after installing
+    /// the dispatch entry. On error the route was not installed and seeds remain
+    /// solely owned by this wrapper; its Drop clears them before returning.
+    pub(crate) fn install(self, setup: &super::mode::TransportSetup)
+        -> Result<&'static TypedInbound<T, M>, StartupError>
+    {
+        setup.add_rx(self.route)?;
+        if let Some(seeds) = self.seeds { seeds.commit(); }
+        Ok(self.route)
+    }
+}
+
 impl<T: 'static, M: WireMode> fmt::Debug for TypedInbound<T, M> {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         f.debug_struct("TypedInbound")
@@ -746,16 +771,18 @@ impl<T: 'static, M: WireMode> fmt::Debug for TypedInbound<T, M> {
 
 // SAFETY: slots and values are reachable only through the index that a producer
 // popped from `free` or a consumer popped from `ready`, so each is used by one
-// owner at a time; `T: Send + Sync` covers moving and sharing values across
-// threads. The retained frames are `Send` by the `Frame` contract and are never
+// owner at a time. DecodedSlot flags and values are mutated only under that
+// unique slot obligation; free/ready transfer uses the existing Release/Acquire
+// protocol. Setup seeds are hidden until their guard commits. `T: Send + Sync`
+// covers moving and sharing values across threads. The retained frames are `Send` by the `Frame` contract and are never
 // shared by reference.
 unsafe impl<T: Send + Sync, M: WireMode> Send for TypedInbound<T, M> {}
 // SAFETY: see `Send`.
 unsafe impl<T: Send + Sync, M: WireMode> Sync for TypedInbound<T, M> {}
 
 impl<T: Send + Sync + 'static, M: WireMode> TypedInbound<T, M> {
-    /// Reserves everything a receive route needs. `first_value` initializes
-    /// each value slot through a pointer; none for an in-place route.
+    /// Reserves everything a receive route needs. `wire_for_init` seeds each
+    /// encoded value; its cleanup remains guarded until route installation.
     #[allow(clippy::too_many_arguments)]
     pub(crate) fn place(
         memory: &crate::memory::StartupMemory,
@@ -767,7 +794,7 @@ impl<T: Send + Sync + 'static, M: WireMode> TypedInbound<T, M> {
         text_len: usize,
         native: bool,
         wire_for_init: Option<&'static dyn Wire<T>>,
-    ) -> Result<&'static Self, StartupError> {
+    ) -> Result<PreparedInbound<T, M>, StartupError> {
         let count = depth.saturating_add(max_held).saturating_add(1);
         let slot_count = u32::try_from(count).map_err(|_| {
             StartupError::Memory(crate::memory::StartupError::MemoryExhausted {
@@ -784,10 +811,9 @@ impl<T: Send + Sync + 'static, M: WireMode> TypedInbound<T, M> {
                 frame: UnsafeCell::new(MaybeUninit::uninit()),
             })?;
         }
-        let values: &'static [UnsafeCell<T>] = match wire_for_init {
-            Some(wire) => init_values(memory, wire, count)?,
-            None => &[],
-        };
+        let seeds = wire_for_init
+            .map(|wire| super::decoded::initialize(memory, wire, count)).transpose()?;
+        let values = seeds.as_ref().map_or(&[][..], |seeds| seeds.slots());
         let frames = if frame_len == 0 {
             None
         } else {
@@ -816,7 +842,7 @@ impl<T: Send + Sync + 'static, M: WireMode> TypedInbound<T, M> {
             native,
             _mode: PhantomData,
         })?;
-        Ok(&*route)
+        Ok(PreparedInbound { route: &*route, seeds })
     }
 
     /// Acquires actual payload storage. Full is the existing pool's exact
@@ -882,12 +908,15 @@ impl<T: Send + Sync + 'static, M: WireMode> TypedInbound<T, M> {
     /// Returns a slot to the pool, dropping any retained frame it held.
     /// # Safety
     /// Caller owns RX-owner's initialized index exclusively with no live views.
-    /// Drop completes the retained owner, then consumes the one pool obligation.
+    /// Drop completes the retained owner and any owned decoded value before
+    /// consuming the one pool obligation; unwind keeps that index withheld.
     unsafe fn release_slot(&self, index: u32) {
         // SAFETY: RX-owner and the caller's unique initialized index prove meta's
         // assume_init_ref and retained frame's assume_init_drop. No callback can
         // obtain this index before free.push; if Drop unwinds the index is not
-        // returned. Completed cleanup and no live views discharge push's contract.
+        // returned. DecodedSlot::clear receives the same unique index after every
+        // value borrow ended; its flag excludes a second owned-value destructor.
+        // Completed cleanup and no live views discharge push's contract.
         unsafe {
             if let Some(slot) = self.slots.get(index as usize) {
                 // SAFETY: the caller owns `index` (popped from `ready` or a dropping
@@ -899,6 +928,7 @@ impl<T: Send + Sync + 'static, M: WireMode> TypedInbound<T, M> {
                     { (*slot.frame.get()).assume_init_drop() };
                 }
             }
+            if let Some(value) = self.values.get(index as usize) { value.clear(); }
             self.free.push(index);
         }
     }
@@ -997,9 +1027,11 @@ impl<T: Send + Sync + 'static, M: WireMode> TypedInbound<T, M> {
     /// Decodes `body` through the selected wire into this slot's value.
     // [impl->req~ssr-unsafe-wire-untrusted~1]
     /// # Safety
-    /// Caller exclusively owns this encoded slot for the entire call, including
-    /// arbitrary safe wire callbacks. T is initialized by the values invariant;
-    /// no payload reference overlaps the mutable decode borrow. Ownership stays.
+    /// Caller exclusively owns this encoded slot throughout initialization and
+    /// decode, including arbitrary safe callback reentry. No value borrow overlaps
+    /// that interval. A vacant value may be initialized here; success leaves valid
+    /// T. Init unwind can leave vacant/leaked storage; decode error/unwind after
+    /// successful initialization leaves valid T, without semantic success.
     unsafe fn decode_into_slot(
         &self,
         index: u32,
@@ -1007,10 +1039,14 @@ impl<T: Send + Sync + 'static, M: WireMode> TypedInbound<T, M> {
         parsed: &ParsedFrame<'_>,
         body: &[u8],
     ) -> Result<(), ReceiveError> {
-        // SAFETY: checked values.get bounds and the values/RX-owner invariants give
-        // one initialized aligned T. The caller's exclusive slot excludes aliases;
-        // &mut T permits a safe wire to replace it but never leave invalid T on
-        // normal return or unwind. Encoding semantics are not a safety premise.
+        // SAFETY: checked values.get and the RX-owner obligation give exclusive
+        // typed storage for the complete temporary borrow. get_or_init establishes
+        // initialized T before decode sees &mut T. Safe decode may replace/panic,
+        // but cannot invalidate T. Ordinary assignment through &mut T installs
+        // its replacement even when the old value's Drop unwinds (Rust's
+        // drop-and-replace cleanup), so logical decode success is not validity.
+        // Initialization unwind is handled as vacant by DecodeGuard; encoding
+        // semantics and a no-panic promise are not memory-safety premises.
         {
             let RxKind::Encoded { wires } = self.kind else {
                 return Err(ReceiveError::Unsupported("not an encoded route"));
@@ -1026,9 +1062,11 @@ impl<T: Send + Sync + 'static, M: WireMode> TypedInbound<T, M> {
                 .values
                 .get(index as usize)
                 .ok_or(ReceiveError::SlotsExhausted)?;
-            // SAFETY: this caller holds the slot's index exclusively until publish,
-            // and the value was initialized at startup.
-            let into = unsafe { &mut *value.get() };
+            // SAFETY: caller holds this unpublished index through the complete
+            // mutable decode borrow and every initializer/decode callback. No
+            // value view or pool return can overlap; the borrow ends at return.
+            let into = unsafe { value.get_or_init(wire.wire) }
+                .map_err(|error| self.refuse_wire(error))?;
             wire.wire
                 .decode(encoding, body, into)
                 .map_err(|error| self.refuse_wire(error))
@@ -1387,6 +1425,9 @@ impl<T: Send + Sync + 'static, M: WireMode> TypedInbound<T, M> {
                 return Err(ReceiveError::SlotsExhausted);
             }
             let release = |this: &Self, index: u32| {
+                // Unique unpublished index; decode borrows ended. Clear owned T
+                // before pool return so destructor reentry cannot reacquire it.
+                if let Some(value) = this.values.get(index as usize) { value.clear(); }
                 this.free.push(index);
                 if reserved {
                     this.queued.fetch_sub(1, Ordering::AcqRel);
@@ -1502,8 +1543,9 @@ impl<T: Send + Sync + 'static, M: WireMode> TypedInbound<T, M> {
 /// publishes or releases the slot itself.
 struct DecodeGuard<'r, T: 'static, M: WireMode> {
     route: &'r TypedInbound<T, M>,
-    // Safety invariant: unique unpublished encoded index; initialized T but no
-    // retained frame. Drop alone returns it unless returned() consumes the guard.
+    // Safety invariant: unique unpublished encoded index; value may be valid or
+    // vacant, and no retained frame exists. Drop alone clears/returns it unless
+    // returned() consumes the guard. Unwind never permits overlapping access.
     index: u32,
     reserved: bool,
 }
@@ -1516,12 +1558,16 @@ impl<T: 'static, M: WireMode> DecodeGuard<'_, T, M> {
 
 impl<T: 'static, M: WireMode> Drop for DecodeGuard<'_, T, M> {
     fn drop(&mut self) {
-        // The slot's meta was never written, so it holds no retained frame, and
-        // its value is a `T` the wire wrote through `&mut T`: back to the pool.
+        // Meta was never written, so this guard owns no retained frame.
         add(&self.route.common.counters.refused);
-        // SAFETY: DecodeGuard.index owns the unique return and holds no frame;
-        // decode's &mut T has unwound before this guard, preserving a valid T.
-        unsafe { self.route.free.push(self.index) };
+        // SAFETY: the guard owns this unpublished index, and every temporary
+        // initialization/decode borrow has unwound. DecodedSlot tracks validity;
+        // clear destroys only completed owned values before return. If Drop also
+        // unwinds, the index remains withheld. No callback can acquire it early.
+        unsafe {
+            if let Some(value) = self.route.values.get(self.index as usize) { value.clear(); }
+            self.route.free.push(self.index);
+        }
         if self.reserved {
             self.route.queued.fetch_sub(1, Ordering::AcqRel);
         }
@@ -1554,42 +1600,6 @@ impl<T: 'static, M: WireMode> Drop for LeaseReservation<'_, T, M> {
         unsafe { self.route.ready.release_consumer(self.context) };
         self.route.held.fetch_sub(1, Ordering::AcqRel);
     }
-}
-
-/// Initializes `count` value slots in place, through a pointer, so a large
-/// value never crosses the stack.
-// [impl->req~ssr-unsafe-wire-untrusted~1]
-/// # Safety-usable invariant
-/// Ok contains exactly count valid initialized T cells in one permanent typed
-/// allocation, without external ownership/aliases. The init_slot result must
-/// match each exact StartupSlot pointer; no caller-provided semantic promise is
-/// assumed. The original mutable storage capability is relinquished on success.
-/// Errors/unwind expose no initialized slice; already initialized values may leak.
-fn init_values<T: Send + Sync + 'static>(
-    memory: &crate::memory::StartupMemory,
-    wire: &'static dyn Wire<T>,
-    count: usize,
-) -> Result<&'static [UnsafeCell<T>], StartupError> {
-    let slots: &'static mut [MaybeUninit<T>] = memory.slice::<T>(count)?;
-    for slot in slots.iter_mut() {
-        let expected: *mut T = slot.as_mut_ptr();
-        let ready = wire.init_slot(crate::wire::StartupSlot::new(slot));
-        // The wire can only return a value for this slot; check anyway.
-        if !core::ptr::eq(ready.into_value() as *mut T, expected) {
-            return Err(StartupError::InvalidConfig(
-                "a wire returned a value for a different slot",
-            ));
-        }
-    }
-    // SAFETY: StartupMemory.slice gives exclusive static, aligned single-allocation
-    // storage for count elements. Each Ready.into_value guarantees initialized T;
-    // the pointer check binds it to this exact element. Count0 is vacuous, and
-    // ZST alignment/non-nullness follow typed storage. MaybeUninit<T> and
-    // UnsafeCell<T> have T's element size/alignment; Reference array/slice layout
-    // proves identical stride and total extent, not arbitrary wrapper composition.
-    // The raw unsized cast preserves count. All initialization borrows ended and
-    // slots is never used again: future access is exclusively via these cells.
-    Ok(unsafe { &*(core::ptr::from_mut(slots) as *const [UnsafeCell<T>]) })
 }
 
 impl<T: Send + Sync + 'static, M: WireMode> TypedInbound<T, M> {
@@ -1648,6 +1658,9 @@ impl<T: Send + Sync + 'static, M: WireMode> TypedInbound<T, M> {
                 return Err(ReceiveError::SlotsExhausted);
             }
             let release = |this: &Self, index: u32| {
+                // Unique unpublished index; decode borrows ended. Clear owned T
+                // before pool return so destructor reentry cannot reacquire it.
+                if let Some(value) = this.values.get(index as usize) { value.clear(); }
                 this.free.push(index);
                 if reserved {
                     this.queued.fetch_sub(1, Ordering::AcqRel);
@@ -1780,13 +1793,15 @@ impl<T: Send + Sync + 'static, M: WireMode> InboundDispatch for TypedInbound<T, 
         if self.native {
             return Ok(());
         }
+        let native_payload = self.common.admitted.iter().any(|wire| wire.native_type_token.is_some());
         if let RxKind::Encoded { wires } = self.kind {
             for wire in wires {
-                if let RuntimeHeap::Allocates(reason) = wire.info.decode_heap() {
-                    return Err(StartupError::RouteNeedsHeapAtRuntime {
-                        route: self.common.name.clone(),
-                        wire: reason,
-                    });
+                if native_payload {
+                    if let RuntimeHeap::Allocates(reason) = wire.info.decode_heap() {
+                        return Err(StartupError::RouteNeedsHeapAtRuntime {
+                            route: self.common.name.clone(), wire: reason,
+                        });
+                    }
                 }
                 if matches!(wire.info.decode_heap(), RuntimeHeap::Middleware(_)) {
                     return Err(StartupError::InvalidConfig(
@@ -1795,7 +1810,7 @@ impl<T: Send + Sync + 'static, M: WireMode> InboundDispatch for TypedInbound<T, 
                 }
             }
         }
-        if mem::needs_drop::<T>() {
+        if native_payload && mem::needs_drop::<T>() {
             return Err(StartupError::RouteNeedsHeapAtRuntime {
                 route: self.common.name.clone(),
                 wire: "the decoded type owns heap memory",
@@ -1955,8 +1970,10 @@ pub(crate) trait InboundDispatch: Send + Sync {
 
 /// A received value in its startup slot. Dropping it returns the slot.
 ///
-/// Holds no heap: it is a reference to `'static` route state and an index, and
-/// its `Drop` neither frees memory nor blocks (R3, design 2.2.1).
+/// The handle itself contains permanent route state and an index. Native/in-place
+/// release retains the no-heap/free contract. Encoded serialized release may
+/// destroy declared owned fields and free their allocations; a destructor unwind
+/// withholds the index. Resource/panic qualification covers the full lifecycle.
 pub struct Received<T: 'static, M: WireMode = Encoded> {
     // Safety invariant: this handle uniquely owns the current initialized slot
     // removed from route's queue, plus its held-credit reservation. take_lease
@@ -1991,8 +2008,14 @@ impl<T: Send + Sync + 'static> Deref for Received<T, Encoded> {
         // ready queue, so the value slot exists and its value was decoded before
         // the slot was published. This lease owns the index until dropped.
         match value {
-            // SAFETY: as the comment above.
-            Some(value) => unsafe { &*value.get() },
+            // SAFETY: Received's publication invariant establishes initialized T
+            // and its live lease excludes clear/reuse for this whole borrow.
+            Some(value) => match unsafe { value.get() } {
+                Some(value) => value,
+                // SAFETY: success-only publication requires initialized=true;
+                // no clearer can run while this Received lease remains live.
+                None => unsafe { core::hint::unreachable_unchecked() },
+            },
             None => {
                 // SAFETY: unreachable by construction; see above.
                 unsafe { core::hint::unreachable_unchecked() }
@@ -2088,7 +2111,9 @@ impl<T: 'static, M: WireMode> TypedInbound<T, M> {
     /// index; all derived borrows have ended. Consumes the slot after full drop.
     unsafe fn release_lease(&self, index: u32) {
         // SAFETY: RX-owner and caller contract prove initialized meta/frame and
-        // exclusive destruction. FreeIndices.push runs only after complete drop;
+        // exclusive destruction of frame and decoded value. DecodedSlot::clear
+        // receives the unique index after all value borrows ended. FreeIndices.push
+        // runs only after complete drop;
         // on unwind it does not run. No view may survive the consumed lease.
         unsafe {
             if let Some(slot) = self.slots.get(index as usize) {
@@ -2100,6 +2125,7 @@ impl<T: 'static, M: WireMode> TypedInbound<T, M> {
                     { (*slot.frame.get()).assume_init_drop() };
                 }
             }
+            if let Some(value) = self.values.get(index as usize) { value.clear(); }
             self.free.push(index);
         }
     }

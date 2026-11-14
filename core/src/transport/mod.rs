@@ -21,10 +21,10 @@
 //! and setup is impossible after it (R2). Both types are non-generic: a Streamer
 //! holds a list of transports chosen from configuration at run time (R5).
 //!
-//! In runtime mode, SDK and binding code neither acquires nor releases heap
-//! memory (R3). Runtime handles hold `&'static` data and indices, so dropping one
-//! frees nothing (R38, R39). A refusal is a fixed-size value. A peer dying or
-//! restarting is normal input (R40).
+//! Native runtime paths neither acquire nor release heap memory (R3). Serialized
+//! paths may declare allocation, including owned decoded values released with
+//! their leases. Runtime backing remains permanent; refusals are fixed-size
+//! values. A peer dying or restarting is normal input (R40).
 
 #![allow(clippy::result_large_err)]
 
@@ -35,6 +35,7 @@ use crate::frame::header::{UFrameHeaderError, WrittenHeader};
 use crate::ucode::UCode;
 use crate::wire::WireError;
 
+mod decoded;
 mod deadline_monitor;
 mod deadline_service;
 mod deadline_timing;

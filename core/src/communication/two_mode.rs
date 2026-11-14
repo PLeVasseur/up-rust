@@ -1591,7 +1591,7 @@ where
             set.first_wire(),
         ),
     };
-    let route = TypedInbound::<T, M>::place(
+    let prepared_route = TypedInbound::<T, M>::place(
         memory,
         common,
         rx_kind_value,
@@ -1603,15 +1603,14 @@ where
         init_wire,
     )?;
     setup.check_route(crate::transport::RouteView {
-        report: route.report(),
+        report: prepared_route.report(),
         wires: admission.infos,
         max_peers: options.max_peers,
         clients,
         ttl: options.ttl,
         max_in_flight: 0,
     })?;
-    setup.add_rx(route)?;
-    Ok(route)
+    prepared_route.install(setup)
 }
 
 /// A received request with its responder. Dropping it returns the request's slot.
@@ -2467,7 +2466,7 @@ impl<'a, Req: 'static, Resp: 'static, W> RpcClientBuilder<'a, Req, Resp, W> {
         let peers = PeerTable::new_in(memory, response_options.max_peers)?;
         let name_ref: &'static RouteName = memory.place(name)?;
         let lending = setup.family() == Family::Lending;
-        let table = CallTable::<Resp>::place(
+        let prepared_table = CallTable::<Resp>::prepare(
             memory,
             max_in_flight,
             response_max,
@@ -2493,17 +2492,16 @@ impl<'a, Req: 'static, Resp: 'static, W> RpcClientBuilder<'a, Req, Resp, W> {
             prepared.deviations,
             setup.shared(),
         );
-        let responses: &'static ClientResponses<Resp> =
-            memory.place(ClientResponses { common, table })?;
+        let prepared_responses = prepared_table.with_responses(memory, common)?;
         setup.check_route(crate::transport::RouteView {
-            report: responses.report(),
+            report: prepared_responses.report(),
             wires: admission.infos,
             max_peers: response_options.max_peers,
             clients: &[],
             ttl: Some(ttl),
             max_in_flight,
         })?;
-        setup.add_rx(responses)?;
+        let responses = prepared_responses.install(setup)?;
         let role = RpcClientSetup {
             transport: setup.id(),
             request,

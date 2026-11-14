@@ -18,7 +18,8 @@
 //! the send still finds its reservation. Every call completes: with a response,
 //! when its deadline passes, or when its server restarts or is reported gone.
 //! Correlation is the full key: the route fixes source and sink, and the slot
-//! records the request ID. Dropping a [`Call`] only returns its slot.
+//! records the request ID. Dropping a [`Call`] releases any owned decoded value
+//! before returning its slot.
 //!
 //! A response is decoded once, into a startup slot the size of `Resp`, when
 //! `try_response` takes it; a large response never crosses the stack. A retained
@@ -130,7 +131,10 @@ pub struct CallTable<Resp: 'static> {
     slots: &'static [CallSlot],
     responses: Option<ByteSlots>,
     max_response_len: usize,
-    values: &'static [UnsafeCell<Resp>],
+    // Safety invariant: encoded values are valid/vacant under DecodedSlot.
+    // Only the current exclusive Call decode/release owner may mutate them;
+    // a successful Reply borrows an initialized slot until that Call is dropped.
+    values: &'static [super::decoded::DecodedSlot<Resp>],
     wires: &'static [TypedWire<Resp>],
 }
 
@@ -139,8 +143,10 @@ pub struct CallTable<Resp: 'static> {
 // the current final-address owner and tuple after those writes; an Acquire can
 // therefore expose native bytes even before COMPLETE. A live shared Call borrow
 // prevents its unique mutable take/release/drop and hence owner destruction.
-// Encoded Resp decoding instead occurs under &mut Call after COMPLETE; a Reply
-// reads that value in TAKEN. Resp: Send + Sync covers value movement/sharing.
+// Encoded Resp initialization/decoding occurs under &mut Call after COMPLETE;
+// a successful Reply reads that value in TAKEN. DecodedSlot flag/value cleanup
+// occurs under the unique releasing claim before FreeIndices return. Its existing
+// Release/Acquire transfer publishes the vacant/valid state to the next owner. Resp: Send + Sync covers value movement/sharing.
 // Retained owner callbacks are not invoked concurrently through shared views;
 // readers use the captured immutable extent. Unique release/delivery claims
 // arbitrate destruction, including the ABANDONED handoff. Private Call fields
@@ -149,11 +155,51 @@ unsafe impl<Resp: Send + Sync> Send for CallTable<Resp> {}
 // SAFETY: see `Send`.
 unsafe impl<Resp: Send + Sync> Sync for CallTable<Resp> {}
 
+/// Owns unpublished RPC seeds through response-owner allocation and admission.
+pub(crate) struct PreparedCallTable<Resp: 'static> {
+    table: &'static CallTable<Resp>,
+    seeds: Option<super::decoded::InitialValues<Resp>>,
+}
+
+/// Exposes reports only; no usable table/response handle escapes before install.
+pub(crate) struct PreparedClientResponses<Resp: 'static> {
+    responses: &'static ClientResponses<Resp>,
+    seeds: Option<super::decoded::InitialValues<Resp>>,
+}
+
+impl<Resp: Send + Sync + 'static> PreparedCallTable<Resp> {
+    /// # Safety-usable invariant
+    /// Keeps sole seed cleanup in the returned unpublished wrapper. Allocation
+    /// refusal destroys completed seeds before return; no table handle escapes.
+    pub(crate) fn with_responses(self, memory: &StartupMemory, common: RxCommon)
+        -> Result<PreparedClientResponses<Resp>, StartupError>
+    {
+        let responses = memory.place(ClientResponses { common, table: self.table })?;
+        Ok(PreparedClientResponses { responses, seeds: self.seeds })
+    }
+}
+
+impl<Resp: Send + Sync + 'static> PreparedClientResponses<Resp> {
+    pub(crate) fn report(&self) -> RouteReport { self.responses.report() }
+
+    /// # Safety-usable invariant
+    /// Installs the complete dispatch entry and consumes seed cleanup before
+    /// returning its usable handle. add_rx has no fallible step after dispatch
+    /// insertion; errors leave no installed table and this guard clears seeds.
+    pub(crate) fn install(self, setup: &super::mode::TransportSetup)
+        -> Result<&'static ClientResponses<Resp>, StartupError>
+    {
+        setup.add_rx(self.responses)?;
+        if let Some(seeds) = self.seeds { seeds.commit(); }
+        Ok(self.responses)
+    }
+}
+
 impl<Resp: Send + Sync + 'static> CallTable<Resp> {
     /// Reserves the table in startup memory. `init_wire` gives every decode slot
     /// its first valid value, through a pointer.
     // [impl->req~ssr-unsafe-wire-untrusted~1]
-    pub(crate) fn place(
+    pub(crate) fn prepare(
         memory: &StartupMemory,
         capacity: usize,
         max_response_len: usize,
@@ -161,7 +207,7 @@ impl<Resp: Send + Sync + 'static> CallTable<Resp> {
         wires: &'static [TypedWire<Resp>],
         init_wire: Option<&'static dyn Wire<Resp>>,
         policy: super::LifetimePolicy,
-    ) -> Result<&'static Self, StartupError> {
+    ) -> Result<PreparedCallTable<Resp>, StartupError> {
         let free = FreeIndices::new_in(memory, capacity)?.with_policy(policy);
         let mut slots = memory.fixed_vec::<CallSlot>(capacity)?;
         for _ in 0..capacity {
@@ -185,25 +231,9 @@ impl<Resp: Send + Sync + 'static> CallTable<Resp> {
         } else {
             Some(ByteSlots::new_in(memory, capacity, max_response_len)?)
         };
-        let values: &'static [UnsafeCell<Resp>] = match init_wire {
-            Some(wire) => {
-                let cells: &'static mut [MaybeUninit<Resp>] = memory.slice::<Resp>(capacity)?;
-                for slot in cells.iter_mut() {
-                    let expected = slot.as_mut_ptr();
-                    let ready = wire.init_slot(crate::wire::StartupSlot::new(slot));
-                    if !core::ptr::eq(ready.into_value() as *mut Resp, expected) {
-                        return Err(StartupError::InvalidConfig(
-                            "a wire returned a value for a different slot",
-                        ));
-                    }
-                }
-                // SAFETY: every cell was initialized above; `UnsafeCell<T>` and
-                // `MaybeUninit<T>` have the layout of `T`; the memory lives for
-                // the rest of the process.
-                unsafe { &*(core::ptr::from_mut(cells) as *const [UnsafeCell<Resp>]) }
-            }
-            None => &[],
-        };
+        let seeds = init_wire
+            .map(|wire| super::decoded::initialize(memory, wire, capacity)).transpose()?;
+        let values = seeds.as_ref().map_or(&[][..], |seeds| seeds.slots());
         let table = memory.place(Self {
             free,
             slots: slots.into_static_slice(),
@@ -212,7 +242,26 @@ impl<Resp: Send + Sync + 'static> CallTable<Resp> {
             values,
             wires,
         })?;
-        Ok(&*table)
+        Ok(PreparedCallTable { table: &*table, seeds })
+    }
+
+    // Preserve existing private state-machine fixtures without giving production
+    // builders a way around their unpublished seed guard.
+    #[cfg(test)]
+    #[allow(clippy::too_many_arguments)]
+    pub(crate) fn place(
+        memory: &StartupMemory,
+        capacity: usize,
+        max_response_len: usize,
+        retained: bool,
+        wires: &'static [TypedWire<Resp>],
+        init_wire: Option<&'static dyn Wire<Resp>>,
+        policy: super::LifetimePolicy,
+    ) -> Result<&'static Self, StartupError> {
+        let prepared = Self::prepare(memory, capacity, max_response_len, retained,
+            wires, init_wire, policy)?;
+        if let Some(seeds) = prepared.seeds { seeds.commit(); }
+        Ok(prepared.table)
     }
 
     pub(crate) fn capacity(&self) -> usize {
@@ -643,19 +692,24 @@ impl<Resp: Send + Sync + 'static> CallTable<Resp> {
     // [impl->req~ssr-unsafe-wire-untrusted~1]
     /// # Safety
     /// Caller uniquely mutably borrows the current Call for this index, after
-    /// response completion, with no live typed value borrows. Its value slot is
-    /// initialized; exclusive access lasts across arbitrary safe wire callbacks.
-    /// Normal/error/unwind leaves a valid T, not necessarily semantic success.
+    /// response completion, with no live typed value borrows. Exclusive access
+    /// lasts through initialization, decode and every temporary returned borrow,
+    /// including safe callback reentry. Success leaves valid T. Initialization
+    /// unwind may leave vacant/leaked storage; after successful initialization,
+    /// decode error/unwind leaves valid T without implying semantic success.
     unsafe fn decode_into_value(
         &self,
         index: u32,
         encoding: u32,
         payload: &[u8],
     ) -> Result<(), CallError> {
-        // SAFETY: checked values.get yields the initialized per-index Resp cell;
-        // the current Call's exclusive mutable response borrow rules out aliases.
-        // Wire receives a genuine &mut Resp, so safe code cannot leave invalid data
-        // on normal return/unwind; no safe trait semantic promise proves ownership.
+        // SAFETY: the current Call exclusively owns this checked value slot for
+        // the full initialization/decode borrow. get_or_init establishes valid
+        // Resp before a safe decoder sees it. Initialization unwind leaves its
+        // flag false; otherwise safe &mut Resp preserves validity on all exits.
+        // In particular, Rust's assignment cleanup installs the replacement if
+        // old-value Drop unwinds. A panic can break semantic decode success, not
+        // the safe reference's value validity. No no-panic/trait-law premise is used.
         {
             let encoding =
                 PayloadEncoding::try_from_wire_id(encoding).map_err(|_| CallError::UnknownEncoding)?;
@@ -668,10 +722,10 @@ impl<Resp: Send + Sync + 'static> CallTable<Resp> {
                 .values
                 .get(index as usize)
                 .ok_or(CallError::UnknownEncoding)?;
-            // SAFETY: only `Call::try_response` reaches this, and it takes `&mut self`,
-            // so one owner at a time writes this value slot; the phase protocol keeps
-            // the deliverer off it. The slot was initialized at startup.
-            let into = unsafe { &mut *value.get() };
+            // SAFETY: exclusive &mut Call and completed phase exclude every
+            // other value reader/writer until this temporary borrow ends after
+            // decode. get_or_init's postcondition supplies a valid initialized T.
+            let into = unsafe { value.get_or_init(wire.wire) }.map_err(CallError::Decode)?;
             wire.wire
                 .decode(encoding, payload, into)
                 .map_err(CallError::Decode)
@@ -871,8 +925,11 @@ impl<Resp: Send + Sync + 'static> InboundDispatch for ClientResponses<Resp> {
 
 /// One outstanding call. Dropping it returns the slot.
 ///
-/// The value is `&'static` table state and an index. Dropping it frees no memory;
-/// a late response is rejected as `NoMatchingCall`.
+/// The handle is permanent table state and an index. Dropping it may release
+/// owned encoded response fields; native release retains its no-heap contract.
+/// A panicking owned-value destructor withholds the slot instead of returning it.
+/// Resource/panic qualification covers initialization, decoding and destruction.
+/// A late response is rejected as `NoMatchingCall`.
 pub struct Call<Resp: 'static, M: WireMode = Encoded> {
     table: &'static CallTable<Resp>,
     responses: &'static dyn InboundDispatch,
@@ -881,6 +938,10 @@ pub struct Call<Resp: 'static, M: WireMode = Encoded> {
     // all Reply/payload borrows derive from this Call. Construction transfers
     // that obligation; no safe clone duplicates it. Forget withholds the index.
     index: u32,
+    // Invariant: true only after this Call's encoded decode returned Ok and its
+    // retained response was taken. Kept separate from initialized storage and
+    // TAKEN: either can exist after a decoder writes a valid T then returns Err.
+    decoded_success: bool,
     _marker: PhantomData<fn() -> (Resp, M)>,
 }
 
@@ -898,7 +959,7 @@ impl<Resp: 'static, M: WireMode> Call<Resp, M> {
         index: u32,
     ) -> Self {
         // The caller contract establishes all private Call field invariants.
-        let call = Self { table, responses, shared, index, _marker: PhantomData };
+        let call = Self { table, responses, shared, index, decoded_success: false, _marker: PhantomData };
         // The fully initialized Call owns the reservation before invoking any
         // safe platform callback. Reentry/unwind cannot observe a partial owner.
         // A stall from ARMED to here is charged in service configuration evidence.
@@ -933,14 +994,18 @@ impl<Resp: 'static> CallTable<Resp> {
     /// # Safety
     /// Caller owns the unique return of index in this table; slot is exactly
     /// slots[index], with the current exclusively claimed release state. All
-    /// payload/frame/waker accesses and the complete destructor have ended.
-    /// Consumes the raw pool obligation; no access to this incarnation may follow.
+    /// payload borrows and frame/waker cleanup have ended. Caller alone may
+    /// destroy a remaining decoded value before returning the index; withhold
+    /// this obligation throughout destructor reentry/unwind. Normal return consumes
+    /// the pool obligation; no access to this incarnation may follow.
     unsafe fn finish_return(&self, index: u32, slot: &CallSlot, state: u64) {
         // SAFETY: caller contract gives current paired slot/state and exclusive
-        // completed cleanup. Retirement warning/state publication does not access
-        // payload memory. FreeIndices.push consumes that exact unique obligation
-        // only after state publication, and is the final slot-incarnation access.
+        // completed frame/waker cleanup. clear destroys owned decoded fields
+        // before publication; reentry cannot acquire the withheld index and an
+        // unwind prevents return. Native tables have no decoded values. Only
+        // after cleanup may warning/state publication and final free.push run.
         unsafe {
+            if let Some(value) = self.values.get(index as usize) { value.clear(); }
             let generation = state >> 8;
             let remaining = (u64::MAX >> 8) - generation;
             if remaining <= self.free.policy().warning_remaining() { self.free.warn(); }
@@ -1062,8 +1127,14 @@ impl<Resp: Send + Sync + 'static> Deref for Reply<'_, Resp, Encoded> {
         // slot and moved the call to `TAKEN`; the call owns the slot until
         // dropped, and the `Reply` borrows the call.
         match value {
-            // SAFETY: as the comment above.
-            Some(value) => unsafe { &*value.get() },
+            // SAFETY: successful try_response initialized this value; its Reply
+            // borrows the live Call, excluding decode/clear/reuse for the borrow.
+            Some(value) => match unsafe { value.get() } {
+                Some(value) => value,
+                // SAFETY: Reply construction requires successful decode, which
+                // sets initialized; the live Call keeps it so until every view ends.
+                None => unsafe { core::hint::unreachable_unchecked() },
+            },
             None => {
                 // SAFETY: the index came from `reserve`, which is below the capacity.
                 unsafe { core::hint::unreachable_unchecked() }
@@ -1141,7 +1212,16 @@ impl<Resp: Send + Sync + 'static> Call<Resp, Encoded> {
                 // SAFETY: decode returned and payload is no longer used. This
                 // exclusive encoded Call may drop its retained frame before Reply.
                 unsafe { self.mark_taken(true) };
-                decoded?;
+                if let Err(error) = decoded {
+                    // SAFETY: exclusive Call has no Reply; TAKEN excludes another
+                    // decode and the index is withheld until Call destruction.
+                    // clear marks an owned value vacant before arbitrary Drop.
+                    if let Some(value) = self.table.values.get(self.index as usize) {
+                        unsafe { value.clear() };
+                    }
+                    return Err(error);
+                }
+                self.decoded_success = true;
                 Ok(Some(Reply { call: self }))
             }
         }
@@ -1158,14 +1238,14 @@ impl<Resp: Send + Sync + 'static> Call<Resp, Encoded> {
     // [impl->req~ssr-async-seam~1]
     pub fn __taken_value(&self) -> Option<&Resp> {
         let slot = self.table.slots.get(self.index as usize)?;
-        if phase(slot.state.load(Ordering::Acquire)) != TAKEN {
+        if !self.decoded_success || phase(slot.state.load(Ordering::Acquire)) != TAKEN {
             return None;
         }
         let value = self.table.values.get(self.index as usize)?;
-        // SAFETY: phase `TAKEN` means `try_response` decoded into this slot and
-        // that the call owns it until dropped; `TAKEN` is not left while the
-        // call lives, so nothing writes this value during the borrow.
-        Some(unsafe { &*value.get() })
+        // SAFETY: decoded_success proves Ok decode, independent of whether a
+        // failed decode left initialized bytes. This live Call owns the taken
+        // index; its shared borrow excludes clear, mutation and reuse throughout.
+        unsafe { value.get() }
     }
 }
 
@@ -1259,15 +1339,16 @@ pub(crate) fn check_decoders<T: 'static>(
     wires: &[TypedWire<T>],
     name: impl Fn() -> super::error::RouteName,
 ) -> Result<(), StartupError> {
+    let native_payload = wires.iter().any(|wire| wire.info.identity.native_type_token.is_some());
     for wire in wires {
         match wire.info.decode_heap() {
             RuntimeHeap::None => {}
-            RuntimeHeap::Allocates(reason) => {
+            RuntimeHeap::Allocates(reason) if native_payload => {
                 return Err(StartupError::RouteNeedsHeapAtRuntime {
-                    route: name(),
-                    wire: reason,
+                    route: name(), wire: reason,
                 });
             }
+            RuntimeHeap::Allocates(_) => {}
             RuntimeHeap::Middleware(_) => {
                 return Err(StartupError::InvalidConfig(
                     "a wire must not declare a middleware heap class",
@@ -1275,7 +1356,7 @@ pub(crate) fn check_decoders<T: 'static>(
             }
         }
     }
-    if mem::needs_drop::<T>() {
+    if native_payload && mem::needs_drop::<T>() {
         return Err(StartupError::RouteNeedsHeapAtRuntime {
             route: name(),
             wire: "the decoded type owns heap memory",

@@ -292,15 +292,17 @@ impl TxRoute {
     }
 
     fn startup_check(&self) -> Result<(), StartupError> {
+        let native_payload = self.native
+            || self.admitted.iter().any(|wire| wire.native_type_token.is_some());
         for (heap, name) in self.wire_heap {
             match heap {
                 RuntimeHeap::None => {}
-                RuntimeHeap::Allocates(reason) => {
+                RuntimeHeap::Allocates(reason) if native_payload => {
                     return Err(StartupError::RouteNeedsHeapAtRuntime {
-                        route: self.name.clone(),
-                        wire: reason,
+                        route: self.name.clone(), wire: reason,
                     });
                 }
+                RuntimeHeap::Allocates(_) => {}
                 RuntimeHeap::Middleware(_) => {
                     return Err(StartupError::RouteNeedsHeapAtRuntime {
                         route: self.name.clone(),
@@ -1746,9 +1748,22 @@ impl<T: 'static + Clone> GrowTable<T> {
         self.items.as_ref().map_or(&[], FixedVec::as_slice)
     }
 
-    fn push(&mut self, memory: &StartupMemory, value: T) -> Result<(), StartupError> {
+    /// Reserves one entry without adding it. Successful preparation of two
+    /// tables lets their caller append both entries with no intervening growth.
+    /// Existing entries remain unchanged on allocation refusal. Startup backing
+    /// is monotonic: a successful reservation is not reclaimed if a later one fails.
+    ///
+    /// # Safety-usable invariant
+    /// Success leaves len < capacity, with the same initialized entries and no
+    /// published new entry. Growth checks overflow and reserves a strictly larger
+    /// FixedVec before moving the old initialized prefix; moving entries invokes
+    /// no Clone or user callback. The private table invariant is len <= capacity,
+    /// and items has exactly that capacity whenever present.
+    fn reserve_one(&mut self, memory: &StartupMemory) -> Result<(), StartupError> {
         if self.len() == self.capacity {
-            let capacity = self.capacity.saturating_mul(2).max(8);
+            let capacity = self.capacity.checked_mul(2)
+                .ok_or(StartupError::InvalidConfig("too many route table entries"))?
+                .max(8);
             let mut next = memory.fixed_vec::<T>(capacity)?;
             if let Some(items) = self.items.take() {
                 for item in items {
@@ -1758,6 +1773,11 @@ impl<T: 'static + Clone> GrowTable<T> {
             self.capacity = capacity;
             self.items = Some(next);
         }
+        Ok(())
+    }
+
+    fn push(&mut self, memory: &StartupMemory, value: T) -> Result<(), StartupError> {
+        self.reserve_one(memory)?;
         match &mut self.items {
             Some(items) => items.push(value).map_err(StartupError::from),
             None => Err(StartupError::InvalidConfig("internal: no route table")),
@@ -2348,6 +2368,12 @@ impl TransportSetup {
             .try_borrow_mut()
             .map_err(|_| StartupError::InvalidConfig("re-entrant setup"))?;
         let report = route.report();
+        // Reserve both capacities before either logical entry is appended.
+        // The exclusive SetupInner borrow excludes reentry/mutation, and these
+        // tables hold crate-owned reports/references with no callback on push.
+        // Thus both following pushes have space and cannot require allocation.
+        inner.reports.reserve_one(&self.memory)?;
+        inner.tx.reserve_one(&self.memory)?;
         inner.reports.push(&self.memory, report)?;
         inner.tx.push(&self.memory, route)?;
         self.incomplete_preparation.set(false);
@@ -2360,6 +2386,12 @@ impl TransportSetup {
             .try_borrow_mut()
             .map_err(|_| StartupError::InvalidConfig("re-entrant setup"))?;
         let report = route.report();
+        // Reserve both capacities before either logical entry is appended.
+        // The exclusive SetupInner borrow excludes reentry/mutation, and these
+        // tables hold crate-owned reports/references with no callback on push.
+        // Thus both following pushes have space and cannot require allocation.
+        inner.reports.reserve_one(&self.memory)?;
+        inner.rx.reserve_one(&self.memory)?;
         inner.reports.push(&self.memory, report)?;
         inner.rx.push(&self.memory, route)?;
         self.incomplete_preparation.set(false);
@@ -2617,3 +2649,7 @@ mod execution_package_tests;
 #[cfg(test)]
 #[path = "custom_envelope_tests.rs"]
 mod custom_envelope_tests;
+
+#[cfg(test)]
+#[path = "mode_setup_tests.rs"]
+mod setup_entry_tests;

@@ -28,7 +28,8 @@
 //!   before it returns.
 //! * **Peers.** A peer id is stable across restarts. Incarnation starts at 1 and
 //!   only rises.
-//! * **`Frame` drop** neither frees heap nor blocks.
+//! * **`Frame` drop** never blocks. Native and mixed routes also forbid heap
+//!   allocation/free; an allocating serialized route must declare that behavior.
 //! * **No panic** on any peer input.
 //! * **Truncation.** [`Capabilities::truncate_payload`] says whether the binding
 //!   can carry a payload shorter than its loan. If it can, `used..loaned` is
@@ -317,7 +318,8 @@ pub struct RouteDeclaration<'a> {
 pub struct PreparedRoute {
     /// The binding's handle for this route.
     pub route: BindingRoute,
-    /// The route's heap class. `Middleware` needs a waiver; `Allocates` is refused.
+    /// The route's heap class. `Middleware` needs a waiver; `Allocates` is
+    /// refused for native/mixed payloads and permitted for serialized payloads.
     pub heap: RuntimeHeap,
     /// Deviations that actually apply to this route. Empty unless declared by the binding.
     pub deviations: &'static [&'static super::Deviation],
@@ -475,8 +477,9 @@ pub trait BindingSetup: Send + 'static {
 
 /// Runtime side of a lending binding.
 ///
-/// No method may allocate, panic on capacity or block without bound. Each runs
-/// only after `into_running` returned.
+/// No method may panic on capacity or block without bound. Native/mixed routes
+/// must not allocate/free; serialized allocation must match the prepared route
+/// declaration. Each method runs only after `into_running` returned.
 pub trait LendingRuntime: Send + Sync + 'static {
     /// Latched receive fault, sampled before and after an SDK pull. Never clear
     /// PoolRetired or encode it as an empty queue. No allocation or callback.
@@ -551,7 +554,9 @@ pub trait LendingRuntime: Send + Sync + 'static {
 
 /// Runtime side of a handoff binding.
 ///
-/// No method may allocate, panic on capacity or block without bound.
+/// No method may panic on capacity or block without bound. Native/mixed routes
+/// must not allocate/free; serialized allocation must match the prepared route
+/// declaration.
 pub trait HandoffRuntime: Send + Sync + 'static {
     /// Latched receive fault, sampled before and after an SDK pull. Never clear
     /// PoolRetired or encode it as an empty queue. No allocation or callback.
@@ -639,7 +644,9 @@ pub struct InboundFrame<'a> {
 
 /// Handed to a binding when it enters runtime. Delivers frames and signals readiness.
 ///
-/// Every method is heap-free and never blocks. It works during `into_running`,
+/// Core bookkeeping uses reserved storage. Serialized delivery can invoke an
+/// allocating codec and release owned decoded fields; native/mixed delivery
+/// retains its no-heap/free contract. No method blocks. It works during `into_running`,
 /// and `deliver` never reads the running-value cell. A binding keeps this value
 /// for its whole life; dropping it does nothing.
 #[derive(Clone, Copy)]

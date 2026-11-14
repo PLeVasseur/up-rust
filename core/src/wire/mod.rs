@@ -167,9 +167,14 @@ pub enum EncodedSize {
 /// every prepared route state theirs.
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub enum RuntimeHeap {
-    /// Uses no heap. Backed by the contract test any heap-free wire must pass.
+    /// Neither allocates nor frees heap across the declared operation's full
+    /// lifecycle. Requires the heap-free wire contract checks and source evidence.
     None,
-    /// Uses the heap. Refused at `enter_runtime`, naming this reason.
+    /// Allocates or frees heap during the declared operation's full lifecycle,
+    /// including initialization, error handling and temporary/owned-value cleanup.
+    /// Permitted for serialized payload paths with owned-value lifecycle support;
+    /// refused on native/mixed paths, naming this reason.
+    /// This declaration does not establish panic, OOM, or timing behavior.
     Allocates(&'static str),
     /// The binding's middleware allocates inside its own code. Valid only on a
     /// [`PreparedRoute`](crate::transport::PreparedRoute), and only with a named
@@ -213,14 +218,19 @@ pub struct WireInfo {
     pub max_encoded_len: Option<usize>,
     /// The payload's required alignment.
     pub alignment: usize,
-    /// Whether [`Wire::encoded_size`] always returns [`EncodedSize::Exact`].
+    /// Whether every value that encodes successfully has an exact size from
+    /// [`Wire::encoded_size`]. Unencodable values may report unknown size, but
+    /// [`Wire::encode`] must then refuse them before publication.
     pub exact_size: bool,
     encode_heap: RuntimeHeap,
     decode_heap: RuntimeHeap,
 }
 
 impl WireInfo {
-    /// Declares a wire. Both heap arguments are required, so there is no default claim (R46).
+    /// Declares a wire. Both heap arguments are required, so there is no default
+    /// claim (R46). Their scope is the complete lifecycle documented by
+    /// [`Self::encode_heap`] and [`Self::decode_heap`], including initialization
+    /// and owned-value cleanup, not merely the named callback bodies.
     #[must_use]
     pub const fn new(
         name: &'static str,
@@ -277,8 +287,10 @@ impl WireInfo {
         self
     }
 
-    /// Promises [`Wire::encoded_size`] always returns [`EncodedSize::Exact`], so a
-    /// route on a binding that cannot truncate is admitted at setup.
+    /// Promises every successfully encodable value has an exact size from
+    /// [`Wire::encoded_size`], admitting bindings that cannot truncate. An
+    /// unencodable value may report unknown size only if [`Wire::encode`] returns
+    /// an error; the SDK still checks actual length and refuses disagreement.
     #[must_use]
     pub const fn exact(mut self) -> Self {
         self.exact_size = true;
@@ -292,13 +304,16 @@ impl WireInfo {
         self
     }
 
-    /// Heap class of `encode`.
+    /// Heap class of encoding, including callback/error temporaries and cleanup
+    /// caused by the operation. This declaration is not a panic/OOM proof.
     #[must_use]
     pub const fn encode_heap(&self) -> RuntimeHeap {
         self.encode_heap
     }
 
-    /// Heap class of `decode`.
+    /// Heap class of the full decoded-value lifecycle: init_slot (including
+    /// runtime reinitialization), decode/replacement, and destruction on error or
+    /// release. This declaration is not a panic/OOM proof.
     #[must_use]
     pub const fn decode_heap(&self) -> RuntimeHeap {
         self.decode_heap
@@ -309,6 +324,10 @@ impl WireInfo {
 ///
 /// `encode` and `decode` must not panic on any input: a malformed frame is `Err`.
 /// Encoding must be repeatable: a refused send may be retried with the same value.
+/// These are behavioral/resource obligations, not unsafe invariants: arbitrary
+/// safe implementations may violate them without invalidating the SDK's references.
+/// Heap declarations include initializer, replacement and owned-value cleanup;
+/// qualification of a strict profile must cover panic/OOM across that lifecycle.
 pub trait Wire<T>: Send + Sync + 'static {
     /// Declares this wire's identity and capability.
     fn describe(&self) -> WireInfo;
@@ -325,7 +344,9 @@ pub trait Wire<T>: Send + Sync + 'static {
     /// Reports a value that cannot be represented or a destination too small.
     fn encode(&self, value: &T, out: &mut PayloadWriter<'_>) -> Result<(), WireError>;
 
-    /// Gives a startup slot its first valid value.
+    /// Gives a value slot its first valid value. Native/no-drop slots are seeded
+    /// during setup; owned serialized slots may call this again in runtime after
+    /// their previous value was released. Route configuration remains setup-only.
     fn init_slot<'s>(&self, slot: StartupSlot<'s, T>) -> Ready<'s, T>;
 
     /// Decodes `bytes` into `into`, which holds a valid `T` from an earlier use or from startup.
