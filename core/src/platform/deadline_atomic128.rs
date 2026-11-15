@@ -1,4 +1,4 @@
-//! Private admitted macOS ARM64 / Linux GNU host primitive. See `core/docs/pal-deadline-safety.md` for
+//! Private admitted macOS ARM64 / Linux GNU / Windows MSVC x86-64 primitive. See `core/docs/pal-deadline-safety.md` for
 //! the FFI/profile lemma.
 use core::{cell::UnsafeCell, ffi::c_void};
 
@@ -117,7 +117,7 @@ impl Atomic128 {
 }
 
 /// Witness of the selected build/platform profile and its local capability check.
-/// Linux x86-64 additionally requires the executable's CX16 minimum ISA on every
+/// Linux and Windows x86-64 additionally requires the executable's CX16 minimum ISA on every
 /// eligible CPU; the build script enforces its compiler selection, not deployment.
 #[derive(Clone, Copy)]
 pub(crate) struct AtomicProfile(());
@@ -130,8 +130,8 @@ impl AtomicProfile {
         if !permitted { return None; }
         // SAFETY: hpr3_admit has no storage inputs and runs baseline ISA only.
         // Its selected platform contract returns true only with CMPXCHG16B on
-        // Linux x86-64, LSE on Linux ARM64, or the Apple ARM64 baseline.
-        // On Linux x86-64 the build script requires Rust's cmpxchg16b target
+        // Linux/Windows x86-64, LSE on Linux ARM64, or the Apple ARM64 baseline.
+        // On Linux/Windows x86-64 the build script requires Rust's cmpxchg16b target
         // feature. The executable's minimum-ISA environment contract covers
         // every eligible CPU for its lifetime; CPUID only checks this CPU and
         // does not establish migration safety. Linux ARM64 instead obtains its

@@ -257,8 +257,14 @@ in-flight update whose writes it did not observe; it cannot return an impossible
 combination. report does not initiate a new check, read a clock, or return Busy
 or a contention None. Its helping only finishes an already-admitted operation.
 
-count_schedule acquires one stable full origin/counting-bit state (helping a
-marker first). It needs no count/health fields. Arithmetic follows the base:
+count_schedule makes one origin-word observation. If it finds a marker, it
+helps that descriptor at most once and returns Recheck; it does not retry to
+obtain a stable state. The service planner maps Recheck to ServiceNow, preserving
+the previous completed-pass sample and preventing sleep. A stable observation
+supplies the full origin/counting-bit state without count/health fields. The call
+uses at most seven wide-atomic invocations plus an optional latch store, subject
+to the primitive's progress contract. This bounds algorithmic work only, not
+physical latency or service/publication J. Arithmetic follows the base:
 first=(origin>>shift + cutoff + 1)*2^shift; maintenance=previous+configured.
 For shift<=53/cutoff<=2048, first<2^66; maintenance<2^65. Widening is to u128
 before addition/multiplication. Total wrapping operators equal mathematical
@@ -374,3 +380,50 @@ Witness lifetime is the process under the selected platform contract: explicit
 whole-process CX16 target baseline on x86-64, ELF HWCAP_ATOMICS on Linux ARM64,
 and the Apple ARM64 baseline. CPUID alone does not establish that lifetime.
 Sources—not tests or disassembly—must justify this platform dependency lemma.
+
+## Windows x86-64 MSVC target candidate
+
+This port uses the same Clang generic atomic-builtins dependency contract and
+exact two-u64 storage representation as the reviewed Linux x86-64 port. It
+does not require Microsoft cl.exe to implement `__int128`: this source has no
+`__int128` and is compiled by Clang for the MSVC target ABI. Clang and llvm-lib
+are explicit build tools; they do not become runtime Rust dependencies.
+
+The Windows compiler profile explicitly enables static unwind tables with
+`-funwind-tables`. Microsoft's [x64 exception-handling contract](https://learn.microsoft.com/en-us/cpp/build/exception-handling-x64?view=msvc-170)
+requires function-table and unwind information for code that saves nonvolatile
+registers or changes its stack. The CX16 functions and baseline CPUID admission function save RBX.
+The Windows admission TU uses explicit `cpuid` inline assembly with EAX, EBX,
+ECX and EDX outputs and matching leaf/subleaf inputs. The EBX output makes
+RBX clobbering visible to Clang so its Win64 frame lowering can preserve it
+with static unwind coverage. Neither generic `cpuid.h` nor Apple Clang17
+`__cpuidex` suffices here: both hide a temporary RBX change inside xchg pairs.
+CPUID reads no caller memory; leaf0 supplies the maximum basic leaf, then leaf1
+ECX bit13 supplies the local CX16 check. The baseline TU has no CX16 flag.
+This dependency obligation applies to arbitrary-PC stack walking as well as
+language exceptions; the absence of callbacks or C++ throws does not discharge
+it. Compiler qualification inspects every generated Windows C function, including
+`hpr3_admit`, and checks each generated prologue against its COFF
+`.pdata`/`.xdata` ranges and unwind codes, and binds those objects into the
+captured archive and Rust library. The tables are static data: no dynamic
+function registration, runtime allocation, callback or new import is required.
+
+The Rust executable must select `cmpxchg16b` in its minimum ISA. Every CPU on
+which the process can execute must meet that compiler-target contract. CPUID
+is a local sanity check, not a migration guarantee. The baseline admission
+object receives no `-mcx16`; the wide object does, and a static assertion rejects
+any compiler that cannot implement the exact 16-byte access lock-free. The
+MSVC-target COFF archive is produced by llvm-lib. Both Rust and C independently
+assert size and alignment exactly16 and field offsets0/8. All concurrent
+access to each UnsafeCell object uses the same 16-byte builtins. Initial integer
+writes occur before shared publication. No additional Windows object, address
+registration, heap, hidden lock, reference creation or destructor is introduced.
+
+The reviewed generation/helping/coherent-report state machine is unchanged.
+This port does not export a Windows Native platform or compile the separate
+WaitOnAddress candidate. The core can be built and its deadline algorithm checked
+independently of that OS backend; no safe caller is given the unaccepted foreign
+operation. Windows wait safety (WP-ATOMIC-1), final linking/execution, native
+platform constructors, worker activation, finite J, resource qualification and
+ASIL acceptance remain separate. A Windows core build is not a complete Windows
+SDK/platform support claim.

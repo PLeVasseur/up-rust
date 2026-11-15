@@ -344,30 +344,83 @@ impl HostDeadline {
         })
     }
 
+    /// One scheduling observation, with at most one descriptor help.
+    /// A due descriptor is completed/helped, then requests another service pass;
+    /// it never makes the planner chase later producers before returning.
+    /// Recheck is conservative: deadline_service::plan maps it to ServiceNow,
+    /// preserving the prior completed-sample baseline and preventing sleep.
+    /// This bounds algorithmic work, not atomic latency or physical service J.
     pub fn count_schedule(&self, previous: u64, sample: u64) -> CountSchedule {
-        loop {
-            let word = self.origin.load();
-            let State::Stable(state) = decode(word) else {
-                self.help_word(word);
-                continue;
-            };
-            if sample < previous || sample < state.origin {
-                return CountSchedule::Recheck;
-            }
-            let first_eligible_ns = if state.counted {
-                None
-            } else {
-                Some(
-                    (u128::from(state.origin.wrapping_shr(self.shift))
-                        + u128::from(self.cutoff)
-                        + 1)
-                    .wrapping_mul(1_u128.wrapping_shl(self.shift)),
-                )
-            };
-            return CountSchedule::Events {
-                first_eligible_ns,
-                maintenance_ns: u128::from(previous) + u128::from(self.maintenance),
-            };
+        let word = self.origin.load();
+        let State::Stable(state) = decode(word) else {
+            self.help_word(word);
+            return CountSchedule::Recheck;
+        };
+        if sample < previous || sample < state.origin {
+            return CountSchedule::Recheck;
         }
+        let first_eligible_ns = if state.counted {
+            None
+        } else {
+            Some(
+                (u128::from(state.origin.wrapping_shr(self.shift))
+                    + u128::from(self.cutoff)
+                    + 1)
+                .wrapping_mul(1_u128.wrapping_shl(self.shift)),
+            )
+        };
+        CountSchedule::Events {
+            first_eligible_ns,
+            maintenance_ns: u128::from(previous) + u128::from(self.maintenance),
+        }
+    }
+}
+
+#[cfg(test)]
+mod scheduling_progress_controls {
+    use super::*;
+    extern crate std;
+
+    // [utest->req~ssr-qos-deadline~3] [utest->req~ssr-atomic-windows~1]
+    #[test]
+    fn planner_helps_paused_winner_without_sleep_or_duplicate_credit() {
+        let config = crate::transport::deadline_monitor::MonitorConfig::new(1024, 0).unwrap();
+        let profile = AtomicProfile::admit().expect("requires admitted host profile");
+        let mut deadline = HostDeadline::new(config, 0, profile);
+        // Force a real carry across the low count limb in this interleaving.
+        let initial = u128::from(u64::MAX);
+        deadline.seed_for_test(initial);
+        std::thread::scope(|scope| {
+            let (installed_tx, installed_rx) = std::sync::mpsc::sync_channel(0);
+            let (resume_tx, resume_rx) = std::sync::mpsc::sync_channel(0);
+            let shared = &deadline;
+            let winner = scope.spawn(move || {
+                let mut paused = false;
+                let mut hook = |point| {
+                    if point == Point::AfterMarker && !paused {
+                        paused = true;
+                        installed_tx.send(()).unwrap();
+                        // A failing parent assertion drops the sender; no orphan
+                        // blocked child is required to finish this test fixture.
+                        let _ = resume_rx.recv();
+                    }
+                };
+                shared.observe_inner(2048, true, Some(&mut hook))
+            });
+            installed_rx.recv().unwrap();
+            let schedule = deadline.count_schedule(0, 2048);
+            let helped = deadline.report();
+            // A later winner may complete before the original initiator resumes.
+            let later_won = deadline.observe(4096, true);
+            let later = deadline.report();
+            resume_tx.send(()).unwrap();
+            let first_won = winner.join().unwrap();
+            assert_eq!(schedule, CountSchedule::Recheck);
+            assert_eq!((helped.origin_ns, helped.missed_gaps), (2048, initial + 1));
+            assert!(first_won && later_won);
+            assert_eq!((later.origin_ns, later.missed_gaps), (4096, initial + 2));
+            assert_eq!(deadline.report(), later);
+            assert!(matches!(deadline.count_schedule(0, 4096), CountSchedule::Events { .. }));
+        });
     }
 }

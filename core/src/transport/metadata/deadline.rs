@@ -7,12 +7,12 @@
 //! This removes the split monitor/count publication, not the separate timing,
 //! underlying-transport arrival, restart or target qualification obligations.
 
-#[cfg(not(any(all(target_os = "macos", target_arch = "aarch64"), all(target_os = "linux", target_env = "gnu", any(target_arch = "x86_64", target_arch = "aarch64")))))]
+#[cfg(not(any(all(target_os = "macos", target_arch = "aarch64"), all(target_os = "linux", target_env = "gnu", any(target_arch = "x86_64", target_arch = "aarch64")), all(target_os = "windows", target_env = "msvc", target_arch = "x86_64"))))]
 use super::Leaf;
 use crate::transport::deadline_monitor::{CountSchedule, MonitorConfig};
 use crate::transport::report::{add, Counter, DeadlineReport};
 
-#[cfg(not(any(all(target_os = "macos", target_arch = "aarch64"), all(target_os = "linux", target_env = "gnu", any(target_arch = "x86_64", target_arch = "aarch64")))))]
+#[cfg(not(any(all(target_os = "macos", target_arch = "aarch64"), all(target_os = "linux", target_env = "gnu", any(target_arch = "x86_64", target_arch = "aarch64")), all(target_os = "windows", target_env = "msvc", target_arch = "x86_64"))))]
 #[derive(Clone, Copy)]
 struct Record {
     origin_ns: u64,
@@ -22,13 +22,13 @@ struct Record {
     count_exhausted: bool,
 }
 
-#[cfg(not(any(all(target_os = "macos", target_arch = "aarch64"), all(target_os = "linux", target_env = "gnu", any(target_arch = "x86_64", target_arch = "aarch64")))))]
+#[cfg(not(any(all(target_os = "macos", target_arch = "aarch64"), all(target_os = "linux", target_env = "gnu", any(target_arch = "x86_64", target_arch = "aarch64")), all(target_os = "windows", target_env = "msvc", target_arch = "x86_64"))))]
 pub(crate) struct CoherentDeadline {
     config: MonitorConfig,
     state: Leaf<Record>,
 }
 
-#[cfg(not(any(all(target_os = "macos", target_arch = "aarch64"), all(target_os = "linux", target_env = "gnu", any(target_arch = "x86_64", target_arch = "aarch64")))))]
+#[cfg(not(any(all(target_os = "macos", target_arch = "aarch64"), all(target_os = "linux", target_env = "gnu", any(target_arch = "x86_64", target_arch = "aarch64")), all(target_os = "windows", target_env = "msvc", target_arch = "x86_64"))))]
 impl CoherentDeadline {
     #[cfg(test)]
     fn seed_for_test(&mut self, count: u128) {
@@ -177,8 +177,8 @@ impl CoherentDeadline {
 #[cfg(test)]
 mod tests;
 
-#[cfg(any(all(target_os = "macos", target_arch = "aarch64"), all(target_os = "linux", target_env = "gnu", any(target_arch = "x86_64", target_arch = "aarch64"))))]
+#[cfg(any(all(target_os = "macos", target_arch = "aarch64"), all(target_os = "linux", target_env = "gnu", any(target_arch = "x86_64", target_arch = "aarch64")), all(target_os = "windows", target_env = "msvc", target_arch = "x86_64")))]
 #[path = "deadline/host.rs"]
 mod host;
-#[cfg(any(all(target_os = "macos", target_arch = "aarch64"), all(target_os = "linux", target_env = "gnu", any(target_arch = "x86_64", target_arch = "aarch64"))))]
+#[cfg(any(all(target_os = "macos", target_arch = "aarch64"), all(target_os = "linux", target_env = "gnu", any(target_arch = "x86_64", target_arch = "aarch64")), all(target_os = "windows", target_env = "msvc", target_arch = "x86_64")))]
 pub(crate) use host::CoherentDeadline;

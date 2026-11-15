@@ -179,8 +179,14 @@ pub trait PlatformInit: Sync {
     /// Returns a [`PlatformError`] when the range is invalid or cannot be locked.
     ///
     /// # Safety
-    /// `ptr..ptr + len` must be writable memory owned by the caller, with no live
-    /// references to it and nothing yet placed in it (every byte is overwritten).
+    /// For nonzero `len`, the caller must supply a non-null `ptr` with provenance
+    /// permitting writes to all `len` bytes within one live allocation. That
+    /// entire extent must remain writable and exclusively available to this call
+    /// until it returns, with no competing references or accesses and no placed
+    /// values whose contents or destruction must be preserved. Alignment is that
+    /// of `u8`; the range must not wrap the address space. For zero `len`, no
+    /// pointee storage is required. The call may overwrite the supplied bytes;
+    /// it does not take ownership of or deallocate the allocation.
     unsafe fn prefault(&self, ptr: *mut u8, len: usize) -> Result<(), PlatformError>;
 
     /// The runtime face of this platform, handed to runtime values at the mode change.
@@ -243,5 +249,5 @@ pub(crate) fn aligned_bounds(
     Ok((start & !mask, end, aligned_end))
 }
 
-#[cfg(any(all(target_os = "macos", target_arch = "aarch64"), all(target_os = "linux", target_env = "gnu", any(target_arch = "x86_64", target_arch = "aarch64"))))]
+#[cfg(any(all(target_os = "macos", target_arch = "aarch64"), all(target_os = "linux", target_env = "gnu", any(target_arch = "x86_64", target_arch = "aarch64")), all(target_os = "windows", target_env = "msvc", target_arch = "x86_64")))]
 pub(crate) mod deadline_atomic128;

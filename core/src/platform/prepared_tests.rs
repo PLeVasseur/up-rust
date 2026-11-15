@@ -92,16 +92,19 @@ fn native_worker_prepares_before_activation_and_joins_on_initialization_cancel()
 // Separate non-inlined access sites exercise the canonical copy under the
 // selected multiple-codegen-unit build. This cannot prove vtable uniqueness;
 // the source contract avoids requiring it. No native worker is prepared.
+#[cfg(any(target_os = "linux", target_os = "macos", target_os = "nto", target_os = "qnx"))]
 #[inline(never)]
 fn canonical_runtime_first() -> &'static dyn Platform {
     crate::platform::PlatformInit::runtime(&crate::platform::NATIVE)
 }
+#[cfg(any(target_os = "linux", target_os = "macos", target_os = "nto", target_os = "qnx"))]
 mod canonical_runtime_other_unit {
     #[inline(never)]
     pub(super) fn get() -> &'static dyn crate::platform::Platform {
         crate::platform::PlatformInit::runtime(&crate::platform::NATIVE)
     }
 }
+#[cfg(any(target_os = "linux", target_os = "macos", target_os = "nto", target_os = "qnx"))]
 #[test]
 fn canonical_native_runtime_reference_is_copied_into_control() {
     let first = canonical_runtime_first();
