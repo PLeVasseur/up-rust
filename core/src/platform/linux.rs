@@ -91,6 +91,24 @@ fn errno() -> c_int {
     unsafe { *__errno_location() }
 }
 
+impl Native {
+    /// Exercise worker clock, untimed/timed futex, wake and errno entrypoints
+    /// during initialization. This is not an exhaustive OS/loader/TLS proof.
+    pub(crate) fn prepare_worker_thread(&self) {
+        let word = AtomicU32::new(0);
+        let _ = self.now();
+        let _ = self.unix_time_ms();
+        let _ = self.wait(&word, 1, None);
+        // Linux wait passes every Some deadline to FUTEX_WAIT_BITSET, even an
+        // elapsed one. The valid absolute timespec and mismatching private word
+        // cannot block. No concurrent code can change the local word to one.
+        let _ = self.wait(&word, 1, Some(Monotonic(1)));
+        let _ = errno();
+        self.wake_one(&word);
+        self.wake_all(&word);
+    }
+}
+
 impl Platform for Native {
     fn now(&self) -> Monotonic {
         // CLOCK_MONOTONIC cannot fail with a valid pointer on Linux. If it ever

@@ -1,9 +1,16 @@
-//! New source-only fixtures. UNCOMPILED / UNRUN; no finite J or native credit.
+//! Worker ownership fixtures; execution receipts are bound to exact artifacts.
+//! No fixture admits a finite J or a production timing catalogue entry.
 #![allow(clippy::unwrap_used, clippy::expect_used, clippy::panic)]
 use super::*;
 use crate::memory::StartupRegion;
 use crate::transport::mode::{RuntimeCore, TransportSetup};
 use crate::transport::tests::{CLOCK, NullHandoff};
+
+#[cfg(any(all(target_os = "macos", target_pointer_width = "64"),
+    all(target_os = "linux", target_env = "gnu", target_pointer_width = "64",
+        any(target_arch = "x86_64", target_arch = "aarch64", target_arch = "riscv64"))))]
+#[path = "prepared_service_tests.rs"]
+mod service;
 
 fn core(memory: &crate::memory::StartupMemory) -> &'static RuntimeCore {
     let setup = TransportSetup::handoff_on(memory, &CLOCK, NullHandoff).unwrap();

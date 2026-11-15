@@ -2711,7 +2711,7 @@ mod whitebox {
 
 #[cfg(test)]
 #[allow(clippy::unwrap_used, clippy::indexing_slicing, clippy::panic)]
-mod retirement_integration_tests {
+pub(crate) mod retirement_integration_tests {
     extern crate std;
     use std::{alloc::{GlobalAlloc, Layout, System}, cell::Cell, thread_local};
     use crate::transport::{Frame, LoanedPayload, PayloadLoanProvenance, BindingSetup, PeerRef};
@@ -2897,6 +2897,39 @@ fn measure_heap(f: impl FnOnce()) -> HeapCounts {
     f();
     drop(guard); // also disables measurement if f unwinds
     HEAP_COUNTS.with(Cell::get)
+}
+
+// Test-only entrypoints for the actual SDK pthread fixture. Reuse the existing
+// allocator/TLS counter, so measurement follows the worker instead of the test
+// thread. This sees Rust GlobalAlloc operations, not foreign libc allocations.
+pub(crate) fn prime_native_worker_heap() -> bool {
+    let (counts, valid) = measure_native_worker_heap(|| {
+        let value = std::boxed::Box::new([0_u8; 128]);
+        core::hint::black_box(value.as_ptr());
+        drop(value);
+    });
+    valid && counts == [1, 1]
+}
+
+pub(crate) fn measure_native_worker_heap(f: impl FnOnce()) -> ([usize; 2], bool) {
+    let entered = HEAP_COUNTS.try_with(|cell| {
+        if cell.get().active { return false; }
+        cell.set(HeapCounts { active: true, ..HeapCounts::default() });
+        true
+    }).unwrap_or(false);
+    let guard = entered.then(|| HeapWindow);
+    f();
+    drop(guard);
+    HEAP_COUNTS.try_with(|cell| {
+        let counts = cell.get();
+        let valid = entered && !counts.saturated
+            && !HEAP_UNAVAILABLE.load(crate::platform::atomic::Ordering::Relaxed);
+        ([counts.allocs, counts.frees], valid)
+    }).unwrap_or(([0, 0], false))
+}
+
+pub(crate) fn native_worker_heap_window_active() -> bool {
+    HEAP_COUNTS.try_with(|cell| cell.get().active).unwrap_or(false)
 }
 fn heap_window(f: impl FnOnce()) {
     let counts = measure_heap(f);

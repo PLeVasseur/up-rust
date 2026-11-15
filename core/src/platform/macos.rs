@@ -86,6 +86,37 @@ fn errno() -> c_int {
     unsafe { *__error() }
 }
 
+impl Native {
+    /// Exercise the named worker-thread entrypoints during initialization.
+    /// This calls both wait symbols and this thread's errno accessor; it does
+    /// not establish that every OS error, loader or TLS path is allocation-free.
+    pub(crate) fn prepare_worker_thread(&self) {
+        let word = AtomicU32::new(0);
+        let _ = self.now();
+        let _ = self.unix_time_ms();
+        let _ = self.wait(&word, 1, None);
+        // SAFETY: word owns one initialized, four-byte-aligned AtomicU32 for
+        // the entire synchronous call. Its as_ptr permits the documented atomic
+        // comparison, and no reference to its interior is created. The private
+        // word remains zero, so expected=1 cannot match or enter a blocking wait.
+        // The Apple os_sync_wait_on_address.h contract accepts size=4, private
+        // flags, OS_CLOCK_MACH_ABSOLUTE_TIME and a nonzero relative timeout.
+        // No pointer is retained after return. Call directly so an elapsed Rust
+        // deadline cannot skip the timed entrypoint during initialization.
+        let _ = unsafe {
+            os_sync_wait_on_address_with_timeout(
+                word.as_ptr().cast(), 1, 4, SYNC_FLAGS_NONE,
+                OS_CLOCK_MACH_ABSOLUTE_TIME, 1,
+            )
+        };
+        // A mismatch can succeed without reading errno in wait(), so touch the
+        // actual worker's errno explicitly regardless of the native return code.
+        let _ = errno();
+        self.wake_one(&word);
+        self.wake_all(&word);
+    }
+}
+
 impl Platform for Native {
     fn now(&self) -> Monotonic {
         // SAFETY: plain libSystem call with a valid clock id; returns a value.

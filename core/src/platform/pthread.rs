@@ -243,22 +243,37 @@ unsafe extern "C" fn worker_entry(arg: *mut c_void) -> *mut c_void {
     control.policy.store(policy, Ordering::Relaxed);
     control.priority.store(parameter.priority, Ordering::Relaxed);
     control.init_error.store(code, Ordering::Relaxed);
-    // Prime the concrete clock, wait, wake-one, wake-all and error/TLS paths
-    // before publishing readiness. ACTIVE cannot be issued until prepare returns;
-    // waiting for ACTIVE while the actual word is PARKED must return immediately
-    // under the existing Native futex/address-wait contract. No application hook
-    // or blanket timeout is used. Qualification still audits loader/OS internals.
-    let _ = control.platform.now();
-    let _ = control.platform.wait(&control.command, ACTIVE, None);
-    control.platform.wake_one(&control.command);
-    control.platform.wake_all(&control.command);
+    // Touch this actual worker's clocks, untimed/timed wait, wakes and errno
+    // before readiness. Preparation only admits Native, so no caller callback
+    // participates. The helper does not prove every error/loader/TLS path warm;
+    // runtime resource qualification remains a separate obligation.
+    crate::platform::NATIVE.prepare_worker_thread();
+    #[cfg(test)]
+    control.heap.calibrated.store(
+        crate::communication::two_mode::retirement_integration_tests::prime_native_worker_heap(),
+        Ordering::Relaxed,
+    );
     control.ready.store(true, Ordering::Release);
     control.platform.wake_all(&control.command);
     loop {
         let command = control.command.load(Ordering::Acquire);
         if command == CANCEL_INITIALIZATION { return core::ptr::null_mut(); }
         if command == ACTIVE {
-            if let Some(core) = control.core() { DeadlineServiceEntry::new(core).run(); }
+            if let Some(core) = control.core() {
+                #[cfg(not(test))]
+                DeadlineServiceEntry::new(core).run();
+                #[cfg(test)]
+                {
+                    let ([allocs, frees], valid) = crate::communication::two_mode::retirement_integration_tests::
+                        measure_native_worker_heap(|| DeadlineServiceEntry::new(core).run());
+                    // The observer acquires finished before reading these fields.
+                    control.heap.allocs.store(allocs, Ordering::Relaxed);
+                    control.heap.frees.store(frees, Ordering::Relaxed);
+                    control.heap.valid.store(valid, Ordering::Relaxed);
+                    control.heap.finished.store(1, Ordering::Release);
+                    control.platform.wake_all(&control.heap.finished);
+                }
+            }
             // Entry cancellation after activation must NOT return from pthread.
             control.command(RETAIN_FOREVER);
         }

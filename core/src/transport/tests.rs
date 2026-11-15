@@ -319,3 +319,7 @@ impl LendingRuntime for PushLending {
         None
     }
 }
+// Unit-fixture-only access for actual worker qualification. No production hook
+// or public timing-admission bypass is exported.
+pub(crate) use super::{deadline_monitor::MonitorConfig, deadline_timing::ArmedDeadline,
+    metadata::CoherentDeadline};

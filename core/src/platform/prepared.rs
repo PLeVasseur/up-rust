@@ -45,13 +45,35 @@ struct Control {
     // Native constructor supplies the concrete SDK platform, never an open
     // callback supplied by an application. No lifetime is extended here.
     platform: &'static dyn Platform,
+    // Test-only observation of the real worker, never a runtime admission token.
+    #[cfg(test)]
+    heap: WorkerHeapObservation,
+}
+
+#[cfg(test)]
+struct WorkerHeapObservation {
+    calibrated: AtomicBool,
+    finished: AtomicU32,
+    valid: AtomicBool,
+    allocs: crate::platform::atomic::AtomicUsize,
+    frees: crate::platform::atomic::AtomicUsize,
+}
+
+#[cfg(test)]
+impl WorkerHeapObservation {
+    fn new() -> Self {
+        Self { calibrated: AtomicBool::new(false), finished: AtomicU32::new(0),
+            valid: AtomicBool::new(false), allocs: crate::platform::atomic::AtomicUsize::new(0),
+            frees: crate::platform::atomic::AtomicUsize::new(0) }
+    }
 }
 
 impl Control {
     fn new(platform: &'static dyn Platform) -> Self {
         Self { core: AtomicPtr::new(core::ptr::null_mut()), command: AtomicU32::new(PARKED),
             ready: AtomicBool::new(false), init_error: AtomicI32::new(0), cleanup_error: AtomicI32::new(0),
-            policy: AtomicI32::new(0), priority: AtomicI32::new(0), platform }
+            policy: AtomicI32::new(0), priority: AtomicI32::new(0), platform,
+            #[cfg(test)] heap: WorkerHeapObservation::new() }
     }
 
     /// # Safety-usable invariant
