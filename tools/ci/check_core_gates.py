@@ -32,7 +32,11 @@ FORBIDDEN_TOKENS = ("core::task", "core::future", "core::pin", "alloc::", "exter
 ATOMIC_FACADE = pathlib.PurePosixPath("core/src/platform/atomic.rs")
 
 
-def rust_tokens(source: str) -> list[tuple[str, int]]:
+class SourceScanError(ValueError):
+    """Source applicability could not be established conservatively."""
+
+
+def rust_tokens(source: str, *, literals: bool = False) -> list[tuple[str, int]]:
     """Tokens/offsets for the import gate, excluding comments and string literals.
 
     This is a source gate, not Rust name resolution or macro expansion. Ancestor
@@ -52,16 +56,32 @@ def rust_tokens(source: str) -> list[tuple[str, int]]:
             while depth and pos < len(source):
                 marker = re.search(r'/\*|\*/', source[pos:])
                 if marker is None:
-                    pos = len(source)
-                    break
+                    raise SourceScanError("unterminated block comment")
                 depth += 1 if marker[0] == "/*" else -1
                 pos += marker.end()
+            if depth:
+                raise SourceScanError("unterminated block comment")
         elif match[1] is not None:
             end = source.find('"' + match[1], pos)
-            pos = len(source) if end < 0 else end + 1 + len(match[1])
+            if end < 0:
+                raise SourceScanError("unterminated raw string")
+            pos = end + 1 + len(match[1])
+            if literals:
+                tokens.append((source[match.start():pos], match.start()))
         elif token.startswith(("//", '"', 'b"', 'c"', "'", "b'")):
+            if token == '"':
+                raise SourceScanError("unterminated string")
+            if literals and not token.startswith("//"):
+                tokens.append((token, match.start()))
             continue
         else:
+            # The source gate deliberately supports ASCII code identifiers only.
+            # Splitting a Unicode identifier could accept an allowed prefix
+            # (e.g. __wake) while overlooking its distinct, forbidden full name.
+            # Comments and all literal families were consumed above.
+            if not token.isascii():
+                line = source.count('\n', 0, match.start()) + 1
+                raise SourceScanError(f'non-ASCII code token at line {line} is unsupported')
             tokens.append((token.removeprefix("r#"), match.start()))
     return tokens
 
@@ -135,25 +155,542 @@ def hook_unresolved(name: str, returncode: int, stderr: str) -> bool:
         (match.group("free") or match.group("associated")) == name
         for match in diagnostic.finditer(stderr))
 
-def hook_violations(source: str) -> list[str]:
-    lines = source.splitlines()
-    violations = []
-    for i, line in enumerate(lines):
-        match = re.match(r"\s*pub\s+(?:(?:const|unsafe|async)\s+)*fn\s+(__\w+|startup_values)\b", line)
-        if not match or match[1] in ASYNC_SEAM:
-            continue
-        j = i - 1
-        attributes = []
-        while j >= 0:
-            text = lines[j].strip()
-            if text.startswith(("#[", "//")) or not text:
-                attributes.append(text)
-                j -= 1
+# A deliberately conservative source-applicability parser, not rustc expansion.
+# Only test and (for hook visibility) up_rust_test_hooks have known values.
+# Unknown target/feature/custom atoms remain possible on every host running CI.
+def cfg_value(words: list[str], disabled: frozenset[str]) -> bool | None:
+    def expr(i: int) -> tuple[bool | None, int]:
+        if i >= len(words) or not re.fullmatch(r'[A-Za-z_][A-Za-z_0-9]*', words[i]):
+            raise SourceScanError('malformed cfg predicate')
+        name = words[i]
+        i += 1
+        if i < len(words) and words[i] == '(':
+            if name not in ('all', 'any', 'not'):
+                raise SourceScanError(f'unsupported cfg operator {name}')
+            values = []
+            i += 1
+            while i < len(words) and words[i] != ')':
+                value, i = expr(i)
+                values.append(value)
+                if i < len(words) and words[i] == ',':
+                    i += 1
+                elif i >= len(words) or words[i] != ')':
+                    raise SourceScanError('malformed cfg argument list')
+            if i >= len(words):
+                raise SourceScanError('unterminated cfg predicate')
+            if name == 'not':
+                if len(values) != 1:
+                    raise SourceScanError('cfg not requires exactly one predicate')
+                value = None if values[0] is None else not values[0]
+            elif name == 'all':
+                value = False if False in values else (None if None in values else True)
             else:
+                value = True if True in values else (None if None in values else False)
+            return value, i + 1
+        if i < len(words) and words[i] == '=':
+            if i + 1 >= len(words) or not string_literal(words[i + 1]):
+                raise SourceScanError('cfg value must be a string literal')
+            return None, i + 2
+        return (False if name in disabled else None), i
+
+    value, end = expr(0)
+    # The cfg attribute, unlike nested predicates, permits a trailing comma.
+    if words[end:] not in ([], [',']):
+        raise SourceScanError('extra tokens in cfg predicate')
+    return value
+
+
+def string_literal(word: str) -> bool:
+    return bool(re.fullmatch(r'"(?:\\.|[^"\\])*"|r(\#*)".*"\1', word, re.DOTALL))
+
+
+def literal_path(word: str) -> str:
+    # Rust escape syntax is not JSON's. Refuse it rather than misresolve a file.
+    if not string_literal(word):
+        raise SourceScanError('path/include requires one literal string')
+    value = word[word.index('"') + 1:word.rindex('"')]
+    if '\\' in value or '\n' in value or not value:
+        raise SourceScanError('escaped, empty or multiline path/include is unsupported')
+    return value
+
+
+def cfg_and(left: bool | None, right: bool | None) -> bool | None:
+    return False if False in (left, right) else (True if left is True and right is True else None)
+
+
+class SourceView:
+    """Mask only structurally bounded, definitely disabled items.
+
+    Token-tree delimiters are matched before masking. Macro bodies/arguments
+    stay opaque: cfg inside a macro is evaluated at expansion, not definition.
+    Their literal tokens are still checked, and generated module/include edges
+    are refused. This does not implement Rust name resolution or expansion.
+    """
+    def __init__(self, source: str, disabled: frozenset[str], *, modules: bool = False):
+        self.source = source
+        self.tokens = rust_tokens(source, literals=True)
+        self.words = [word for word, _ in self.tokens]
+        self.pairs: dict[int, int] = {}
+        self.disabled = disabled
+        self.modules = modules
+        self.edges: list[tuple[str, str, tuple[str, ...], bool | None, int]] = []
+        self.hooks: list[tuple[str, int]] = []
+        self.errors: list[str] = []
+        self.masked: list[tuple[int, int]] = []
+        stack = []
+        for i, word in enumerate(self.words):
+            if word in ('(', '[', '{'):
+                stack.append(i)
+            elif word in (')', ']', '}'):
+                if not stack or self.words[stack[-1]] != {')': '(', ']': '[', '}': '{'}[word]:
+                    raise SourceScanError(f'unbalanced delimiter at line {self.line(i)}')
+                opening = stack.pop()
+                self.pairs[opening] = i
+        if stack:
+            raise SourceScanError(f'unclosed delimiter at line {self.line(stack[-1])}')
+        self.closings = {closing: opening for opening, closing in self.pairs.items()}
+        # Classify macro delimiters before walking any item/header. A brace in
+        # a type- or expression-position macro is not an ordinary Rust scope;
+        # an apparent inner cfg in that token tree cannot mask shipping tokens.
+        self.macros: dict[int, tuple[int, str]] = {}
+        for i, word in enumerate(self.words):
+            if word == 'macro_rules' and self.words[i + 1:i + 2] == ['!'] and i + 3 in self.pairs:
+                self.macros[i + 3] = (i, word)
+            elif (re.fullmatch(r'[A-Za-z_][A-Za-z_0-9]*', word) and
+                  self.words[i + 1:i + 2] == ['!'] and i + 2 in self.pairs):
+                self.macros[i + 2] = (i, word)
+        self.walk(0, len(self.words), True, ())
+
+    def line(self, i: int) -> int:
+        return self.source.count('\n', 0, self.tokens[i][1]) + 1
+
+    def attrs(self, i: int, end: int) -> tuple[list[list[str]], int, bool]:
+        attributes = []
+        inner = False
+        while i < end and self.words[i] == '#':
+            j = i + 1
+            this_inner = j < end and self.words[j] == '!'
+            j += int(this_inner)
+            if j >= end or self.words[j] != '[':
+                raise SourceScanError(f'malformed attribute at line {self.line(i)}')
+            if attributes and inner != this_inner:
                 break
-        if "#[cfg(up_rust_test_hooks)]" not in attributes:
-            violations.append(f"{i + 1}: {match[1]}")
-    return violations
+            inner = this_inner
+            closing = self.pairs[j]
+            attributes.append(self.words[j + 1:closing])
+            i = closing + 1
+        return attributes, i, inner
+
+    def condition(self, attrs: list[list[str]]) -> bool | None:
+        result: bool | None = True
+        for attr in attrs:
+            if not attr:
+                raise SourceScanError('empty attribute')
+            if attr[0] == 'cfg':
+                if len(attr) < 3 or attr[1] != '(' or attr[-1] != ')':
+                    raise SourceScanError('malformed cfg attribute')
+                result = cfg_and(result, cfg_value(attr[2:-1], self.disabled))
+            elif attr[0] == 'cfg_attr':
+                # Even a conditional cfg/path could change file reachability.
+                # Do not infer its absence. Nonstructural attributes are kept.
+                if len(attr) < 5 or attr[1] != '(' or attr[-1] != ')':
+                    raise SourceScanError('malformed cfg_attr attribute')
+                depth = 0
+                split = None
+                for j in range(2, len(attr) - 1):
+                    if attr[j] in ('(', '[', '{'):
+                        depth += 1
+                    elif attr[j] in (')', ']', '}'):
+                        depth -= 1
+                    elif attr[j] == ',' and depth == 0:
+                        split = j
+                        break
+                if split is None:
+                    raise SourceScanError('cfg_attr needs predicate and attributes')
+                cfg_value(attr[2:split], self.disabled)
+                if not attr[split + 1:-1] or attr[split + 1:-1] == [',']:
+                    raise SourceScanError('cfg_attr needs at least one attribute')
+                if any(word in ('cfg', 'cfg_attr', 'path') for word in attr[split + 1:]):
+                    raise SourceScanError('cfg_attr changing cfg/path is unsupported; use explicit cfg items')
+        return result
+
+    def mask(self, start: int, end: int) -> None:
+        if end > start:
+            begin = self.tokens[start][1]
+            finish = self.tokens[end - 1][1] + len(self.words[end - 1])
+            self.masked.append((begin, finish))
+
+    def opaque(self, start: int, end: int, condition: bool | None) -> None:
+        if condition is False:
+            return
+        words = self.words
+        for i in range(start, end):
+            if (self.modules and words[i] == '$' and
+                words[i + 2:i + 3] == ['!']):
+                self.errors.append(f'metavariable macro invocation at line {self.line(i)} is unsupported')
+            if self.modules and words[i] == '!' and i + 1 in self.pairs:
+                # A repetition or metavariable expression can emit the macro
+                # name too: `$($name)?!(...)` and `${...}!(...)` are not static
+                # invocations. Do not rely on finding the literal `include`.
+                prior = [i - 1]
+                if words[i - 1:i] in (['*'], ['+'], ['?']):
+                    prior = [i - 2, i - 3]  # with or without a separator
+                if any(self.closings.get(j, 0) > 0 and
+                       words[self.closings[j] - 1:self.closings[j]] == ['$'] for j in prior):
+                    self.errors.append(f'metavariable macro invocation at line {self.line(i)} is unsupported')
+            if self.modules and words[i] in ('mod', 'include'):
+                # An identifier argument can become an include! name or alias
+                # after substitution; requiring a literal trailing ! misses it.
+                self.errors.append(f'macro-generated module/include at line {self.line(i)} is unsupported')
+            if self.modules and (
+                words[i] in ('concat_idents', 'paste') or
+                (words[i] == '$' and words[i + 1:i + 2] != ['crate'] and words[i + 2:i + 3] == ['::']) or
+                (words[i] == 'core' and words[i + 1:i + 2] not in (['::'], [':']) and
+                 words[i - 1:i] not in (['.'], ['$'])) or
+                (words[i] == 'core' and words[i + 1:i + 3] == ['::', '$']) or
+                words[i] in ('std', 'alloc')
+            ):
+                self.errors.append(f'macro namespace construction at line {self.line(i)} is unsupported')
+            # Literal identifiers supplied to a name-generating macro are still
+            # visible in this source. Do not mistake an identifier argument for
+            # proof that the generated function is safely gated. References,
+            # macro names and metavariables do not declare functions here.
+            if ((words[i].startswith('__') or words[i] == 'startup_values') and
+                words[i] not in ASYNC_SEAM and words[i - 1:i] not in (['.'], ['::'], ['$']) and
+                words[i + 1:i + 2] not in (['!'], ['::'])):
+                self.errors.append(f'macro argument {words[i]} at line {self.line(i)} may name an unguarded test hook')
+            # Do not treat cfg in an expansion as protection for a hook.
+            if words[i] == 'pub':
+                j = i + 1
+                while j < end and words[j] in ('const', 'unsafe', 'async', 'extern'):
+                    j += 1
+                    if words[j:j + 1] and string_literal(words[j]):
+                        j += 1
+                if words[j:j + 1] == ['fn'] and j + 1 < end:
+                    self.hook(words[j + 1], j + 1)
+
+    def macro_group(self, opening: int, condition: bool | None,
+                    inline: tuple[str, ...]) -> int:
+        """Handle a known macro group in any position, without entering walk."""
+        origin, kind = self.macros[opening]
+        finish = self.pairs[opening] + 1
+        if kind == 'include':
+            # include! is expanded in place even in a type/initializer/header.
+            # Never rely on the core/src orphan sweep to find its source.
+            if self.modules:
+                args = self.words[opening + 1:finish - 1]
+                if args[-1:] == [',']:
+                    args = args[:-1]
+                if len(args) != 1:
+                    raise SourceScanError('computed include path is unsupported')
+                self.edges.append(('include', literal_path(args[0]), inline,
+                                   condition, self.line(origin)))
+        else:
+            if self.modules and condition is not False:
+                if kind in ('concat_idents', 'paste'):
+                    self.errors.append(f'macro namespace construction at line {self.line(origin)} is unsupported')
+                if self.words[origin - 1:origin] == ['$']:
+                    self.errors.append(f'metavariable macro invocation at line {self.line(origin)} is unsupported')
+            self.opaque(opening + 1, finish - 1, condition)
+        return finish
+
+    def header(self, start: int, end: int, condition: bool | None,
+               inline: tuple[str, ...]) -> None:
+        """Find macro/include groups in tokens consumed as an item header.
+
+        A header is not parsed as an item scope: cfg-looking tokens there grant
+        no exclusion. Ordinary delimiter groups are traversed, but macro groups
+        always use macro_group, which retains their literal tokens or refuses.
+        """
+        i = start
+        while i < end:
+            if i in self.macros:
+                i = self.macro_group(i, condition, inline)
+            elif i in self.pairs:
+                finish = self.pairs[i] + 1
+                self.header(i + 1, finish - 1, condition, inline)
+                i = finish
+            else:
+                i += 1
+
+    def hook(self, name: str, i: int) -> None:
+        if (name.startswith('__') or name == 'startup_values') and name not in ASYNC_SEAM:
+            self.hooks.append((name, self.line(i)))
+
+    def walk(self, start: int, end: int, ambient: bool | None, inline: tuple[str, ...]) -> None:
+        i = start
+        while i < end:
+            begin = i
+            attrs, i, inner = self.attrs(i, end)
+            condition = cfg_and(ambient, self.condition(attrs))
+            self.header(begin, i, condition, inline)
+            if inner:
+                # Inner attributes govern the entire containing scope and must
+                # precede its contents. Later ones are not an omission licence.
+                if begin != start:
+                    raise SourceScanError(f'inner attribute after contents at line {self.line(begin)}')
+                ambient = condition
+                if ambient is False:
+                    self.mask(start, end)
+                start = i
+                continue
+            if i >= end:
+                raise SourceScanError('attribute without an item')
+            head = i
+            public = self.words[i] == 'pub' and self.words[i + 1:i + 2] != ['(']
+            if self.words[i] == 'pub':
+                i += 1
+                if self.words[i:i + 1] == ['(']:
+                    i = self.pairs[i] + 1
+            qualifier = i
+            while i < end and self.words[i] in ('unsafe', 'async', 'default', 'const'):
+                i += 1
+            if self.words[qualifier:qualifier + 1] == ['const'] and self.words[i:i + 1] != ['fn']:
+                i = qualifier  # const item/initializer, rather than const fn
+            if self.words[i:i + 1] == ['extern'] and self.words[i + 1:i + 2] != ['crate']:
+                i += 1
+                if i < end and string_literal(self.words[i]):
+                    i += 1
+            kind = self.words[i] if i < end else ''
+            if kind == 'mod':
+                name = self.words[i + 1] if i + 1 < end else ''
+                if not re.fullmatch(r'[A-Za-z_][A-Za-z_0-9]*', name):
+                    raise SourceScanError('unsupported module name')
+                j = i + 2
+                paths = [attr for attr in attrs if attr[0] == 'path']
+                path = None
+                if paths:
+                    if len(paths) != 1 or len(paths[0]) != 3 or paths[0][1] != '=':
+                        raise SourceScanError('unsupported module path attribute')
+                    path = literal_path(paths[0][2])
+                if self.words[j:j + 1] == [';']:
+                    self.edges.append(('path' if path else 'mod', path or name, inline, condition, self.line(i)))
+                    finish = j + 1
+                elif self.words[j:j + 1] == ['{']:
+                    if path:
+                        raise SourceScanError('path attribute on inline module is unsupported')
+                    finish = self.pairs[j] + 1
+                    self.walk(j + 1, finish - 1, condition, inline + (name,))
+                else:
+                    raise SourceScanError('unsupported module declaration')
+                if condition is False:
+                    self.mask(begin, finish)
+                i = finish
+                continue
+            if self.modules and any(attr[0] == 'path' for attr in attrs):
+                raise SourceScanError('path attribute outside a module')
+            # Macro definitions and invocations are never parsed as Rust items.
+            if kind == 'macro':
+                raise SourceScanError('declarative macro 2.0 syntax is unsupported')
+            if kind == 'include' and self.words[i + 1:i + 2] == ['!'] and i + 2 not in self.macros:
+                raise SourceScanError('malformed include invocation')
+            # Use the same identifier/definition classification as the global
+            # macro index. Punctuation followed by unary !(...) is not a macro.
+            macro = kind == 'macro_rules' or self.macros.get(i + 2) == (i, kind)
+            if macro:
+                j = i + (3 if kind == 'macro_rules' else 2)
+                if j not in self.macros:
+                    raise SourceScanError(f'unsupported macro syntax at line {self.line(i)}')
+                finish = self.macro_group(j, condition, inline)
+                if condition is False:
+                    self.mask(begin, finish)
+                i = finish
+                continue
+            item = kind in ('fn', 'impl', 'trait', 'struct', 'enum', 'union', 'use', 'static', 'const', 'type', 'extern')
+            if kind == 'fn' and not re.fullmatch(r'[A-Za-z_][A-Za-z_0-9]*', self.words[i + 1] if i + 1 < end else ''):
+                item = False  # a function pointer type, not a function item
+            if item:
+                if public and kind == 'fn' and condition is not False and i + 1 < end:
+                    self.hook(self.words[i + 1], i + 1)
+                j = i + 1
+                while j < end and self.words[j] != ';':
+                    if j in self.macros or self.words[j] in ('(', '['):
+                        j = self.pairs[j] + 1
+                    elif self.words[j] == '{':
+                        break
+                    else:
+                        j += 1
+                if j == end:
+                    if attrs or public:
+                        raise SourceScanError(f'unbounded item at line {self.line(i)}')
+                    i += 1  # e.g. `impl Trait` in a parameter; omit nothing
+                    continue
+                self.header(head, j, condition, inline)
+                finish = self.pairs[j] + 1 if self.words[j] == '{' else j + 1
+                if (self.modules and kind == 'use' and condition is not False and
+                    'include' in self.words[i:finish]):
+                    self.errors.append(f'include macro import at line {self.line(i)} is unsupported')
+                if self.words[j] == '{':
+                    # A brace in a const-generic header can shorten this extent;
+                    # it cannot cause later source to be masked accidentally.
+                    self.walk(j + 1, finish - 1, condition, inline)
+                if condition is False:
+                    self.mask(begin, finish)
+                i = finish
+                continue
+            # Unsupported attributed expressions are retained, never omitted.
+            # Recurse into ordinary token groups so nested local modules count.
+            i = head
+            if i in self.macros:
+                i = self.macro_group(i, ambient, inline)
+            elif self.words[i] in ('(', '[', '{'):
+                finish = self.pairs[i] + 1
+                self.walk(i + 1, finish - 1, ambient, inline)
+                i = finish
+            else:
+                i += 1
+
+    def text(self) -> str:
+        result = list(self.source)
+        for start, end in self.masked:
+            for i in range(start, end):
+                if result[i] != '\n':
+                    result[i] = ' '
+        return ''.join(result)
+
+
+def runtime_token_violations(source: str) -> list[str]:
+    tokens = rust_tokens(source)
+    words = [word for word, _ in tokens]
+    hits = set()
+
+    def import_tree(i: int, prefix: list[str], origin: int) -> int:
+        parts = list(prefix)
+        while i < len(words):
+            word = words[i]
+            if word == '::':
+                i += 1
+            elif word == '{':
+                i += 1
+                while i < len(words) and words[i] != '}':
+                    if words[i] == ',':
+                        i += 1
+                    else:
+                        following = import_tree(i, parts, origin)
+                        if following <= i:
+                            return i
+                        i = following
+                return i + 1
+            elif word in ('as', ',', ';', '}'):
+                if parts and (parts[0] in ('std', 'alloc') or
+                              (parts[0] == 'core' and len(parts) > 1 and
+                               parts[1] in ('future', 'task', 'pin'))):
+                    hits.add(origin)
+                return i + 2 if word == 'as' else i
+            elif re.fullmatch(r'[A-Za-z_][A-Za-z_0-9]*|\*', word):
+                if word != 'self':
+                    parts.append(word)
+                i += 1
+            else:
+                return i
+        return i
+
+    for i, word in enumerate(words):
+        if word == 'use':
+            import_tree(i + 1, [], i)
+        forbidden = (word in ('std', 'alloc') and words[i + 1:i + 2] == ['::'])
+        forbidden |= word == 'core' and words[i + 1:i + 2] == ['::'] and words[i + 2:i + 3] in (['future'], ['task'], ['pin'])
+        forbidden |= word == 'extern' and words[i + 1:i + 2] == ['crate'] and words[i + 2:i + 3] in (['std'], ['alloc'])
+        if forbidden:
+            hits.add(i)
+    return [f'{source.count(chr(10), 0, tokens[i][1]) + 1}: forbidden runtime {words[i]} path'
+            for i in sorted(hits)]
+
+
+def core_source_violations(root: pathlib.Path) -> list[str]:
+    """Resolve source edges, including disabled ones, before classifying files.
+
+    A file reached through both a test and shipping edge is shipping. Unattached
+    .rs files are conservatively scanned as shipping too. Reads are cached only
+    within this invocation; no inode/mtime or persistent content cache is used.
+    """
+    root = root.resolve()
+    base = root / 'core' / 'src'
+    cache: dict[pathlib.Path, tuple[SourceView, SourceView]] = {}
+    reached: set[pathlib.Path] = set()
+    shipping: set[pathlib.Path] = set()
+    hook_shipping: set[pathlib.Path] = set()
+    active: set[pathlib.Path] = set()
+    done: set[tuple[pathlib.Path, pathlib.Path, bool, bool]] = set()
+    hits = []
+
+    def visit(path: pathlib.Path, module_dir: pathlib.Path, enabled: bool = True,
+              hooks_enabled: bool = True) -> None:
+        path = path.resolve()
+        if not path.is_relative_to(root):
+            raise SourceScanError(f'module/include outside repository: {path}')
+        if not path.is_file():
+            raise SourceScanError(f'missing module/include: {path.relative_to(root)}')
+        reached.add(path)
+        if enabled:
+            shipping.add(path)
+        if hooks_enabled:
+            hook_shipping.add(path)
+        key = (path, module_dir, enabled, hooks_enabled)
+        if key in done:
+            return
+        if path in active:
+            raise SourceScanError(f'cyclic module/include: {path.relative_to(root)}')
+        active.add(path)
+        if path not in cache:
+            source = path.read_text(encoding='utf-8')
+            try:
+                cache[path] = (SourceView(source, frozenset({'test'}), modules=True),
+                               SourceView(source, frozenset({'test', 'up_rust_test_hooks'}), modules=True))
+            except SourceScanError as error:
+                raise SourceScanError(f'{path.relative_to(root)}: {error}') from error
+        runtime, hooks = cache[path]
+        for edge, hook_edge in zip(runtime.edges, hooks.edges, strict=True):
+            kind, name, inline, condition, line = edge
+            directory = module_dir.joinpath(*inline)
+            if kind == 'mod':
+                candidates = [directory / (name + '.rs'), directory / name / 'mod.rs']
+                existing = [candidate for candidate in candidates if candidate.is_file()]
+                if len(existing) != 1:
+                    raise SourceScanError(f'{path.relative_to(root)}:{line}: missing/ambiguous module {name}')
+                target = existing[0]
+                child_dir = directory / name
+            elif kind == 'path':
+                # Out-of-line path attributes are relative to the containing file;
+                # within inline modules, Rust adds the inline module directory.
+                target = (directory if inline else path.parent) / name
+                child_dir = target.parent
+            else:
+                target = path.parent / name
+                child_dir = directory
+            visit(target, child_dir, enabled and condition is not False,
+                  hooks_enabled and hook_edge[3] is not False)
+        active.remove(path)
+        done.add(key)
+
+    try:
+        visit(base / 'lib.rs', base)
+        for path in sorted(base.rglob('*.rs')):
+            if path.resolve() not in reached:
+                visit(path, path.parent if path.name == 'mod.rs' else path.with_suffix(''))
+        for path in sorted(shipping):
+            runtime, hooks = cache[path]
+            relative = path.relative_to(root)
+            source = runtime.text()
+            hits.extend(f'{relative}: source applicability refused: {error}' for error in runtime.errors)
+            hits.extend(f'{relative}:{hit}' for hit in atomic_import_violations(source, relative))
+            hits.extend(f'{relative}:{hit}' for hit in runtime_token_violations(source))
+            if path in hook_shipping:
+                hits.extend(f'{relative}: source applicability refused: {error}' for error in hooks.errors
+                            if error not in runtime.errors)
+                hits.extend(f'{relative}:{line}: {name}' for name, line in hooks.hooks)
+    except (SourceScanError, OSError, UnicodeError) as error:
+        hits.append(f'source applicability refused: {error}')
+    return hits
+
+
+def hook_violations(source: str) -> list[str]:
+    try:
+        view = SourceView(source, frozenset({'test', 'up_rust_test_hooks'}))
+        return ([f'source applicability refused: {error}' for error in view.errors] +
+                [f'{line}: {name}' for name, line in view.hooks])
+    except SourceScanError as error:
+        return [f'source applicability refused: {error}']
 
 
 def run(cmd: list[str], **kwargs) -> subprocess.CompletedProcess[str]:
@@ -205,26 +742,19 @@ class Gates:
 
     # 2. The certified surface excludes these modules; alloc and std cannot appear.
     def source_scan(self) -> None:
-        hits: list[str] = []
-        for path in sorted((CORE / "src").rglob("*.rs")):
-            source = path.read_text(encoding="utf-8")
+        hits = core_source_violations(ROOT)
+        # Keep the legacy facade's existing textual source scope. Generated
+        # OUT_DIR code and procedural macro expansion belong to compiler gates.
+        for path in sorted((ROOT / 'src').rglob('*.rs')):
             hits.extend(f"{path.relative_to(ROOT)}:{hit}" for hit in
-                        atomic_import_violations(source, path.relative_to(ROOT)))
-            for number, line in enumerate(source.splitlines(), 1):
-                stripped = line.strip()
-                if stripped.startswith("//"):
-                    continue
-                for token in FORBIDDEN_TOKENS:
-                    if token in line:
-                        hits.append(f"{path.relative_to(ROOT)}:{number}: {line.strip()}")
-        for base in (CORE / "src", ROOT / "src"):
-            for path in sorted(base.rglob("*.rs")):
-                hits.extend(f"{path.relative_to(ROOT)}:{hit}" for hit in hook_violations(path.read_text()))
+                        hook_violations(path.read_text(encoding='utf-8')))
         controls = (
             ("pub fn __unlisted() {}", True),
             ("pub const fn __unlisted() {}", True),
             ("#[doc(hidden)]\npub fn __unlisted() {}", True),
             ("#[cfg(up_rust_test_hooks)]\npub fn __unlisted() {}", False),
+            ("#[cfg(any(test, up_rust_test_hooks))]\npub fn __unlisted() {}", False),
+            ("#[cfg(any(test, feature = \"extra\"))]\npub fn __unlisted() {}", True),
             ("pub fn __wake() {}", False),
             ("pub fn startup_values() {}", True),
         )
