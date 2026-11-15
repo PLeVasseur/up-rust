@@ -1,6 +1,6 @@
 # Deployment data is in range, verified and protected
 
-`uman~sdk-aou-deployment-data~1`
+`uman~sdk-aou-deployment-data~2`
 
 Covers:
 - aou~seooc-deployment-data~5
@@ -9,7 +9,7 @@ Covers:
 
 Draft integrator guidance against the corrected specification input. The quotation states
 requirements and assumptions, including future behavior; it is not an assertion
-that the current SDK implements them. The values-only schema requirement remains uncovered; prescribing the integrator’s duty here is not evidence that all loader paths enforce it.
+that the current SDK implements them. The values-only schema requirement remains uncovered; prescribing the integrator's duty here is not evidence that all loader paths enforce it. Its inventory names E2E tables only for a route that selects the deferred E2E wire.
 
 Read [manual status](README.md) before using this entry. A documentary coverage
 link neither validates the deployment nor closes an implementation requirement.
@@ -34,7 +34,7 @@ link neither validates the deployment nor closes an implementation requirement.
 
 The integrator SHALL complete and retain the following checklist for the item:
 
-- [ ] Version and review a complete deployment inventory: routes/QoS, transport integrity levels, expected peers and RPC clients, every capacity, iceoryx2 depths, proposed E2E senders/data IDs/resynchronization/start sources, and selected compiled-in waiver IDs.
+- [ ] Version and review a complete deployment inventory: routes/QoS, transport integrity levels, expected peers and RPC clients, every capacity, iceoryx2 depths and selected compiled-in waiver IDs; for a route that selects the deferred E2E wire, once it is delivered, also its senders, data IDs, resync_frames and start sources.
 - [ ] Validate all ranges and cross-references against the actual implemented schema. Accept values only; do not add scripts, expressions, dynamically loaded code or arbitrary waiver definitions.
 - [ ] Protect released data against unintended change through provisioning and startup. Plan the Streamer integrity-code check and verify it on the future implementation; a digest stored alongside mutable data alone does not establish authorized provenance.
 - [ ] Declare every intended peer/role before runtime. Change deployment through whole-process restart with new initialization data, including adding lending RPC clients; do not invent a runtime setup escape hatch.

@@ -19,7 +19,7 @@ Verification:: miri (Stacked Borrows and Tree Borrows, over the tests and proof 
 Status:: Draft
 ISO 26262:: 6-Annex D.2.3 (part-clause numbers only)
 
-*Rationale.* Undefined behaviour can corrupt memory in ways that no later check can see, which runtime code must never risk. In Rust, `+unsafe+` marks only code whose memory safety the compiler cannot check, so safe callers rely on the element to keep that promise for them, hidden items included.
+*Rationale.* Undefined behaviour can corrupt memory in ways that no later check can see, which runtime code must never risk. In Rust, `+unsafe+` marks only code whose memory safety the compiler cannot check, so safe callers rely on the element to keep that promise for them, hidden items included. The promise holds under the faulty-peer model too: a peer that writes values its own middleware never writes must not let a safe call reach undefined behaviour. Miri, tests and target builds are evidence at their own scope; none replaces the source-level argument for each obligation.
 
 == Every `+unsafe+` is inventoried and justified
 

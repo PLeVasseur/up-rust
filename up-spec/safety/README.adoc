@@ -15,7 +15,7 @@ It is a draft on a feature branch. Every item in it is still Draft.
 
 An OFT run keeps the items in the files its patterns name and its tag filter selects, and reports each kept item that lacks coverage. So:
 
-* *No SDK reads this area yet.* Each SDK names up-spec files and directories in its OFT patterns, and none names `safety/`. Nothing here sits at the top of the repository, where a pattern such as `up-spec/*.adoc` would reach it.
+* *An SDK reads this area only by naming it.* Each SDK names up-spec files and directories in its OFT patterns; one that adopts these items names its own `seooc-<sdk>/` directory, as up-rust names `safety/seooc-up-rust`, and no SDK names `safety/` as a whole. Nothing here sits at the top of the repository, where a pattern such as `up-spec/*.adoc` would reach it.
 * *Every item here carries a tag from the table below, and no tag of the protocol chapters.* A run that keeps untagged items (`_`), or items tagged `LanguageLibrary`, `TransportLayerImpl` and the like, keeps none of them. The patterns are the first guard: a run whose tag filter is missing keeps every item its patterns reach, and still none from here.
 * *Nothing here links to the protocol chapters through OFT,* so they gain no coverage obligations from it.
 
@@ -66,7 +66,7 @@ Each item carries the tag of the part it is allocated to. The repository that ho
 . Its gating runs add its gate tag to their filter, for example `SafetyGateUpRust`, and not the tags of the table. Every item they keep is then covered, and every coverage tag in the repository resolves.
 . A report-only run, which fails nothing, adds the tags of the table it covers as well, for example `SafetyUpRustCore`, and shows every item still to cover.
 . Code and tests carry OFT's own coverage tags, `+[impl->req~ssr-…~N]+` and `+[utest->req~ssr-…~N]+`, only for items its gating runs keep, because a tag naming an item the run did not keep is a broken link. A review log in the repository records who mapped each tag.
-. The up-spec change that defines or gates an item lands first. The repository moves its up-spec submodule to that change in the same merge as the commit that tags the item, so that no run sees a tag without its item.
+. The up-spec change that defines or gates an item lands first. The repository moves its copy of up-spec, a submodule or a pinned copied snapshot as that repository packages it, to that change in the same merge as the commit that tags the item, and records which change it copied, so that no run sees a tag without its item.
 
 == ISO 26262
 

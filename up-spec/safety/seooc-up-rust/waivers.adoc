@@ -30,10 +30,10 @@ A waiver *MUST* admit allocation inside middleware only, for the operations and 
 [horizontal]
 ASIL:: B
 Allocated to:: the element
-Verification:: test (a wire that declares allocation is refused even with a waiver), review
+Verification:: test (a wire that declares allocation on a native route is refused even with a waiver), review
 Status:: Draft
 
-*Rationale.* The element can answer only for its own code, so a waiver covers only what middleware does inside itself, for the operations and the bound its permit states (`+core/src/transport/waiver.rs+`). A known anomaly in middleware, such as a panic it can reach, is a defect and is never filed as a waiver.
+*Rationale.* The element can answer only for its own code, so a waiver covers only what middleware does inside itself, for the operations and the bound its permit states (`+core/src/transport/waiver.rs+`). A known anomaly in middleware, such as a panic it can reach, is a defect and is never filed as a waiver. Declared allocation on a serialized or owned route is admitted by that route's heap class (`+req~ssr-heap-declared~2+`), not by a waiver, so a waiver cannot carry native work into allocation, and a serialized route's permission is never a waiver for anything else.
 
 == Waivers are recorded and can be found
 

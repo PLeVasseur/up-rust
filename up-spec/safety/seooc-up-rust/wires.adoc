@@ -32,7 +32,7 @@ A wire that declares no heap use in a direction *MUST* pass its contract suite i
 [horizontal]
 ASIL:: B
 Allocated to:: each wire
-Verification:: heap-window, test (both contract suites, with their negative controls: an ordinary wire fails the sequenced check, a wire that never resynchronizes fails its restart check, a wire that draws a random value per encode fails determinism, and the E2E wire fails the ordinary check; the sequenced check's interface: a sender factory that is given a start value, a receiver factory and the restart bound, with receivers' slot storage made outside the heap windows)
+Verification:: heap-window, test (both contract suites, with their negative controls: an ordinary wire fails the sequenced check, a wire that never resynchronizes fails its restart check, a wire that draws a random value per encode fails determinism, and, once the deferred E2E wire is delivered, it fails the ordinary check; the sequenced check's interface: a sender factory that is given a start value, a receiver factory and the restart bound, with receivers' slot storage made outside the heap windows)
 Status:: Draft
 
-*Rationale.* A sequenced wire deliberately changes its encoding, so its contract tests must check that sequence rather than require identical bytes on every encode.
+*Rationale.* A sequenced wire deliberately changes its encoding, so its contract tests must check that sequence rather than require identical bytes on every encode. The item binds the directions in which a wire claims no heap use. A serialized wire that declares allocation in a direction is not required to be heap-free there; its declared class is checked when its route enters runtime mode (`+req~ssr-heap-declared~2+`), and a native route refuses it.

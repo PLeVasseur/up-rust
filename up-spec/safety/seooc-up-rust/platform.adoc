@@ -7,18 +7,18 @@ Conventions, tags and status words: xref:../README.adoc[the safety area's README
 
 == Every platform backend keeps the platform's rules
 
-[.specitem,oft-sid="req~ssr-platform-contract~1",oft-title="Every platform backend keeps the platform's rules",oft-needs="impl,utest",oft-tags="SafetyUpRustCore"]
+[.specitem,oft-sid="req~ssr-platform-contract~2",oft-title="Every platform backend keeps the platform's rules",oft-needs="impl,utest",oft-tags="SafetyUpRustCore"]
 --
-Every runtime platform backend *MUST NOT* use the heap, panic, create a thread, or need global state that requires first-use setup. Its monotonic clock *MUST NOT* fail. Its wall clock *MUST* report a failed read instead of panicking. Its wait *MUST NOT* lose a wake that happens after the caller observed the expected value.
+Every runtime platform backend *MUST NOT* use the heap, panic, create a thread, or need global state that requires first-use setup. Its wait *MUST NOT* lose a wake that happens after the caller observed the expected value, and a caller that returns from it spuriously, after an interruption or late *MUST* recheck the expected value and the time before it waits again or returns. A clock read *MUST* report a failure instead of panicking or substituting another time base, and a caller that obtains a monotonic reading earlier than one it already holds *MUST* treat it as a failed read. The element *MUST* treat a failed read as fail-closed: a bounded operation that depends on it ends as expired and is counted, and a TTL check refuses the frame. Each supported configuration's package *MUST* state its backend's clock sources, with their units, resolution, monotonicity, adjustment and failure behaviour, its wake protocol and memory ordering, and the execution contexts from which each operation may be called.
 --
 
 [horizontal]
 ASIL:: B
-Allocated to:: each platform backend
-Verification:: test (a platform contract test in `+test-util+`, run inside heap windows), review
+Allocated to:: each platform backend; the element, for its handling of a failed read
+Verification:: test (a platform contract test in `+test-util+`, run inside heap windows; a fault-injected backend whose clock read fails or steps back, ending a wait as expired, counted, and refusing a TTL check), review (each backend's source and its package's stated contracts)
 Status:: Draft
 
-*Rationale.* `+core/src/platform/mod.rs+`, the trait's stated rules: "no heap, no panic, no thread creation, no global state that needs first-use setup, and `+wait+` must not lose a wake", with a monotonic clock that is "Infallible by contract". Runtime code reaches the operating system only through a backend, so a backend that broke one of these rules would break the element's runtime requirements from below, such as `+req~ssr-heap-none~1+` and `+req~ssr-refuse-no-panic~1+`.
+*Rationale.* `+core/src/platform/mod.rs+`, the trait's stated rules: "no heap, no panic, no thread creation, no global state that needs first-use setup, and `+wait+` must not lose a wake". Runtime code reaches the operating system only through a backend, so a backend that broke one of these rules would break the element's runtime requirements from below, such as `+req~ssr-heap-none~2+` and `+req~ssr-refuse-no-panic~1+`. The same trait documents the monotonic clock as "Infallible by contract"; this revision removes that premise, because an OS call can fail and a successful read during initialization does not show that a later one cannot. A failed read that ended a wait as satisfied, or a TTL check that passed with an unknown time, would turn a platform fault into a silent timing or expiry error, so the outcome is fail-closed and counted. The contracts a configuration states are those an integrator needs to select it without deriving them again (xref:README.adoc#claims[the SEooC's claims]).
 
 == Entropy and prefault stay in initialization
 
@@ -37,18 +37,18 @@ Status:: Draft
 
 == Initialization entropy differs at each start
 
-[.specitem,oft-sid="req~ssr-platform-entropy~1",oft-title="Initialization entropy differs at each start",oft-needs="impl,utest",oft-tags="SafetyUpRustCore"]
+[.specitem,oft-sid="req~ssr-platform-entropy~2",oft-title="Initialization entropy comes from a declared source",oft-needs="impl,utest",oft-tags="SafetyUpRustCore"]
 --
-Every shipped platform backend's initialization entropy *MUST* come from the OS's entropy source, so that it differs at each start of the process. A read that fails *MUST* be reported, and *MUST NOT* be replaced by a fixed value.
+Every shipped platform backend's initialization entropy *MUST* come from a source that its supported configuration's package names, with a stated contract: for an OS entropy source, the probability that two starts draw the same value; for a persistent or counter-based source, how it is stored and advanced across restarts and resets. A read that fails, or a source that the setup check finds short of the package's stated contract, *MUST* be reported and *MUST* refuse setup; it *MUST NOT* be replaced by a fixed value, a test seed or uptime. Random entropy makes a repeated value improbable, not impossible, so it *MUST NOT* be the argument for a requirement that a value never repeats across starts; such a requirement needs a checked persistent construction.
 --
 
 [horizontal]
 ASIL:: B
 Allocated to:: each platform backend
-Verification:: test (two processes started one after the other read different entropy; a failed read is reported, through a fault-injected backend), review (each backend's source, against its OS's documentation)
+Verification:: test (a failed read is reported and refuses setup, through a fault-injected backend; a source short of its stated contract is refused), review (each backend's source, against its OS's documentation and its package's stated contract)
 Status:: Draft
 
-*Rationale.* Entropy is read once, to seed the message-ID generators (`+PlatformInit::entropy+` in `+core/src/platform/mod.rs+`), so a fixed or repeated seed could repeat IDs from one start to the next. The shipped backends read the OS's source: `+getrandom+` on Linux, `+getentropy+` on macOS and `+/dev/urandom+` on QNX (`+core/src/platform/linux.rs+`, `+core/src/platform/macos.rs+`, `+core/src/platform/qnx.rs+`). The integrator's platforms carry the same duty in `+aou~seooc-integrator-platform~3+`.
+*Rationale.* Entropy is read once, to seed the message-ID generators (`+PlatformInit::entropy+` in `+core/src/platform/mod.rs+`), so a fixed or repeated seed could repeat IDs from one start to the next. The shipped backends read the OS's source: `+getrandom+` on Linux, `+getentropy+` on macOS and `+/dev/urandom+` on QNX (`+core/src/platform/linux.rs+`, `+core/src/platform/macos.rs+`, `+core/src/platform/qnx.rs+`). Such a source gives a small, quantifiable collision probability, not a guarantee that two starts differ, so the previous statement that its entropy "differs at each start" was stronger than any OS source can support. Identity requirements keep their strength: where one demands non-repetition, this item forbids resting it on entropy. Two starts that read different values are a smoke check, not evidence of non-repetition. A platform that a custom configuration supplies carries the same duty under `+aou~seooc-integrator-platform~4+`.
 
 == Every runtime behaviour is classified
 
@@ -67,40 +67,49 @@ Status:: Draft
 
 == The element needs no 64-bit atomic
 
-[.specitem,oft-sid="req~ssr-atomic-width~1",oft-title="The element needs no 64-bit atomic",oft-needs="impl,utest",oft-tags="SafetyUpRustCore"]
+[.specitem,oft-sid="req~ssr-atomic-width~2",oft-title="No target needs an atomic width it lacks",oft-needs="impl,utest",oft-tags="SafetyUpRustCore"]
 --
-The element's code *MUST NOT* use any 64-bit atomic type. It needs only 32-bit and pointer-sized atomics with compare-and-swap, in one implementation on every target. It reaches every atomic, loads and stores included, through one module of its own, the atomics facade. Its pointer-sized atomics hold only lengths and indices, whose meaning does not depend on their width. Every word that one of its protocols shares between threads is a 32-bit atomic or narrower, and it reads memory shared with another process in 32-bit words and bytes. It builds for a 32-bit target without 64-bit atomics.
+On every supported target the element *MUST* keep full semantic identity, coherent reports, ownership, genuine `+Full+` behaviour and its terminal-safe finite-lifetime policy without needing an atomic width that the target lacks. A target's backend *MAY* use a reviewed platform-specific mechanism behind one common SDK contract: wider atomics where the target provides them, or a private exclusion where it does not. Each such mechanism's supported execution contexts, memory ordering, alignment, lifetime and interruption obligations *MUST* be stated and packaged with its configuration, and its source-level safety argument *MUST* cover every participant that can reach its storage. A difference in representation *MUST NOT* change public semantics, add a `+Busy+` result or a limit on callers, or let a stale operation act on a later tenure. A private interrupt mask is not a lock shared with another process, and it does not exclude a participant that it leaves unmasked. Core code outside the platform layer reaches every atomic, loads and stores included, through the atomics facade. Its pointer-sized atomics hold only lengths and indices, whose meaning does not depend on their width, and on every target it reads memory shared with another process in 32-bit words and bytes. Core builds for a 32-bit target without 64-bit atomics.
 --
 
 [horizontal]
 ASIL:: B
-Allocated to:: the element
-Verification:: gate (core builds for `+thumbv7m-none-eabi+`; no `+AtomicU64+`, `+AtomicI64+`, `+target_has_atomic+` or `+target_pointer_width+` in core; no `+core::sync::atomic+` or `+std::sync::atomic+` import in core outside the facade), test (the suite under Miri, both models, on `+armv5te-unknown-linux-gnueabi+` and `+powerpc-unknown-linux-gnu+`)
+Allocated to:: the element; each platform backend, for its mechanism
+Verification:: gate (core builds for `+thumbv7m-none-eabi+`; no `+core::sync::atomic+` or `+std::sync::atomic+` import in core outside the facade and the platform layer), test (the suite under Miri, both models, on `+armv5te-unknown-linux-gnueabi+` and `+powerpc-unknown-linux-gnu+`; each backend's mechanism on the targets its configuration names), review (each mechanism's source-level safety argument, against every participant that can reach its storage)
 Status:: Draft
 
-*Rationale.* One implementation with 32-bit shared protocol words avoids requiring atomic operations that some supported cores do not provide.
+*Rationale.* A requirement that every protocol word be a 32-bit atomic, in one implementation on every target, avoided operations that some supported cores lack, but it also forbade the full-width host deadline monitor, which uses 16-byte atomics where the CPU provides them and refuses setup where it does not (`+core/docs/pal-deadline-safety.md+`, `+core/src/platform/deadline_atomic128.rs+`), and it did not by itself keep identity full width. The observable obligations are what the element's users rely on; a target mechanism is acceptable when it keeps them, states its contexts and is argued at source level for every participant. Host execution does not show how a masked interrupt behaves on an MCU, so each mechanism is verified on the targets its configuration names.
 
 == Every narrowed value states its window
 
-[.specitem,oft-sid="req~ssr-atomic-windows~1",oft-title="Every narrowed value states its window",oft-needs="impl,utest,uman",oft-tags="SafetyUpRustCore"]
+[.specitem,oft-sid="req~ssr-atomic-windows~2",oft-title="Every narrowed value states its window",oft-needs="impl,utest,uman",oft-tags="SafetyUpRustCore"]
 --
-Every value the element keeps narrower than what it stands for, or lets wrap or saturate, *MUST* have a stated window and the event rate that would defeat it, documented with the element. That covers:
+Every value the element keeps narrower than what it stands for, or lets wrap or saturate, *MUST* have a stated window and the event rate that would defeat it, documented with the element and with each supported configuration whose representation has it. A value kept at full width for the element's lifetime, or closed explicitly before its range is exhausted, has no window. A representation *MUST NOT* drop the binding of a full identity to the tenure an operation acts on: wherever an operation claims a call slot, a peer entry or another reusable record, or ends or fails the tenure it names, the full identity and tenure it names *MUST* be compared with the record's current ones atomically with that claim or change, either in the same exclusive step or by a recheck after a claim that gives the claim back, recording nothing, on a mismatch. No wrap, reuse or stalled operation then completes or fails another call, retires another tenure or admits a stale one.
 
-* a call slot's generation, 2^28^ reuses of one slot during one stalled call. A delivery checks again the request ID after it claims the slot, so a wrap never delivers a response to another call; a stalled `+expire+` or `+fail_older+` can still time out or fail a later call early;
-* a peer-table entry's generation, 2^22^ reuses of one entry during one stalled call. `+enter+` checks again the entry's full ID after it claims it; a stalled `+retire+` can still retire a later tenure, which acts as a spurious `+peer_lost+` for its peer;
-* a peer entry's 8 bits of users, 255 concurrent classifications of one peer, beyond which a frame is refused;
+At this revision every supported profile, host and MCU alike, keeps these values at full width: the deadline record's origin and count, a peer's identity and incarnation, a call slot's request ID and bound peer, and the message-ID generator's counter and last good time. The windows that remain are:
+
+* a flow counter's wrap: fewer than 2^32^ increments between two reads that are compared (`+aou~seooc-application-reacts~4+`);
+* a fault counter's saturation at 2^32^ − 1, which a read reports as saturated, not as a difference;
+* a deadline count's saturation at the end of its range, which the report states (`+req~ssr-qos-deadline~4+`);
+* a pool's reuse count and a call slot's generation, whose exhaustion retires that pool for good, after the warning its lifetime policy states, instead of reusing a value;
+* the message-ID generator's period, 2^64^ IDs of one route, stated with its refusal bounds (`+req~ssr-ids-unique~4+`).
+
+A configuration whose representation narrows a value further *MUST* list each window it adds with that configuration. For the predecessor 32-bit-word representation, which no supported profile uses and whose one-word deadline monitor remains only as a model under test, these were:
+
+* a call slot's generation, 2^28^ reuses of one slot during one stalled call: a stalled `+expire+` or `+fail_older+` could time out or fail a later call early;
+* a peer-table entry's generation, 2^22^ reuses of one entry during one stalled call: a stalled `+retire+` could retire a later tenure, which acts as a spurious `+peer_lost+` for its peer;
+* a peer entry's 8 bits of users, 255 concurrent classifications of one peer, beyond which a frame was refused;
 * the incarnation latch's sequence word: a torn read needs 2^32^ increments, 2^31^ raises, during one stalled read;
-* a flow counter's wrap: fewer than 2^32^ increments between two reads that are compared;
 * the message-ID period, 2^32^ IDs of one route;
 * the ID guard, 2^31^ IDs within one 64 ms bucket, whose changes a word of their own detects; after a stale store of the bucket, one bucket's IDs stay below 2^31^ + 2 × `+T_wd+` × the ID rate;
 * the last good time's saturation, at a ±4.36-year offset of the wall clock from its reading at the route's setup, beyond which an ID needed while the clock cannot be read is refused;
-* the deadline monitor's tick, wrap-aware over 2^30^ ticks, refreshed into the past, to now − 2^28^, by any check that finds a counted gap 2^29^ ticks old, the counting check included. It needs the route serviced at least every 2^29^ ticks (`+aou~seooc-application-reacts~3+`) and every wait inside the element, checks as well as arrivals, under 2^28^ ticks (`+aou~seooc-timing-budgets~5+`).
+* the deadline monitor's one-word tick, wrap-aware over 2^30^ ticks, refreshed into the past, to now − 2^28^, by any check that finds a counted gap 2^29^ ticks old, the counting check included. It needs the route serviced at least every 2^29^ ticks (`+aou~seooc-application-reacts~4+`) and every wait inside the element, checks as well as arrivals, under 2^28^ ticks (`+aou~seooc-timing-budgets~6+`).
 --
 
 [horizontal]
 ASIL:: B
 Allocated to:: the element
-Verification:: test (each boundary driven through a test hook; an arrival racing a refresh, under Miri; the ID guard seeded at 0 and then set to the present), review (the documented list against the code)
+Verification:: test (each remaining window's boundary driven through a test hook: a flow counter's wrap, a fault counter's and the deadline count's saturation, a pool retired before its reuse count or a slot's generation wraps; the identity binding at each claim and at each expiry, peer failure and retirement; the one-word monitor's boundaries and an arrival racing a refresh, under Miri, as a model), review (the documented list against the code of every profile, host and MCU, and the source argument of each full-width representation's exclusive step)
 Status:: Draft
 
-*Rationale.* Narrowed and wrapping state is correct only inside its reuse and observation windows; those bounds must be visible to the integrator rather than implicit in the representation.
+*Rationale.* Narrowed and wrapping state is correct only inside its reuse and observation windows; those bounds must be visible to the integrator rather than implicit in the representation. A window belongs to a representation, not to every target. The list above is the representation at this revision: the host profiles' deadline backend (`+core/docs/pal-deadline-safety.md+`), the deadline record of the MCU profiles and of every other non-host build, a 64-bit origin and a 128-bit count in one exclusive record (`+core/src/transport/metadata/deadline.rs+`), the peer and call tables and the generator (`+core/src/transport/metadata.rs+`, `+core/src/transport/ids.rs+`), the pools (`+core/src/transport/pool.rs+`, `+core/src/transport/rpc.rs+`) and the counters (`+core/src/transport/report.rs+`); the one-word monitor survives only as a model under test (`+core/src/transport/deadline_monitor.rs+`). These are facts about the representation, not a proof of its exclusion, interruption, long-suspension, coherence or arithmetic argument, which each mechanism's source review supplies. Binding a full identity to its tenure is what keeps a wrap or a stalled operation from acting on a later call or tenure, so no representation may drop it; a mechanism that compares inside the claim needs no recheck after it, and one that claims first keeps the recheck.

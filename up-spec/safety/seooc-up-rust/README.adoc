@@ -1,7 +1,7 @@
 = up-rust SEooC: scope, modes and verification
 :toc: preamble
 
-The software safety requirements and assumptions of use of one safety element out of context (SEooC): up-rust's runtime data path, with the Streamer's data plane, the end-to-end protection wire and strict mode. The element claims ASIL B capability. No item is known yet, so the requirements are assumed ones, and the assumptions of use say what an integrator has to provide (10-9).
+The software safety requirements and assumptions of use of one safety element out of context (SEooC): up-rust's runtime data path, with the Streamer's data plane, the end-to-end protection wire and strict mode. The element is developed for ASIL B capability, and claims it only for a supported configuration whose evidence establishes it (<<claims>>). No item is known yet, so the requirements are assumed ones, and the assumptions of use say what an integrator has to provide (10-9).
 
 The conventions, tags and status words are in xref:../README.adoc[the safety area's README]. Every item is still Draft.
 
@@ -34,7 +34,7 @@ a|
 a|
 * The runtime platform: `now`, `unix_time_ms`, `wait`, `wake_one`, `wake_all`.
 * The initialization-only platform: `entropy`, `prefault`.
-* The shipped backends, chosen by `cfg`: Linux; QNX, source only; macOS, for development only, with no safety claim.
+* The shipped backends, chosen by `cfg`: Linux; macOS; QNX, source only and future work. A supported configuration names the backend it uses (`+aou~seooc-target-environment~4+`).
 * The shared signal.
 | `up-rust-core::platform`, `signal`
 
@@ -46,11 +46,11 @@ a|
 | The carrier primitives in `up-rust-core`; the ASIL Streamer crate and its binary in `up-streamer-rust`
 
 | E6. The end-to-end protection wire
-| `E2e<W>`, an opt-in wire that wraps any other wire. It carries a data ID, a counter, its sender's incarnation and a CRC in the payload, and uses the route's deadline as its timeout. Whether and where to use it is the integrator's choice (`+aou~seooc-e2e-protection~6+`).
+| `E2e<W>`, an opt-in wire that wraps any other wire. It carries a data ID, a counter, its sender's incarnation and a CRC in the payload, and uses the route's deadline as its timeout. Whether and where to use it is the integrator's choice (`+aou~seooc-e2e-protection~7+`). Deferred: the wire is not part of this delivery; its items keep their IDs and revisions, two of them with an updated citation of that assumption of use, and no gate or current obligation of another item depends on it.
 | `up-wire-e2e`, a `no_std` member of `up-rust` that depends only on `up-rust-core`
 
 | E7. Strict mode
-| An opt-in check, in initialization mode only, of the integrator's setup against the rules that the assumptions of use name. It has four states: Off, the default; Report; Enforce; and Locked, which is Enforce alone, under `+--cfg up_rust_strict+`. Its findings name the rule, the route, the requirement IDs and the fix; it accepts a deviation only when it is acknowledged by ID and revision; and every run produces a compliance report (`+req~ssr-strict-init-only~1+`, `+req~ssr-strict-report~1+`).
+| An opt-in check, in initialization mode only, of the integrator's setup against the rules that the assumptions of use name. It has four states: Off, the default; Report; Enforce; and Locked, which is Enforce alone, under `+--cfg up_rust_strict+`. Its findings name the rule, the route, the requirement IDs and the fix; it accepts a deviation only when it is acknowledged by ID and revision; and every run produces a compliance report (`+req~ssr-strict-init-only~1+`, `+req~ssr-strict-report~2+`).
 | `up-rust-strict`, a `no_std` member of `up-rust` that depends only on `up-rust-core`; in core, read-only views of each route's declarations and one hook
 |===
 
@@ -59,24 +59,42 @@ The initialization-mode code of E1 to E7 is part of the element too: builders, a
 == Outside the element
 
 * *Classic routes.* `UTransport`, `UMessage` routes and the classic L2 building blocks allocate in the SDK's own code, so no waiver can admit them, and they never enter runtime mode. They stay QM.
-* *The Tokio layer*, `up-rust-tokio`.
+* *Async integrations*: the planned executor-independent async layer (working name `up-rust-async`), which keeps futures and executor hooks above core's synchronous seam and keeps the asynchronous contract of `+req~ssr-async-seam~2+`, and the existing `up-rust-tokio`, which that layer is to replace. Core, synchronous use and the async layer itself require no particular executor. An executor's own resources are outside the element's claims, so a native resource claim for an asynchronous path rests on a configuration package that establishes its executor's behaviour. The layer is planned work, to be tested with Tokio and with Embassy before the async API is frozen; nothing here claims that it exists yet.
 * *Middleware internals*: iceoryx2, Zenoh, vSomeIP, DDS, MQTT, LoLa. Allocation inside middleware needs a declared permit and a named waiver, and each binding's README says what its middleware cannot guarantee.
-* *QM convenience crates*: `up-rust` itself (the classic API, heap-backed startup memory, configuration helpers, the prelude), `up-wire-protobuf` and the other `std` wires, and `test-util`. On the ASIL path an application does not link `up-rust`.
+* *QM convenience crates*: `up-rust` itself (the classic API, heap-backed startup memory, configuration helpers, the prelude), the optional `up-rust-std` and `up-rust-alloc` layers with the allocation providers that plug into them, `up-wire-protobuf` and the other `std` wires, and `test-util`. On the ASIL path an application links only its claimed safety dependency graph (`+req~ssr-crate-core-only-binary~2+`), judged by what each crate actually brings into the image, with its features and target-selected paths, never by its name: `up-rust` as published brings dependencies outside that graph, and a compatibility re-export is judged by the graph it brings. Ordinary use keeps all of them. An optional layer joins a claimed graph only where a configuration admits it with its own allocated requirements and evidence (`+req~ssr-crate-core-only-binary~2+`); at this revision none does. `up-rust-core` itself has no dependencies, no Cargo features and no `alloc`; the optional `alloc`, `std` and application layers are separate crates, the `alloc` layer experimental on Rust 1.100 while the others keep the 1.88 minimum supported version.
 * *The classic `UStreamer`*, its dynamic routes and its cross-family adapters.
 * *Wires and bindings from elsewhere* with `unsafe` code of their own. Their integrator qualifies that code.
-* *A platform backend the integrator supplies*, held to the platform's rules by `+aou~seooc-integrator-platform~3+`.
+* *A custom platform backend that an integrator supplies*, an explicit extension held to the platform's rules by `+aou~seooc-integrator-platform~4+`.
 * *The application's own logic and the item's safety function.* The element carries data. What the data means, and how the item reacts to a failure, are the integrator's.
 * *The OS, hardware, supervisor, clock source and deployment data, and the choice of routes that need end-to-end protection*: these are assumptions of use.
 
 == What the element relies on but does not contain
 
-* *Bindings and wires* are separate elements. Their code runs inside the element's calls, but each is developed and verified on its own, against the contract suites in `test-util`. The items allocated to them are in `bindings.adoc` and `wires.adoc`, and `+aou~seooc-qualified-bindings-and-wires~4+` restricts an integrator to those that pass. The end-to-end protection wire is a wire too, but it is shipped as the element's safety mechanism, so it is part E6, with its own items.
+* *Bindings and wires* are separate elements. Their code runs inside the element's calls, but each is developed and verified on its own, against the contract suites in `test-util`. The items allocated to them are in `bindings.adoc` and `wires.adoc`, and `+aou~seooc-qualified-bindings-and-wires~5+` restricts an integrator to those that pass. The end-to-end protection wire is a wire too, but it is shipped as the element's safety mechanism, so it is part E6, with its own items.
 * *Derive macros* (`up-rust-macros`: `ZeroSlot`, `StablePayload`, `StablePayloadInit`) are tools. The code they generate becomes part of the element and is held to its requirements.
 * *`test-util`* (the heap guard, the C-level observer, the contract suites, the in-memory bindings) is verification tooling. The in-memory bindings are test doubles, not bindings, so evidence that rests on one says which.
 
+[[claims]]
+== Claims
+
+A deployment can ask for four independent properties, and each route's report keeps them apart (`+req~ssr-qos-no-downgrade~2+`):
+
+* *Functional communication and monitoring*: the protocol and ownership semantics, deadline gaps counted from true arrivals, and reports that can be read whenever execution permits. Every supported profile offers it, with no timing or safety package.
+* *Native resource behaviour*: no heap acquired or released, and no forbidden wait, panic or corruption, on a native path and in the work it causes.
+* *A finite timing bound*: a stated endpoint reached within a bound, under a supported configuration whose execution model, workload envelope and evidence establish it.
+* *Safety assurance*: the element's contribution to an item's safety requirements, at a stated ASIL and context, with its requirements, analyses, verification, qualification and assessment.
+
+They are not a ladder. No OS family, architecture, compiler or middleware confers a timing bound or an ASIL, and a dependency's certificate does not qualify this element. A timing bound or an assurance scope that a route explicitly requires is admitted under its configuration or refused at setup by name; its absence never refuses ordinary use. An integrity level, an ASIL label or a strict-mode state is not such a request: strict mode checks what a configuration declares before any assurance package exists, and reports assurance that is not established as Draft and unassessed. A passing setup or strict-mode check shows that its observable predicates held; it is not a qualification or an assessment.
+
+The element's maintainers provide versioned supported configuration packages: the platform backend, its synchronization and execution model, startup checks, sizing, supported contexts, build settings, dependency scope, evidence and limitations. An application team selects a package and declares its semantic traffic, routes, payload and retention bounds and the timing and safety outcomes it requires; it does not invent a synchronization backend or an OS scheduling proof for supported use. A custom platform is an explicit extension (`+aou~seooc-integrator-platform~4+`). The item's hazards, its fault tolerant time interval, its actual workload, its safe state and everything outside the package stay the integrator's.
+
+Evidence is reported by its state, never as another: design feasibility, implementation present, compiled, linked, exercised, source-reviewed, composition-verified, and qualified or assessed, each with its exact pins and limitations. Compiling does not show execution, a source review does not show timing, and an emulator does not show physical timing. The current SDK profiles are macOS ARM64, Linux x86-64, Linux ARM64, Windows x86-64, Cortex-M7 and RV32IMAC; QNX 7.1 and 8.x are future work, source only, each its own profile.
+
+The assumptions of use bind an integrator that claims safety assurance for a configuration; ordinary use need not carry out safety integration procedures. A safety manual states the integration contract; it is not a safety case, an assessment or a certificate.
+
 == Operating modes
 
-Runtime mode belongs to a transport. A transport is in runtime mode from the moment its own transition returns. Every requirement stated for runtime mode binds that transport from then on, whatever the process's other transports are doing. A process is in runtime mode once every transport it built is, and for the Streamer when `enter_runtime_all` returns. The process-level definition is used for three things only: sealing shared startup memory, the Streamer's startup report, and process-level statements for integrators.
+Runtime mode belongs to a transport. A transport is in runtime mode from the moment its own transition returns, and its transition is all or nothing for that transport alone: where several transports enter together, one that has entered stays in runtime mode if a later one is refused (`+req~ssr-mode-entry~5+`). Every requirement stated for runtime mode binds that transport from then on, whatever the process's other transports are doing. A process is in runtime mode once every transport it built is, and for the Streamer when `enter_runtime_all` returns. The process-level definition is used for three things only: sealing shared startup memory, the Streamer's startup report, and process-level statements for integrators.
 
 [cols="1,2,2,3,2",options="header"]
 |===
@@ -85,7 +103,7 @@ Runtime mode belongs to a transport. A transport is in runtime mode from the mom
 | Initialization
 | Process start, or a restart
 | The transport's transition succeeds, or the process exits
-| Construction; route declaration and admission; startup memory placement; waivers; forcing lazy state; cleaning up after a dead predecessor. Heap only on the `std` path. On the ASIL path, only startup memory
+| Construction; route declaration and admission; startup memory placement; waivers; forcing lazy state; cleaning up after a dead predecessor. SDK startup memory from static or caller-provided regions, or, outside the ASIL path, from the optional `up-rust-std` or a declared `up-rust-alloc` provider (`+req~ssr-memory-static~2+`)
 | Traffic
 
 | Transition
@@ -97,8 +115,8 @@ Runtime mode belongs to a transport. A transport is in runtime mode from the mom
 | Runtime
 | The transport's transition returns
 | Process exit, crash or kill, and nothing else
-| Activating the handles, and the Streamer, without heap; traffic; refusals and counters; bounded waits; deadline service; the Streamer's route gates
-| Setup; acquiring or releasing heap; releasing anything
+| Activating the handles, and the Streamer, without heap; traffic; refusals and counters; bounded waits; deadline service; the Streamer's route gates; on a serialized or owned route, only the allocation that its declared heap class admits, after the refusals that can come first, and the release, exactly once, of what that allocation produced when its ownership ends, by a destruction that setup admitted only as unable to panic or abort, at once or on the route's release service, where it may stay pending, charged and isolated, with no completion deadline (`+req~ssr-heap-declared~2+`, `+req~ssr-heap-slot-types~2+`, `+req~ssr-release-lease-drop~3+`)
+| Setup; heap use on a native path, in the work it causes, or beyond a route's declared class; heap use to decide, report or count a refusal, a discard or a peer's failure; releasing a route, role, table, startup region or other runtime resource
 |===
 
 There is no shutdown mode: in runtime mode a process leaves by exit, crash or kill, and in the ASIL build a panic aborts it. There is no degraded mode with rules of its own. A refusal, a counted drop, a missed deadline or a lost peer affects one route, and the others carry on. The Streamer's "degraded" is a reported state: its safe state is fail-silent per route, through its route gates.
@@ -112,11 +130,12 @@ There is no shutdown mode: in runtime mode a process leaves by exit, crash or ki
 | Provided to applications | L2 handles, the transition, bounded waits, route reports, counters and waiver records | the files from `runtime-modes.adoc` to `waivers.adoc`
 | Provided to the Streamer | Carrier routes, the capacity check, park, the shared signal | `bounded-work.adoc`, `qos.adoc`, `integrity.adoc`, `streamer.adoc`
 | Provided to integrators | The end-to-end protection wire; strict mode and its compliance report; the Streamer's operator interface, mode report, watchdog hook and startup report | `streamer.adoc`, `e2e-wire.adoc`, `build.adoc`
-| Required from bindings | The lending or handoff contract, and the bindings' duties | `bindings.adoc`; `+aou~seooc-qualified-bindings-and-wires~4+`
+| Required from bindings | The lending or handoff contract, and the bindings' duties | `bindings.adoc`; `+aou~seooc-qualified-bindings-and-wires~5+`
 | Required from wires | The wire contract, and the wires' duties | `wires.adoc`
-| Required from each platform backend | The platform's rules | `platform.adoc`; `+aou~seooc-integrator-platform~3+`
-| Required from the OS and hardware | Address-space isolation, threads, wait and wake, a monotonic clock, a wall clock, 32-bit atomics with compare-and-swap, atomic and coherent on every core that shares them | `assumptions-of-use.adoc`
-| Required from the integrator | Supervisor and deployment data; waiver approval and timing budgets; the choice of routes that need end-to-end protection; peer rates; the build order and the build profile; operator access | `assumptions-of-use.adoc`
+| Provided by the element's maintainers | Versioned supported configuration packages: backend, synchronization and execution model, startup checks, sizing, supported contexts, build settings, dependency scope, evidence and limitations | <<claims>>; `platform.adoc`; `+aou~seooc-target-environment~4+`
+| Required from each platform backend | The platform's rules | `platform.adoc`; `+aou~seooc-integrator-platform~4+`
+| Required from the OS and hardware | Address-space isolation, or on an MCU the stated partition boundary, threads, wait and wake, a monotonic clock, a wall clock, 32-bit atomics with compare-and-swap, atomic and coherent on every core that shares them | `assumptions-of-use.adoc`
+| Required from the integrator | Supervisor and deployment data; waiver approval; the selection of a supported configuration and the item's timing budgets; the choice of routes that need end-to-end protection; peer rates; the build order and the build profile; operator access | `assumptions-of-use.adoc`
 |===
 
 == Verification methods
@@ -140,7 +159,7 @@ The lane names are `linux-stable`, `linux-1.88`, `macos-stable`, `miri-sb`, `mir
 
 *The shipped profile.* Evidence lanes (heap windows, fault injection and the panic-link gate) run the ASIL profile: `panic = "abort"` and `overflow-checks = true`. Contract suites that rely on catching a panic run on an unwinding test profile, for diagnosis only, and their evidence counts only as part of an item's evidence.
 
-*macOS* is a development target with no safety claim. Its lanes are pthread evidence: they catch lazy first-use allocation that Linux futexes hide.
+*macOS* has functional support, and, like every profile today, no configuration that claims assurance. Its lanes are pthread evidence: they catch lazy first-use allocation that Linux futexes hide.
 
 An item is verified only when each method it lists has evidence for the paths it names. A test that passes on another path is not evidence.
 
