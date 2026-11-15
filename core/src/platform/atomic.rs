@@ -11,7 +11,8 @@
  * SPDX-License-Identifier: Apache-2.0
  ********************************************************************************/
 
-//! Native-width atomic access boundary. Full generator, peer and RPC records
+//! Native-width atomic access boundary. Host generators use independent native
+//! 64-bit words where available. Other generator profiles, peer and RPC records
 //! use the private scoped metadata operations, not an emulated wide atomic.
 //! Loads, stores and read-modify-writes on the remaining narrow words use these
 //! types. The explicit experimental model is selected by platform::exclusion.
@@ -21,3 +22,6 @@
 pub(crate) use core::sync::atomic::{
     compiler_fence, fence, AtomicBool, AtomicI32, AtomicPtr, AtomicU32, AtomicU8, AtomicUsize, Ordering,
 };
+
+#[cfg(all(up_rust_native32_model = "host", target_has_atomic = "64"))]
+pub(crate) use core::sync::atomic::AtomicU64;

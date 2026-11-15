@@ -1,15 +1,41 @@
 # Experimental core platform selection
 
-On this experimental branch, ordinary Linux and macOS Cargo builds select the
-existing host metadata implementation automatically. No custom Rust flags are
-required. This remains a no_std core: selecting host does not add a dependency
+On this experimental branch, Linux and macOS Cargo builds select the host
+execution model automatically. The Linux x86-64 deadline backend additionally
+requires the explicit compiler target profile below. This remains a no_std core:
+selecting host does not add a dependency
 on std, alloc, up-rust-std or up-rust-alloc.
 
-The host implementation uses an AtomicBool spinlock for private metadata access.
-It can wait indefinitely if a holder is delayed. Automatic selection changes
-build configuration only; it does not satisfy the production no-wait/progress
-requirement, establish a waiting-time bound, or qualify the host implementation.
-Application callbacks cannot run inside the private protected operations.
+The host deadline record uses a reviewed lock-free wide-atomic protocol on the
+three profiles below. Reports may retry under interference; lock-free does not
+promise a bounded completion time. Host peer/RPC metadata still uses a spin gate
+and can wait indefinitely if a holder is delayed. Application callbacks cannot
+run inside the private protected operations. Neither automatic model selection
+nor the selected tests establishes a complete platform or timing qualification.
+
+| Deadline target | Compiler and capability boundary |
+| --- | --- |
+| `aarch64-apple-darwin` | Native Apple Clang build; Apple ARM64 baseline |
+| `aarch64-unknown-linux-gnu` | Native Clang build with LSE shim; setup checks Linux `HWCAP_ATOMICS` |
+| `x86_64-unknown-linux-gnu` | Native Clang build; Rust target must include `cmpxchg16b` |
+
+For Linux x86-64, select a CX16 minimum-ISA binary through normal Cargo target
+configuration, for example:
+
+```toml
+# .cargo/config.toml in the application workspace
+[target.x86_64-unknown-linux-gnu]
+rustflags = ["-C", "target-feature=+cmpxchg16b"]
+```
+
+Every CPU eligible to run that binary must support CX16 for its lifetime,
+including migration and hotplug. The local CPUID check is a sanity check; it
+does not certify the other CPUs. A generic x86-64 build without the selected
+feature is refused. There is no hidden lock fallback. The checked compiler
+profiles are Apple Clang 17, Linux x86-64 Clang 19 and Linux ARM64 Clang 18;
+the build also requires `ar`. Cross-compiling the C shim is not implemented.
+See [the source proof](docs/pal-deadline-safety.md) for exact ABI and progress
+scope. Other target combinations have no qualification from these results.
 
 Bare-metal builds retain explicit selection of one supplied SDK-owned image:
 

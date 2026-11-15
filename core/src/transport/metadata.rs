@@ -10,7 +10,10 @@ use super::rpc::{
     phase, with_phase, ARMED, DELIVERING, FREE, PEER_LOST, PEER_RESTARTED, RESERVED, TIMED_OUT,
 };
 use crate::memory::{StartupError, StartupMemory};
+#[cfg(all(up_rust_native32_model = "host", target_has_atomic = "64"))]
+use crate::platform::atomic::{AtomicU64, Ordering};
 use crate::platform::exclusion::Exclusion;
+use crate::platform::progress::ProgressBackend;
 use core::cell::UnsafeCell;
 
 mod deadline;
@@ -47,7 +50,7 @@ impl<T> Leaf<T> {
     /// or execution-context handoff; ordinary application code cannot call this
     /// private helper or obtain its guard. Host tests deliberately exercise stalls.
     unsafe fn apply<R>(&self, f: impl FnOnce(&mut T) -> R) -> R {
-        let _guard = self.gate.enter();
+        let _guard = ProgressBackend::enter(&self.gate);
         // SAFETY: UnsafeCell::get and reference creation require initialized,
         // aligned live T with exclusive access for the borrow. LEAF supplies
         // initialization/liveness; Exclusion::enter's documented platform model
@@ -149,6 +152,11 @@ pub fn __native32_records_control(memory: &StartupMemory) -> Result<u32, Startup
 }
 
 pub(super) struct Generator {
+    #[cfg(all(up_rust_native32_model = "host", target_has_atomic = "64"))]
+    sequence: AtomicU64,
+    #[cfg(all(up_rust_native32_model = "host", target_has_atomic = "64"))]
+    millis: AtomicU64,
+    #[cfg(not(all(up_rust_native32_model = "host", target_has_atomic = "64")))]
     data: Leaf<(u64, u64)>,
 }
 impl core::fmt::Debug for Generator {
@@ -159,10 +167,30 @@ impl core::fmt::Debug for Generator {
 impl Generator {
     pub(super) const fn new(sequence: u64, millis: u64) -> Self {
         Self {
+            #[cfg(all(up_rust_native32_model = "host", target_has_atomic = "64"))]
+            sequence: AtomicU64::new(sequence),
+            #[cfg(all(up_rust_native32_model = "host", target_has_atomic = "64"))]
+            millis: AtomicU64::new(millis),
+            #[cfg(not(all(up_rust_native32_model = "host", target_has_atomic = "64")))]
             data: Leaf::new((sequence, millis)),
         }
     }
     pub(super) fn clock(&self, sampled: Option<u64>) -> u64 {
+        #[cfg(all(up_rust_native32_model = "host", target_has_atomic = "64"))]
+        {
+            // clock and advance were already separate metadata operations.
+            // SeqCst retains one order across both words without an owned gate.
+            // A successful sample returns that sample, even if another caller
+            // updates the fallback before this call returns. Rollback is valid.
+            match sampled {
+                Some(millis) => {
+                    self.millis.store(millis, Ordering::SeqCst);
+                    millis
+                }
+                None => self.millis.load(Ordering::SeqCst),
+            }
+        }
+        #[cfg(not(all(up_rust_native32_model = "host", target_has_atomic = "64")))]
         // SAFETY: this nested closure uses only initialized scalar/Copy metadata,
         // bounds-safe slice iteration and crate-controlled phase helpers; no
         // callback, nested leaf, destructor, reference escape or handoff occurs.
@@ -176,6 +204,13 @@ impl Generator {
         }
     }
     pub(super) fn advance(&self, amount: u64) -> u64 {
+        #[cfg(all(up_rust_native32_model = "host", target_has_atomic = "64"))]
+        {
+            // fetch_add returns the prior value and wraps exactly like the
+            // original scalar transition; no caller retains exclusive access.
+            self.sequence.fetch_add(amount, Ordering::SeqCst)
+        }
+        #[cfg(not(all(up_rust_native32_model = "host", target_has_atomic = "64")))]
         // SAFETY: this nested closure uses only initialized scalar/Copy metadata,
         // bounds-safe slice iteration and crate-controlled phase helpers; no
         // callback, nested leaf, destructor, reference escape or handoff occurs.
@@ -958,5 +993,54 @@ mod scoped_exclusion_tests {
         assert!(!call.fail_due(u64::MAX));
         assert!(!call.fail_all());
         assert_eq!(phase(call.snapshot().state), DELIVERING);
+    }
+}
+
+#[cfg(all(test, up_rust_native32_model = "host", target_has_atomic = "64"))]
+mod generator_atomic_tests {
+    extern crate std;
+
+    use super::Generator;
+    use std::sync::Barrier;
+    use std::thread;
+
+    // This is a contention/semantic control, not heap instrumentation: test
+    // threads allocate outside Generator. No allocation claim follows from it.
+    // Partial req~ssr-ids-unique~2 evidence: counter credits only; UUID
+    // collision bounds and platform clock qualification are outside this test.
+    #[test]
+    fn concurrent_generator_keeps_sequence_credits_and_whole_clock_samples() {
+        const PER_THREAD: usize = 1024;
+        const SEED: u64 = u64::MAX - 511;
+        const SAMPLES: [u64; 4] = [
+            0xffff_ffff_0000_0000,
+            0x0000_0000_ffff_ffff,
+            0xaaaa_aaaa_5555_5555,
+            0x5555_5555_aaaa_aaaa,
+        ];
+        let generator = Generator::new(SEED, 0);
+        let start = Barrier::new(SAMPLES.len());
+        let mut credits = thread::scope(|scope| {
+            let handles = SAMPLES.map(|sample| {
+                let generator = &generator;
+                let start = &start;
+                scope.spawn(move || {
+                    let mut credits = [0; PER_THREAD];
+                    start.wait();
+                    for credit in &mut credits {
+                        assert_eq!(generator.clock(Some(sample)), sample);
+                        assert!(SAMPLES.contains(&generator.clock(None)));
+                        *credit = generator.advance(1).wrapping_sub(SEED);
+                    }
+                    credits
+                })
+            });
+            handles.map(|handle| handle.join().expect("generator worker failed"))
+        });
+        credits.as_flattened_mut().sort_unstable();
+        for (expected, &credit) in credits.as_flattened().iter().enumerate() {
+            assert_eq!(credit, expected as u64);
+        }
+        assert_eq!(generator.advance(0), SEED.wrapping_add(4096));
     }
 }

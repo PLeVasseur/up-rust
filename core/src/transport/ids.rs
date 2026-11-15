@@ -14,8 +14,8 @@
 //! Message IDs without a thread-local RNG, the heap or a panic path.
 //!
 //! One generator per route, seeded once from init-only entropy, then advanced by
-//! a counter under private metadata exclusion, mixed with SplitMix64. Time comes from the runtime wall
-//! clock. IDs are unique, not secret (design 2.2.2).
+//! a counter through private metadata operations, mixed with SplitMix64. Time
+//! comes from the runtime wall clock. IDs are unique, not secret (design 2.2.2).
 
 #[cfg(test)]
 use crate::test_support::FixtureResult as _;
@@ -47,10 +47,10 @@ impl IdGenerator {
 
     pub(crate) fn next_id(&self, platform: &dyn Platform) -> Option<UUID> {
         const GOLDEN: u64 = 0x9E37_79B9_7F4A_7C15;
-        // The callback precedes exclusion and can reenter the same route.
+        // The callback precedes metadata access and can reenter the same route.
         let sampled = platform.unix_time_ms();
         let millis = self.metadata.clock(sampled);
-        // Intentionally a second region: preserve the existing interleaving.
+        // Intentionally a separate operation: preserve the existing interleaving.
         let counter = self.metadata.advance(GOLDEN);
         let mix = |mut z: u64| {
             z = (z ^ (z >> 30)).wrapping_mul(0xBF58_476D_1CE4_E5B9);

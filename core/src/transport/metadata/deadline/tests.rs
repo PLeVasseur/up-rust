@@ -52,7 +52,7 @@ fn full_origin_survives_low_word_alias_and_older_sample() {
 fn exact_max_and_overflow_are_distinct_and_health_is_sticky() {
     let mut monitor = monitor(0);
     // Exclusive test setup only. No shared publication or runtime reset exists.
-    monitor.state.data.get_mut().missed_gaps = u128::MAX - 1;
+    monitor.seed_for_test(u128::MAX - 1);
     let legacy = Counter::<true>::default();
     assert!(monitor.arrival_and_publish(2048, &legacy));
     let exact_max = monitor.report();
@@ -92,7 +92,7 @@ fn concurrent_reports_never_pair_a_new_origin_with_an_old_count() {
     extern crate std;
     let mut monitor = monitor(0);
     let seed = (1_u128 << 32) - 1;
-    monitor.state.data.get_mut().missed_gaps = seed;
+    monitor.seed_for_test(seed);
     let legacy = Counter::<true>::default();
     let start = std::sync::Barrier::new(3);
     let complete = std::sync::Barrier::new(3);
@@ -172,7 +172,7 @@ fn carries_preserve_full_count_and_independent_health() {
     for bits in [32, 64, 96] {
         let mut monitor = monitor(0);
         let seed = (1_u128 << bits) - 1;
-        monitor.state.data.get_mut().missed_gaps = seed;
+        monitor.seed_for_test(seed);
         monitor.sample_missing();
         let legacy = Counter::<true>::default();
         assert!(monitor.arrival_and_publish(1025, &legacy));

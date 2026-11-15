@@ -313,7 +313,8 @@ impl PreparedTiming {
                     .map_err(timing::startup_error)?;
                 report.requested_j_ns = config.requested_j_ns;
                 let value = memory.place(ArmedDeadline {
-                    monitor: DeadlineMonitor::new(monitor_config, 0), report,
+                    monitor: DeadlineMonitor::try_new(monitor_config, 0).ok_or(
+                        StartupError::InvalidConfig("deadline PAL requires lock-free host wide atomics supported by this CPU"))?, report,
                 })?;
                 pending.push(PendingMonitor { route: *route, value })?;
             }

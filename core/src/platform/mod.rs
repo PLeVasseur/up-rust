@@ -25,6 +25,7 @@
 
 pub(crate) mod atomic;
 pub(crate) mod exclusion;
+pub(crate) mod progress;
 pub(crate) mod prepared;
 
 use crate::platform::atomic::AtomicU32;
@@ -241,3 +242,6 @@ pub(crate) fn aligned_bounds(
     let aligned_end = end.checked_add(mask).ok_or(invalid)? & !mask;
     Ok((start & !mask, end, aligned_end))
 }
+
+#[cfg(any(all(target_os = "macos", target_arch = "aarch64"), all(target_os = "linux", target_env = "gnu", any(target_arch = "x86_64", target_arch = "aarch64"))))]
+pub(crate) mod deadline_atomic128;
