@@ -3,13 +3,25 @@
 
 The key words "*MUST*", "*MUST NOT*", "*REQUIRED*", "*SHALL*", "*SHALL NOT*", "*SHOULD*", "*SHOULD NOT*", "*RECOMMENDED*", "*MAY*", and "*OPTIONAL*" in this document are to be interpreted as described in https://www.rfc-editor.org/info/bcp14[IETF BCP14 (RFC2119 & RFC8174)]
 
-Conventions, tags and status words: xref:../README.adoc[the safety area's README]. Scope and element boundary: xref:README.adoc[the SEooC's README].
+Conventions, tags and status words: xref:../README.adoc[the safety area's README].
+Scope and element boundary: xref:README.adoc[the SEooC's README].
 
 == Work per call is bounded by setup data
 
 [.specitem,oft-sid="req~ssr-bound-work~2",oft-title="Work per call is bounded by setup data",oft-needs="impl,utest",oft-tags="SafetyUpRustCore"]
 --
-Each runtime operation *MUST* examine at most a number of frames, slots and loop iterations fixed by setup data: route depth, slot count and table capacity. However much a peer sends, it cannot make one call run longer than that bound. No documented use requires repeating an operation until a peer stops sending. The documented drain makes at most a number of calls set by setup data. Frames still queued after it stay with the transport, under the route's policy. Lock-free retry loops depend only on other threads' progress, never on a peer's data.
+*The bound.*
+Each runtime operation *MUST* examine at most a number of frames, slots and loop iterations fixed by setup data: route depth, slot count and table capacity.
+However much a peer sends, it cannot make one call run longer than that bound.
+
+*Documented use.*
+
+* No documented use requires repeating an operation until a peer stops sending.
+* The documented drain makes at most a number of calls set by setup data.
+* Frames still queued after it stay with the transport, under the route's policy.
+
+*Lock-free retries.*
+Lock-free retry loops depend only on other threads' progress, never on a peer's data.
 --
 
 [horizontal]
@@ -19,29 +31,128 @@ Verification:: fault-injection (a flood on every receive kind, through the docum
 Status:: Draft
 ISO 26262:: 6-Annex D.2.2, 6-7.4.13 (part-clause numbers only)
 
-*Rationale.* Bounding one call is insufficient if the documented service loop repeats forever while a peer supplies more work. The bound is on the work a call does, counted in frames, slots and iterations; it is not a bound on time. Lock-free progress is progress of the system, not a completion bound for each caller; bounded work is not a worst-case execution time, and a worst-case execution time while running is not a scheduled response time. Those are timing claims of a supported configuration (`+req~ssr-bound-wait~2+`).
+*Rationale.*
+Bounding one call is insufficient if the documented service loop repeats forever while a peer supplies more work.
+
+The bound is on the work a call does, counted in frames, slots and iterations.
+It is not a bound on time:
+
+* Lock-free progress is progress of the system, not a completion bound for each caller.
+* Bounded work is not a worst-case execution time.
+* A worst-case execution time while running is not a scheduled response time.
+
+Those are timing claims of a supported configuration (`+req~ssr-bound-wait~2+`).
 
 == Every wait is bounded
 
 [.specitem,oft-sid="req~ssr-bound-wait~2",oft-title="Every bounded wait has a logical deadline",oft-needs="impl,utest",oft-tags="SafetyUpRustCore"]
 --
-A runtime operation *MUST NOT* block without a bound, except in a deliberate idle wait that the transport's documented contract supports while no bounded operation, timeout or deadline check is due. Such an idle wait *MUST* use a wake protocol that cannot lose the wake that makes work due, and *MUST NOT* stand in for a bounded operation or hide unbounded internal work. Every other wait *MUST* take a finite logical deadline and *MUST NOT* intentionally wait beyond it. It *MUST* return on a wake, on its deadline, or when the peer it waits for has died, and after a spurious wake, an interruption or a late resumption it *MUST* recheck the authoritative state and the time before it waits again or returns. The one exception to a finite logical deadline is pending cleanup, as `+req~ssr-release-lease-drop~3+` defines and isolates it: an admitted release that has already been handed off may wait, for the dependency that its admitted policy names, without a finite completion deadline. The exception covers no wait that an operation, a progress step, a drop or a hand-off performs itself, such as a blocking allocation, a decode, a provider, binding or callback call, a completion or an overflow wait; no worker loop; and no lock or other primitive shared with another process (`+req~ssr-bound-no-cross-process-lock~1+`). No bounded operation, deadline, expiry or health observation waits for pending cleanup. A deadline that passes while the operation is still pending makes its documented terminal outcome due: the operation exposes that outcome when it next runs, and accepts no completion whose acceptance event falls after the deadline on the clock the deadline uses. Neither that outcome nor a committed one waits for the release of what the operation owned, which may stay pending as cleanup. A result that the operation committed at its acceptance event before the deadline stands: observing it later, because the caller was descheduled, never turns it into expiry or overwrites it. Each operation's contract states its acceptance event and its clock: a wait's timeout and a setup bound are compared with the platform's monotonic clock, and the acceptance event is the observation of the awaited state; an RPC call's TTL is compared in wall time from the request's creation (`+req~ssr-qos-ttl~4+`), and the acceptance event is the element's completion of the call with a response that its wire check accepted (`+req~ssr-rpc-check-at-arrival~2+`). This holds for every logical deadline in the element, a wait's timeout, an RPC call's TTL and a setup bound alike: the deadline decides the outcome, not when a descheduled caller observes it. A finite bound on when the caller physically resumes, or on when a callback or reaction runs, is a separate timing claim, made only under a supported configuration whose timing analysis establishes it. A QoS wait on overflow *MUST* be bounded by its declared limit; it *MUST* be refused at setup where a binding cannot bound it, and on every carrier egress. Idle waiters *MUST NOT* wake each other.
+*No unbounded blocking.*
+A runtime operation *MUST NOT* block without a bound, except in a deliberate idle wait that the transport's documented contract supports while no bounded operation, timeout or deadline check is due.
+
+*The idle wait.*
+Such an idle wait:
+
+* *MUST* use a wake protocol that cannot lose the wake that makes work due;
+* *MUST NOT* stand in for a bounded operation or hide unbounded internal work.
+
+*Every other wait.*
+Every other wait:
+
+* *MUST* take a finite logical deadline and *MUST NOT* intentionally wait beyond it;
+* *MUST* return on a wake, on its deadline, or when the peer it waits for has died;
+* after a spurious wake, an interruption or a late resumption, *MUST* recheck the authoritative state and the time before it waits again or returns.
+
+*The one exception: pending cleanup.*
+The one exception to a finite logical deadline is pending cleanup, as `+req~ssr-release-lease-drop~3+` defines and isolates it.
+An admitted release that has already been handed off may wait, for the dependency that its admitted policy names, without a finite completion deadline.
+
+The exception covers none of the following:
+
+* a wait that an operation, a progress step, a drop or a hand-off performs itself, such as a blocking allocation, a decode, a provider, binding or callback call, a completion or an overflow wait;
+* a worker loop;
+* a lock or other primitive shared with another process (`+req~ssr-bound-no-cross-process-lock~1+`).
+
+No bounded operation, deadline, expiry or health observation waits for pending cleanup.
+
+*What a deadline decides.*
+A deadline that passes while the operation is still pending makes its documented terminal outcome due:
+
+* The operation exposes that outcome when it next runs.
+* The operation accepts no completion whose acceptance event falls after the deadline on the clock the deadline uses.
+* Neither that outcome nor a committed one waits for the release of what the operation owned, which may stay pending as cleanup.
+
+A result that the operation committed at its acceptance event before the deadline stands.
+Observing it later, because the caller was descheduled, never turns it into expiry or overwrites it.
+
+*Acceptance event and clock.*
+Each operation's contract states its acceptance event and its clock:
+
+* A wait's timeout and a setup bound are compared with the platform's monotonic clock.
+The acceptance event is the observation of the awaited state.
+* An RPC call's TTL is compared in wall time from the request's creation (`+req~ssr-qos-ttl~4+`).
+The acceptance event is the element's completion of the call with a response that its wire check accepted (`+req~ssr-rpc-check-at-arrival~2+`).
+
+This holds for every logical deadline in the element, a wait's timeout, an RPC call's TTL and a setup bound alike: the deadline decides the outcome, not when a descheduled caller observes it.
+
+*Physical timing is a separate claim.*
+A finite bound on when the caller physically resumes, or on when a callback or reaction runs, is a separate timing claim.
+It is made only under a supported configuration whose timing analysis establishes it.
+
+*QoS wait on overflow.*
+A QoS wait on overflow *MUST* be bounded by its declared limit.
+It *MUST* be refused at setup where a binding cannot bound it, and on every carrier egress.
+
+*Idle waiters.*
+Idle waiters *MUST NOT* wake each other.
 --
 
 [horizontal]
 ASIL:: B
 Allocated to:: the element
-Verification:: test (several idle waiters; a spurious and an interrupted return that recheck state and time; a deadline that passes while the caller is not running, reported as its outcome; a result committed before the deadline and observed after it, kept; a completion first offered after the deadline, refused, with the expiry reported; an idle wait woken by the arrival that makes work due; an operation whose deadline passes while the release of what it ended is pending, reporting its outcome without waiting for that release), heap-window (the failure path of a QoS wait), fault-injection (a peer killed while a sender waits)
+Verification:: test, heap-window, fault-injection
+* *test*
+** Several idle waiters.
+** A spurious and an interrupted return that recheck state and time.
+** A deadline that passes while the caller is not running, reported as its outcome.
+** A result committed before the deadline and observed after it, kept.
+** A completion first offered after the deadline, refused, with the expiry reported.
+** An idle wait woken by the arrival that makes work due.
+** An operation whose deadline passes while the release of what it ended is pending, reporting its outcome without waiting for that release.
+* *heap-window*: the failure path of a QoS wait.
+* *fault-injection*: a peer killed while a sender waits.
 Status:: Draft
 ISO 26262:: 6-Annex D.2.2 (part-clause numbers only)
 
-*Rationale.* A survivor that waited without a bound for a peer that has died would never return, so one failed process would stop those that stayed up (`+req~ssr-peer-failure-normal~2+`). A QoS wait gives up after its declared timeout and reports failure (`+Overflow::Wait+` in `+core/src/transport/qos.rs+`). A carrier egress refuses it at setup, because the carrier's worker would be the one waiting (`+core/src/transport/carrier.rs+`). A route with nothing to report stays quiet, since a service tick that woke waiters regardless would make idle waiters wake each other for ever (`+TransportRuntime::service+` in `+core/src/transport/mode.rs+`). A timeout is logical: correct code can resume after it if the OS stopped the process, a virtual machine was paused or a higher-priority task did not yield, so the statement bounds what the element waits for and how it recovers, and leaves a physical return bound to a configuration that can establish one. An idle wait with nothing due needs no timeout, provided the wake that makes work due cannot be lost. A release that waits behind an allocator's or an underlying transport's own lock cannot observe a deadline from inside that call, and running it on another thread does not make it deadline-aware. So no operation waits for it, it is kept apart from everything this item bounds, and what it owns stays charged until it completes, instead of being given a completion deadline that it cannot keep (`+req~ssr-release-lease-drop~3+`).
+*Rationale.*
+A survivor that waited without a bound for a peer that has died would never return.
+One failed process would then stop those that stayed up (`+req~ssr-peer-failure-normal~2+`).
+
+_Waits that are bounded._
+
+* A QoS wait gives up after its declared timeout and reports failure.
+* A carrier egress refuses a QoS wait at setup, because the carrier's worker would be the one waiting.
+* A route with nothing to report stays quiet.
+A service tick that woke waiters regardless would make idle waiters wake each other for ever.
+
+_Logical, not physical._
+A timeout is logical.
+Correct code can resume after it if the OS stopped the process, a virtual machine was paused or a higher-priority task did not yield.
+So the statement bounds what the element waits for and how it recovers, and leaves a physical return bound to a configuration that can establish one.
+An idle wait with nothing due needs no timeout, provided the wake that makes work due cannot be lost.
+
+_Why pending cleanup has no deadline._
+A release that waits behind an allocator's or an underlying transport's own lock cannot observe a deadline from inside that call.
+Running it on another thread does not make it deadline-aware.
+So no operation waits for it, and it is kept apart from everything this item bounds.
+What it owns stays charged until it completes, instead of being given a completion deadline that it cannot keep (`+req~ssr-release-lease-drop~3+`).
 
 == No lock shared with another process
 
 [.specitem,oft-sid="req~ssr-bound-no-cross-process-lock~1",oft-title="No lock shared with another process",oft-needs="impl,utest",oft-tags="SafetyUpRustCore"]
 --
-Element code *MUST NOT* take a lock or other blocking primitive shared with another process, and a runtime operation *MUST NOT* need another process to make progress in order to return.
+* Element code *MUST NOT* take a lock or other blocking primitive shared with another process.
+* A runtime operation *MUST NOT* need another process to make progress in order to return.
 --
 
 [horizontal]
@@ -50,4 +161,9 @@ Allocated to:: the element
 Verification:: review (an inventory of synchronization primitives), fault-injection (a peer killed at arbitrary points never hangs a survivor)
 Status:: Draft
 
-*Rationale.* A process can die at any instruction (`+req~ssr-peer-failure-normal~2+`), so a lock it shares can be left held, with the state it guards half changed and no process left to finish the change. Eclipse S-CORE's LoLa middleware gave up an inter-process mutex for this reason: its error handling grew too complex when a process died while holding it (https://github.com/eclipse-score/communication/blob/f5e8f2c8a9247b025b1d425af399588e0264698a/score/mw/com/impl/bindings/lola/dependability/partial_restart/README.md[LoLa's partial-restart notes]). In the code, the Linux backend's waits are private to the process: it uses no shared-memory futex and no robust list (`+core/src/platform/linux.rs+`).
+*Rationale.*
+A process can die at any instruction (`+req~ssr-peer-failure-normal~2+`).
+A lock it shares can then be left held, with the state it guards half changed and no process left to finish the change.
+
+Eclipse S-CORE's LoLa middleware gave up an inter-process mutex for this reason: its error handling grew too complex when a process died while holding it (https://github.com/eclipse-score/communication/blob/f5e8f2c8a9247b025b1d425af399588e0264698a/score/mw/com/impl/bindings/lola/dependability/partial_restart/README.md[LoLa's partial-restart notes]).
+Waits that stay private to one process cannot be left in that state by another process's death.

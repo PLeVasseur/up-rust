@@ -3,13 +3,16 @@
 
 The key words "*MUST*", "*MUST NOT*", "*REQUIRED*", "*SHALL*", "*SHALL NOT*", "*SHOULD*", "*SHOULD NOT*", "*RECOMMENDED*", "*MAY*", and "*OPTIONAL*" in this document are to be interpreted as described in https://www.rfc-editor.org/info/bcp14[IETF BCP14 (RFC2119 & RFC8174)]
 
-Conventions, tags and status words: xref:../README.adoc[the safety area's README]. Scope and element boundary: xref:README.adoc[the SEooC's README].
+Conventions, tags and status words: xref:../README.adoc[the safety area's README].
+Scope and element boundary: xref:README.adoc[the SEooC's README].
 
 == Middleware heap needs a named waiver
 
 [.specitem,oft-sid="req~ssr-waiver-required~1",oft-title="Middleware heap needs a named waiver",oft-needs="impl,utest",oft-tags="SafetyUpRustCore"]
 --
-A transport with a route whose prepared heap class is allocation inside middleware *MUST* enter runtime mode only when a named waiver matches each permit its binding declares. Otherwise the transition *MUST* be refused, naming the transport, the route and the permit.
+A transport with a route whose prepared heap class is allocation inside middleware *MUST* enter runtime mode only when a named waiver matches each permit its binding declares.
+
+Otherwise the transition *MUST* be refused, naming the transport, the route and the permit.
 --
 
 [horizontal]
@@ -18,13 +21,23 @@ Allocated to:: the element
 Verification:: test (refused without the waiver, admitted with it)
 Status:: Draft
 
-*Rationale.* Allocation inside middleware is outside the element's control, so it enters runtime mode only as a deployment's explicit, recorded decision (`+req~ssr-waiver-record~1+`). The transition refuses a missing waiver with `+StartupError::MiddlewareHeapNeedsWaiver+`, which names the route and the permit (`+core/src/transport/error.rs+`).
+*Rationale.*
+Allocation inside middleware is outside the element's control.
+So it enters runtime mode only as a deployment's explicit, recorded decision (`+req~ssr-waiver-record~1+`).
+
+A refusal that names the transport, the route and the permit tells the deployment which decision is missing.
 
 == A waiver covers middleware and nothing else
 
 [.specitem,oft-sid="req~ssr-waiver-scope~1",oft-title="A waiver covers middleware and nothing else",oft-needs="impl,utest",oft-tags="SafetyUpRustCore"]
 --
-A waiver *MUST* admit allocation inside middleware only, for the operations and the bound its permit names. It *MUST NOT* admit allocation in SDK, binding or wire code, a wire that declares allocation, or a panic.
+A waiver *MUST* admit allocation inside middleware only, for the operations and the bound its permit names.
+
+It *MUST NOT* admit:
+
+* allocation in SDK, binding or wire code;
+* a wire that declares allocation;
+* a panic.
 --
 
 [horizontal]
@@ -33,13 +46,28 @@ Allocated to:: the element
 Verification:: test (a wire that declares allocation on a native route is refused even with a waiver), review
 Status:: Draft
 
-*Rationale.* The element can answer only for its own code, so a waiver covers only what middleware does inside itself, for the operations and the bound its permit states (`+core/src/transport/waiver.rs+`). A known anomaly in middleware, such as a panic it can reach, is a defect and is never filed as a waiver. Declared allocation on a serialized or owned route is admitted by that route's heap class (`+req~ssr-heap-declared~2+`), not by a waiver, so a waiver cannot carry native work into allocation, and a serialized route's permission is never a waiver for anything else.
+*Rationale.*
+The element can answer only for its own code.
+So a waiver covers only what middleware does inside itself, for the operations and the bound its permit states.
+
+A known anomaly in middleware, such as a panic it can reach, is a defect and is never filed as a waiver.
+
+Declared allocation on a serialized or owned route is admitted by that route's heap class (`+req~ssr-heap-declared~2+`), not by a waiver.
+So a waiver cannot carry native work into allocation, and a serialized route's permission is never a waiver for anything else.
 
 == Waivers are recorded and can be found
 
 [.specitem,oft-sid="req~ssr-waiver-record~1",oft-title="Waivers are recorded and can be found",oft-needs="impl,utest",oft-tags="SafetyUpRustCore"]
 --
-Each waiver *MUST* be named and scoped, be applied where it can be found in the code, be recorded at the transition, be readable in runtime mode without heap, and name an approver other than its author. Deployment data can select a waiver compiled into the program by its id, but *MUST NOT* be able to create one.
+Each waiver *MUST*:
+
+* be named and scoped;
+* be applied where it can be found in the code;
+* be recorded at the transition;
+* be readable in runtime mode without heap;
+* name an approver other than its author.
+
+Deployment data can select a waiver compiled into the program by its id, but *MUST NOT* be able to create one.
 --
 
 [horizontal]
@@ -49,4 +77,12 @@ Verification:: test (the runtime lists the waiver; a record that names its autho
 Status:: Draft
 ISO 26262:: 9-7 (part-clause numbers only)
 
-*Rationale.* A binding ships a permit that states the use it needs, and a deployment files a waiver against it, so accepting the allocation is the deployment's recorded decision (`+core/src/transport/waiver.rs+`). The split follows MISRA Compliance:2020, which keeps a deviation permit, the accepted use case, apart from the deviation record of each use (https://misra.org.uk/app/uploads/2021/06/MISRA-Compliance-2020.pdf[MISRA Compliance:2020]). Keeping waivers compiled in and selected by id lets deployment data choose among approved waivers, but never write a new one. An approver other than the author gives each waiver a second person's check.
+*Rationale.*
+A binding ships a permit that states the use it needs, and a deployment files a waiver against it.
+So accepting the allocation is the deployment's recorded decision.
+
+The split follows MISRA Compliance:2020, which keeps a deviation permit, the accepted use case, apart from the deviation record of each use (https://misra.org.uk/app/uploads/2021/06/MISRA-Compliance-2020.pdf[MISRA Compliance:2020]).
+
+Keeping waivers compiled in and selected by id lets deployment data choose among approved waivers, but never write a new one.
+
+An approver other than the author gives each waiver a second person's check.

@@ -3,38 +3,88 @@
 
 The key words "*MUST*", "*MUST NOT*", "*REQUIRED*", "*SHALL*", "*SHALL NOT*", "*SHOULD*", "*SHOULD NOT*", "*RECOMMENDED*", "*MAY*", and "*OPTIONAL*" in this document are to be interpreted as described in https://www.rfc-editor.org/info/bcp14[IETF BCP14 (RFC2119 & RFC8174)]
 
-Conventions, tags and status words: xref:../README.adoc[the safety area's README]. Scope and element boundary: xref:README.adoc[the SEooC's README].
+Conventions, tags and status words: xref:../README.adoc[the safety area's README].
+Scope and element boundary: xref:README.adoc[the SEooC's README].
 
-Allocated to the E2E wire, `up-wire-e2e` (tag `SafetyE2eWire`), except where an item says otherwise: core's error variant and route counter are the element's. Using the wire is the integrator's choice (`+aou~seooc-e2e-protection~7+`).
+Allocated to the E2E wire, `up-wire-e2e` (tag `SafetyE2eWire`), except where an item says otherwise: core's error variant and route counter are the element's.
+Using the wire is the integrator's choice (`+aou~seooc-e2e-protection~7+`).
 
-*Deferred.* The E2E wire is not part of the current delivery. Its fourteen items below keep their IDs and revisions: the deferral implements, passes and withdraws none of them, gives them no gate or coverage credit, and no item outside this file depends on them for a current obligation. Their text is as written, except that `+req~ssr-e2e-resync~4+` and `+req~ssr-e2e-sender-state~2+` now cite revision 7 of the integrator's assumption of use. That revision keeps every duty it states for a route on this wire and confines those duties to such a route, so the citation changes neither item's meaning nor its deferred status. A system that needs end-to-end protection now supplies and justifies its own, as `+aou~seooc-e2e-protection~7+` requires.
+*Deferred.*
+The E2E wire is not part of the current delivery.
+Its fourteen items below keep their IDs and revisions:
 
-The restart design is the full version, with both sender kinds. Text marked *(b)* is what that design brought in, and holds.
+* the deferral implements, passes and withdraws none of them;
+* it gives them no gate or coverage credit;
+* no item outside this file depends on them for a current obligation.
 
-An RPC route's responses are protected as AUTOSAR's E2E client-server profiles protect theirs: the server answers with the request's own counter, the client accepts only an exact match, and the message type, the result and the caller's identity are all protected (`+req~ssr-e2e-rpc-echo~1+`).
+Their statements are as written, apart from layout, except that `+req~ssr-e2e-resync~4+` and `+req~ssr-e2e-sender-state~2+` now cite revision 7 of the integrator's assumption of use.
+That revision keeps every duty it states for a route on this wire and confines those duties to such a route, so the citation changes neither item's meaning nor its deferred status.
+A system that needs end-to-end protection now supplies and justifies its own, as `+aou~seooc-e2e-protection~7+` requires.
 
-A request the wire refuses is answered, final or advisory, except a corrupt one (`+req~ssr-e2e-refusal-answered~1+`), and a sliding window judges each reference's counters (`+req~ssr-e2e-replay-window~1+`). The deadline check at setup was retired; its duty is in `+aou~seooc-e2e-protection~7+`. The in-place variant's requirements are added when its design is recorded.
+*Design notes.*
+
+* The restart design is the full version, with both sender kinds.
+Text marked *(b)* is what that design brought in, and holds.
+* An RPC route's responses are protected as AUTOSAR's E2E client-server profiles protect theirs: the server answers with the request's own counter, the client accepts only an exact match, and the message type, the result and the caller's identity are all protected (`+req~ssr-e2e-rpc-echo~1+`).
+* A request the wire refuses is answered, final or advisory, except a corrupt one (`+req~ssr-e2e-refusal-answered~1+`), and a sliding window judges each reference's counters (`+req~ssr-e2e-replay-window~1+`).
+* The deadline check at setup was retired; its duty is in `+aou~seooc-e2e-protection~7+`.
+* The in-place variant's requirements are added when its design is recorded.
 
 == The E2E wire wraps any wire and leaves its bytes alone
 
 [.specitem,oft-sid="req~ssr-e2e-wraps-any-wire~4",oft-title="The E2E wire wraps any wire and leaves its bytes alone",oft-needs="impl,utest",oft-tags="SafetyE2eWire"]
 --
-`+E2e<W>+` *MUST* wrap any wire `+W+` for the same message type. It adds a header, *(b)* 32 bytes on a topic and 48 on an RPC route, in the formats of `+req~ssr-e2e-header-format~3+`. The header carries a data ID, a counter, *(b)* its sender's incarnation, the frame's length, and a CRC over every other header field and the inner payload; a method header also carries the fields that `+req~ssr-e2e-header-format~3+` adds. It leaves the inner wire's encoded bytes unchanged. It states its own wire identity, and its own payload encoding from the private-use range. Its maximum encoded length includes the header, and it is exact when the inner wire is. It adds no heap use of its own, and states the inner wire's heap claim for each direction. It passes the sequenced wire contract, and the inner wire passes the ordinary wire contract on its own (`+req~ssr-wire-heap-claim-tested~2+`).
+`+E2e<W>+` *MUST* wrap any wire `+W+` for the same message type.
+
+*The header.*
+It adds a header, *(b)* 32 bytes on a topic and 48 on an RPC route, in the formats of `+req~ssr-e2e-header-format~3+`.
+The header carries a data ID, a counter, *(b)* its sender's incarnation, the frame's length, and a CRC over every other header field and the inner payload.
+A method header also carries the fields that `+req~ssr-e2e-header-format~3+` adds.
+
+*The inner wire.*
+It leaves the inner wire's encoded bytes unchanged.
+
+*What it states about itself.*
+
+* It states its own wire identity, and its own payload encoding from the private-use range.
+* Its maximum encoded length includes the header, and it is exact when the inner wire is.
+* It adds no heap use of its own, and states the inner wire's heap claim for each direction.
+
+*Contracts.*
+It passes the sequenced wire contract, and the inner wire passes the ordinary wire contract on its own (`+req~ssr-wire-heap-claim-tested~2+`).
 --
 
 [horizontal]
 ASIL:: B
 Allocated to:: the E2E wire
-Verification:: test (the sequenced wire contract on `+E2e<Xcdr2>+` and on `+E2e+` over a test wire; a control that `+assert_wire_contract+` still refuses the E2E wire, with its existing message; a byte comparison showing the inner encoding unchanged inside the frame; the `+WireInfo+` fields, which are the identity, the payload encoding, the maximum encoded length and its exactness; `+Xcdr2+` and the test wire passing `+assert_wire_contract+`), heap-window
+Verification:: test, heap-window
+* *test*
+** The sequenced wire contract on the E2E wire over the XCDR2 wire and over a test wire.
+** A control that the ordinary wire contract suite still refuses the E2E wire, with its existing message.
+** A byte comparison showing the inner encoding unchanged inside the frame.
+** The wire's stated identity, payload encoding, maximum encoded length and its exactness.
+** The XCDR2 wire and the test wire passing the ordinary wire contract suite.
 Status:: Draft
 
-*Rationale.* Wrapping preserves the inner wire as a separate choice, and the wrapper can claim only the heap behavior and size guarantees that the combined encoding supports.
+*Rationale.*
+Wrapping preserves the inner wire as a separate choice, and the wrapper can claim only the heap behavior and size guarantees that the combined encoding supports.
 
 == The E2E header has one documented format
 
 [.specitem,oft-sid="req~ssr-e2e-header-format~3",oft-title="The E2E header has one documented format",oft-needs="impl,utest",oft-tags="SafetyE2eWire"]
 --
-The E2E wire's headers *MUST* have two fixed formats, each with a 64-bit CRC, documented with the crate: a 32-byte data header for topics, and a 48-byte method header for RPC routes, which adds a Source ID, a message type, a result and a status, as AUTOSAR's method profiles carry them. The record covers the field order, the field sizes and the byte order; the values of the method header's fields, a refusal answer's results and kinds among them; the CRC's polynomial, initial value, reflection and final XOR; known-answer vectors for each header and the CRC; and the CRC's Hamming distance at the largest frame the wire admits, from which an integrator works out each route's residual error rate.
+The E2E wire's headers *MUST* have two fixed formats, each with a 64-bit CRC, documented with the crate:
+
+* a 32-byte data header for topics;
+* a 48-byte method header for RPC routes, which adds a Source ID, a message type, a result and a status, as AUTOSAR's method profiles carry them.
+
+The record covers:
+
+* the field order, the field sizes and the byte order;
+* the values of the method header's fields, a refusal answer's results and kinds among them;
+* the CRC's polynomial, initial value, reflection and final XOR;
+* known-answer vectors for each header and the CRC;
+* the CRC's Hamming distance at the largest frame the wire admits, from which an integrator works out each route's residual error rate.
 --
 
 [horizontal]
@@ -43,13 +93,22 @@ Allocated to:: the E2E wire
 Verification:: test (the known-answer vectors, encoded and decoded), review (the stated Hamming distance, against the CRC's published properties)
 Status:: Draft
 
-*Rationale.* A fixed, documented header permits independent implementations to check the same protected bytes; undetected header corruption remains part of the residual error analysis.
+*Rationale.*
+A fixed, documented header permits independent implementations to check the same protected bytes.
+Undetected header corruption remains part of the residual error analysis.
 
 == The E2E wire's crate cannot be tainted
 
 [.specitem,oft-sid="req~ssr-e2e-crate-isolated~2",oft-title="The E2E wire's crate cannot be tainted",oft-needs="impl,utest",oft-tags="SafetyE2eWire"]
 --
-The E2E wire *MUST* live in its own crate: `+no_std+`, no `+alloc+`, no Cargo features, no dependency other than `+up-rust-core+`, no `+unsafe+` code, and no 64-bit atomic type.
+The E2E wire *MUST* live in its own crate:
+
+* `+no_std+`;
+* no `+alloc+`;
+* no Cargo features;
+* no dependency other than `+up-rust-core+`;
+* no `+unsafe+` code;
+* no 64-bit atomic type.
 --
 
 [horizontal]
@@ -58,38 +117,93 @@ Allocated to:: the E2E wire
 Verification:: gate (manifest; restricted sysroot; `+forbid(unsafe_code)+`; a build for `+thumbv7m-none-eabi+`)
 Status:: Draft
 
-*Rationale.* A separate wire crate keeps protection optional while maintaining the same dependency and heap restrictions as the runtime element.
+*Rationale.*
+A separate wire crate keeps protection optional while maintaining the same dependency and heap restrictions as the runtime element.
 
 == The E2E wire detects each fault
 
 [.specitem,oft-sid="req~ssr-e2e-detects~4",oft-title="The E2E wire detects each fault",oft-needs="impl,utest",oft-tags="SafetyE2eWire"]
 --
-Decoding through the E2E wire *MUST* first check each frame's header, its CRC and its data ID. A frame whose length field does not match its size, or whose CRC does not match is refused as corrupt. A frame whose data ID was not declared is refused. Neither refusal changes any state. A request's method fields are checked before its counter, and a request that fails them is refused as corrupt and changes no state. On every route but a response route, the counter is then judged, for each declared sender:
+*Header, CRC and data ID first.*
+Decoding through the E2E wire *MUST* first check each frame's header, its CRC and its data ID.
+
+* A frame whose length field does not match its size, or whose CRC does not match is refused as corrupt.
+* A frame whose data ID was not declared is refused.
+* Neither refusal changes any state.
+
+*Method fields.*
+A request's method fields are checked before its counter, and a request that fails them is refused as corrupt and changes no state.
+
+*The counter.*
+On every route but a response route, the counter is then judged, for each declared sender:
 
 * the first frame after the receiver starts is delivered, and its incarnation and counter start the reference;
-* a frame of the reference's incarnation is judged by its counter against the highest one delivered, through the window of `+req~ssr-e2e-replay-window~1+`. Each incarnation's counter starts at 0 and never wraps (`+req~ssr-e2e-sender-state~2+`). A greater counter is delivered, and the counters it skips open one gap, counted at once, so the frame that reveals a gap is delivered. A counter that has arrived is a repeat, and is refused. A smaller counter that has not arrived is delivered late on a request route, and refused as late on a topic, while it is inside the window and at or above its floor; otherwise it is refused as below the floor or out of the window. None of these frames is ever adopted;
+* a frame of the reference's incarnation is judged by its counter against the highest one delivered, through the window of `+req~ssr-e2e-replay-window~1+`.
+** Each incarnation's counter starts at 0 and never wraps (`+req~ssr-e2e-sender-state~2+`).
+** A greater counter is delivered, and the counters it skips open one gap, counted at once, so the frame that reveals a gap is delivered.
+** A counter that has arrived is a repeat, and is refused.
+** A smaller counter that has not arrived is delivered late on a request route, and refused as late on a topic, while it is inside the window and at or above its floor; otherwise it is refused as below the floor or out of the window.
+** None of these frames is ever adopted;
 * *(b)* a frame of another incarnation is judged by `+req~ssr-e2e-resync~4+`.
 
-A frame that passes these checks and then fails the inner wire's decode has advanced the reference. Each refusal names what failed, without heap and without panicking. A response is judged by `+req~ssr-e2e-rpc-echo~1+`. Which refused requests are answered, and how, is stated in `+req~ssr-e2e-refusal-answered~1+` and `+req~ssr-peer-rpc-undecodable-answered~5+`.
+*After the checks.*
+
+* A frame that passes these checks and then fails the inner wire's decode has advanced the reference.
+* Each refusal names what failed, without heap and without panicking.
+* A response is judged by `+req~ssr-e2e-rpc-echo~1+`.
+* Which refused requests are answered, and how, is stated in `+req~ssr-e2e-refusal-answered~1+` and `+req~ssr-peer-rpc-undecodable-answered~5+`.
 --
 
 [horizontal]
 ASIL:: B
 Allocated to:: the E2E wire
-Verification:: test (after a receiver restart, each declared sender's first frame is delivered; a counter that crosses 2^32^ is accepted; a loss of more than 2^31^ frames within one incarnation is delivered, and counted; a frame that reveals a gap is delivered, and its gap counted once; a repeat is refused, and named; a reordered frame inside the window is delivered late on a request route and refused as late on a topic; a frame below the floor and one more than 63 counters back are refused, and named; corruption and an undeclared data ID are refused; a request whose method fields fail is refused as corrupt; each header check refuses, and changes no state; a frame that passes and then fails the inner decode advances the reference, and a later copy of it is refused as a repeat; with the receiver's last counter at exactly `+resync_frames+`, a restart is not refused as a repeat), fault-injection (a byte corrupted between hops; a torn copy on copy route), heap-window
+Verification:: test, fault-injection, heap-window
+* *test*
+** After a receiver restart, each declared sender's first frame is delivered.
+** A counter that crosses 2^32^ is accepted.
+** A loss of more than 2^31^ frames within one incarnation is delivered, and counted.
+** A frame that reveals a gap is delivered, and its gap counted once.
+** A repeat is refused, and named.
+** A reordered frame inside the window is delivered late on a request route and refused as late on a topic.
+** A frame below the floor and one more than 63 counters back are refused, and named.
+** Corruption and an undeclared data ID are refused.
+** A request whose method fields fail is refused as corrupt.
+** Each header check refuses, and changes no state.
+** A frame that passes and then fails the inner decode advances the reference, and a later copy of it is refused as a repeat.
+** With the receiver's last counter at exactly `+resync_frames+`, a restart is not refused as a repeat.
+* *fault-injection*: a byte corrupted between hops; a torn copy on copy route.
 Status:: Draft
 ISO 26262:: 6-Annex D.2.4 (part-clause numbers only)
 
-*Rationale.* Resynchronization is `+req~ssr-e2e-resync~4+`. Checking framing and integrity before changing receiver state prevents a corrupt header from intentionally becoming a valid sequence observation; an undetected corruption remains a residual.
+*Rationale.*
+Resynchronization is `+req~ssr-e2e-resync~4+`.
+
+Checking framing and integrity before changing receiver state prevents a corrupt header from intentionally becoming a valid sequence observation.
+An undetected corruption remains a residual.
 
 == A restart resynchronizes, stale frames are refused, and no arrival order locks a sender out
 
 [.specitem,oft-sid="req~ssr-e2e-resync~4",oft-title="A restart resynchronizes, stale frames are refused, and no arrival order locks a sender out",oft-needs="impl,utest",oft-tags="SafetyE2eWire"]
 --
-*(b)* Each frame *MUST* carry its sender's incarnation. For each declared sender, the deployment data on both sides says whether its starts increase. By default, they are not declared increasing. For each declared sender, the receiver keeps the reference's incarnation and one run. For a sender declared increasing, it also keeps the newest incarnation adopted and one retired incarnation.
+*Incarnations and declarations.*
+*(b)* Each frame *MUST* carry its sender's incarnation.
 
-On a strict-mode ASIL RPC request route, the receiver *MUST* refuse every request whose incarnation is older than the newest it has adopted for that sender. Such a request never starts or extends a resynchronization run, never becomes the reference, and never moves the newest adopted incarnation backwards. This rule takes precedence over the run rule below. Each such refusal is counted by kind and answered under `+req~ssr-e2e-refusal-answered~1+`: final only with proof that this server instance never delivered that tag and never will, otherwise advisory. A request that fails the framing or integrity checks remains subject to their corrupt-request rule. A false declaration that locks a client out therefore produces counted refusal answers, not silent lockout. The clients' persistent increasing starts are an initialization declaration under `+aou~seooc-e2e-protection~7+`; the receiver's rule is runtime E2E behavior selected during initialization.
+* For each declared sender, the deployment data on both sides says whether its starts increase.
+By default, they are not declared increasing.
+* For each declared sender, the receiver keeps the reference's incarnation and one run.
+* For a sender declared increasing, it also keeps the newest incarnation adopted and one retired incarnation.
 
+*The strict older-incarnation refusal.*
+On a strict-mode ASIL RPC request route, the receiver *MUST* refuse every request whose incarnation is older than the newest it has adopted for that sender.
+
+* Such a request never starts or extends a resynchronization run, never becomes the reference, and never moves the newest adopted incarnation backwards.
+* This rule takes precedence over the run rule below.
+* Each such refusal is counted by kind and answered under `+req~ssr-e2e-refusal-answered~1+`: final only with proof that this server instance never delivered that tag and never will, otherwise advisory.
+* A request that fails the framing or integrity checks remains subject to their corrupt-request rule.
+* A false declaration that locks a client out therefore produces counted refusal answers, not silent lockout.
+* The clients' persistent increasing starts are an initialization declaration under `+aou~seooc-e2e-protection~7+`; the receiver's rule is runtime E2E behavior selected during initialization.
+
+*The run rule.*
 The following rules apply subject to that strict older-incarnation refusal; default mode retains them without that additional refusal.
 
 * *A sender declared increasing.* A frame of an incarnation newer than the newest adopted is delivered at once: the reference's incarnation is retired, the reference moves to the frame, the run is cleared, and one restart is counted. A frame of the retired incarnation is refused as stale. It never starts a run, and is never adopted.
@@ -101,176 +215,435 @@ The following rules apply subject to that strict older-incarnation refusal; defa
 ** When the run reaches `+resync_frames+`, that frame is adopted. It is delivered, the reference moves to it, and one resync is counted. For a sender declared increasing, the newest adopted and the retired incarnation stay as they were.
 ** The frames refused before it are not counted as lost.
 
+*What holds while a sender's declaration is true.*
 While a sender's declaration is true:
 
 * the restart of a sender declared increasing costs no refused frame;
 * any other sender's restart costs exactly `+resync_frames+` refused frames on a route that keeps order. They are counted from the last frame of the old incarnation to arrive, provided the new incarnation sends more than `+resync_frames+` frames;
 * no arrival order refuses a live declared sender for good. Displaced incarnations are exceptions: in default mode the retired incarnation of a sender declared increasing is always refused; on a strict-mode ASIL RPC request route every incarnation older than the newest adopted is always refused. An undetected corruption of a frame's header is not an arrival order: at the CRC's undetected-error rate, it can lock a sender out until it restarts (`+aou~seooc-e2e-protection~7+`).
 
-In default mode, an incarnation older than the retired one can still complete a run and become the reference. Its late requests within their TTL can then execute, and a re-adoption can permit replay within the window (`+aou~seooc-e2e-protection~7+`). The strict older-incarnation rule does not remove this default-mode residual.
+*The default-mode residual.*
+In default mode, an incarnation older than the retired one can still complete a run and become the reference.
+Its late requests within their TTL can then execute, and a re-adoption can permit replay within the window (`+aou~seooc-e2e-protection~7+`).
+The strict older-incarnation rule does not remove this default-mode residual.
 
+*`+resync_frames+`.*
 `+resync_frames+` is a `+u8+`, set in deployment data from 1 to 255 and checked at construction, with 2 as its default.
 --
 
 [horizontal]
 ASIL:: B
 Allocated to:: the E2E wire
-Verification:: fault-injection (a sender killed and restarted, with real processes on iceoryx2: declared increasing, with a counter supplied at construction, no frame refused and one restart counted; not declared increasing, exactly `+resync_frames+` frames refused and one resync counted), test (walks A and B and a clock reset at boot; the arrival-order properties P1 to P3, with the receiver states, start orders and duplicated frames; the sequenced contract's check that no arrival order permanently refuses a live sender while its declaration is true; with increasing starts A < B < C, adopt A, then B, then C and deliver delayed valid A requests with counters 0, 1 and 2, all within TTL, at `+resync_frames=2+`: strict mode refuses and counts each A request, answers each advisory because A is older than retired B and non-delivery cannot be proved, never adopts A, and still delivers a fresh C request; default mode refuses the first two A frames and adopts A on the third, retaining its disclosed residual; strict retired-B requests and never-adopted incarnations between B and C get final answers only under the proof conditions of `+req~ssr-e2e-refusal-answered~1+`; `+resync_frames+` of 0, refused at construction), heap-window (the restart)
+Verification:: fault-injection, test, heap-window
+* *fault-injection*: a sender killed and restarted, with real processes on iceoryx2.
+** Declared increasing, with a counter supplied at construction: no frame refused and one restart counted.
+** Not declared increasing: exactly `+resync_frames+` frames refused and one resync counted.
+* *test*
+** Walks A and B and a clock reset at boot.
+** The arrival-order properties P1 to P3, with the receiver states, start orders and duplicated frames.
+** The sequenced contract's check that no arrival order permanently refuses a live sender while its declaration is true.
+** With increasing starts A < B < C, adopt A, then B, then C and deliver delayed valid A requests with counters 0, 1 and 2, all within TTL, at `+resync_frames=2+`.
+Strict mode refuses and counts each A request, answers each advisory because A is older than retired B and non-delivery cannot be proved, never adopts A, and still delivers a fresh C request.
+Default mode refuses the first two A frames and adopts A on the third, retaining its disclosed residual.
+** Strict retired-B requests and never-adopted incarnations between B and C get final answers only under the proof conditions of `+req~ssr-e2e-refusal-answered~1+`.
+** `+resync_frames+` of 0, refused at construction.
+* *heap-window*: the restart.
 Status:: Draft
 
-*Rationale.* Per-hop peer identity cannot establish end-to-end restart order, so the wire needs its own incarnation rule and must trust start order only where deployment declares it. A persistent increasing source alone does not prevent old frames arriving after several restarts. The strict receive rule prevents those frames from moving the reference backwards; refusal finality still requires proof of non-delivery, not merely an older incarnation.
+*Rationale.*
+Per-hop peer identity cannot establish end-to-end restart order.
+So the wire needs its own incarnation rule and must trust start order only where deployment declares it.
+
+A persistent increasing source alone does not prevent old frames arriving after several restarts.
+The strict receive rule prevents those frames from moving the reference backwards.
+Refusal finality still requires proof of non-delivery, not merely an older incarnation.
 
 == A sliding window judges a reference's counters
 
 [.specitem,oft-sid="req~ssr-e2e-replay-window~1",oft-title="A sliding window judges a reference's counters",oft-needs="impl,utest",oft-tags="SafetyE2eWire"]
 --
-For each declared sender on a request route or a topic, the receiver *MUST* judge a frame of the reference's incarnation through a sliding window of 64 counters, as IPsec and DTLS judge theirs against replay. It keeps the highest counter delivered; one bit for each of the 64 counters at and below it, set once that counter has arrived; and a floor, the counter at which the incarnation became the reference. When an incarnation becomes the reference, all its bits are set. A frame with counter c is:
+*The window.*
+For each declared sender on a request route or a topic, the receiver *MUST* judge a frame of the reference's incarnation through a sliding window of 64 counters, as IPsec and DTLS judge theirs against replay.
+
+It keeps:
+
+* the highest counter delivered;
+* one bit for each of the 64 counters at and below it, set once that counter has arrived;
+* a floor, the counter at which the incarnation became the reference.
+
+When an incarnation becomes the reference, all its bits are set.
+
+*Judging a frame.*
+A frame with counter c is:
 
 * above the highest: delivered, and the window slides; a counter that leaves the window without arriving is counted lost;
 * inside the window and at or above the floor, with its bit set: a repeat, refused;
 * inside the window and at or above the floor, with its bit clear: delivered late on a request route, and refused as late on a topic, and in both cases its bit is set, so that it is never counted lost;
 * below the floor: refused, as below the floor; and more than 63 below the highest: refused, as out of the window.
 
-When the reference changes, by a restart or an adoption, the old window's counters that have not arrived are counted lost at that moment. The window changes only under the slot's try-lock, in constant time, without heap and without waiting.
+*When the reference changes.*
+When the reference changes, by a restart or an adoption, the old window's counters that have not arrived are counted lost at that moment.
+
+*Cost.*
+The window changes only under the slot's try-lock, in constant time, without heap and without waiting.
 --
 
 [horizontal]
 ASIL:: B
 Allocated to:: the E2E wire
-Verification:: test (each case at its boundary: the window's two edges, the floor, a late request delivered and a late sample refused, a repeat inside the window; the window across a restart and an adoption, with its open counters counted lost), miri (the window's words under the slot's try-lock), heap-window
+Verification:: test, miri, heap-window
+* *test*
+** Each case at its boundary: the window's two edges, the floor, a late request delivered and a late sample refused, a repeat inside the window.
+** The window across a restart and an adoption, with its open counters counted lost.
+* *miri*: the window's words under the slot's try-lock.
 Status:: Draft
 
-*Rationale.* A bounded window can admit reordered requests once without accepting repeats; a separate floor preserves the evidence needed for final refusal answers.
+*Rationale.*
+A bounded window can admit reordered requests once without accepting repeats.
+A separate floor preserves the evidence needed for final refusal answers.
 
 == An E2E response answers exactly its call
 
 [.specitem,oft-sid="req~ssr-e2e-rpc-echo~1",oft-title="An E2E response answers exactly its call",oft-needs="impl,utest",oft-tags="SafetyE2eWire"]
 --
-On an RPC route, the E2E wire *MUST* use the method header of `+req~ssr-e2e-header-format~3+`. A request carries its client's data ID as its Source ID, message type request, result normal and status 0, and the server refuses one that does not, as corrupt, before judging its counter. A response carries its server's data ID, echoes its request's data ID as its Source ID, echoes its request's counter and incarnation, and carries message type response, its result and its commstatus code inside its CRC. It has no sequence of its own.
+On an RPC route, the E2E wire *MUST* use the method header of `+req~ssr-e2e-header-format~3+`.
 
-A client accepts a response only if its length, reserved bytes and CRC are intact; its type is response and its result agrees with its status; its data ID is a server the client declares; its Source ID is the client's own data ID; its incarnation is the client's own; its counter is the call's own, compared per call and not as a sequence over responses; and its status is the response's commstatus. A response with no E2E header is unprotected. Otherwise the client refuses the response, naming the cause: corrupt, undeclared data ID, misaddressed, stale, wrong call, status mismatch or unprotected. A copy that another server answers is refused as an undeclared data ID when the client declares one server for the method. The protection assumes one response wire per method, which the element provides.
+*Requests.*
+A request carries its client's data ID as its Source ID, message type request, result normal and status 0.
+The server refuses one that does not, as corrupt, before judging its counter.
+
+*Responses.*
+A response carries its server's data ID, echoes its request's data ID as its Source ID, echoes its request's counter and incarnation, and carries message type response, its result and its commstatus code inside its CRC.
+It has no sequence of its own.
+
+*What a client accepts.*
+A client accepts a response only if:
+
+* its length, reserved bytes and CRC are intact;
+* its type is response and its result agrees with its status;
+* its data ID is a server the client declares;
+* its Source ID is the client's own data ID;
+* its incarnation is the client's own;
+* its counter is the call's own, compared per call and not as a sequence over responses;
+* its status is the response's commstatus.
+
+A response with no E2E header is unprotected.
+
+*What a client refuses.*
+Otherwise the client refuses the response, naming the cause: corrupt, undeclared data ID, misaddressed, stale, wrong call, status mismatch or unprotected.
+A copy that another server answers is refused as an undeclared data ID when the client declares one server for the method.
+
+*Assumption.*
+The protection assumes one response wire per method, which the element provides.
 --
 
 [horizontal]
 ASIL:: B
 Allocated to:: the E2E wire
-Verification:: test (a request without its method fields, refused as corrupt before its counter is judged; each acceptance condition and each refusal of a response, named; a response delivered to another client; a response to another call; a copy that another server answers; a response with no E2E header; a response naming another payload encoding, refused on an E2E route), heap-window
+Verification:: test, heap-window
+* *test*
+** A request without its method fields, refused as corrupt before its counter is judged.
+** Each acceptance condition and each refusal of a response, named.
+** A response delivered to another client.
+** A response to another call.
+** A copy that another server answers.
+** A response with no E2E header.
+** A response naming another payload encoding, refused on an E2E route.
 Status:: Draft
 
-*Rationale.* A response sequence alone does not identify the outstanding call; echoing the protected request identity binds the answer to that call.
+*Rationale.*
+A response sequence alone does not identify the outstanding call.
+Echoing the protected request identity binds the answer to that call.
 
 == One data ID per sender and route
 
 [.specitem,oft-sid="req~ssr-e2e-data-id~4",oft-title="One data ID per sender and route",oft-needs="impl,utest",oft-tags="SafetyE2eWire"]
 --
-Each sender on a route *MUST* have its own data ID, derived the same way on both sides from deployment data, by one documented function of the sender's URI, the route's resource ID, the message type, and the route's fixed sink where it has one: a notification's destination, a request's method. A receiver accepts only the data IDs declared for its route's senders (an RPC server's declared clients; a topic's publisher), and refuses and counts a frame with any other. A collision among one receiver's declared senders is refused when the wire is constructed. The element provides the derivation as a function, so that the integrator's tooling and both sides compute the same ID. A declared sender given as a wildcard has no data ID, and construction refuses it. A response carries its server's data ID, and echoes its client's as its Source ID, so a response delivered to the wrong client is refused as misaddressed (`+req~ssr-e2e-rpc-echo~1+`).
+*Derivation.*
+Each sender on a route *MUST* have its own data ID, derived the same way on both sides from deployment data, by one documented function of the sender's URI, the route's resource ID, the message type, and the route's fixed sink where it has one: a notification's destination, a request's method.
+
+*Acceptance.*
+A receiver accepts only the data IDs declared for its route's senders (an RPC server's declared clients; a topic's publisher), and refuses and counts a frame with any other.
+
+*Construction.*
+
+* A collision among one receiver's declared senders is refused when the wire is constructed.
+* The element provides the derivation as a function, so that the integrator's tooling and both sides compute the same ID.
+* A declared sender given as a wildcard has no data ID, and construction refuses it.
+
+*Responses.*
+A response carries its server's data ID, and echoes its client's as its Source ID, so a response delivered to the wrong client is refused as misaddressed (`+req~ssr-e2e-rpc-echo~1+`).
 --
 
 [horizontal]
 ASIL:: B
 Allocated to:: the E2E wire
-Verification:: test (two clients of one method; an undeclared sender; a second publisher on one topic; a collision in the declared list, refused at construction; a notification for another destination, refused; a response delivered to another client, refused as misaddressed; the function's test vectors; a wildcard in the declared list, refused at construction)
+Verification:: test
+* Two clients of one method.
+* An undeclared sender.
+* A second publisher on one topic.
+* A collision in the declared list, refused at construction.
+* A notification for another destination, refused.
+* A response delivered to another client, refused as misaddressed.
+* The function's test vectors.
+* A wildcard in the declared list, refused at construction.
 Status:: Draft
 
-*Rationale.* A route-only identity would merge different senders, and omitting the destination would admit a misaddressed frame; deployment must distinguish both.
+*Rationale.*
+A route-only identity would merge different senders, and omitting the destination would admit a misaddressed frame.
+Deployment must distinguish both.
 
 == E2E sending state is one counter per wire value
 
 [.specitem,oft-sid="req~ssr-e2e-sender-state~2",oft-title="E2E sending state is one counter per wire value",oft-needs="impl,utest",oft-tags="SafetyE2eWire"]
 --
-The E2E wire *MUST* keep its sending state in the wire value: one counter and, *(b)*, one incarnation per E2E value. The SDK never gives one wire value to two roles. An `+E2e+` value cannot be cloned, so it cannot be a transport default. A publisher, a notifier, and an RPC client on its request route each send on one route, so the value's counter is that route's. The counter is 48 bits, and never wraps: an encode at 2^48^ is refused, by name. The counter is kept in two 32-bit halves behind a try-lock. An encode that finds another encode of the same value in progress is refused, by name, before the counter moves, so the receiver sees no lost frame. The lock sees a second sending thread only when two encodes overlap; it does not replace the one-sender assumption of use (`+aou~seooc-e2e-protection~7+`). The counter advances by one per encode, so an encode or send that fails, or a send refused and then retried, shows at the receiver as one lost frame. *(b)* The incarnation is 80 bits: 48 bits of the sender's start value, read once at construction, followed by 32 bits of the platform's initialization entropy. The start value is the platform's wall clock in milliseconds, or a value the integrator supplies at construction, as the sender's deployment data chooses. Construction is refused, by name, if the start value or the entropy cannot be read. An RPC server's responses carry no sequence of their own: each echoes its request's counter and incarnation, so an RPC server's E2E value reads no start value or entropy.
+*State lives in the wire value.*
+The E2E wire *MUST* keep its sending state in the wire value: one counter and, *(b)*, one incarnation per E2E value.
+
+* The SDK never gives one wire value to two roles.
+* An `+E2e+` value cannot be cloned, so it cannot be a transport default.
+* A publisher, a notifier, and an RPC client on its request route each send on one route, so the value's counter is that route's.
+
+*The counter.*
+
+* The counter is 48 bits, and never wraps: an encode at 2^48^ is refused, by name.
+* The counter is kept in two 32-bit halves behind a try-lock.
+* An encode that finds another encode of the same value in progress is refused, by name, before the counter moves, so the receiver sees no lost frame.
+* The lock sees a second sending thread only when two encodes overlap; it does not replace the one-sender assumption of use (`+aou~seooc-e2e-protection~7+`).
+* The counter advances by one per encode, so an encode or send that fails, or a send refused and then retried, shows at the receiver as one lost frame.
+
+*The incarnation.*
+
+* *(b)* The incarnation is 80 bits: 48 bits of the sender's start value, read once at construction, followed by 32 bits of the platform's initialization entropy.
+* The start value is the platform's wall clock in milliseconds, or a value the integrator supplies at construction, as the sender's deployment data chooses.
+* Construction is refused, by name, if the start value or the entropy cannot be read.
+
+*RPC servers.*
+An RPC server's responses carry no sequence of their own: each echoes its request's counter and incarnation, so an RPC server's E2E value reads no start value or entropy.
 --
 
 [horizontal]
 ASIL:: B
 Allocated to:: the E2E wire
-Verification:: compile-fail (an `+E2e+` value as a transport default), test (two clients of one method raise no false gaps; a send refused and retried shows as one lost frame; *(b)* construction refused when the clock reads none, and when the entropy fails; an encode at 2^48^ refused, from a sender built at a chosen counter; encodes across 2^31^ and 2^32^, from senders built at those counters; a contended encode refused before the counter moves; a supplied start value used as given), heap-window
+Verification:: compile-fail, test, heap-window
+* *compile-fail*: an `+E2e+` value as a transport default.
+* *test*
+** Two clients of one method raise no false gaps.
+** A send refused and retried shows as one lost frame.
+** *(b)* Construction refused when the clock reads none, and when the entropy fails.
+** An encode at 2^48^ refused, from a sender built at a chosen counter.
+** Encodes across 2^31^ and 2^32^, from senders built at those counters.
+** A contended encode refused before the counter moves.
+** A supplied start value used as given.
 Status:: Draft
 
-*Rationale.* Sharing one sequence between independent senders would manufacture apparent loss and reordering; refusing overlapping encodes preserves the counter state.
+*Rationale.*
+Sharing one sequence between independent senders would manufacture apparent loss and reordering.
+Refusing overlapping encodes preserves the counter state.
 
 == E2E receiving state is one fixed slot per declared sender
 
 [.specitem,oft-sid="req~ssr-e2e-receiver-state~2",oft-title="E2E receiving state is one fixed slot per declared sender",oft-needs="impl,utest",oft-tags="SafetyE2eWire"]
 --
-The receiving state *MUST* be one fixed-size slot per declared data ID, in storage the caller provides at construction. A slot holds the state that `+req~ssr-e2e-detects~4+` and `+req~ssr-e2e-resync~4+` judge by, its window (`+req~ssr-e2e-replay-window~1+`) among it, and the sender's figures (`+req~ssr-e2e-figures~2+`). Updates take a per-slot try-lock. A frame that finds its slot held is refused and counted as contended, and never waited on, so concurrent decoders cannot corrupt the state, and no thread blocks. The figures are read without the slot's lock. No route context reaches the wire. An RPC client keeps no receiving slot: it checks a response against its call's tag (`+req~ssr-e2e-rpc-echo~1+`).
+*One slot per data ID.*
+The receiving state *MUST* be one fixed-size slot per declared data ID, in storage the caller provides at construction.
+A slot holds the state that `+req~ssr-e2e-detects~4+` and `+req~ssr-e2e-resync~4+` judge by, its window (`+req~ssr-e2e-replay-window~1+`) among it, and the sender's figures (`+req~ssr-e2e-figures~2+`).
+
+*Updates.*
+Updates take a per-slot try-lock.
+A frame that finds its slot held is refused and counted as contended, and never waited on, so concurrent decoders cannot corrupt the state, and no thread blocks.
+
+*Reads.*
+The figures are read without the slot's lock.
+
+*No route context.*
+No route context reaches the wire.
+
+*RPC clients.*
+An RPC client keeps no receiving slot: it checks a response against its call's tag (`+req~ssr-e2e-rpc-echo~1+`).
 --
 
 [horizontal]
 ASIL:: B
 Allocated to:: the E2E wire
-Verification:: test (a contended frame is refused and counted, never waited on; concurrent decoders' reordering is refused and counted, not corrupted, including from a push-binding test double that delivers one route's frames from two threads; reading the figures in a loop on another thread causes no refusal), miri (the try-lock under threads), heap-window
+Verification:: test, miri, heap-window
+* *test*
+** A contended frame is refused and counted, never waited on.
+** Concurrent decoders' reordering is refused and counted, not corrupted, including from a push-binding test double that delivers one route's frames from two threads.
+** Reading the figures in a loop on another thread causes no refusal.
+* *miri*: the try-lock under threads.
 Status:: Draft
 
-*Rationale.* Receiver state is larger than a single atomic word, so it requires exclusive updates while its published figures remain readable without waiting for the state lock.
+*Rationale.*
+Receiver state is larger than a single atomic word.
+So it requires exclusive updates while its published figures remain readable without waiting for the state lock.
 
 == End-to-end refusals are named, and counted once
 
 [.specitem,oft-sid="req~ssr-e2e-refusal-counted~2",oft-title="End-to-end refusals are named, and counted once",oft-needs="impl,utest",oft-tags="SafetyUpRustCore"]
 --
-The element *MUST* report each end-to-end refusal as one fixed-size wire error variant that names what failed: corrupt, undeclared data ID, repeat, late, below the floor, out of window, stale, retired, older, contended, misaddressed, wrong call, status mismatch or unprotected. It counts each one once, in one route counter, without heap: on a receive route, in place of `+refused+`; on an RPC client's response decode; and when a response arrives. An `+unprotected+` response is counted in a route counter of its own, never in the E2E counter. A call whose responses were all refused ends at its TTL, naming the last refusal. A refused frame is released at once. Which refused requests are answered is stated in `+req~ssr-e2e-refusal-answered~1+`.
+*Named.*
+The element *MUST* report each end-to-end refusal as one fixed-size wire error variant that names what failed: corrupt, undeclared data ID, repeat, late, below the floor, out of window, stale, retired, older, contended, misaddressed, wrong call, status mismatch or unprotected.
+
+*Counted once.*
+It counts each one once, in one route counter, without heap:
+
+* on a receive route, in place of `+refused+`;
+* on an RPC client's response decode;
+* when a response arrives.
+
+An `+unprotected+` response is counted in a route counter of its own, never in the E2E counter.
+
+*Calls and frames.*
+
+* A call whose responses were all refused ends at its TTL, naming the last refusal.
+* A refused frame is released at once.
+* Which refused requests are answered is stated in `+req~ssr-e2e-refusal-answered~1+`.
 --
 
 [horizontal]
 ASIL:: B
 Allocated to:: the element
-Verification:: test (each kind, on a subscriber's receive route and on a client's response decode, counted once in the E2E counter, with `+refused+` unchanged; an `+unprotected+` response counted in its own counter and not in the E2E counter; a call whose responses were all refused ending at its TTL, naming the last refusal; a refused request's frame released at once), heap-window
+Verification:: test, heap-window
+* *test*
+** Each kind, on a subscriber's receive route and on a client's response decode, counted once in the E2E counter, with `+refused+` unchanged.
+** An `+unprotected+` response counted in its own counter and not in the E2E counter.
+** A call whose responses were all refused ending at its TTL, naming the last refusal.
+** A refused request's frame released at once.
 Status:: Draft
 
-*Rationale.* A response rejected before completion still needs a visible cause, and an unprotected operator response must not appear as corrupt protected traffic.
+*Rationale.*
+A response rejected before completion still needs a visible cause, and an unprotected operator response must not appear as corrupt protected traffic.
 
 == A refused request is answered, final or advisory
 
 [.specitem,oft-sid="req~ssr-e2e-refusal-answered~1",oft-title="A refused request is answered, final or advisory",oft-needs="impl,utest",oft-tags="SafetyUpRustCore,SafetyE2eWire"]
 --
-Every request that the E2E wire refuses *MUST* get one answer from the element, except a corrupt one: a request whose length, CRC, reserved bytes or method fields fail has nothing trustworthy to echo. A request whose data ID was not declared is answered `+InvalidArgument+`. Every other refusal is answered by the wire's refusal answer, in default mode and in strict mode alike. Inside the method header and its CRC, the answer carries the message result 2, refused and final, or 3, refused and advisory; the status `+Aborted+`; and the refusal's kind, in the first reserved byte: stale, repeat, out of window, below the floor, contended, retired or older.
+*One answer, except for a corrupt request.*
+Every request that the E2E wire refuses *MUST* get one answer from the element, except a corrupt one: a request whose length, CRC, reserved bytes or method fields fail has nothing trustworthy to echo.
 
+* A request whose data ID was not declared is answered `+InvalidArgument+`.
+* Every other refusal is answered by the wire's refusal answer, in default mode and in strict mode alike.
+
+*What the answer carries.*
+Inside the method header and its CRC, the answer carries:
+
+* the message result 2, refused and final, or 3, refused and advisory;
+* the status `+Aborted+`;
+* the refusal's kind, in the first reserved byte: stale, repeat, out of window, below the floor, contended, retired or older.
+
+*When an answer is final.*
 An answer is final only when this server instance never delivered the request's tag and never will:
 
 * in default mode, a request refused because its incarnation is not the reference, from a sender not declared increasing, whose counter is below `+resync_frames+` and whose incarnation is not the one the slot started with;
 * in strict mode, also a request of the retired incarnation whose counter is above the highest that incarnation delivered, and one of an incarnation older than the reference, when none has been retired yet or when it is newer than the retired one.
 
-Every other answer is advisory. A client completes its call at once on a final answer, as rejected with `+Aborted+`, naming the kind. It gives an advisory answer back, so the call stays open for its real response, and a call that ends at its TTL names that kind. The element's own answers are tried once, whatever the response route's overflow policy, and an answer the route cannot take is dropped and counted. The server counts each refusal by kind, and each answer it cannot send. On an E2E route, the client's response queue holds one more frame per call in flight.
+Every other answer is advisory.
+
+*What the client does.*
+
+* A client completes its call at once on a final answer, as rejected with `+Aborted+`, naming the kind.
+* It gives an advisory answer back, so the call stays open for its real response, and a call that ends at its TTL names that kind.
+
+*Sending and counting.*
+
+* The element's own answers are tried once, whatever the response route's overflow policy, and an answer the route cannot take is dropped and counted.
+* The server counts each refusal by kind, and each answer it cannot send.
+* On an E2E route, the client's response queue holds one more frame per call in flight.
 --
 
 [horizontal]
 ASIL:: B
 Allocated to:: the element; the E2E wire
-Verification:: test (each kind answered, final or advisory as classified, in default mode and in strict mode; a corrupt request left unanswered; an undeclared data ID answered `+InvalidArgument+`; a final answer completing its call at once, and an advisory one given back; an answer the route cannot take, dropped and counted; the server's counts by kind; a client locked out by a false strict declaration told on every call, and counted at the server), heap-window
+Verification:: test, heap-window
+* *test*
+** Each kind answered, final or advisory as classified, in default mode and in strict mode.
+** A corrupt request left unanswered.
+** An undeclared data ID answered `+InvalidArgument+`.
+** A final answer completing its call at once, and an advisory one given back.
+** An answer the route cannot take, dropped and counted.
+** The server's counts by kind.
+** A client locked out by a false strict declaration told on every call, and counted at the server.
 Status:: Draft
 
-*Rationale.* A final refusal is safe only when this server instance cannot also deliver the request; otherwise an advisory answer preserves the possibility of its real response.
+*Rationale.*
+A final refusal is safe only when this server instance cannot also deliver the request.
+Otherwise an advisory answer preserves the possibility of its real response.
 
 == The E2E wire's figures cover the stretch from encode to decode
 
 [.specitem,oft-sid="req~ssr-e2e-figures~2",oft-title="The E2E wire's figures cover the stretch from encode to decode",oft-needs="impl,utest",oft-tags="SafetyE2eWire"]
 --
+*The figures.*
 The E2E wire *MUST* keep, for each declared sender and in its own fixed storage, figures that the application reads without taking the slot's lock, one atomic each, each saturating at 2^32^ − 1: lost, late and pending frames, gaps, restarts, resyncs, and refusals by kind.
 
 * *Lost* counts each frame of the reference's incarnation that left the receiver's window without arriving, or was still open when the reference changed. So it lags the frame that reveals a gap by up to 63 frames; the gap itself is counted when it is revealed.
 * *Late* counts a first copy that arrived inside the window after a greater counter.
 * *Pending* is a gauge of the gaps the window holds open now, kept in an atomic of its own.
-* At each adoption of an incarnation at counter c, the figures add c to frames *not delivered before adoption*. This is exact at that incarnation's first adoption; at re-adoption it can over-count. For counters from 0 through c - 1, *never arrived before adoption* is c less the distinct frames of that incarnation that arrived in that prefix, including arrivals refused before adoption and counting duplicates only once. The wire *MUST* report that count as exact only when its retained distinct-arrival history proves it, subject to the stated saturation. When the necessary history is incomplete, it *MUST* report unknown, explicitly distinct from an exact zero, and *MUST NOT* present a partial count or estimate as exact. A cumulative figure with any unknown contribution *MUST* remain marked incomplete; a later exact contribution does not restore completeness.
+* At each adoption of an incarnation at counter c, the figures add c to frames *not delivered before adoption*.
+** This is exact at that incarnation's first adoption; at re-adoption it can over-count.
+** For counters from 0 through c - 1, *never arrived before adoption* is c less the distinct frames of that incarnation that arrived in that prefix, including arrivals refused before adoption and counting duplicates only once.
+** The wire *MUST* report that count as exact only when its retained distinct-arrival history proves it, subject to the stated saturation.
+** When the necessary history is incomplete, it *MUST* report unknown, explicitly distinct from an exact zero, and *MUST NOT* present a partial count or estimate as exact.
+** A cumulative figure with any unknown contribution *MUST* remain marked incomplete; a later exact contribution does not restore completeness.
 * For a receiver's first frame, the figures record where the receiver joined: that frame's incarnation and counter.
 
-The history and its completeness metadata *MUST* use bounded, initialization-provided storage and add no runtime allocation, freeing or waiting. Lost history, including history evicted on candidate changes or an arrival that contention prevents recording, *MUST NOT* produce a false exact result or stop recovery or otherwise permitted traffic. The count and its completeness indication *MUST* be published and read consistently: concurrent publication *MUST NOT* pair an incomplete count with an exact indication. Saturation *MUST NOT* be represented as an unsaturated exact count. These duties do not change the separate atomic lost, late and pending figures or the replay and recovery rules.
+*History and completeness.*
 
-An application that *MUST* react within the item's fault tolerant time interval reads lost plus pending, or the gap count. The figures do not count the lost tail of an incarnation, or frames sent before the receiver started. A frame that the receiving route drops or expires after decode is counted only by that route. A frame counted lost that then arrives, more than 63 counters late, is also counted as refused.
+* The history and its completeness metadata *MUST* use bounded, initialization-provided storage and add no runtime allocation, freeing or waiting.
+* Lost history, including history evicted on candidate changes or an arrival that contention prevents recording, *MUST NOT* produce a false exact result or stop recovery or otherwise permitted traffic.
+* The count and its completeness indication *MUST* be published and read consistently: concurrent publication *MUST NOT* pair an incomplete count with an exact indication.
+* Saturation *MUST NOT* be represented as an unsaturated exact count.
+* These duties do not change the separate atomic lost, late and pending figures or the replay and recovery rules.
+
+*What the figures are for, and what they leave out.*
+
+* An application that *MUST* react within the item's fault tolerant time interval reads lost plus pending, or the gap count.
+* The figures do not count the lost tail of an incarnation, or frames sent before the receiver started.
+* A frame that the receiving route drops or expires after decode is counted only by that route.
+* A frame counted lost that then arrives, more than 63 counters late, is also counted as refused.
 --
 
 [horizontal]
 ASIL:: B
 Allocated to:: the E2E wire
-Verification:: test (a gap, counted at once, with its frames counted lost when they leave the window; a late frame inside the window, counted late and not lost; a frame more than 63 counters late, counted lost and refused; pending, read on another thread while gaps open and close; not-delivered-before-adoption exact at first adoption, with its re-adoption over-count disclosed; never-arrived-before-adoption exact when retained distinct-arrival history proves it; prefix-boundary arrivals and duplicates counted correctly; an evicted duplicate, interleaved candidate changes or unrecorded contended arrival yielding unknown when necessary history is incomplete; unknown distinct from zero; cumulative incompleteness retained after later exact contributions; concurrent count/completeness publication; recovery continuing after history loss; a join's incarnation and counter; a restart; a resync; each figure saturating; a frame that drop-oldest evicts after decode, which appears in `+dropped_oldest+` and not in the figures), heap-window
+Verification:: test, heap-window
+* *test*
+** A gap, counted at once, with its frames counted lost when they leave the window.
+** A late frame inside the window, counted late and not lost.
+** A frame more than 63 counters late, counted lost and refused.
+** Pending, read on another thread while gaps open and close.
+** Not-delivered-before-adoption exact at first adoption, with its re-adoption over-count disclosed.
+** Never-arrived-before-adoption exact when retained distinct-arrival history proves it.
+** Prefix-boundary arrivals and duplicates counted correctly.
+** An evicted duplicate, interleaved candidate changes or unrecorded contended arrival yielding unknown when necessary history is incomplete.
+** Unknown distinct from zero.
+** Cumulative incompleteness retained after later exact contributions.
+** Concurrent count/completeness publication.
+** Recovery continuing after history loss.
+** A join's incarnation and counter.
+** A restart.
+** A resync.
+** Each figure saturating.
+** A frame that drop-oldest evicts after decode, which appears in `+dropped_oldest+` and not in the figures.
 Status:: Draft
 
-*Rationale.* Sequence observations establish only certain losses, while holes remain pending until the window passes them; per-hop and end-to-end counts therefore answer different questions. Distinct arrivals outside retained history cannot always be distinguished from duplicates, so an explicit unknown preserves the observation limit without stopping traffic or requiring unbounded storage. Completeness and saturation describe different limits and neither turns an unproved count into an exact one.
+*Rationale.*
+Sequence observations establish only certain losses, while holes remain pending until the window passes them.
+Per-hop and end-to-end counts therefore answer different questions.
+
+Distinct arrivals outside retained history cannot always be distinguished from duplicates.
+So an explicit unknown preserves the observation limit without stopping traffic or requiring unbounded storage.
+
+Completeness and saturation describe different limits, and neither turns an unproved count into an exact one.
 
 == Protection survives every allowed hop
 
 [.specitem,oft-sid="req~ssr-e2e-survives-hops~1",oft-title="Protection survives every allowed hop",oft-needs="impl,utest",oft-tags="SafetyStreamer"]
 --
-A frame protected by the E2E wire *MUST* pass its check at the receiving endpoint after any allowed Streamer hop, across envelopes and transport families. A byte corrupted between hops *MUST* be detected there.
+A frame protected by the E2E wire *MUST* pass its check at the receiving endpoint after any allowed Streamer hop, across envelopes and transport families.
+
+A byte corrupted between hops *MUST* be detected there.
 --
 
 [horizontal]
@@ -279,4 +652,6 @@ Allocated to:: the Streamer
 Verification:: test (a carriage test through the test forwarder; a full hop test)
 Status:: Draft
 
-*Rationale.* A carrier forwards a frame's identifiers and payload bytes unchanged (`+core/src/transport/carrier.rs+`, `+req~ssr-streamer-byte-identity~1+`), so a check over those bytes at the receiving endpoint covers every hop before it.
+*Rationale.*
+A carrier forwards a frame's identifiers and payload bytes unchanged (`+req~ssr-streamer-byte-identity~1+`).
+So a check over those bytes at the receiving endpoint covers every hop before it.

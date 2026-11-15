@@ -3,13 +3,18 @@
 
 The key words "*MUST*", "*MUST NOT*", "*REQUIRED*", "*SHALL*", "*SHALL NOT*", "*SHOULD*", "*SHOULD NOT*", "*RECOMMENDED*", "*MAY*", and "*OPTIONAL*" in this document are to be interpreted as described in https://www.rfc-editor.org/info/bcp14[IETF BCP14 (RFC2119 & RFC8174)]
 
-Conventions, tags and status words: xref:../README.adoc[the safety area's README]. Scope and element boundary: xref:README.adoc[the SEooC's README].
+Conventions, tags and status words: xref:../README.adoc[the safety area's README].
+Scope and element boundary: xref:README.adoc[the SEooC's README].
 
 == Deployment data is validated in full
 
 [.specitem,oft-sid="req~ssr-config-validated~1",oft-title="Deployment data is validated in full",oft-needs="impl,utest",oft-tags="SafetyUpRustCore"]
 --
-Deployment data applied at startup *MUST* be validated completely during initialization: every value against its admissible range, and every dependency between values. Anything invalid, unknown, missing where required or inconsistent *MUST* be refused with an error naming the field. A value *MUST NOT* be coerced, silently defaulted or skipped.
+Deployment data applied at startup *MUST* be validated completely during initialization: every value against its admissible range, and every dependency between values.
+
+Anything invalid, unknown, missing where required or inconsistent *MUST* be refused with an error naming the field.
+
+A value *MUST NOT* be coerced, silently defaulted or skipped.
 --
 
 [horizontal]
@@ -19,7 +24,10 @@ Verification:: test (a negative configuration suite, run on both construction pa
 Status:: Draft
 ISO 26262:: 6-C.4.6 (part-clause numbers only)
 
-*Rationale.* A value that is coerced, defaulted or skipped without an error runs the deployment on a configuration nobody wrote, and the integrator learns of it only from its effects. Refusing during initialization, by field, keeps every such mistake out of runtime mode, where setup can no longer change anything (`+req~ssr-mode-no-setup-at-runtime~1+`).
+*Rationale.*
+A value that is coerced, defaulted or skipped without an error runs the deployment on a configuration nobody wrote, and the integrator learns of it only from its effects.
+
+Refusing during initialization, by field, keeps every such mistake out of runtime mode, where setup can no longer change anything (`+req~ssr-mode-no-setup-at-runtime~1+`).
 
 == Direct construction and deployment data are one path
 
@@ -34,13 +42,18 @@ Allocated to:: the element
 Verification:: test (the same refusals on both paths)
 Status:: Draft
 
-*Rationale.* Checks that lived only in a loader would leave a program built in code unchecked, and two sets of checks could drift apart. Both paths build the same non-generic transport types (`+req~ssr-mode-two-types~1+`), so one setup runs the same checks for both.
+*Rationale.*
+Checks that lived only in a loader would leave a program built in code unchecked, and two sets of checks could drift apart.
+
+Both paths build the same non-generic transport types (`+req~ssr-mode-two-types~1+`), so one setup runs the same checks for both.
 
 == Deployment data carries no code
 
 [.specitem,oft-sid="req~ssr-config-no-code~1",oft-title="Deployment data carries no code",oft-needs="uman",oft-tags="SafetyUpRustCore"]
 --
-Deployment data *MUST* hold values only. It *MUST NOT* be able to carry scripts, expressions or anything else that is executed or interpreted, and it selects compiled-in waivers by id and nothing more.
+Deployment data *MUST* hold values only.
+
+It *MUST NOT* be able to carry scripts, expressions or anything else that is executed or interpreted, and it selects compiled-in waivers by id and nothing more.
 --
 
 [horizontal]
@@ -50,13 +63,22 @@ Verification:: review (of the schema)
 Status:: Draft
 ISO 26262:: 1-3.15 (part-clause numbers only)
 
-*Rationale.* Values can be checked against their ranges before start (`+req~ssr-config-validated~1+`), while code carried in data would run outside the program that was verified. Waivers stay compiled into the program, so deployment data can only choose among them by id (`+req~ssr-waiver-record~1+`).
+*Rationale.*
+Values can be checked against their ranges before start (`+req~ssr-config-validated~1+`), while code carried in data would run outside the program that was verified.
+
+Waivers stay compiled into the program, so deployment data can only choose among them by id (`+req~ssr-waiver-record~1+`).
 
 == Resource IDs are checked at setup
 
 [.specitem,oft-sid="req~ssr-config-resource-ranges~1",oft-title="Resource IDs are checked at setup",oft-needs="impl,utest",oft-tags="SafetyUpRustCore"]
 --
-Every role's resource ID *MUST* be checked against up-spec's ranges when the role is built: `+0x8000+` to `+0xFFFE+` for a publish topic and a notification origin, `+0x0001+` to `+0x7FFF+` for a method, and `+0+` for a notification destination and a reply-to. An ID outside its range *MUST* be refused, naming the route and the range.
+Every role's resource ID *MUST* be checked against up-spec's ranges when the role is built:
+
+* `+0x8000+` to `+0xFFFE+` for a publish topic and a notification origin;
+* `+0x0001+` to `+0x7FFF+` for a method;
+* `+0+` for a notification destination and a reply-to.
+
+An ID outside its range *MUST* be refused, naming the route and the range.
 --
 
 [horizontal]
@@ -65,13 +87,23 @@ Allocated to:: the element
 Verification:: test (each boundary value, on each role)
 Status:: Draft
 
-*Rationale.* up-spec fixes these ranges in its message attributes (`+dsn~up-attributes-publish-source~2+`, `+dsn~up-attributes-notification-source~2+`, `+dsn~up-attributes-notification-sink~2+`, `+dsn~up-attributes-request-sink~2+`, `+dsn~up-attributes-request-source~2+`). Checking them when the role is built finds a wrong ID in deployment data at setup, instead of in a peer's refusal of the first message.
+*Rationale.*
+up-spec fixes these ranges in its message attributes (`+dsn~up-attributes-publish-source~2+`, `+dsn~up-attributes-notification-source~2+`, `+dsn~up-attributes-notification-sink~2+`, `+dsn~up-attributes-request-sink~2+`, `+dsn~up-attributes-request-source~2+`).
+
+Checking them when the role is built finds a wrong ID in deployment data at setup, instead of in a peer's refusal of the first message.
 
 == ASIL Streamer routes name exact source addresses
 
 [.specitem,oft-sid="req~ssr-config-exact-addresses~1",oft-title="ASIL Streamer routes name exact source addresses",oft-needs="impl,utest",oft-tags="SafetyStreamer"]
 --
-In the ASIL Streamer, every route's source filter *MUST* name one exact address, and every lending leg *MUST* name its physical service exactly. A wildcard source *MUST* be refused at setup, naming the route. A frame from an address that no route reserved *MUST* be refused and counted.
+In the ASIL Streamer:
+
+* every route's source filter *MUST* name one exact address;
+* every lending leg *MUST* name its physical service exactly.
+
+A wildcard source *MUST* be refused at setup, naming the route.
+
+A frame from an address that no route reserved *MUST* be refused and counted.
 --
 
 [horizontal]
@@ -80,4 +112,12 @@ Allocated to:: the Streamer
 Verification:: test
 Status:: Draft
 
-*Rationale.* An exact source filter bounds route matching and lets the Streamer refuse and count frames carrying an undeclared address. It does not authenticate a sending process: a faulty process using a reserved address can pass the filter. Physical service selection does not establish that identity either; access control, peer qualification and end-to-end protection retain their separate assumptions and limits. The carrier primitives already require it of a lending leg: a lending route names one physical service, and a wildcard filter on one needs an explicit physical source or is refused (`+CarrierRoute+` in `+core/src/transport/carrier.rs+`).
+*Rationale.*
+An exact source filter bounds route matching and lets the Streamer refuse and count frames carrying an undeclared address.
+
+It does not authenticate a sending process: a faulty process using a reserved address can pass the filter.
+Physical service selection does not establish that identity either.
+Access control, peer qualification and end-to-end protection retain their separate assumptions and limits.
+
+The carrier primitives require the same of a lending leg.
+A lending route names one physical service, and a wildcard filter on one needs an explicit physical source or is refused.

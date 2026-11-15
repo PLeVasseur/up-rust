@@ -1,41 +1,103 @@
 = Safety requirements for traceability
 :toc: preamble
 
-This area holds safety requirements that SDKs trace with OpenFastTrace (OFT), apart from the protocol specification. Its first content is the software safety requirements and assumptions of use of the up-rust SEooC, in xref:seooc-up-rust/README.adoc[`seooc-up-rust/`].
+This area holds safety requirements that SDKs trace with OpenFastTrace (OFT), apart from the protocol specification.
+Its first content is the software safety requirements and assumptions of use of the up-rust SEooC, in xref:seooc-up-rust/README.adoc[`seooc-up-rust/`].
 
-It is a draft on a feature branch. Every item in it is still Draft.
+It is a draft on a feature branch.
+Every item in it is still Draft.
 
 == Where things go
 
 * *Protocol requirements*, which every SDK of a kind must meet, stay in the protocol chapters (`basics/`, `up-l1/`, `up-l2/`, `up-l3/`), tagged as those chapters tag them.
-* *An SDK element's own safety requirements* go in a directory of their own here, named `seooc-<sdk>/`. They are written for one element and its parts, and no other SDK has to meet them.
+* *An SDK element's own safety requirements* go in a directory of their own here, named `seooc-<sdk>/`.
+They are written for one element and its parts, and no other SDK has to meet them.
 * *Safety requirements that are language-agnostic*, if any are added, go at the top of this area, in files of their own.
+
+[[spec-first]]
+== The specification comes first
+
+The items here say what an implementation must satisfy.
+An implementation's code, tests and reviews trace to the items, never the other way round.
+
+* No statement, rationale or verification entry rests on an implementation's source files, internal names, review records or current state.
+* A rationale gives the product or safety reason for its statement.
+It cites other items of up-spec, public standards and the published contracts of other projects.
+* A statement may name something the element must provide, such as an operation, a setting, a counter or a crate.
+That name is part of the specification, not a citation of code.
+* An SDK that implements an item keeps its own record of where it does so, outside this repository, as non-normative traceability.
 
 == Why this area cannot break an SDK's run
 
-An OFT run keeps the items in the files its patterns name and its tag filter selects, and reports each kept item that lacks coverage. So:
+An OFT run keeps the items in the files its patterns name and its tag filter selects, and reports each kept item that lacks coverage.
+So:
 
-* *An SDK reads this area only by naming it.* Each SDK names up-spec files and directories in its OFT patterns; one that adopts these items names its own `seooc-<sdk>/` directory, as up-rust names `safety/seooc-up-rust`, and no SDK names `safety/` as a whole. Nothing here sits at the top of the repository, where a pattern such as `up-spec/*.adoc` would reach it.
-* *Every item here carries a tag from the table below, and no tag of the protocol chapters.* A run that keeps untagged items (`_`), or items tagged `LanguageLibrary`, `TransportLayerImpl` and the like, keeps none of them. The patterns are the first guard: a run whose tag filter is missing keeps every item its patterns reach, and still none from here.
+* *An SDK reads this area only by naming it.*
+Each SDK names up-spec files and directories in its OFT patterns.
+One that adopts these items names its own `seooc-<sdk>/` directory, as up-rust names `safety/seooc-up-rust`, and no SDK names `safety/` as a whole.
+Nothing here sits at the top of the repository, where a pattern such as `up-spec/*.adoc` would reach it.
+* *Every item here carries a tag from the table below, and no tag of the protocol chapters.*
+A run that keeps untagged items (`_`), or items tagged `LanguageLibrary`, `TransportLayerImpl` and the like, keeps none of them.
+The patterns are the first guard: a run whose tag filter is missing keeps every item its patterns reach, and still none from here.
 * *Nothing here links to the protocol chapters through OFT,* so they gain no coverage obligations from it.
 
 == The items
 
-* *Artifact types.* `req` for a software safety requirement, `aou` for an assumption of use, the types up-spec already uses.
-* *IDs.* `+req~ssr-<area>-<name>~<revision>+` and `+aou~seooc-<name>~<revision>+`. A name is never changed or reused. A revision rises when the meaning of a statement changes, not for a wording fix.
-* *Markup.* As in the protocol chapters: `+[.specitem,oft-sid="…",oft-title="…",oft-needs="…",oft-tags="…"]+`, then an open block (`--`) that holds the statement. Text after the block is not part of the item: the ASIL, the allocation, the verification methods, the status, the ISO 26262 references and the rationale. A rationale cites only public sources: up-spec, the code, and public standards by part and clause number.
-* *Key words.* Statements use the key words of BCP 14 as up-spec does (xref:../basics/payload_encoding_registry.adoc[the payload encoding registry], "Requirement Ownership"): *MUST* and *MUST NOT* for the element and its parts, *SHALL* and *SHALL NOT* for an assumption of use, whose duty falls on the integrator. Both keep BCP 14's meaning of an absolute requirement. An item not yet rewritten for publication states its duties without key words, and binds just the same.
-* *Needs.*
-** A requirement met in code needs `impl,utest`: the code that meets it, and the tests that show it, carry coverage tags.
-** A requirement shown only by reviewing a document needs `uman`.
-** A requirement met in code that also makes the element state something for integrators needs `impl,utest,uman`.
-** An assumption of use needs `uman`: the safety manual states it. A document covers it with an item of its own that covers the assumption, because OFT reads no coverage tag in a Markdown file.
-* *Status.* "Draft" until the requirements are signed off. "Draft, pending owner (S0 O-n)" marks text that waits on an owner decision of the S0 document. The words "record pending" mark text that cites a binding's record that is not committed yet: its ID is filled in when it is. "Revision pending" beside a record's ID marks text that already relies on that record's next revision.
-* *(b).* In the end-to-end protection items, *(b)* marks text that the chosen restart design brought in: the full version, with both sender kinds. That text holds.
+=== Artifact types
+
+`req` for a software safety requirement, `aou` for an assumption of use, the types up-spec already uses.
+
+=== IDs
+
+`+req~ssr-<area>-<name>~<revision>+` and `+aou~seooc-<name>~<revision>+`.
+
+* A name is never changed or reused.
+* A revision rises when the meaning of a statement changes, not for a wording fix.
+
+=== Markup
+
+As in the protocol chapters: `+[.specitem,oft-sid="…",oft-title="…",oft-needs="…",oft-tags="…"]+`, then an open block (`--`) that holds the statement.
+
+* Inside the block, a statement may use short paragraphs, labels in bold and lists.
+All of it is the statement.
+* Text after the block is not part of the item: the ASIL, the allocation, the verification methods, the status, the ISO 26262 references and the rationale.
+* A rationale cites only public sources: up-spec, public standards by part and clause number, and the published documents and code of other projects, each at a fixed version.
+It does not cite the code of the SDK that implements the item (<<spec-first>>).
+
+=== Key words
+
+Statements use the key words of BCP 14 as up-spec does (xref:../basics/payload_encoding_registry.adoc[the payload encoding registry], "Requirement Ownership"):
+
+* *MUST* and *MUST NOT* for the element and its parts;
+* *SHALL* and *SHALL NOT* for an assumption of use, whose duty falls on the integrator.
+
+Both keep BCP 14's meaning of an absolute requirement.
+An item not yet rewritten for publication states its duties without key words, and binds just the same.
+
+=== Needs
+
+* A requirement met in code needs `impl,utest`: the code that meets it, and the tests that show it, carry coverage tags.
+* A requirement shown only by reviewing a document needs `uman`.
+* A requirement met in code that also makes the element state something for integrators needs `impl,utest,uman`.
+* An assumption of use needs `uman`: the safety manual states it.
+A document covers it with an item of its own that covers the assumption, because OFT reads no coverage tag in a Markdown file.
+
+=== Status
+
+* "Draft" until the requirements are signed off.
+* "Draft, pending owner (S0 O-n)" marks text that waits on an owner decision of the S0 document.
+* The words "record pending" mark text that cites a binding's record that is not committed yet: its ID is filled in when it is.
+* "Revision pending" beside a record's ID marks text that already relies on that record's next revision.
+
+=== (b)
+
+In the end-to-end protection items, *(b)* marks text that the chosen restart design brought in: the full version, with both sender kinds.
+That text holds.
 
 == Tags
 
-Each item carries the tag of the part it is allocated to. The repository that holds that part covers it.
+Each item carries the tag of the part it is allocated to.
+The repository that holds that part covers it.
 
 [cols="2,4,3",options="header"]
 |===
@@ -51,7 +113,15 @@ Each item carries the tag of the part it is allocated to. The repository that ho
 | `SafetyManual` | every assumption of use | `up-rust`, in its safety manual
 |===
 
-*Gate tags.* Each repository that covers items here gets one gate tag, named after it: `SafetyGateUpRust`, `SafetyGateStreamer`, `SafetyGateIceoryx2`, `SafetyGateXcdrV2`, and so on. An item gets a repository's gate tag once that repository covers it in OFT's sense, with at least one coverage link of each type the item needs. Coverage in OFT's sense says nothing about whether an item is verified, which its verification methods decide. A repository's gating runs keep only the items that carry its gate tag, so they stay green while it covers the rest, and a report-only run keeps them all. Bindings and wires share items, so each gets a gate tag of its own. Gate tags present on items record the repository mappings admitted with them.
+=== Gate tags
+
+Each repository that covers items here gets one gate tag, named after it: `SafetyGateUpRust`, `SafetyGateStreamer`, `SafetyGateIceoryx2`, `SafetyGateXcdrV2`, and so on.
+
+* An item gets a repository's gate tag once that repository covers it in OFT's sense, with at least one coverage link of each type the item needs.
+* Coverage in OFT's sense says nothing about whether an item is verified, which its verification methods decide.
+* A repository's gating runs keep only the items that carry its gate tag, so they stay green while it covers the rest, and a report-only run keeps them all.
+* Bindings and wires share items, so each gets a gate tag of its own.
+* Gate tags present on items record the repository mappings admitted with them.
 
 [cols="2,4",options="header"]
 |===
@@ -63,17 +133,31 @@ Each item carries the tag of the part it is allocated to. The repository that ho
 == How a repository starts tracing these items
 
 . Its OFT patterns add the directory it covers, for example `up-spec/safety/seooc-up-rust`.
-. Its gating runs add its gate tag to their filter, for example `SafetyGateUpRust`, and not the tags of the table. Every item they keep is then covered, and every coverage tag in the repository resolves.
+. Its gating runs add its gate tag to their filter, for example `SafetyGateUpRust`, and not the tags of the table.
+Every item they keep is then covered, and every coverage tag in the repository resolves.
 . A report-only run, which fails nothing, adds the tags of the table it covers as well, for example `SafetyUpRustCore`, and shows every item still to cover.
-. Code and tests carry OFT's own coverage tags, `+[impl->req~ssr-…~N]+` and `+[utest->req~ssr-…~N]+`, only for items its gating runs keep, because a tag naming an item the run did not keep is a broken link. A review log in the repository records who mapped each tag.
-. The up-spec change that defines or gates an item lands first. The repository moves its copy of up-spec, a submodule or a pinned copied snapshot as that repository packages it, to that change in the same merge as the commit that tags the item, and records which change it copied, so that no run sees a tag without its item.
+. Code and tests carry OFT's own coverage tags, `+[impl->req~ssr-…~N]+` and `+[utest->req~ssr-…~N]+`, only for items its gating runs keep, because a tag naming an item the run did not keep is a broken link.
+A review log in the repository records who mapped each tag.
+. The up-spec change that defines or gates an item lands first.
+The repository moves its copy of up-spec, a submodule or a pinned copied snapshot as that repository packages it, to that change in the same merge as the commit that tags the item.
+It records which change it copied, so that no run sees a tag without its item.
 
 == ISO 26262
 
-Items and text in this area cite ISO 26262 by part and clause number only, written `part-clause`, for example `6-7.4.13`, or `part-Table n`. No text of the standard appears here, quoted or closely paraphrased, and no table that maps it.
+Items and text in this area cite ISO 26262 by part and clause number only, written `part-clause`, for example `6-7.4.13`, or `part-Table n`.
+No text of the standard appears here, quoted or closely paraphrased, and no table that maps it.
 
 == Source
 
-The items of `seooc-up-rust/` were first written outside this repository, and are being rewritten for publication. A rewritten item's statement uses the key words above, with its meaning unchanged, and its rationale is written from public sources alone: up-spec, the up-rust code, and the published documents and code of other projects, each linked at a fixed version, with ISO 26262 cited by part and clause number only. A rationale names each source where it uses it. A path such as `+core/src/memory.rs+` is in the up-rust repository, and an item ID is one of up-spec's.
+The items of `seooc-up-rust/` were first written outside this repository, and are being rewritten for publication.
 
-An item not yet rewritten keeps only the rationale sentences that cited public sources, so its rationale may be short or absent. The decisions each item rests on, the reviews that shaped it and its history are kept outside this repository, with the rationale sentences that cited them. Rationale sentences that cited ISO 26262 were left out, and their part-clause numbers are kept in each item's ISO 26262 line.
+* A rewritten item's statement uses the key words above, with its meaning unchanged.
+* Its rationale is written from public sources alone: up-spec, public standards, and the published documents and code of other projects, each linked at a fixed version.
+ISO 26262 is cited by part and clause number only.
+* A rationale names each source where it uses it, and an item ID is one of up-spec's.
+* A rationale does not cite the code of the SDK that implements the item (<<spec-first>>).
+
+An item not yet rewritten keeps only the rationale sentences that cited public sources, so its rationale may be short or absent.
+
+The decisions each item rests on, the reviews that shaped it and its history are kept outside this repository, with the rationale sentences that cited them.
+Rationale sentences that cited ISO 26262 were left out, and their part-clause numbers are kept in each item's ISO 26262 line.

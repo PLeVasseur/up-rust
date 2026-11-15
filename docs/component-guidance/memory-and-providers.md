@@ -43,16 +43,12 @@ Each supported provider, in each configuration a package supports, states:
 | Contexts | Threads and interrupt contexts it may be called from, the synchronization participants it relies on, and which of them a waiting release could hold or occupy |
 | Evidence | Exact source, toolchain, target and configuration of its evidence, its known limits and, for a release that can wait, the isolation argument and any established release progress |
 
-This record is what `req~ssr-heap-declared~2` uses for a serialized route's
-declared policy and what `req~ssr-mode-init-failure~3` uses during setup. Its
-statements come from the provider's own contract, not from the shape of the call.
-In Rust 1.100, the standard `Allocator` trait's `allocate` returns a `Result`, but
-its documentation permits an implementation to abort or panic on exhaustion
-instead. A `try_*` wrapper therefore cannot establish recoverable exhaustion for
-a provider whose contract does not promise it. The published
-`linked_list_allocator` 0.10.5 documents a panic when its setup storage is too
-small; a provider that wraps it checks the size before that call. Stating the
-panic does not make the call admissible (`req~ssr-mode-init-failure~3`).
+This record is what `req~ssr-heap-declared~2` uses for a serialized route's declared policy and what `req~ssr-mode-init-failure~3` uses during setup. Its statements come from the provider's own contract, not from the shape of the call.
+
+- In Rust 1.100, the standard `Allocator` trait's `allocate` returns a `Result`, but its documentation permits an implementation to abort or panic on exhaustion instead.
+- A `try_*` wrapper therefore cannot establish recoverable exhaustion for a provider whose contract does not promise it.
+- The published `linked_list_allocator` 0.10.5 documents a panic when its setup storage is too small; a provider that wraps it checks the size before that call.
+- Stating the panic does not make the call admissible (`req~ssr-mode-init-failure~3`).
 
 A provider used unchanged in a supported package is the package maintainers'.
 A custom provider is an explicit extension with its own evidence, in the same
@@ -177,14 +173,13 @@ The memory-safety defences are required in every case and grant no permission:
 - **Service failure.** A stalled or failed service leaves its values charged and
   shows as capacity pressure. It never frees a slot early.
 
-The release service is created during initialization and runs for the life of
-the process. Its hand-off is lock-free and preallocated for every value that can
-be pending. It acquires no heap memory and needs no call from the application to
-make progress. It holds ownership awaiting destruction, not unread traffic, so it
-is not a second receive queue. It is distinct from a binding's deferred return of native retained
-samples, which frees no heap. The exact iceoryx2 port-lock anomaly keeps its
-bounded scope (`req~ssr-binding-frame-drop~4`) and is never a general destructor
-exception.
+The release service is created during initialization and runs for the life of the process.
+
+- Its hand-off is lock-free and preallocated for every value that can be pending.
+- It acquires no heap memory and needs no call from the application to make progress.
+- It holds ownership awaiting destruction, not unread traffic, so it is not a second receive queue.
+- It is distinct from a binding's deferred return of native retained samples, which frees no heap.
+- The exact iceoryx2 port-lock anomaly keeps its bounded scope (`req~ssr-binding-frame-drop~4`) and is never a general destructor exception.
 
 ### Waiting releases are pending cleanup
 
@@ -230,43 +225,34 @@ Practical Rust design paths, all still to be built and proved:
 | An allocation that may outlive a forgotten or stalled cleanup | The owner keeps its allocator and backing alive itself, for example through a process-lifetime handle, never through a borrow that the service could outlive |
 | A provider whose release holds a lock that public allocation also needs while it waits | Not admitted under this contract without a mechanism that keeps public allocation bounded; ordinary QM use of that provider is unaffected |
 
-Standard containers qualify only when their whole element and provider
-destruction graph meets admission; neither "standard" nor an `Allocator`
-implementation shows timing or panic freedom. Supported provider and worker
-packages are maintainer work: the SDK, binding, platform and provider
-maintainers establish the composition and package the check and the named
-refusal. Integrators select a supported configuration and declare its load;
-they do not design worker pools, audit lock graphs or promise how arbitrary
-callbacks behave. A custom extension brings evidence for its exact type,
-provider and contexts through public APIs, and a type, trait or record name is
-never that evidence. An arbitrary lock-based provider without the evidence stays
-unsupported for this contract, while ordinary supported allocating and QM use
-remains available.
+Standard containers qualify only when their whole element and provider destruction graph meets admission; neither "standard" nor an `Allocator` implementation shows timing or panic freedom.
+
+- Supported provider and worker packages are maintainer work: the SDK, binding, platform and provider maintainers establish the composition and package the check and the named refusal.
+- Integrators select a supported configuration and declare its load; they do not design worker pools, audit lock graphs or promise how arbitrary callbacks behave.
+- A custom extension brings evidence for its exact type, provider and contexts through public APIs, and a type, trait or record name is never that evidence.
+- An arbitrary lock-based provider without the evidence stays unsupported for this contract, while ordinary supported allocating and QM use remains available.
 
 None of these mechanisms is implemented at the frozen revision. The existing
 fixed-provider and owning-value experiments and the Tokio and Embassy probes show
 only their recorded feasibility; they do not show this isolation.
 
-The documentary requirement is the admission obligation and its refusal. The
-mechanism is source work that is not implemented at the frozen revision: the
-evidence record, the named refusal, the service, its capacity and its isolation.
-Source acceptance needs a per-type, per-provider and per-context proof covering
-reentrancy, unwinding, forgetting, failure and stall, capacity, the isolation of
-waiting releases, exactly-once transfer, lifetime under forgetting, allocation
-identity and layout, and the scheduler or worker composition. Tests and Miri supplement that argument; they
-do not replace it (`[rej.miri-passes]`).
+The documentary requirement is the admission obligation and its refusal.
+
+- The mechanism is source work that is not implemented at the frozen revision: the evidence record, the named refusal, the service, its capacity and its isolation.
+- Source acceptance needs a per-type, per-provider and per-context proof covering reentrancy, unwinding, forgetting, failure and stall, capacity, the isolation of waiting releases, exactly-once transfer, lifetime under forgetting, allocation identity and layout, and the scheduler or worker composition.
+- Tests and Miri supplement that argument; they do not replace it (`[rej.miri-passes]`).
 
 ## Unsafe obligations
 
 A provider's `unsafe impl` of `Allocator` must prove, with the pinned skill:
-returned blocks fit the requested layout and alignment, including
-`0 < size < align` (`[hazard.edge-domain]`); deallocation and `grow`/`shrink`
-receive only blocks this allocator issued, with matching layouts; zero-size
-requests honour the trait's contract; provenance and exclusivity of every block;
-and `Send`/`Sync` only where concurrent use is actually synchronized
-(`[hazard.send-sync]`). A lifetime-bound allocator borrow must not let a block
-escape the allocator's lifetime; Rust rejects that escape at compile time
-(experiment MEM-E02).
+
+- returned blocks fit the requested layout and alignment, including `0 < size < align` (`[hazard.edge-domain]`);
+- deallocation and `grow`/`shrink` receive only blocks this allocator issued, with matching layouts;
+- zero-size requests honour the trait's contract;
+- provenance and exclusivity of every block;
+- and `Send`/`Sync` only where concurrent use is actually synchronized (`[hazard.send-sync]`).
+
+A lifetime-bound allocator borrow must not let a block escape the allocator's lifetime; Rust rejects that escape at compile time (experiment MEM-E02).
 
 ## Feasibility evidence and its limits
 

@@ -8,17 +8,30 @@ live above it.
 
 ## The contract in Rust terms
 
-| Contract property | Rust mechanism | Note |
-| --- | --- | --- |
-| Progress step | `Future::poll` | `poll` must not run a blocking wait, a middleware wait or `Overflow::Wait`; an operation that needs one stays synchronous |
-| Notification arranged before pending | Register the task's `Waker` with the seam before the final readiness check, then return `Poll::Pending` | Readiness is authoritative; a wake is a hint and the future rechecks |
-| Concurrent waiters | One registration per pending operation, sized from the admitted capacity | A single per-route cell that a second waiter overwrites does not meet this |
-| Abandonment | Dropping the future | Before submission: nothing sent. After: nothing recalled; owners return or stay charged. An owned value's destruction follows the route's admitted, panic-free cleanup, and any wait moves to the release service as pending cleanup, never into the future's drop or onto the executor |
-| Forgotten operation | `mem::forget` of the future is safe | Storage validity must not depend on `Drop`: no stored callback may borrow the future's stack; the slot stays charged |
-| Deadlines | The SDK's acceptance predicate, using its own clock | A scheduler timer only re-polls; Tokio's and Embassy's generic timeout wrappers can report an inner future ready past their deadline |
-| Native ownership | A native TX loan never crosses `.await` | An RX borrow stays tied to its retained owner while suspended |
-| Native resources | The exact executor's `Waker` clone, wake and drop, task and timer paths | Rust's safe `Waker` API promises no heap-free, panic-free or bounded behaviour; arbitrary wakers can run other code |
-| Service | SDK-owned deadline, expiry and deferred-release service | The application gains no service loop. A waiting release never runs inline on a cooperative executor worker (a Tokio worker thread, an Embassy executor) that progress, timers or other returns need. On one cooperative executor with no preempting or separate service context, only releases that cannot wait are admissible; a package that cannot keep a waiting release off those contexts refuses that composition by name |
+Each contract property maps to a Rust mechanism, with a note on what the mechanism must and must not do.
+
+- **Progress step.** Rust mechanism: `Future::poll`.
+  - `poll` must not run a blocking wait, a middleware wait or `Overflow::Wait`; an operation that needs one stays synchronous.
+- **Notification arranged before pending.** Rust mechanism: Register the task's `Waker` with the seam before the final readiness check, then return `Poll::Pending`.
+  - Readiness is authoritative; a wake is a hint and the future rechecks.
+- **Concurrent waiters.** Rust mechanism: One registration per pending operation, sized from the admitted capacity.
+  - A single per-route cell that a second waiter overwrites does not meet this.
+- **Abandonment.** Rust mechanism: Dropping the future.
+  - Before submission: nothing sent.
+  - After: nothing recalled; owners return or stay charged.
+  - An owned value's destruction follows the route's admitted, panic-free cleanup, and any wait moves to the release service as pending cleanup, never into the future's drop or onto the executor.
+- **Forgotten operation.** Rust mechanism: `mem::forget` of the future is safe.
+  - Storage validity must not depend on `Drop`: no stored callback may borrow the future's stack; the slot stays charged.
+- **Deadlines.** Rust mechanism: The SDK's acceptance predicate, using its own clock.
+  - A scheduler timer only re-polls; Tokio's and Embassy's generic timeout wrappers can report an inner future ready past their deadline.
+- **Native ownership.** Rust mechanism: A native TX loan never crosses `.await`.
+  - An RX borrow stays tied to its retained owner while suspended.
+- **Native resources.** Rust mechanism: The exact executor's `Waker` clone, wake and drop, task and timer paths.
+  - Rust's safe `Waker` API promises no heap-free, panic-free or bounded behaviour; arbitrary wakers can run other code.
+- **Service.** Rust mechanism: SDK-owned deadline, expiry and deferred-release service.
+  - The application gains no service loop.
+  - A waiting release never runs inline on a cooperative executor worker (a Tokio worker thread, an Embassy executor) that progress, timers or other returns need.
+  - On one cooperative executor with no preempting or separate service context, only releases that cannot wait are admissible; a package that cannot keep a waiting release off those contexts refuses that composition by name.
 
 `Pin`, `Waker`, `Context` and the seam's function names are mechanisms. The
 normative text speaks of progress steps, notifications, submission and

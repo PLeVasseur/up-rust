@@ -3,105 +3,320 @@
 
 The key words "*MUST*", "*MUST NOT*", "*REQUIRED*", "*SHALL*", "*SHALL NOT*", "*SHOULD*", "*SHOULD NOT*", "*RECOMMENDED*", "*MAY*", and "*OPTIONAL*" in this document are to be interpreted as described in https://www.rfc-editor.org/info/bcp14[IETF BCP14 (RFC2119 & RFC8174)]
 
-Conventions, tags and status words: xref:../README.adoc[the safety area's README]. Scope and element boundary: xref:README.adoc[the SEooC's README].
+Conventions, tags and status words: xref:../README.adoc[the safety area's README].
+Scope and element boundary: xref:README.adoc[the SEooC's README].
 
 == Peer failure is normal input
 
 [.specitem,oft-sid="req~ssr-peer-failure-normal~2",oft-title="Peer failure is normal input",oft-needs="impl,utest",oft-tags="SafetyUpRustCore"]
 --
-A peer process that dies at any instruction, or restarts, *MUST NOT* cause a panic, a heap acquisition or an unbounded wait in element code in any process that stays up, nor a heap release there on a native route, on a route whose heap class is none or in work they share. The one exception to the unbounded wait is the release of what the failure ends, which may stay pending as cleanup: it waits for no peer, stays charged and is isolated as `+req~ssr-release-lease-drop~3+` states, so no survivor's operation, arrival, deadline or expiry accounting, health report or other owner's return waits for it. Those processes *MUST* see the failure only as silence, counted deadline misses, call errors, or a reported peer loss or restart, each due without waiting for that release. On a serialized or owned route whose declared heap class admits allocation, a call or frame that such an outcome ends releases what it owns exactly once as `+req~ssr-heap-slot-types~2+` states; that is the only heap use the failure causes there, and it releases no route, role, table, startup region or other runtime resource and revokes no surviving owner.
+*What a peer's failure must not cause.*
+A peer process that dies at any instruction, or restarts, *MUST NOT* cause any of the following in element code in any process that stays up:
+
+* a panic;
+* a heap acquisition;
+* an unbounded wait;
+* a heap release on a native route, on a route whose heap class is none or in work they share.
+
+*The one exception to the unbounded wait.*
+The one exception to the unbounded wait is the release of what the failure ends, which may stay pending as cleanup.
+It waits for no peer, stays charged and is isolated as `+req~ssr-release-lease-drop~3+` states.
+So no survivor's operation, arrival, deadline or expiry accounting, health report or other owner's return waits for it.
+
+*What survivors see.*
+Those processes *MUST* see the failure only as silence, counted deadline misses, call errors, or a reported peer loss or restart, each due without waiting for that release.
+
+*Routes that declare allocation.*
+On a serialized or owned route whose declared heap class admits allocation, a call or frame that such an outcome ends releases what it owns exactly once as `+req~ssr-heap-slot-types~2+` states.
+That is the only heap use the failure causes there.
+It releases no route, role, table, startup region or other runtime resource and revokes no surviving owner.
 --
 
 [horizontal]
 ASIL:: B
 Allocated to:: the element
-Verification:: fault-injection inside a heap-window (a peer killed and restarted during traffic, on real iceoryx2 and on in-memory bindings of both families; on a serialized route that admits owning values, a restart report that fails a call holding a decoded response, with that one release under the declared class and nothing else, and the call error reported while that release is held pending)
+Verification:: fault-injection inside a heap-window
+* A peer killed and restarted during traffic, on real iceoryx2 and on in-memory bindings of both families.
+* On a serialized route that admits owning values, a restart report that fails a call holding a decoded response, with that one release under the declared class and nothing else, and the call error reported while that release is held pending.
 Status:: Draft
 ISO 26262:: 9-7.4.4 g, 6-Annex D.2.4 (part-clause numbers only)
 
-*Rationale.* Peers run in other processes, often over middleware this project does not control, so each process has to protect itself from their failures rather than rely on them. In the code, a peer dying or restarting is normal input to a transport (`+core/src/transport/mod.rs+`), and a frame from an earlier incarnation of a peer is refused as stale (`+ReceiveError::StalePeer+`). Revision 1 forbade any heap use in a surviving process, which a serialized route cannot meet when a peer's failure ends a call that holds a decoded owned response: that value must still be destroyed, once. This revision keeps the failure's own handling free of heap acquisition everywhere, and of heap release on native and heap-free routes, and confines the release of what it ends to the route's declared class (`+req~ssr-heap-none~2+`). That release can wait behind an allocator's lock like any other, so it is kept pending and apart, and the survivors' reports of the failure do not wait for it.
+*Rationale.*
+Peers run in other processes, often over middleware this project does not control.
+So each process has to protect itself from their failures rather than rely on them.
+A peer dying or restarting is therefore normal input to a transport, and a frame from an earlier incarnation of a peer is refused as stale (`+req~ssr-peer-stale-rejected~3+`).
+
+_Why revision 2._
+Revision 1 forbade any heap use in a surviving process.
+A serialized route cannot meet that when a peer's failure ends a call that holds a decoded owned response: that value must still be destroyed, once.
+
+This revision keeps the failure's own handling free of heap acquisition everywhere, and of heap release on native and heap-free routes.
+It confines the release of what the failure ends to the route's declared class (`+req~ssr-heap-none~2+`).
+That release can wait behind an allocator's lock like any other, so it is kept pending and apart, and the survivors' reports of the failure do not wait for it.
 
 == RPC calls always end
 
 [.specitem,oft-sid="req~ssr-peer-rpc-ends~2",oft-title="RPC calls always end",oft-needs="impl,utest",oft-tags="SafetyUpRustCore"]
 --
-Every RPC call *MUST* have a deadline, so a call whose server has vanished or never answers completes with an error by its TTL. A server can answer a request only within the request's TTL, counted from when the request was created. A call's completion, by a response, by its TTL, by its cancellation or by a peer's failure, ends its tenure, so no later response completes it, and *MUST NOT* wait for the release of what the call owned. The call's slot then returns to the table once it holds nothing whose release is pending: a decoded response or a retained owner that the call held is released as `+req~ssr-heap-slot-types~2+` and `+req~ssr-release-lease-drop~3+` state, and until that release completes, the storage that holds it stays charged and is not reused, whether it stays with the call's slot or has passed to the release service, and the route's admitted capacity covers it in either place.
+*Every call has a deadline.*
+Every RPC call *MUST* have a deadline, so a call whose server has vanished or never answers completes with an error by its TTL.
+A server can answer a request only within the request's TTL, counted from when the request was created.
+
+*Completion ends the call's tenure.*
+A call's completion, by a response, by its TTL, by its cancellation or by a peer's failure, ends its tenure, so no later response completes it.
+The completion *MUST NOT* wait for the release of what the call owned.
+
+*The slot returns when nothing is pending.*
+The call's slot then returns to the table once it holds nothing whose release is pending:
+
+* A decoded response or a retained owner that the call held is released as `+req~ssr-heap-slot-types~2+` and `+req~ssr-release-lease-drop~3+` state.
+* Until that release completes, the storage that holds it stays charged and is not reused, whether it stays with the call's slot or has passed to the release service.
+* The route's admitted capacity covers it in either place.
 --
 
 [horizontal]
 ASIL:: B
 Allocated to:: the element
-Verification:: test (a call ended by its TTL, by its cancellation and by a peer's failure while what it owned is pending release: its outcome reported at once, its storage charged and not reused, and its slot returned only once nothing it holds is pending), fault-injection (a server killed during a call)
+Verification:: test, fault-injection
+* *test*: a call ended by its TTL, by its cancellation and by a peer's failure while what it owned is pending release.
+Its outcome is reported at once, its storage is charged and not reused, and its slot is returned only once nothing it holds is pending.
+* *fault-injection*: a server killed during a call.
 Status:: Draft
 
-*Rationale.* A vanished server cannot release its client resources, so the client needs its own expiration path and a reusable call slot. The TTL is a logical deadline (`+req~ssr-bound-wait~2+`): once it has passed while the call is still pending, the call's outcome is its expiry and no response accepted after it completes the call, and the client observes that outcome when it next services or waits on the call. A response the element accepted before the TTL completes the call even if the client, descheduled, observes it later; observing late never turns it into expiry. When that observation happens is a timing claim of a supported configuration, not of this item. Revision 1 also returned the call's slot to the table when the call ended, which a call that still holds a decoded owned response, or a retained owner whose return is pending, cannot do without reusing storage that is still owned. This revision separates the call's outcome and tenure, which end at once, from the release of what it owned, which may be pending cleanup; whether the call's slot keeps that ownership until the release completes or hands it to the release service is the implementation's choice, provided the capacity covers it.
+*Rationale.*
+A vanished server cannot release its client resources, so the client needs its own expiration path and a reusable call slot.
+
+_The TTL is a logical deadline_ (`+req~ssr-bound-wait~2+`).
+
+* Once it has passed while the call is still pending, the call's outcome is its expiry and no response accepted after it completes the call.
+The client observes that outcome when it next services or waits on the call.
+* A response the element accepted before the TTL completes the call even if the client, descheduled, observes it later.
+Observing late never turns it into expiry.
+* When that observation happens is a timing claim of a supported configuration, not of this item.
+
+_Why revision 2._
+Revision 1 also returned the call's slot to the table when the call ended.
+A call that still holds a decoded owned response, or a retained owner whose return is pending, cannot do that without reusing storage that is still owned.
+
+This revision separates the call's outcome and tenure, which end at once, from the release of what it owned, which may be pending cleanup.
+Whether the call's slot keeps that ownership until the release completes or hands it to the release service is the implementation's choice, provided the capacity covers it.
 
 == A response reaches only its own call
 
 [.specitem,oft-sid="req~ssr-peer-rpc-correlation~3",oft-title="A response reaches only its own call",oft-needs="impl,utest",oft-tags="SafetyUpRustCore"]
 --
-A response *MUST* be delivered only to the call that sent its request. A response that arrives after its call has ended, including one that arrives at a slot a later call now uses, is refused and counted, and is never delivered to the later call. The element *MUST* bind the response's full request ID, and, for a call bound to a peer, that peer's full identity and incarnation, to the slot's current tenure atomically with claiming the slot for the response: it compares them in the same exclusive step that claims the slot, or, where its mechanism claims first, compares them again after the claim and gives the slot back, recording nothing, on a mismatch. Either way no reuse, wrap or delay lets a response complete another call, on every route. That binding comes before any wire check, so on an E2E route the echo never sees such a response. On an RPC route with the E2E wire, a response *MUST* also answer its call exactly (`+req~ssr-e2e-rpc-echo~1+`, `+req~ssr-rpc-check-at-arrival~2+`). It relies on request IDs being unique within the window (`+req~ssr-ids-unique~4+`).
+*Delivery.*
+A response *MUST* be delivered only to the call that sent its request.
+A response that arrives after its call has ended, including one that arrives at a slot a later call now uses, is refused and counted, and is never delivered to the later call.
+
+*Binding to the slot's tenure.*
+The element *MUST* bind the following to the slot's current tenure, atomically with claiming the slot for the response:
+
+* the response's full request ID;
+* for a call bound to a peer, that peer's full identity and incarnation.
+
+It does so in one of two ways:
+
+* it compares them in the same exclusive step that claims the slot; or
+* where its mechanism claims first, it compares them again after the claim and gives the slot back, recording nothing, on a mismatch.
+
+Either way no reuse, wrap or delay lets a response complete another call, on every route.
+
+*Order.*
+That binding comes before any wire check, so on an E2E route the echo never sees such a response.
+
+*E2E routes.*
+On an RPC route with the E2E wire, a response *MUST* also answer its call exactly (`+req~ssr-e2e-rpc-echo~1+`, `+req~ssr-rpc-check-at-arrival~2+`).
+
+*Dependency.*
+It relies on request IDs being unique within the window (`+req~ssr-ids-unique~4+`).
 --
 
 [horizontal]
 ASIL:: B
 Allocated to:: the element
-Verification:: test (a response after expiry, at a reused slot; a response for an earlier tenure of a reused slot, refused with nothing recorded; a response from another peer, or from an older incarnation of the bound peer, refused), review (the claim's source argument for each configuration's mechanism: the comparison and the claim in one exclusive step, or the recheck after the claim and its give-back)
+Verification:: test, review
+* *test*
+** A response after expiry, at a reused slot.
+** A response for an earlier tenure of a reused slot, refused with nothing recorded.
+** A response from another peer, or from an older incarnation of the bound peer, refused.
+* *review*: the claim's source argument for each configuration's mechanism: the comparison and the claim in one exclusive step, or the recheck after the claim and its give-back.
 Status:: Draft
 ISO 26262:: 6-Annex D.2.4 (part-clause numbers only)
 
-*Rationale.* A reused slot can carry a later call; binding the response's full request identity to the slot's current tenure as the slot is claimed prevents a delayed response from completing that later call. At this revision the call table compares both request-ID words and the bound peer, and claims the slot, in one exclusive step (`+begin_delivery+` in `+core/src/transport/metadata.rs+`); a mechanism that claims before it compares keeps the recheck after the claim and its give-back instead. Revision 2 prescribed that recheck whatever the mechanism. The full width of the fields is a fact about the representation; the exclusion argument for the step is each mechanism's source review. The clauses about the E2E wire bind only a route that uses it, and that wire is deferred and not part of this delivery; the identity binding and the refusal of a late response bind every route now.
+*Rationale.*
+A reused slot can carry a later call.
+Binding the response's full request identity to the slot's current tenure as the slot is claimed prevents a delayed response from completing that later call.
+
+_Why revision 3._
+Revision 2 prescribed the recheck after the claim, whatever the mechanism.
+A mechanism that compares the full request ID and the bound peer, and claims the slot, in one exclusive step needs no recheck.
+A mechanism that claims before it compares keeps the recheck after the claim and its give-back instead.
+So this revision states the outcome and admits either form.
+
+The full width of the fields is a fact about a representation.
+The exclusion argument for the step is established by the review of each mechanism.
+
+_Scope._
+The clauses about the E2E wire bind only a route that uses it, and that wire is deferred and not part of this delivery.
+The identity binding and the refusal of a late response bind every route now.
 
 == A response completes its call only once its wire accepts it
 
 [.specitem,oft-sid="req~ssr-rpc-check-at-arrival~2",oft-title="A response completes its call only once its wire accepts it",oft-needs="impl,utest",oft-tags="SafetyUpRustCore"]
 --
-When a response arrives, the element *MUST* first bind it to the call's current tenure as `+req~ssr-peer-rpc-correlation~3+` requires: a response that does not match completes and records nothing, and a slot claimed for it is given back. It then runs the route's wire check on the bytes the call keeps, before the call completes. A refused response completes nothing: it is counted on its route, and the call stays open for another copy. A call that receives no accepted response ends at its TTL, naming the last refusal it recorded. A refusal answer is checked like any response: a final one completes the call at once as rejected, naming the refusal's kind, and an advisory one is given back, so the call stays open and, if it ends at its TTL, names that kind. The element records the call's tag before its request is sent, and refuses a response that arrives before then. The arrival checks of one response route run one at a time, so a copy is never refused because another copy of the same response is being checked. A peer failure that finds a call's response being checked fails the call at once if that response is refused.
+*First, the binding to the call.*
+When a response arrives, the element *MUST* first bind it to the call's current tenure as `+req~ssr-peer-rpc-correlation~3+` requires.
+A response that does not match completes and records nothing, and a slot claimed for it is given back.
+
+*Then, the wire check.*
+It then runs the route's wire check on the bytes the call keeps, before the call completes.
+
+* A refused response completes nothing: it is counted on its route, and the call stays open for another copy.
+* A call that receives no accepted response ends at its TTL, naming the last refusal it recorded.
+
+*Refusal answers.*
+A refusal answer is checked like any response:
+
+* a final one completes the call at once as rejected, naming the refusal's kind;
+* an advisory one is given back, so the call stays open and, if it ends at its TTL, names that kind.
+
+*The call's tag.*
+The element records the call's tag before its request is sent, and refuses a response that arrives before then.
+
+*Concurrency.*
+
+* The arrival checks of one response route run one at a time, so a copy is never refused because another copy of the same response is being checked.
+* A peer failure that finds a call's response being checked fails the call at once if that response is refused.
 --
 
 [horizontal]
 ASIL:: B
 Allocated to:: the element
-Verification:: test (two polling threads on one response route; a refusal racing the call's drop, its TTL, a peer's loss and its restart; a final answer that completes its call at once, and an advisory one that leaves it open), miri (the give-back and the delivering phases, with threads), heap-window
+Verification:: test, miri, heap-window
+* *test*
+** Two polling threads on one response route.
+** A refusal racing the call's drop, its TTL, a peer's loss and its restart.
+** A final answer that completes its call at once, and an advisory one that leaves it open.
+* *miri*: the give-back and the delivering phases, with threads.
 Status:: Draft
 
-*Rationale.* Completing a call before checking its wire would let a corrupt first copy exclude a later intact response. Revision 1 prescribed a check of the slot after the claim; the identity can equally be bound in the step that claims the slot, as `+req~ssr-peer-rpc-correlation~3+` allows. Refusal answers come only from a wire that protects calls, which in this delivery means none: the E2E wire that would send them is deferred. A call that ends at its TTL ends logically, as `+req~ssr-peer-rpc-ends~2+` states. Giving a claim back returns the call to waiting for another copy and releases nothing early: what the refused copy owns is released as `+req~ssr-heap-slot-types~2+` states, and storage that a pending release still holds is not reused (`+req~ssr-release-lease-drop~3+`).
+*Rationale.*
+Completing a call before checking its wire would let a corrupt first copy exclude a later intact response.
+
+Revision 1 prescribed a check of the slot after the claim.
+The identity can equally be bound in the step that claims the slot, as `+req~ssr-peer-rpc-correlation~3+` allows.
+
+Refusal answers come only from a wire that protects calls, which in this delivery means none: the E2E wire that would send them is deferred.
+
+A call that ends at its TTL ends logically, as `+req~ssr-peer-rpc-ends~2+` states.
+
+Giving a claim back returns the call to waiting for another copy and releases nothing early.
+What the refused copy owns is released as `+req~ssr-heap-slot-types~2+` states, and storage that a pending release still holds is not reused (`+req~ssr-release-lease-drop~3+`).
 
 == A native representation never crosses an ABI
 
 [.specitem,oft-sid="req~ssr-native-abi-agreed~1",oft-title="A native representation never crosses an ABI",oft-needs="impl,utest",oft-tags="SafetyUpRustCore,SafetyBinding"]
 --
-The element *MUST* state an ABI fingerprint of its target: its byte order, its pointer width, and the size and alignment of each scalar its stable payloads admit, `+u128+` and `+i128+` included. At setup, a route whose wire carries a native representation is refused when a peer's fingerprint differs, and the refusal names both ABIs and the copying route as the fix. Every peer of a route that admits a native wire records its fingerprint when it creates its side, and a native peer refuses one that records none, by name. A serialized wire is not affected. Each binding that carries native frames between processes exchanges the fingerprint at setup.
+*The fingerprint.*
+The element *MUST* state an ABI fingerprint of its target:
+
+* its byte order;
+* its pointer width;
+* the size and alignment of each scalar its stable payloads admit, `+u128+` and `+i128+` included.
+
+*Refusal at setup.*
+At setup, a route whose wire carries a native representation is refused when a peer's fingerprint differs.
+The refusal names both ABIs and the copying route as the fix.
+
+*Recording.*
+Every peer of a route that admits a native wire records its fingerprint when it creates its side.
+A native peer refuses one that records none, by name.
+
+*Scope.*
+A serialized wire is not affected.
+
+*Bindings.*
+Each binding that carries native frames between processes exchanges the fingerprint at setup.
 --
 
 [horizontal]
 ASIL:: B
 Allocated to:: the element; each binding that carries native frames between processes
-Verification:: test (the binding contract's refusal of an ABI mismatch at setup, on the test doubles and on iceoryx2 with two processes; the fingerprint's unit tests; each Miri lane's logged fingerprint, on three targets with three values)
+Verification:: test
+* The binding contract's refusal of an ABI mismatch at setup, on the test doubles and on iceoryx2 with two processes.
+* The fingerprint's unit tests.
+* Each Miri lane's logged fingerprint, on three targets with three values.
 Status:: Draft
 
-*Rationale.* Equal message identity does not imply equal in-memory layout; an explicit ABI agreement prevents interpreting one target layout as another.
+*Rationale.*
+Equal message identity does not imply equal in-memory layout.
+An explicit ABI agreement prevents interpreting one target layout as another.
 
 == Stale peers are rejected
 
 [.specitem,oft-sid="req~ssr-peer-stale-rejected~3",oft-title="Stale peers are rejected",oft-needs="impl,utest",oft-tags="SafetyUpRustCore"]
 --
-A frame from an earlier incarnation of a peer *MUST* be recognized by its full incarnation and refused as stale, never treated as current, and counted. A peer's identity is stable across its restarts, and the incarnation the element records for it only rises. The element *MUST* compare a frame's full peer identity and incarnation with the recorded ones, and record a newer incarnation, as one exclusive step of its configuration's mechanism, so that no concurrent classification, restart, loss or restart report can make a stale incarnation current, move the recorded incarnation back, or bind one peer's frames to another peer's entry. Classification places no limit on how many frames of one peer are classified at once: a frame is refused only as stale, as undeclared (`+req~ssr-peer-admission~2+`), or because the table that its declaration sized is genuinely full. A binding's restart report fails the calls bound to older incarnations of that peer, and is counted. No frame is admitted as current from a stale incarnation.
+*Stale frames.*
+A frame from an earlier incarnation of a peer *MUST* be recognized by its full incarnation and refused as stale, never treated as current, and counted.
+
+*Identity and incarnation.*
+A peer's identity is stable across its restarts, and the incarnation the element records for it only rises.
+
+*One exclusive step.*
+The element *MUST* compare a frame's full peer identity and incarnation with the recorded ones, and record a newer incarnation, as one exclusive step of its configuration's mechanism, so that no concurrent classification, restart, loss or restart report can:
+
+* make a stale incarnation current;
+* move the recorded incarnation back; or
+* bind one peer's frames to another peer's entry.
+
+*No limit on concurrent classification.*
+Classification places no limit on how many frames of one peer are classified at once.
+A frame is refused only as stale, as undeclared (`+req~ssr-peer-admission~2+`), or because the table that its declaration sized is genuinely full.
+
+*Restart reports.*
+A binding's restart report fails the calls bound to older incarnations of that peer, and is counted.
+
+*No admission from a stale incarnation.*
+No frame is admitted as current from a stale incarnation.
 --
 
 [horizontal]
 ASIL:: B
 Allocated to:: the element
-Verification:: test (a stale incarnation refused and counted; a newer one recorded, with the calls of older incarnations failed; frames of one peer classified concurrently from several threads, and on an MCU from an interrupt handler where its configuration admits one, with no misclassification and no limit on concurrent classifications; the loss of an old incarnation racing the current incarnation's frames; an unknown identity that is never a wildcard; a genuinely full table refused as full), fault-injection (a restart on real iceoryx2, and a test double that restarts), review (the exclusive step's source argument for each configuration's mechanism, against every participant that can reach the table)
+Verification:: test, fault-injection, review
+* *test*
+** A stale incarnation refused and counted.
+** A newer one recorded, with the calls of older incarnations failed.
+** Frames of one peer classified concurrently from several threads, and on an MCU from an interrupt handler where its configuration admits one, with no misclassification and no limit on concurrent classifications.
+** The loss of an old incarnation racing the current incarnation's frames.
+** An unknown identity that is never a wildcard.
+** A genuinely full table refused as full.
+* *fault-injection*: a restart on real iceoryx2, and a test double that restarts.
+* *review*: the exclusive step's source argument for each configuration's mechanism, against every participant that can reach the table.
 Status:: Draft
 
-*Rationale.* A restarted peer must not inherit frames or calls from its predecessor, and contention must not turn a stale incarnation into a current one. Revision 2 named the mechanism of the 32-bit-word representation, a contended raise refused as contention and at most 255 concurrent classifications of one peer. At this revision the peer table keeps each peer's full 64-bit identity and incarnation in one exclusive record and has neither limit (`+core/src/transport/metadata.rs+`, `+core/src/transport/inbound.rs+`), so the requirement states the outcome that every mechanism keeps instead. Full width removes a wrap window; it does not by itself establish the exclusion argument, which each mechanism's source review supplies (`+req~ssr-atomic-width~2+`).
+*Rationale.*
+A restarted peer must not inherit frames or calls from its predecessor, and contention must not turn a stale incarnation into a current one.
+
+_Why revision 3._
+Revision 2 named the mechanism of one representation: 32-bit words, a contended raise refused as contention, and at most 255 concurrent classifications of one peer.
+Those limits belonged to that mechanism, not to the product.
+A mechanism that keeps each peer's full 64-bit identity and incarnation in one exclusive record has neither limit.
+So the requirement states the outcome that every mechanism keeps instead.
+
+Full width removes a wrap window.
+It does not by itself establish the exclusion argument, which the review of each mechanism supplies (`+req~ssr-atomic-width~2+`).
 
 == Undeclared peers cannot lock out declared ones
 
 [.specitem,oft-sid="req~ssr-peer-admission~2",oft-title="Undeclared peers cannot lock out declared ones",oft-needs="impl,utest",oft-tags="SafetyUpRustCore"]
 --
-On a route with a declared list of peers, a frame from an undeclared source *MUST* be refused and counted before it takes a peer-table entry. The table is sized from the declaration, and a declaration that the table or the binding cannot hold is refused at setup. A lost peer's entry is returned. Returning it never makes a later peer's frames be refused as stale, whatever frames of the lost peer are in flight at that moment.
+On a route with a declared list of peers, a frame from an undeclared source *MUST* be refused and counted before it takes a peer-table entry.
+
+* The table is sized from the declaration, and a declaration that the table or the binding cannot hold is refused at setup.
+* A lost peer's entry is returned.
+* Returning it never makes a later peer's frames be refused as stale, whatever frames of the lost peer are in flight at that moment.
 --
 
 [horizontal]
@@ -110,28 +325,82 @@ Allocated to:: the element
 Verification:: fault-injection (strangers first, then declared clients; a lost peer racing its own last frame, on two threads), miri, test
 Status:: Draft
 
-*Rationale.* Undeclared sources must not consume the entries reserved for declared peers; concurrent reuse must preserve the identity of each entry.
+*Rationale.*
+Undeclared sources must not consume the entries reserved for declared peers.
+Concurrent reuse must preserve the identity of each entry.
 
 == An undecodable request is answered
 
 [.specitem,oft-sid="req~ssr-peer-rpc-undecodable-answered~5",oft-title="An undecodable request is answered",oft-needs="impl,utest",oft-tags="SafetyUpRustCore"]
 --
-A server that receives a request whose header it can parse, but whose payload it cannot decode for a reason other than an end-to-end check, or whose encoding it does not admit, *MUST* answer it through the request's reply token, with commstatus `+InvalidArgument+`, producing the answer without heap, and counts it. The answer is sent as any response on that route is, under the route's overflow policy and heap class, including a bounded wait where the route declares one. The client's call then ends with that error instead of waiting out its TTL. A request whose header cannot be parsed has no reply address: it is refused and counted, and its call ends at its TTL. So does a call whose answer cannot be sent, and that is counted too. A request that an end-to-end check refuses is counted (`+req~ssr-e2e-refusal-counted~2+`) and answered by the wire's refusal answer, final or advisory (`+req~ssr-e2e-refusal-answered~1+`), except a corrupt one, which is never answered. The server cannot tell a corrupted or duplicated copy from the only one, and an error answer to a copy could end a call it is still serving, so an end-to-end refusal never gets an error answer: an advisory refusal answer leaves the call open, and the call ends with the server's real response, or at its TTL. A request whose end-to-end data ID was not declared is answered `+InvalidArgument+`, as an undecodable one is. A request that passes the end-to-end check, and then fails the inner wire's decode, is answered. Every answer, the element's and the application's, is stamped by the route's wire with its request's tag, so on an E2E route it echoes that request. Another server's answer to a misaddressed copy carries that server's data ID, which the client refuses when it declares one server for the method. Every refused request's frame is released at once.
+*The answer.*
+This item covers a request whose header the server can parse, but:
+
+* whose payload it cannot decode for a reason other than an end-to-end check; or
+* whose encoding it does not admit.
+
+A server that receives such a request *MUST* answer it through the request's reply token, with commstatus `+InvalidArgument+`, producing the answer without heap, and counts it.
+
+*Sending the answer.*
+The answer is sent as any response on that route is, under the route's overflow policy and heap class, including a bounded wait where the route declares one.
+The client's call then ends with that error instead of waiting out its TTL.
+
+*Requests that get no answer.*
+
+* A request whose header cannot be parsed has no reply address: it is refused and counted, and its call ends at its TTL.
+* So does a call whose answer cannot be sent, and that is counted too.
+
+*End-to-end refusals.*
+A request that an end-to-end check refuses is counted (`+req~ssr-e2e-refusal-counted~2+`) and answered by the wire's refusal answer, final or advisory (`+req~ssr-e2e-refusal-answered~1+`), except a corrupt one, which is never answered.
+
+The server cannot tell a corrupted or duplicated copy from the only one, and an error answer to a copy could end a call it is still serving.
+So an end-to-end refusal never gets an error answer: an advisory refusal answer leaves the call open, and the call ends with the server's real response, or at its TTL.
+
+* A request whose end-to-end data ID was not declared is answered `+InvalidArgument+`, as an undecodable one is.
+* A request that passes the end-to-end check, and then fails the inner wire's decode, is answered.
+
+*Tags.*
+Every answer, the element's and the application's, is stamped by the route's wire with its request's tag, so on an E2E route it echoes that request.
+Another server's answer to a misaddressed copy carries that server's data ID, which the client refuses when it declares one server for the method.
+
+*Release.*
+Every refused request's frame is released at once.
 --
 
 [horizontal]
 ASIL:: B
 Allocated to:: the element
-Verification:: test (an undecodable request is answered `+InvalidArgument+` on both binding families; a duplicated request that arrives before the real response gets an advisory answer, and its call ends with the real response; a corrupted only copy gets no answer, and its call ends at its TTL; a request with an undeclared data ID is answered `+InvalidArgument+`; a request that passes the end-to-end check and fails the inner decode is answered `+InvalidArgument+`; a refused request whose server never delivered its tag gets a final answer, and its call ends at once as rejected), heap-window (producing each answer; on a serialized route, only the route's declared send-side allocation and release)
+Verification:: test, heap-window
+* *test*
+** An undecodable request is answered `+InvalidArgument+` on both binding families.
+** A duplicated request that arrives before the real response gets an advisory answer, and its call ends with the real response.
+** A corrupted only copy gets no answer, and its call ends at its TTL.
+** A request with an undeclared data ID is answered `+InvalidArgument+`.
+** A request that passes the end-to-end check and fails the inner decode is answered `+InvalidArgument+`.
+** A refused request whose server never delivered its tag gets a final answer, and its call ends at once as rejected.
+* *heap-window*: producing each answer; on a serialized route, only the route's declared send-side allocation and release.
 Status:: Draft
 
-*Rationale.* A known decoding failure can be reported immediately, but an answer to a duplicate must not falsely terminate the call whose original request may still produce a response. The end-to-end clauses bind only a route with the E2E wire, which is deferred and not part of this delivery; the `+InvalidArgument+` answer to an undecodable request, its counting and the release of every refused frame bind every route now. Revision 4 also required the answer's sending to use no heap, which a serialized route whose binding allocates storage for every frame it sends cannot meet; producing the answer stays heap-free on every route, and sending it follows the route's own heap class, which on a native route is none (`+req~ssr-heap-none~2+`).
+*Rationale.*
+A known decoding failure can be reported immediately.
+But an answer to a duplicate must not falsely terminate the call whose original request may still produce a response.
+
+_Scope._
+The end-to-end clauses bind only a route with the E2E wire, which is deferred and not part of this delivery.
+The `+InvalidArgument+` answer to an undecodable request, its counting and the release of every refused frame bind every route now.
+
+_Why revision 5._
+Revision 4 also required the answer's sending to use no heap.
+A serialized route whose binding allocates storage for every frame it sends cannot meet that.
+Producing the answer stays heap-free on every route, and sending it follows the route's own heap class, which on a native route is none (`+req~ssr-heap-none~2+`).
 
 == A call with no server fails at once
 
 [.specitem,oft-sid="req~ssr-peer-rpc-no-server~1",oft-title="A call with no server fails at once",oft-needs="impl,utest",oft-tags="SafetyUpRustCore"]
 --
-On a binding that declares that it counts its receivers exactly, a call whose request reached no server *MUST* fail at once, with an error that names the cause, instead of waiting out its TTL. On any other binding, the call *MUST* end at its TTL.
+On a binding that declares that it counts its receivers exactly, a call whose request reached no server *MUST* fail at once, with an error that names the cause, instead of waiting out its TTL.
+
+On any other binding, the call *MUST* end at its TTL.
 --
 
 [horizontal]
@@ -140,19 +409,75 @@ Allocated to:: the element
 Verification:: test (with and without the capability), heap-window
 Status:: Draft
 
-*Rationale.* Waiting out the TTL of a request that no server received only delays an error the binding already knows, and holds the call's slot until then.
+*Rationale.*
+Waiting out the TTL of a request that no server received only delays an error the binding already knows, and holds the call's slot until then.
 
 == Message IDs are unique
 
 [.specitem,oft-sid="req~ssr-ids-unique~4",oft-title="Message IDs are unique",oft-needs="impl,utest,uman",oft-tags="SafetyUpRustCore"]
 --
-Every message ID the element generates *MUST* be a UUIDv7, as up-spec's rules require, and its 74 bits beyond the millisecond come from one generator per route, seeded once from initialization-only entropy (`+req~ssr-platform-entropy~2+`). Two IDs of one source can therefore collide by chance. The element states that residual, with its derivation: the probability that two IDs collide, per pair within one millisecond, within one route, across a source's routes, and across the source process's restarts, including while the wall clock cannot be read and the last good time is reused. The residual is a probability: where a configuration claims that IDs never repeat across restarts, it *MUST* rest that claim on a checked persistent construction, never on the entropy alone. Generating an ID uses no heap and does not panic, also when the wall clock cannot be read, and the first ID on a thread needs no first-use setup. A generator *MUST* refuse to generate, and count the refusal, rather than repeat an ID's input within its stated period, and its supported configuration's package *MUST* state its period and refusal bounds. For a generator with a 32-bit sequence they are these. Within one route, an ID's input repeats only when the same millisecond recurs and a multiple of 2^32^ IDs separates the two IDs. Generation is refused, and counted, after 2^31^ IDs within one 64 ms bucket of the time the IDs carry, whether the wall clock cannot be read or reads but does not move; a refused call does not advance the sequence. The bucket's changes are detected on a value of their own. The last good time is kept to 64 ms from the clock's reading at the route's setup, and saturates at a ±4.36-year offset of the wall clock from that reading; while it is saturated, an ID needed while the clock cannot be read is refused, and counted.
+*Format and source.*
+Every message ID the element generates *MUST* be a UUIDv7, as up-spec's rules require.
+Its 74 bits beyond the millisecond come from one generator per route, seeded once from initialization-only entropy (`+req~ssr-platform-entropy~2+`).
+
+*The stated residual.*
+Two IDs of one source can therefore collide by chance.
+The element states that residual, with its derivation: the probability that two IDs collide,
+
+* per pair within one millisecond;
+* within one route;
+* across a source's routes;
+* across the source process's restarts, including while the wall clock cannot be read and the last good time is reused.
+
+The residual is a probability.
+Where a configuration claims that IDs never repeat across restarts, it *MUST* rest that claim on a checked persistent construction, never on the entropy alone.
+
+*Cost of generating.*
+Generating an ID uses no heap and does not panic, also when the wall clock cannot be read, and the first ID on a thread needs no first-use setup.
+
+*Refuse rather than repeat.*
+A generator *MUST* refuse to generate, and count the refusal, rather than repeat an ID's input within its stated period.
+Its supported configuration's package *MUST* state its period and refusal bounds.
+
+*Bounds for a generator with a 32-bit sequence.*
+For a generator with a 32-bit sequence they are these:
+
+* Within one route, an ID's input repeats only when the same millisecond recurs and a multiple of 2^32^ IDs separates the two IDs.
+* Generation is refused, and counted, after 2^31^ IDs within one 64 ms bucket of the time the IDs carry, whether the wall clock cannot be read or reads but does not move.
+A refused call does not advance the sequence.
+* The bucket's changes are detected on a value of their own.
+* The last good time is kept to 64 ms from the clock's reading at the route's setup, and saturates at a ±4.36-year offset of the wall clock from that reading.
+While it is saturated, an ID needed while the clock cannot be read is refused, and counted.
 --
 
 [horizontal]
 ASIL:: B
 Allocated to:: the element
-Verification:: review (the stated residual and its derivation; each generator's stated period and refusal bounds against its code), test (no repeat in a large sample, across a restart, and while the clock is unreadable; for a 32-bit sequence, an outage of 2^31^ IDs and then 2^31^ refused calls through a hook, with no repeated input; a stuck clock, a clock read only now and then, and a saturated last good time; a clock step back; a route seeded at 0 whose clock is then set to the present), heap-window (the first ID on a cold thread)
+Verification:: review, test, heap-window
+* *review*
+** The stated residual and its derivation.
+** Each generator's stated period and refusal bounds against its code.
+* *test*
+** No repeat in a large sample, across a restart, and while the clock is unreadable.
+** For a 32-bit sequence, an outage of 2^31^ IDs and then 2^31^ refused calls through a hook, with no repeated input.
+** A stuck clock, a clock read only now and then, and a saturated last good time.
+** A clock step back.
+** A route seeded at 0 whose clock is then set to the present.
+* *heap-window*: the first ID on a cold thread.
 Status:: Draft
 
-*Rationale.* up-spec `+dsn~uuid-spec~1+`. Correlation depends on distinguishing requests across time and reuse; a finite generator needs explicit refusal bounds when its clock cannot advance. The period and the bucket limits are properties of a generator's sequence width, so they are stated with the generator a configuration uses rather than for every target; a wider sequence moves them, and the rule that a generator refuses rather than repeats stays. Random seeding gives a quantified collision probability, not a guarantee that two starts differ, so a claim of non-repetition across restarts needs a construction that can be checked. The 32-bit figures above belong to a generator with a 32-bit sequence; the generator at this revision keeps a 64-bit counter and the full last good time (`+core/src/transport/ids.rs+`), so its period is 2^64^ IDs of one route, and the refusal bounds that this item requires of it are its configuration's to state.
+*Rationale.*
+up-spec `+dsn~uuid-spec~1+`.
+
+Correlation depends on distinguishing requests across time and reuse.
+A finite generator needs explicit refusal bounds when its clock cannot advance.
+
+The period and the bucket limits are properties of a generator's sequence width.
+So they are stated with the generator a configuration uses rather than for every target.
+A wider sequence moves them, and the rule that a generator refuses rather than repeats stays.
+
+Random seeding gives a quantified collision probability, not a guarantee that two starts differ.
+So a claim of non-repetition across restarts needs a construction that can be checked.
+
+The 32-bit figures above belong to a generator with a 32-bit sequence.
+A generator that keeps a 64-bit counter and the full last good time has a period of 2^64^ IDs of one route, and the refusal bounds that this item requires of it are its configuration's to state.

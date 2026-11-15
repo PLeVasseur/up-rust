@@ -3,28 +3,62 @@
 
 The key words "*MUST*", "*MUST NOT*", "*REQUIRED*", "*SHALL*", "*SHALL NOT*", "*SHOULD*", "*SHOULD NOT*", "*RECOMMENDED*", "*MAY*", and "*OPTIONAL*" in this document are to be interpreted as described in https://www.rfc-editor.org/info/bcp14[IETF BCP14 (RFC2119 & RFC8174)]
 
-Conventions, tags and status words: xref:../README.adoc[the safety area's README]. Scope and element boundary: xref:README.adoc[the SEooC's README].
+Conventions, tags and status words: xref:../README.adoc[the safety area's README].
+Scope and element boundary: xref:README.adoc[the SEooC's README].
 
 == The ASIL build aborts on panic and checks overflow
 
 [.specitem,oft-sid="req~ssr-build-panic-abort~3",oft-title="The ASIL build aborts on panic and checks overflow",oft-needs="impl,utest",oft-tags="SafetyStreamer"]
 --
-The ASIL release profile *MUST* set `+panic = "abort"+` and `+overflow-checks = true+`. A build of the ASIL Streamer binary *MUST* refuse to compile unless `+cfg(panic = "abort")+` holds. The refusal sits in that binary, which has `+test = false+` and no integration tests in its package, so that no test build compiles it: Cargo builds tests, and every dependency of a test, with unwinding. Every other build of the workspace *MUST* still compile, `+cargo build+`, `+cargo clippy --all-targets+` and `+cargo doc+` among them. Cargo cannot set `+panic+` for one package, so the development profile *MUST* set `+panic = "abort"+` as well, or the binary's package *MUST* be left out of the workspace's default members.
+*Profile settings.*
+The ASIL release profile *MUST* set `+panic = "abort"+` and `+overflow-checks = true+`.
+
+*The binary refuses an unwinding build.*
+A build of the ASIL Streamer binary *MUST* refuse to compile unless `+cfg(panic = "abort")+` holds.
+The refusal sits in that binary, which has `+test = false+` and no integration tests in its package, so that no test build compiles it: Cargo builds tests, and every dependency of a test, with unwinding.
+
+*Every other build still compiles.*
+Every other build of the workspace *MUST* still compile, `+cargo build+`, `+cargo clippy --all-targets+` and `+cargo doc+` among them.
+
+*Development builds.*
+Cargo cannot set `+panic+` for one package.
+So the development profile *MUST* set `+panic = "abort"+` as well, or the binary's package *MUST* be left out of the workspace's default members.
 --
 
 [horizontal]
 ASIL:: B
 Allocated to:: the Streamer binary
-Verification:: gate (a build of the binary with unwinding fails to compile; the release profile's settings; `+cargo test+` on the workspace still compiles; `+cargo build+`, `+cargo clippy --all-targets+` and `+cargo doc+` on the workspace still compile)
+Verification:: gate
+* A build of the binary with unwinding fails to compile.
+* The release profile's settings.
+* `+cargo test+` on the workspace still compiles.
+* `+cargo build+`, `+cargo clippy --all-targets+` and `+cargo doc+` on the workspace still compile.
 Status:: Draft
 
-*Rationale.* With `+panic = "abort"+`, a panic ends the process at once instead of unwinding through code that may hold half-changed state, and overflow checks turn an arithmetic overflow into that panic instead of a wrong value. The refusal sits in the binary because Cargo builds tests with unwinding: in a library crate, it would stop that crate's tests, and every test that uses the crate, from compiling. Unless the development profile aborts on panic too, or the binary is left out of the default members, a development build of the workspace compiles the binary with unwinding, and fails. Confirm Cargo's behaviour against the toolchain in use. Aborting contains an unexpected defect; it does not permit a reachable panic, which stays a defect (`+req~ssr-refuse-no-panic~1+`), and it does not make admissible a destructor, allocator or dependency that can panic, which setup refuses instead (`+req~ssr-heap-slot-types~2+`).
+*Rationale.*
+With `+panic = "abort"+`, a panic ends the process at once instead of unwinding through code that may hold half-changed state.
+Overflow checks turn an arithmetic overflow into that panic instead of a wrong value.
+
+_Why the refusal sits in the binary._
+Cargo builds tests with unwinding.
+In a library crate, the refusal would stop that crate's tests, and every test that uses the crate, from compiling.
+
+_Why the development profile matters._
+Unless the development profile aborts on panic too, or the binary is left out of the default members, a development build of the workspace compiles the binary with unwinding, and fails.
+Confirm Cargo's behaviour against the toolchain in use.
+
+_What aborting does not do._
+Aborting contains an unexpected defect.
+It does not permit a reachable panic, which stays a defect (`+req~ssr-refuse-no-panic~1+`).
+It does not make admissible a destructor, allocator or dependency that can panic, which setup refuses instead (`+req~ssr-heap-slot-types~2+`).
 
 == The ASIL build contains only specified functions
 
 [.specitem,oft-sid="req~ssr-build-specified-functions-only~1",oft-title="The ASIL build contains only specified functions",oft-needs="impl,utest",oft-tags="SafetyUpRustCore,SafetyStreamer"]
 --
-The ASIL build *MUST* contain only specified functions. Instrumentation, benchmark code and test hooks *MUST* be absent from it, or be specified and shown unable to affect any software safety requirement.
+The ASIL build *MUST* contain only specified functions.
+
+Instrumentation, benchmark code and test hooks *MUST* be absent from it, or be specified and shown unable to affect any software safety requirement.
 --
 
 [horizontal]
@@ -34,83 +68,240 @@ Verification:: gate (a symbols check on a final ASIL image, for test and benchma
 Status:: Draft
 ISO 26262:: 6-10.4.6 (part-clause numbers only)
 
-*Rationale.* Code in an image that no requirement specifies is code that no requirement's verification covers, yet it can still run and change state. `+up-rust-core+` has hidden test hooks today, such as `+__admit_for_tests+` in `+core/src/transport/envelope.rs+` and `+__slice_for_tests+` in `+core/src/memory.rs+`, which an ASIL image would contain unless they are removed or specified.
+*Rationale.*
+Code in an image that no requirement specifies is code that no requirement's verification covers, yet it can still run and change state.
+
+Hidden test hooks are the usual case.
+An ASIL image would contain them unless they are removed or specified (`+req~ssr-no-test-hooks~1+`).
 
 == The shipped element contains no test hook
 
 [.specitem,oft-sid="req~ssr-no-test-hooks~1",oft-title="The shipped element contains no test hook",oft-needs="impl,utest",oft-tags="SafetyUpRustCore"]
 --
-Every item of the element that exists only for tests *MUST* compile only under the `+up_rust_test_hooks+` configuration, which no shipped build sets. The async layer's seam is not a test hook; `+req~ssr-async-seam~2+` states it.
+Every item of the element that exists only for tests *MUST* compile only under the `+up_rust_test_hooks+` configuration, which no shipped build sets.
+
+The async layer's seam is not a test hook; `+req~ssr-async-seam~2+` states it.
 --
 
 [horizontal]
 ASIL:: B
 Allocated to:: the element
-Verification:: gate (the source scan refuses a hidden `+pub fn __+` that is neither under the configuration nor one of the seam's names; built without the configuration, a probe naming each test hook fails to resolve)
+Verification:: gate
+* The source scan refuses a hidden `+pub fn __+` that is neither under the configuration nor one of the seam's names.
+* Built without the configuration, a probe naming each test hook fails to resolve.
 Status:: Draft
 
-*Rationale.* A test hook that changes hidden protocol state must not become an operation available in a shipped build.
+*Rationale.*
+A test hook that changes hidden protocol state must not become an operation available in a shipped build.
 
-== The async seam has a written contract
+== The asynchronous interface has a written, executor-independent contract
 
 [.specitem,oft-sid="req~ssr-async-seam~2",oft-title="The asynchronous interface has a written, executor-independent contract",oft-needs="impl,utest,uman",oft-tags="SafetyUpRustCore"]
 --
-An asynchronous interface to the element's runtime operations, and the seam it uses to learn when a route or a call can make progress, *MUST* have a written contract, stated with the element, that holds whichever scheduler runs it. For each operation the contract names its submission event, its acceptance event and the clock of its deadline, the contexts that may call it, and what it requires of a scheduler. It *MUST* keep these properties:
+*A written contract.*
+An asynchronous interface to the element's runtime operations, and the seam it uses to learn when a route or a call can make progress, *MUST* have a written contract, stated with the element, that holds whichever scheduler runs it.
 
-* _Progress._ A progress step returns a completion or a pending result. It *MUST NOT* wait for a peer, for middleware, in a blocking operating-system call or in an overflow wait, and its work is bounded as `+req~ssr-bound-work~2+` states. A step that returns pending has arranged a notification of the event it waits for, with no window in which that event can be missed, and it does not poll in a loop or notify itself instead. An operation that needs a blocking wait is offered synchronously, not as an asynchronous step.
-* _Concurrent waiters._ Every pending operation that the admitted capacity of its route or call table allows keeps its own notification path: registering, replacing its own registration, completing or abandoning one operation never removes or overwrites another's. Registration storage is part of the admitted capacity (`+req~ssr-memory-computable~3+`). A notification is a hint, never an arrival (`+req~ssr-qos-deadline~4+`), and the operation rechecks its state after every notification.
-* _Abandonment and commit._ Abandoning an operation before its submission event leaves nothing submitted. Abandoning it afterwards never recalls submitted traffic or undoes anything at a peer. Each owner the operation held is returned or released exactly once under its route's rules (`+req~ssr-release-lease-drop~3+`, `+req~ssr-heap-slot-types~2+`), or stays charged until that can complete. Abandonment, like a drop, neither waits nor panics, and a release that may wait leaves the abandoning step as pending cleanup. A completion offered after the operation was abandoned, or for an earlier tenure of its slot, completes nothing (`+req~ssr-peer-rpc-correlation~3+`).
-* _Lifetime._ An operation abandoned without its cleanup running, because safe code forgot it, leaves no notification or callback able to reach storage that is no longer valid, and keeps its capacity charged instead of letting its slot be reused while still owned. Dropping an asynchronous handle to an activated role stops no service and releases no runtime resource (`+req~ssr-release-inert-drop~1+`).
-* _Deadlines._ A scheduler's timer only causes another progress step: it never extends, shortens or replaces an operation's deadline, its clock or its acceptance event (`+req~ssr-bound-wait~2+`). A result committed at its acceptance event before the deadline stands however late it is observed, and a completion whose acceptance event falls after the deadline is refused even when a timer or a timeout wrapper reports the operation ready.
-* _Ownership and resources._ A native transmit loan is submitted or given back before its operation returns pending, so no pending operation holds one; a native receive borrow stays tied to its retained owner while suspended, and abandoning an operation revokes no other borrower and never copies or serializes its payload. On a native path the contract covers the registration, replacement, notification, abandonment, completion and timer work that an operation causes, which keeps `+req~ssr-heap-none~2+` and `+req~ssr-refuse-no-panic~1+` only in a configuration whose package establishes that for its scheduler; elsewhere a native asynchronous operation is not offered or is refused at setup by name, and is never replaced by a serialized one.
-* _Service._ The element's deadline accounting, expiry and deferred release do not depend on whether an application polls its asynchronous operations, and using the asynchronous interface adds no service duty to the application. Pending cleanup never runs on, holds or occupies a scheduler context or other execution resource that progress steps, notifications, deadline and expiry accounting or other owners' returns need (`+req~ssr-release-lease-drop~3+`); where a configuration's scheduler cannot keep a waiting release off such a resource, that asynchronous composition is refused at setup by name.
+For each operation the contract names:
 
-Asynchronous use needs no particular scheduler and no finite timing bound. Tests verify the contract against core and against each scheduler that a configuration supports. From the API freeze, the contract is a documented part of the element's API.
+* its submission event;
+* its acceptance event and the clock of its deadline;
+* the contexts that may call it;
+* what it requires of a scheduler.
+
+It *MUST* keep the seven properties below.
+
+*1. Progress.*
+
+* A progress step returns a completion or a pending result.
+* It *MUST NOT* wait for a peer, for middleware, in a blocking operating-system call or in an overflow wait, and its work is bounded as `+req~ssr-bound-work~2+` states.
+* A step that returns pending has arranged a notification of the event it waits for, with no window in which that event can be missed, and it does not poll in a loop or notify itself instead.
+* An operation that needs a blocking wait is offered synchronously, not as an asynchronous step.
+
+*2. Concurrent waiters.*
+
+* Every pending operation that the admitted capacity of its route or call table allows keeps its own notification path.
+Registering, replacing its own registration, completing or abandoning one operation never removes or overwrites another's.
+* Registration storage is part of the admitted capacity (`+req~ssr-memory-computable~3+`).
+* A notification is a hint, never an arrival (`+req~ssr-qos-deadline~4+`), and the operation rechecks its state after every notification.
+
+*3. Abandonment and commit.*
+
+* Abandoning an operation before its submission event leaves nothing submitted.
+* Abandoning it afterwards never recalls submitted traffic or undoes anything at a peer.
+* Each owner the operation held is returned or released exactly once under its route's rules (`+req~ssr-release-lease-drop~3+`, `+req~ssr-heap-slot-types~2+`), or stays charged until that can complete.
+* Abandonment, like a drop, neither waits nor panics, and a release that may wait leaves the abandoning step as pending cleanup.
+* A completion offered after the operation was abandoned, or for an earlier tenure of its slot, completes nothing (`+req~ssr-peer-rpc-correlation~3+`).
+
+*4. Lifetime.*
+
+* An operation abandoned without its cleanup running, because safe code forgot it, leaves no notification or callback able to reach storage that is no longer valid.
+It keeps its capacity charged instead of letting its slot be reused while still owned.
+* Dropping an asynchronous handle to an activated role stops no service and releases no runtime resource (`+req~ssr-release-inert-drop~1+`).
+
+*5. Deadlines.*
+
+* A scheduler's timer only causes another progress step.
+It never extends, shortens or replaces an operation's deadline, its clock or its acceptance event (`+req~ssr-bound-wait~2+`).
+* A result committed at its acceptance event before the deadline stands however late it is observed.
+* A completion whose acceptance event falls after the deadline is refused even when a timer or a timeout wrapper reports the operation ready.
+
+*6. Ownership and resources.*
+
+* A native transmit loan is submitted or given back before its operation returns pending, so no pending operation holds one.
+* A native receive borrow stays tied to its retained owner while suspended.
+* Abandoning an operation revokes no other borrower and never copies or serializes its payload.
+* On a native path the contract covers the registration, replacement, notification, abandonment, completion and timer work that an operation causes.
+That work keeps `+req~ssr-heap-none~2+` and `+req~ssr-refuse-no-panic~1+` only in a configuration whose package establishes that for its scheduler.
+Elsewhere a native asynchronous operation is not offered or is refused at setup by name, and is never replaced by a serialized one.
+
+*7. Service.*
+
+* The element's deadline accounting, expiry and deferred release do not depend on whether an application polls its asynchronous operations.
+* Using the asynchronous interface adds no service duty to the application.
+* Pending cleanup never runs on, holds or occupies a scheduler context or other execution resource that progress steps, notifications, deadline and expiry accounting or other owners' returns need (`+req~ssr-release-lease-drop~3+`).
+* Where a configuration's scheduler cannot keep a waiting release off such a resource, that asynchronous composition is refused at setup by name.
+
+*No scheduler or timing bound is required.*
+Asynchronous use needs no particular scheduler and no finite timing bound.
+
+*Verification and status of the contract.*
+Tests verify the contract against core and against each scheduler that a configuration supports.
+From the API freeze, the contract is a documented part of the element's API.
 --
 
 [horizontal]
 ASIL:: B
 Allocated to:: the element's seam; the asynchronous layer that implements the interface
-Verification:: test (the contract's controls against core and under each supported scheduler: readiness before, during and after registration; spurious and coalesced notifications; several waiters on one route and on one call table, with an older waiter abandoned after a newer registration; abandonment before and after submission and during completion; a completion offered late or for an earlier tenure; a forgotten operation; a timer that fires before, at and after the deadline, and a timeout wrapper that reports ready past the deadline; a release held pending while progress steps, notifications, expiry and other owners' returns continue; native paths inside heap windows), miri (the seam's registration storage), review (the contract against the code, and each scheduler's causal resource behaviour against its package)
+Verification:: test, miri, review
+* *test*: the contract's controls against core and under each supported scheduler.
+** Readiness before, during and after registration.
+** Spurious and coalesced notifications.
+** Several waiters on one route and on one call table, with an older waiter abandoned after a newer registration.
+** Abandonment before and after submission and during completion.
+** A completion offered late or for an earlier tenure.
+** A forgotten operation.
+** A timer that fires before, at and after the deadline, and a timeout wrapper that reports ready past the deadline.
+** A release held pending while progress steps, notifications, expiry and other owners' returns continue.
+** Native paths inside heap windows.
+* *miri*: the seam's registration storage.
+* *review*: the contract against the code, and each scheduler's causal resource behaviour against its package.
 Status:: Draft
 
-*Rationale.* An asynchronous layer can miss a notification, overwrite another operation's, keep storage alive incorrectly or accept a late result unless registration, progress, abandonment, lifetime and deadline responsibilities are explicit. Revision 1 named the five hidden functions and the wake-storage type that the current Tokio integration calls, which tied the requirement to one integration's shape and said nothing about concurrent waiters, abandonment, forgotten operations or deadlines. This revision states the observable contract that an executor-independent layer keeps, so any scheduler can drive it; the seam's names, the language's future and wake-up types, and the integrations with particular schedulers belong in the implementation's guidance and evidence. A generic timeout wrapper may report an operation ready after its own deadline has passed, so the element's acceptance rule, not the wrapper, decides lateness. A scheduler's wake-up mechanism can allocate, panic or run other code, so a native resource claim for an asynchronous path rests on the package that supplies the scheduler, never on the interface alone. A release that waits on a scheduler's own worker would stop every task that worker drives, so pending cleanup is kept off the contexts that progress needs.
+*Rationale.*
+An asynchronous layer can miss a notification, overwrite another operation's, keep storage alive incorrectly or accept a late result unless registration, progress, abandonment, lifetime and deadline responsibilities are explicit.
+
+_Why revision 2._
+Revision 1 named the hidden functions and the wake-storage type that one scheduler integration called.
+That tied the requirement to one integration's shape, and it said nothing about concurrent waiters, abandonment, forgotten operations or deadlines.
+
+This revision states the observable contract that an executor-independent layer keeps, so any scheduler can drive it.
+The seam's names, the language's future and wake-up types, and the integrations with particular schedulers belong in the implementation's guidance and evidence.
+
+_Timeouts._
+A generic timeout wrapper may report an operation ready after its own deadline has passed.
+So the element's acceptance rule, not the wrapper, decides lateness.
+
+_Schedulers and native claims._
+A scheduler's wake-up mechanism can allocate, panic or run other code.
+So a native resource claim for an asynchronous path rests on the package that supplies the scheduler, never on the interface alone.
+
+_Pending cleanup._
+A release that waits on a scheduler's own worker would stop every task that worker drives.
+So pending cleanup is kept off the contexts that progress needs.
 
 == Strict mode checks in initialization only
 
 [.specitem,oft-sid="req~ssr-strict-init-only~1",oft-title="Strict mode checks in initialization only",oft-needs="impl,utest",oft-tags="SafetyUpRustCore"]
 --
-Every strict-mode policy check *MUST* run in initialization mode, before the transition: at a route's build for the rules that concern one route, and at the transition for the rest. Its findings are fixed-size values that can be copied, its reports are written into storage the caller provides, and nothing it does allocates, blocks or panics. Runtime paths do not execute the strict-policy checker, consult its policy or produce its findings. Settings fixed during initialization may select runtime behavior explicitly required elsewhere, including the strict ASIL RPC older-incarnation refusal in `+req~ssr-e2e-resync~4+`. That E2E behavior retains the runtime no-heap and bounded-work requirements; initialization-only policy checking does not mean identical E2E receive semantics in every configuration.
+*When checks run.*
+Every strict-mode policy check *MUST* run in initialization mode, before the transition: at a route's build for the rules that concern one route, and at the transition for the rest.
+
+*Cost of checking.*
+
+* Its findings are fixed-size values that can be copied.
+* Its reports are written into storage the caller provides.
+* Nothing it does allocates, blocks or panics.
+
+*Runtime paths.*
+Runtime paths do not execute the strict-policy checker, consult its policy or produce its findings.
+
+*Initialization-selected runtime behaviour.*
+Settings fixed during initialization may select runtime behavior explicitly required elsewhere, including the strict ASIL RPC older-incarnation refusal in `+req~ssr-e2e-resync~4+`.
+That E2E behavior retains the runtime no-heap and bounded-work requirements.
+Initialization-only policy checking does not mean identical E2E receive semantics in every configuration.
 --
 
 [horizontal]
 ASIL:: B
 Allocated to:: the element's strict mode
-Verification:: test (each rule's finding at setup, with a negative control per rule), heap-window (setup and the transition in the Enforce state), review (no runtime path runs the policy checker or reads its policy; initialization-selected E2E behavior is distinguished from policy checking and retains the runtime bounds)
+Verification:: test, heap-window, review
+* *test*: each rule's finding at setup, with a negative control per rule.
+* *heap-window*: setup and the transition in the Enforce state.
+* *review*: no runtime path runs the policy checker or reads its policy; initialization-selected E2E behavior is distinguished from policy checking and retains the runtime bounds.
 Status:: Draft
 
-*Rationale.* Admission findings must be complete before runtime starts, so policy checking cannot add runtime allocation or configuration work. The admitted configuration can still select a specified E2E receive rule that executes during runtime. That clause binds only a route with the E2E wire, which is deferred and not part of this delivery; the initialization-only rule binds every strict-mode check now.
+*Rationale.*
+Admission findings must be complete before runtime starts, so policy checking cannot add runtime allocation or configuration work.
+
+The admitted configuration can still select a specified E2E receive rule that executes during runtime.
+That clause binds only a route with the E2E wire, which is deferred and not part of this delivery.
+The initialization-only rule binds every strict-mode check now.
 
 == The locked build allows only enforcement
 
 [.specitem,oft-sid="req~ssr-strict-lock~2",oft-title="The locked build allows only enforcement",oft-needs="impl,utest",oft-tags="SafetyUpRustCore"]
 --
-Under `+--cfg up_rust_strict+`, set only in the integrator's build configuration, strict mode *MUST* have only its Enforce state: code that names another state fails to compile, and deployment data that names one is refused at setup. Every transport carries a strict-mode policy. A crate or route that the configuration's declared safety dependency graph does not admit *MUST* be refused under the configuration, at build time where the crate can tell and otherwise at setup, naming the crate or route and its replacement. The refusal follows the actual dependency graph and each route's declared heap class, not a crate's name: a wire that uses the heap is refused on a native route and admitted on a serialized route that declares its allocation; classic routes stay outside the two-mode contract (`+req~ssr-mode-classic-excluded~1+`); and code that the claimed graph does not contain keeps its ordinary use.
+*Only Enforce.*
+Under `+--cfg up_rust_strict+`, set only in the integrator's build configuration, strict mode *MUST* have only its Enforce state:
+
+* code that names another state fails to compile;
+* deployment data that names one is refused at setup.
+
+Every transport carries a strict-mode policy.
+
+*Refusal outside the declared graph.*
+A crate or route that the configuration's declared safety dependency graph does not admit *MUST* be refused under the configuration, at build time where the crate can tell and otherwise at setup, naming the crate or route and its replacement.
+
+*What the refusal follows.*
+The refusal follows the actual dependency graph and each route's declared heap class, not a crate's name:
+
+* a wire that uses the heap is refused on a native route and admitted on a serialized route that declares its allocation;
+* classic routes stay outside the two-mode contract (`+req~ssr-mode-classic-excluded~1+`);
+* code that the claimed graph does not contain keeps its ordinary use.
 --
 
 [horizontal]
 ASIL:: B
 Allocated to:: the element's strict mode
-Verification:: gate (a crate that the declared graph does not admit fails to build or set up under the configuration, naming its replacement; a probe naming another state fails to compile), test (deployment data naming another state is refused at setup; a transport without a policy is refused; an allocating wire is refused on a native route and admitted on a serialized route that declares its allocation)
+Verification:: gate, test
+* *gate*
+** A crate that the declared graph does not admit fails to build or set up under the configuration, naming its replacement.
+** A probe naming another state fails to compile.
+* *test*
+** Deployment data naming another state is refused at setup.
+** A transport without a policy is refused.
+** An allocating wire is refused on a native route and admitted on a serialized route that declares its allocation.
 Status:: Draft
 
-*Rationale.* An integrator-selected build lock prevents a development setting or convenience dependency from silently restoring an unsupported runtime surface. Refusing every crate of a kind, such as every allocating wire or the whole `+up-rust+` facade, would refuse configurations the safety case can support, and force ordinary users to migrate only to keep communicating; judging the claimed graph and each route's declared class refuses what the claim cannot support and nothing else. Native guarantees cannot be relaxed by a route label or by a serialized route's permission, and a previously accepted middleware deviation keeps exactly its stated scope.
+*Rationale.*
+An integrator-selected build lock prevents a development setting or convenience dependency from silently restoring an unsupported runtime surface.
+
+Refusing every crate of a kind, such as every allocating wire or the whole `+up-rust+` facade, would refuse configurations the safety case can support.
+It would also force ordinary users to migrate only to keep communicating.
+Judging the claimed graph and each route's declared class refuses what the claim cannot support and nothing else.
+
+Native guarantees cannot be relaxed by a route label or by a serialized route's permission, and a previously accepted middleware deviation keeps exactly its stated scope.
 
 == An acknowledgement names a deviation by ID and revision
 
 [.specitem,oft-sid="req~ssr-strict-ack-revision~1",oft-title="An acknowledgement names a deviation by ID and revision",oft-needs="impl,utest",oft-tags="SafetyUpRustCore"]
 --
-A strict-mode acknowledgement *MUST* name one deviation by its ID and its revision, never by its type, with a reference, an approver and a date. When a deviation's revision rises, an acknowledgement of its earlier revision no longer holds, so its finding refuses again in the Enforce state until it is acknowledged anew. A known failure is refused whatever is acknowledged.
+A strict-mode acknowledgement *MUST* name one deviation by its ID and its revision, never by its type, with a reference, an approver and a date.
+
+When a deviation's revision rises, an acknowledgement of its earlier revision no longer holds.
+So its finding refuses again in the Enforce state until it is acknowledged anew.
+
+A known failure is refused whatever is acknowledged.
 --
 
 [horizontal]
@@ -119,19 +310,45 @@ Allocated to:: the element's strict mode
 Verification:: test (an acknowledgement of an earlier revision refuses again; one that names an unknown ID is refused; a known failure refuses whatever is acknowledged)
 Status:: Draft
 
-*Rationale.* Acknowledging an earlier deviation cannot establish acceptance of a later change to its scope or consequences.
+*Rationale.*
+Acknowledging an earlier deviation cannot establish acceptance of a later change to its scope or consequences.
 
 == Strict mode reports on every run
 
 [.specitem,oft-sid="req~ssr-strict-report~2",oft-title="Strict mode reports on every run",oft-needs="impl,utest",oft-tags="SafetyUpRustCore"]
 --
-Whenever strict mode is in its Report or Enforce state, setup *MUST* produce a compliance report: every finding, with its rule, its route, the requirement IDs it serves and its fix; the acknowledged deviations; for each monitored route, its detection bound with J where a supported configuration establishes J, or a statement that no finite bound is established (`+req~ssr-qos-deadline~4+`), and any servicing or watchdog range that its configuration's representation needs; the timing and assurance claims each route requested and was admitted under, with the configuration and the evidence state each rests on, and, for a route or process with no admitted assurance scope, that its assurance is Draft and unassessed, which refuses nothing; the assumptions of use that apply to the features configured; and each cited item's revision and status, so that a run before the requirements are signed off says that its rules rest on draft items. In the Enforce state every finding is still reported, so one run shows everything to fix. The report *MUST* say that passing its checks is neither a safety qualification nor an assessment.
+Whenever strict mode is in its Report or Enforce state, setup *MUST* produce a compliance report.
+The report holds:
+
+* every finding, with its rule, its route, the requirement IDs it serves and its fix;
+* the acknowledged deviations;
+* for each monitored route, its detection bound with J where a supported configuration establishes J, or a statement that no finite bound is established (`+req~ssr-qos-deadline~4+`), and any servicing or watchdog range that its configuration's representation needs;
+* the timing and assurance claims each route requested and was admitted under, with the configuration and the evidence state each rests on;
+* for a route or process with no admitted assurance scope, that its assurance is Draft and unassessed, which refuses nothing;
+* the assumptions of use that apply to the features configured;
+* each cited item's revision and status, so that a run before the requirements are signed off says that its rules rest on draft items.
+
+In the Enforce state every finding is still reported, so one run shows everything to fix.
+
+The report *MUST* say that passing its checks is neither a safety qualification nor an assessment.
 --
 
 [horizontal]
 ASIL:: B
 Allocated to:: the element's strict mode
-Verification:: test (a run's report with findings of every severity; the cited-items line before and after sign-off; a monitored route with and without an established J; a route's requested and admitted claims; an ASIL-labelled configuration with no assurance package, reported Draft and unassessed and not refused), review (the report's fields against this item)
+Verification:: test, review
+* *test*
+** A run's report with findings of every severity.
+** The cited-items line before and after sign-off.
+** A monitored route with and without an established J.
+** A route's requested and admitted claims.
+** An ASIL-labelled configuration with no assurance package, reported Draft and unassessed and not refused.
+* *review*: the report's fields against this item.
 Status:: Draft
 
-*Rationale.* A compliance report makes declarations, deviations and outstanding duties inspectable; a Draft citation must remain distinguishable from a signed-off requirement. A check can only show that its observable predicates held, so the report keeps claims, the evidence they rest on and the checks that passed apart (xref:README.adoc#claims[the SEooC's claims]).
+*Rationale.*
+A compliance report makes declarations, deviations and outstanding duties inspectable.
+A Draft citation must remain distinguishable from a signed-off requirement.
+
+A check can only show that its observable predicates held.
+So the report keeps claims, the evidence they rest on and the checks that passed apart (xref:README.adoc#claims[the SEooC's claims]).

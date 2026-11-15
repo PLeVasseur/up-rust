@@ -9,7 +9,18 @@ Covers:
 
 Draft integrator guidance against the corrected specification input. The quotation states
 requirements and assumptions, including future behavior; it is not an assertion
-that the current SDK implements them. Revision 7 separates the duties that hold now, deciding which routes need end-to-end protection, supplying and justifying the integrator's own protection there, and the black-channel and decomposition rules, from the duties that bind only a route that selects the SDK's E2E wire. That wire is deferred and not part of this delivery, so no wrapper duty applies to a current route, and its fourteen requirements keep their identifiers and revisions without implementation, gate or coverage credit. For a later route on the wire, the accepted pre-adoption accounting rule is exact when proven, otherwise explicitly unknown.
+that the current SDK implements them.
+
+Revision 7 separates two groups of duties:
+
+- Duties that hold now: deciding which routes need end-to-end protection, supplying and justifying the integrator's own protection there, and the black-channel and decomposition rules.
+- Duties that bind only a route that selects the SDK's E2E wire.
+
+That wire is deferred and not part of this delivery.
+
+- No wrapper duty applies to a current route.
+- Its fourteen requirements keep their identifiers and revisions without implementation, gate or coverage credit.
+- For a later route on the wire, the accepted pre-adoption accounting rule is exact when proven, otherwise explicitly unknown.
 
 Read [manual status](README.md) before using this entry. A documentary coverage
 link neither validates the deployment nor closes an implementation requirement.
@@ -17,7 +28,13 @@ link neither validates the deployment nor closes an implementation requirement.
 ## Assumption (verbatim)
 
 <!-- aou-statement:start -->
-> The integrator *SHALL* decide which routes carry data that needs end-to-end protection, and *SHALL* supply protection on each of them and justify it for the item. In this delivery that protection is the integrator's own mechanism: the SDK's E2E wire `+E2e<W>+` is deferred and not part of it. The integrator states which faults its mechanism detects, the boundary it covers and the residuals it leaves, and its analysis of the route rests on that statement. Data above ASIL B that relies on such protection stays within the decomposition and coexistence duties of `+aou~seooc-integrity-levels~5+`. End-to-end protection adds to the element's own duties and replaces none of them: RPC correlation, TTL, ownership, and the refusal and error handling of every route hold whether a route is protected or not, and message IDs are not authentication (`+aou~seooc-peer-access~4+`). Nothing in the element requires end-to-end protection on any route, including routes at an ASIL integrity level. In strict mode, on an ASIL route over a transport the integrator classifies as a black channel, the route names the integrator's own protection or, once the E2E wire is delivered and selected for it, uses that wire; the report lists the protection named for each route, and warns of an unclassified transport.
+> The integrator *SHALL* decide which routes carry data that needs end-to-end protection, and *SHALL* supply protection on each of them and justify it for the item.
+>
+> * *In this delivery.* In this delivery that protection is the integrator's own mechanism: the SDK's E2E wire `+E2e<W>+` is deferred and not part of it. The integrator states which faults its mechanism detects, the boundary it covers and the residuals it leaves, and its analysis of the route rests on that statement.
+> * *Above ASIL B.* Data above ASIL B that relies on such protection stays within the decomposition and coexistence duties of `+aou~seooc-integrity-levels~5+`.
+> * *Adds, and replaces nothing.* End-to-end protection adds to the element's own duties and replaces none of them: RPC correlation, TTL, ownership, and the refusal and error handling of every route hold whether a route is protected or not, and message IDs are not authentication (`+aou~seooc-peer-access~4+`).
+> * *Not required by the element.* Nothing in the element requires end-to-end protection on any route, including routes at an ASIL integrity level.
+> * *Strict mode.* In strict mode, on an ASIL route over a transport the integrator classifies as a black channel, the route names the integrator's own protection or, once the E2E wire is delivered and selected for it, uses that wire; the report lists the protection named for each route, and warns of an unclassified transport.
 >
 > The duties that follow bind only a route that selects the SDK's E2E wire, once that wire is delivered. A route protected by the integrator's own mechanism, or not protected, is bound by none of them. Where the E2E wire is selected for a route, the integrator:
 >
@@ -40,24 +57,54 @@ link neither validates the deployment nor closes an implementation requirement.
 > ** a request duplicated more than once, whose extra answers can overflow the client's response queue; the route's overflow policy then drops and counts the extra frame, and if that frame is the real response and no later acceptable response or protected final answer completes the call, it ends at its TTL, naming the repeat;
 > ** where a client declares several servers for one method, an answer from another declared server to a misaddressed copy, which passes.
 >
-> On a route that selects the E2E wire, strict mode adds these rules: every such receive route declares a deadline or `+event_only()+`; the clients of such an ASIL RPC route are declared increasing, from a counter kept across restarts and boots, never the wall clock, which the integrator makes durable before use and keeps per sender construction, never per boot, and after replacing a client ECU the integrator restarts its servers. On such a strict ASIL RPC request route, the receiver refuses every incarnation older than the newest adopted, counts the refusal and answers under the final/advisory proof in `+req~ssr-e2e-refusal-answered~1+`; it never re-adopts an older incarnation through a run (`+req~ssr-e2e-resync~4+`). The persistent counter declaration alone does not provide that receive rule. The report lists each E2E route's senders, data IDs, `+resync_frames+`, start declarations with their duty, thread duties and figures.
+> On a route that selects the E2E wire, strict mode adds these rules: every such receive route declares a deadline or `+event_only()+`; the clients of such an ASIL RPC route are declared increasing, from a counter kept across restarts and boots, never the wall clock, which the integrator makes durable before use and keeps per sender construction, never per boot, and after replacing a client ECU the integrator restarts its servers.
+>
+> On such a strict ASIL RPC request route, the receiver refuses every incarnation older than the newest adopted, counts the refusal and answers under the final/advisory proof in `+req~ssr-e2e-refusal-answered~1+`; it never re-adopts an older incarnation through a run (`+req~ssr-e2e-resync~4+`). The persistent counter declaration alone does not provide that receive rule.
+>
+> The report lists each E2E route's senders, data IDs, `+resync_frames+`, start declarations with their duty, thread duties and figures.
 <!-- aou-statement:end -->
 
 ## Integrator actions
 
 The integrator SHALL complete and retain the following checklist for the item:
 
-- [ ] Perform a route-by-route analysis of exchange-of-information faults and decide which routes need end-to-end protection. For each, supply the integrator's own protection, record the faults it detects, the boundary it covers and the residuals it leaves, and justify it for the item. The SDK's E2E wire is not available in this delivery; optional protection does not remove the integrator's duty.
-- [ ] Classify each transport as trusted or as a black channel. For every ASIL route over a black channel, name the protection supplied; for data above ASIL B, keep the decomposition and coexistence arguments that integrity-levels requires. Keep the element's RPC correlation, TTL, ownership and error handling in the analysis: protection replaces none of them, and message IDs are not authentication.
-- [ ] Only for a route that selects the deferred E2E wire, once it is delivered: record exact non-wildcard senders and receiver peers, derived data IDs and their collision domain, resync_frames, one live sender per data ID, role-specific addressing and at most one E2E wrapper per route.
-- [ ] Only for such a route: permit a declaration of increasing starts only with evidence across every construction, restart and boot; for a strict ASIL RPC route on the wire, use a durable per-sender construction counter, not wall time, persisted before use, and restart servers after replacing a client ECU. Plan one sending thread per publish/request route and one decoder per route under the binding's documented threading model, and supply a deadline where detecting silence matters; an explicit event-only choice accepts the lack of deadline-based silence/delay detection.
-- [ ] Only for such a route: review each quoted residual explicitly (incarnation collision, undetected corruption, displaced-incarnation replay, refused RPC copies, default-mode late adoption/re-execution, the 63-counter window, the server-restart final-answer residual, unprotected TTL/ID and clock agreement, false increasing-start lockout, duplicate-response overflow and multiple-server misaddressing). Require actual protection of request/response correlation and protected final/advisory responses before relying on them; account separately for corrupt-request silence and unprotected Streamer errors, and never count a refused copy as necessarily ending an otherwise completable call.
-- [ ] Only for such a route, in strict mode: verify that the strict ASIL RPC receiver refuses, counts and answers every incarnation older than the newest adopted, without starting/extending a run or re-adopting it; a persistent start counter alone does not implement that rule. Check the final/advisory non-delivery proof and keep the default-mode residual separate. Read the never-arrived-before-adoption figure as exact only when its retained distinct-arrival history proves it, unknown otherwise, with saturation as a lower bound, and verify bounded history with no runtime allocation, freeing or waiting in the implementing release.
+- [ ] **Decide which routes need protection, and supply it.**
+  - Perform a route-by-route analysis of exchange-of-information faults and decide which routes need end-to-end protection.
+  - For each, supply the integrator's own protection, record the faults it detects, the boundary it covers and the residuals it leaves, and justify it for the item.
+  - The SDK's E2E wire is not available in this delivery. Optional protection does not remove the integrator's duty.
+- [ ] **Classify each transport.**
+  - Classify each transport as trusted or as a black channel.
+  - For every ASIL route over a black channel, name the protection supplied.
+  - For data above ASIL B, keep the decomposition and coexistence arguments that integrity-levels requires.
+  - Keep the element's RPC correlation, TTL, ownership and error handling in the analysis: protection replaces none of them, and message IDs are not authentication.
+- [ ] **Only for a route that selects the deferred E2E wire, once it is delivered: record its declarations.**
+  - Record exact non-wildcard senders and receiver peers, derived data IDs and their collision domain, resync_frames, one live sender per data ID, role-specific addressing and at most one E2E wrapper per route.
+- [ ] **Only for such a route: starts, threads and deadlines.**
+  - Permit a declaration of increasing starts only with evidence across every construction, restart and boot.
+  - For a strict ASIL RPC route on the wire, use a durable per-sender construction counter, not wall time, persisted before use, and restart servers after replacing a client ECU.
+  - Plan one sending thread per publish/request route and one decoder per route under the binding's documented threading model.
+  - Supply a deadline where detecting silence matters. An explicit event-only choice accepts the lack of deadline-based silence/delay detection.
+- [ ] **Only for such a route: review each quoted residual explicitly.**
+  - The residuals are: incarnation collision, undetected corruption, displaced-incarnation replay, refused RPC copies, default-mode late adoption/re-execution, the 63-counter window, the server-restart final-answer residual, unprotected TTL/ID and clock agreement, false increasing-start lockout, duplicate-response overflow and multiple-server misaddressing.
+  - Require actual protection of request/response correlation and protected final/advisory responses before relying on them.
+  - Account separately for corrupt-request silence and unprotected Streamer errors.
+  - Never count a refused copy as necessarily ending an otherwise completable call.
+- [ ] **Only for such a route, in strict mode: verify the receive rule and the figures.**
+  - Verify that the strict ASIL RPC receiver refuses, counts and answers every incarnation older than the newest adopted, without starting/extending a run or re-adopting it. A persistent start counter alone does not implement that rule.
+  - Check the final/advisory non-delivery proof and keep the default-mode residual separate.
+  - Read the never-arrived-before-adoption figure as exact only when its retained distinct-arrival history proves it, unknown otherwise, with saturation as a lower bound.
+  - Verify bounded history with no runtime allocation, freeing or waiting in the implementing release.
 
 ## Violation manifestations
 
-A route that needs protection and has none, or whose protection misses the faults it is relied on to detect, can deliver corrupted, repeated, delayed or misaddressed data unnoticed. On a later route with the E2E wire, misconfiguration can cause lockout, replayed request execution, silent delay, wrong-peer acceptance or refused calls that reach TTL, and counter or incarnation corruption can suppress good traffic. CRC-valid but semantically wrong payload remains possible.
+- A route that needs protection and has none, or whose protection misses the faults it is relied on to detect, can deliver corrupted, repeated, delayed or misaddressed data unnoticed.
+- On a later route with the E2E wire, misconfiguration can cause lockout, replayed request execution, silent delay, wrong-peer acceptance or refused calls that reach TTL.
+- On such a route, counter or incarnation corruption can suppress good traffic.
+- CRC-valid but semantically wrong payload remains possible.
 
 ## Detection limits
 
-The element cannot see whether a route needs protection or whether the integrator's protection works. End-to-end protection does not authenticate a sender, protect a shared-memory race, cover all outer header fields, or validate an application's payload meaning. No unimplemented E2E behavior is credited; the accepted exact-or-unknown rule does not reconstruct evicted history, changes neither lost/late/pending definitions nor replay/recovery rules, and supplies no implementation evidence.
+- The element cannot see whether a route needs protection or whether the integrator's protection works.
+- End-to-end protection does not authenticate a sender, protect a shared-memory race, cover all outer header fields, or validate an application's payload meaning.
+- No unimplemented E2E behavior is credited.
+- The accepted exact-or-unknown rule does not reconstruct evicted history, changes neither lost/late/pending definitions nor replay/recovery rules, and supplies no implementation evidence.

@@ -3,45 +3,117 @@
 
 The key words "*MUST*", "*MUST NOT*", "*REQUIRED*", "*SHALL*", "*SHALL NOT*", "*SHOULD*", "*SHOULD NOT*", "*RECOMMENDED*", "*MAY*", and "*OPTIONAL*" in this document are to be interpreted as described in https://www.rfc-editor.org/info/bcp14[IETF BCP14 (RFC2119 & RFC8174)]
 
-Conventions, tags and status words: xref:../README.adoc[the safety area's README]. Scope and element boundary: xref:README.adoc[the SEooC's README].
+Conventions, tags and status words: xref:../README.adoc[the safety area's README].
+Scope and element boundary: xref:README.adoc[the SEooC's README].
 
 == Refuse before touching the heap
 
 [.specitem,oft-sid="req~ssr-refuse-before-heap~2",oft-title="Refuse before touching the heap",oft-needs="impl,utest",oft-tags="SafetyUpRustCore"]
 --
-An operation that cannot proceed in runtime mode *MUST* return an error. Exhaustion of slots, depth, held messages, the peer table or the call table, a payload or token that is too long, an expired TTL, an unreadable clock and a bounded wait that ran out *MUST* all be errors, and each refusal that can be decided before an operation's first heap acquisition *MUST* be decided before it. Deciding a refusal, producing its error and counting it *MUST NOT* acquire or release heap memory, abort or panic. On a native route, and on any route whose heap class is none, a refusal does nothing else. On a serialized or owned route, a refusal reached only after the operation acquired heap memory under its declared heap class, such as a check after decode, a failed allocation at a declared allocation point, or a wire check whose acceptance event falls after its deadline, acquires nothing more: it ends the ownership already created, and what that ownership holds is released exactly once as `+req~ssr-heap-slot-types~2+` and `+req~ssr-binding-frame-drop~4+` state. That release is the route's declared heap use, not part of producing the refusal.
+*Refusals are errors.*
+An operation that cannot proceed in runtime mode *MUST* return an error.
+All of these *MUST* be errors:
+
+* exhaustion of slots, depth, held messages, the peer table or the call table;
+* a payload or token that is too long;
+* an expired TTL;
+* an unreadable clock;
+* a bounded wait that ran out.
+
+*Order.*
+Each refusal that can be decided before an operation's first heap acquisition *MUST* be decided before it.
+
+*Cost of refusing.*
+Deciding a refusal, producing its error and counting it *MUST NOT* acquire or release heap memory, abort or panic.
+
+*Native and heap-free routes.*
+On a native route, and on any route whose heap class is none, a refusal does nothing else.
+
+*Serialized and owned routes.*
+On a serialized or owned route, some refusals are reached only after the operation acquired heap memory under its declared heap class.
+Examples are a check after decode, a failed allocation at a declared allocation point, or a wire check whose acceptance event falls after its deadline.
+Such a refusal acquires nothing more.
+It ends the ownership already created, and what that ownership holds is released exactly once as `+req~ssr-heap-slot-types~2+` and `+req~ssr-binding-frame-drop~4+` state.
+That release is the route's declared heap use, not part of producing the refusal.
 --
 
 [horizontal]
 ASIL:: B
 Allocated to:: the element
-Verification:: heap-window (every refusal inside the window; on a serialized route, a refusal before the first declared allocation acquires nothing, and a refusal after it releases only what was already admitted, once, under the declared class), test (each named refusal; a check after decode, a failed declared allocation and a response first accepted after its deadline, each ending the admitted ownership exactly once)
+Verification:: heap-window, test
+* *heap-window*
+** Every refusal inside the window.
+** On a serialized route, a refusal before the first declared allocation acquires nothing.
+** On a serialized route, a refusal after it releases only what was already admitted, once, under the declared class.
+* *test*
+** Each named refusal.
+** A check after decode, a failed declared allocation and a response first accepted after its deadline, each ending the admitted ownership exactly once.
 Status:: Draft
 ISO 26262:: 6-7.4.12 (part-clause numbers only)
 
-*Rationale.* A refusal that needed the heap, or that panicked, would turn an ordinary condition such as a full queue into a failure, at the moment the system is most loaded. Runtime errors are fixed-size values with no heap data (`+req~ssr-error-fixed-size~1+`), so returning one needs no allocation. Revision 1 required every refusal to come before the heap was touched at all, which a serialized route that has already admitted an owned value cannot meet: a refusal after decode, or a response first accepted after its deadline, must still end the value it holds, and ending it frees what the route's wire allocated. This revision keeps deciding, reporting and counting a refusal heap-free on every route, keeps every refusal that can come first ahead of the first allocation, and leaves the release of what was already admitted to the route's declared class (`+req~ssr-heap-none~2+`), so that release is that route's declared heap use and never the refusal's. An allocation failure follows the failure policy the route declares (`+req~ssr-heap-declared~2+`); a declaration does not make an infallible library allocation fail gracefully.
+*Rationale.*
+A refusal that needed the heap, or that panicked, would turn an ordinary condition such as a full queue into a failure, at the moment the system is most loaded.
+Runtime errors are fixed-size values with no heap data (`+req~ssr-error-fixed-size~1+`), so returning one needs no allocation.
+
+_Why revision 2._
+Revision 1 required every refusal to come before the heap was touched at all.
+A serialized route that has already admitted an owned value cannot meet that.
+A refusal after decode, or a response first accepted after its deadline, must still end the value it holds, and ending it frees what the route's wire allocated.
+
+This revision therefore:
+
+* keeps deciding, reporting and counting a refusal heap-free on every route;
+* keeps every refusal that can come first ahead of the first allocation;
+* leaves the release of what was already admitted to the route's declared class (`+req~ssr-heap-none~2+`), so that release is that route's declared heap use and never the refusal's.
+
+An allocation failure follows the failure policy the route declares (`+req~ssr-heap-declared~2+`).
+A declaration does not make an infallible library allocation fail gracefully.
 
 == No panic on runtime paths
 
 [.specitem,oft-sid="req~ssr-refuse-no-panic~1",oft-title="No panic on runtime paths",oft-needs="impl,utest",oft-tags="SafetyUpRustCore"]
 --
-Element code reachable in runtime mode *MUST NOT* panic or abort: not for any bytes, length or sequence a peer sends, not for any clock reading, and not for any sequence of calls through the public API. Arithmetic on runtime paths *MUST* be checked, saturating or wrapping by intent, and *MUST NOT* reach an overflow panic.
+Element code reachable in runtime mode *MUST NOT* panic or abort:
+
+* not for any bytes, length or sequence a peer sends;
+* not for any clock reading;
+* not for any sequence of calls through the public API.
+
+Arithmetic on runtime paths *MUST* be checked, saturating or wrapping by intent, and *MUST NOT* reach an overflow panic.
 --
 
 [horizontal]
 ASIL:: B
 Allocated to:: the element
-Verification:: gate (the panic-link check over the runtime path on both compilers, with the inbound metadata, payload, peer reference and TTL fed as opaque inputs, so that no panic branch can be proven dead from constant inputs; and the workspace lints), fault-injection (malformed and truncated frames), test
+Verification:: gate, fault-injection, test
+* *gate*
+** The panic-link check over the runtime path on both compilers.
+The inbound metadata, payload, peer reference and TTL are fed as opaque inputs, so that no panic branch can be proven dead from constant inputs.
+** The workspace lints.
+* *fault-injection*: malformed and truncated frames.
 Status:: Draft
 ISO 26262:: 6-Table 1 (part-clause numbers only)
 
-*Rationale.* In the build that ships, a panic aborts the process (`+req~ssr-build-panic-abort~3+`), so a panic reachable in runtime mode is a crash that a peer's bytes or a clock reading could set off. No waiver can cover a panic: a waiver covers allocation inside middleware only (`+core/src/transport/waiver.rs+`). The crate denies `+clippy::panic+`, `+clippy::unwrap_used+` and `+clippy::indexing_slicing+` (`+core/src/lib.rs+`), and the workspace's lint table denies `+indexing_slicing+` (`+Cargo.toml+`). Code that runs on a runtime path but that the element does not own, such as the destructor of an admitted owned value, an allocator's release or a dependency they reach, is held to the same rule through admission: setup admits it only where it is established that it cannot panic or abort on whichever thread runs it, and refuses it by name otherwise (`+req~ssr-heap-slot-types~2+`, `+req~ssr-release-lease-drop~3+`). Moving such work to another thread does not change this.
+*Rationale.*
+In the build that ships, a panic aborts the process (`+req~ssr-build-panic-abort~3+`).
+So a panic reachable in runtime mode is a crash that a peer's bytes or a clock reading could set off.
+
+No waiver can cover a panic: a waiver covers allocation inside middleware only (`+req~ssr-waiver-scope~1+`).
+
+Code that runs on a runtime path but that the element does not own is held to the same rule through admission.
+Examples are the destructor of an admitted owned value, an allocator's release or a dependency they reach.
+Setup admits such code only where it is established that it cannot panic or abort on whichever thread runs it, and refuses it by name otherwise (`+req~ssr-heap-slot-types~2+`, `+req~ssr-release-lease-drop~3+`).
+Moving such work to another thread does not change this.
 
 == Errors are fixed-size diagnoses
 
 [.specitem,oft-sid="req~ssr-error-fixed-size~1",oft-title="Errors are fixed-size diagnoses",oft-needs="impl,utest",oft-tags="SafetyUpRustCore"]
 --
-Every error and report the element returns in runtime mode *MUST* be a fixed-size value that can be copied, name its cause, and name the route and the setting where there is one. Producing it *MUST* format nothing, log nothing and allocate nothing. Text for people *MUST* be formatted only in initialization mode.
+Every error and report the element returns in runtime mode *MUST* be a fixed-size value that can be copied, name its cause, and name the route and the setting where there is one.
+
+Producing it *MUST* format nothing, log nothing and allocate nothing.
+
+Text for people *MUST* be formatted only in initialization mode.
 --
 
 [horizontal]
@@ -51,23 +123,71 @@ Verification:: gate (a compile-time `+Copy+` assertion for each runtime error ty
 Status:: Draft
 ISO 26262:: 6-7.4.12 (part-clause numbers only)
 
-*Rationale.* Runtime errors are `+Copy+` and carry no heap data, so reporting a refused send cannot touch the heap (`+core/src/transport/error.rs+`). An error that names its cause, its route and the setting at fault tells the integrator what to change, with no log to search. `+up-rust+` turns only initialization errors (`+StartupError+`) into a `+UStatus+` with text (`+core/src/transport/error.rs+`).
+*Rationale.*
+A fixed-size error that can be copied carries no heap data, so reporting a refused send cannot touch the heap.
+
+An error that names its cause, its route and the setting at fault tells the integrator what to change, with no log to search.
+
+Text for people is produced only from initialization errors, where formatting is allowed.
 
 == No silent loss, and each loss counted once
 
 [.specitem,oft-sid="req~ssr-error-no-silent-loss~3",oft-title="No silent loss, and each loss counted once",oft-needs="impl,utest",oft-tags="SafetyUpRustCore"]
 --
-Every frame the element refuses, drops, evicts or expires in runtime mode *MUST* be either returned to its caller as an error, or counted exactly once in its route's fixed counters, under a counter that names the cause. A retry is not a drop. The counters can be read in runtime mode without heap. A loss entirely inside middleware that the binding cannot observe is not a counted event; that route's report *MUST* explicitly disclose the unobservable-loss limitation. Observable overflow discards *MUST* be counted as specified by `+req~ssr-qos-overflow~3+`; this exception does not excuse missing observable counts. A fault counter saturates at 2^32^ − 1 and stays there, and an increment below that is never dropped. A flow counter (`+carried+`, `+busy+`, `+parked+`) wraps, and readers take differences (`+aou~seooc-application-reacts~4+`). A free slot released twice with no take between the two releases is counted as a fault, never absorbed silently; one released, taken and released again is not detected. A pull binding's failure to read its own queue is counted on the route (`+receive_failed+`), and so is a data connection that its middleware drops or fails to set up without an error, as iceoryx2's default handler does. An E2E client counts a response with no E2E header in a route counter of its own, `+unprotected+`, never in the E2E counter.
+*Every loss is returned or counted.*
+Every frame the element refuses, drops, evicts or expires in runtime mode *MUST* be either returned to its caller as an error, or counted exactly once in its route's fixed counters, under a counter that names the cause.
+
+* A retry is not a drop.
+* The counters can be read in runtime mode without heap.
+
+*Losses the binding cannot observe.*
+A loss entirely inside middleware that the binding cannot observe is not a counted event.
+That route's report *MUST* explicitly disclose the unobservable-loss limitation.
+
+Observable overflow discards *MUST* be counted as specified by `+req~ssr-qos-overflow~3+`.
+This exception does not excuse missing observable counts.
+
+*Counter behaviour.*
+
+* A fault counter saturates at 2^32^ − 1 and stays there, and an increment below that is never dropped.
+* A flow counter (`+carried+`, `+busy+`, `+parked+`) wraps, and readers take differences (`+aou~seooc-application-reacts~4+`).
+
+*Double release.*
+A free slot released twice with no take between the two releases is counted as a fault, never absorbed silently.
+One released, taken and released again is not detected.
+
+*Pull bindings.*
+A pull binding's failure to read its own queue is counted on the route (`+receive_failed+`).
+So is a data connection that its middleware drops or fails to set up without an error, as iceoryx2's default handler does.
+
+*E2E clients.*
+An E2E client counts a response with no E2E header in a route counter of its own, `+unprotected+`, never in the E2E counter.
 --
 
 [horizontal]
 ASIL:: B
 Allocated to:: the element
-Verification:: test (one counter per cause; each observable loss counted once or returned as specified, under contention and under `+Wait+` too; unobservable middleware losses disclosed rather than represented as complete counts), heap-window (counters read inside the window)
+Verification:: test, heap-window
+* *test*
+** One counter per cause.
+** Each observable loss counted once or returned as specified, under contention and under `+Wait+` too.
+** Unobservable middleware losses disclosed rather than represented as complete counts.
+* *heap-window*: counters read inside the window.
 Status:: Draft
 ISO 26262:: 6-Annex D.2.4 (part-clause numbers only)
 
-*Rationale.* The E2E wire's figures count, as lost, each frame of the reference's incarnation that left the receiver's window without arriving, or was still open when the reference changed (`+req~ssr-e2e-figures~2+`). An end-to-end refusal is counted in its own route counter, not in `+refused+` (`+req~ssr-e2e-refusal-counted~2+`). A named count or an error gives each observable local loss an observation point, while saturating fault counts avoid turning an overflow into apparent recovery. A declared middleware visibility limit is not a measurement of its losses, and counter fields alone do not establish that every discard is observable. The `+unprotected+` clause binds only a client of the E2E wire, which is deferred and not part of this delivery; it takes effect when that wire is delivered, and no other clause depends on it.
+*Rationale.*
+A named count or an error gives each observable local loss an observation point.
+Saturating fault counts avoid turning an overflow into apparent recovery.
+
+A declared middleware visibility limit is not a measurement of its losses, and counter fields alone do not establish that every discard is observable.
+
+_End-to-end protection._
+
+* The E2E wire's figures count, as lost, each frame of the reference's incarnation that left the receiver's window without arriving, or was still open when the reference changed (`+req~ssr-e2e-figures~2+`).
+* An end-to-end refusal is counted in its own route counter, not in `+refused+` (`+req~ssr-e2e-refusal-counted~2+`).
+* The `+unprotected+` clause binds only a client of the E2E wire, which is deferred and not part of this delivery.
+It takes effect when that wire is delivered, and no other clause depends on it.
 
 == Each route reports what it got
 
@@ -80,7 +200,9 @@ For every route, the element *MUST* report in runtime mode, without heap:
 * its reserved storage;
 * its heap class, naming the permit where middleware allocates.
 
-The transport's waiver list *MUST* map every such permit to the waiver that admitted it. A report *MUST NOT* state a setting the route does not have.
+The transport's waiver list *MUST* map every such permit to the waiver that admitted it.
+
+A report *MUST NOT* state a setting the route does not have.
 --
 
 [horizontal]
@@ -89,4 +211,6 @@ Allocated to:: the element
 Verification:: test (the send mode, QoS, reserved storage, heap class and permit, and the join to the waiver list, each asserted)
 Status:: Draft
 
-*Rationale.* Each report names its permit through its heap class (`+RouteReport+` in `+core/src/transport/report.rs+`), and the runtime keeps the waivers it recorded, so each permit joins to the waiver that admitted it.
+*Rationale.*
+Each report names its permit through its heap class, and the runtime keeps the waivers it recorded.
+So each permit joins to the waiver that admitted it.

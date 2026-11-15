@@ -3,30 +3,58 @@
 
 The key words "*MUST*", "*MUST NOT*", "*REQUIRED*", "*SHALL*", "*SHALL NOT*", "*SHOULD*", "*SHOULD NOT*", "*RECOMMENDED*", "*MAY*", and "*OPTIONAL*" in this document are to be interpreted as described in https://www.rfc-editor.org/info/bcp14[IETF BCP14 (RFC2119 & RFC8174)]
 
-Conventions, tags and status words: xref:../README.adoc[the safety area's README]. Scope and element boundary: xref:README.adoc[the SEooC's README].
+Conventions, tags and status words: xref:../README.adoc[the safety area's README].
+Scope and element boundary: xref:README.adoc[the SEooC's README].
 
-These are the duties of the binding contract. Each binding meets them in its own code, and covers them in its own repository, by running the contract suites against itself. They carry the tag `SafetyBinding`; the iceoryx2 binding's own items carry `SafetyIceoryx2`, and a duty of pull-form bindings also carries `SafetyBindingPull`.
+These are the duties of the binding contract.
+Each binding meets them in its own code, and covers them in its own repository, by running the contract suites against itself.
+
+* They carry the tag `SafetyBinding`.
+* The iceoryx2 binding's own items carry `SafetyIceoryx2`.
+* A duty of pull-form bindings also carries `SafetyBindingPull`.
 
 == Binding code allocates nothing in runtime mode
 
 [.specitem,oft-sid="req~ssr-binding-no-heap~2",oft-title="Binding code allocates nothing in runtime mode on a native path",oft-needs="impl,utest",oft-tags="SafetyBinding"]
 --
-In runtime mode, binding code *MUST NOT* acquire or release heap memory on any path that a native payload operation causes, errors, cancellation, retirement and deferred release included, and *MUST NOT* do so on any other path except as a serialized or owned route's declared heap class permits and setup admits (`+req~ssr-heap-declared~2+`). Allocation inside the binding's middleware *MUST* be declared as a permit on the routes it affects, and be reported separately. These rules bind the binding's transport from its own transition.
+*Native paths.*
+In runtime mode, binding code *MUST NOT* acquire or release heap memory on any path that a native payload operation causes, errors, cancellation, retirement and deferred release included.
+
+*Every other path.*
+In runtime mode, binding code *MUST NOT* acquire or release heap memory on any other path, except as a serialized or owned route's declared heap class permits and setup admits (`+req~ssr-heap-declared~2+`).
+
+*Middleware.*
+Allocation inside the binding's middleware *MUST* be declared as a permit on the routes it affects, and be reported separately.
+
+*When the rules apply.*
+These rules bind the binding's transport from its own transition.
 --
 
 [horizontal]
 ASIL:: B
 Allocated to:: each binding
-Verification:: heap-window (for each binding, over native traffic with errors, cancellation, retirement and deferred release, with middleware allocation reported apart under its permit; on a serialized route, the binding's declared allocation reported, never hidden)
+Verification:: heap-window
+* For each binding, over native traffic with errors, cancellation, retirement and deferred release, with middleware allocation reported apart under its permit.
+* On a serialized route, the binding's declared allocation reported, never hidden.
 Status:: Draft
 
-*Rationale.* Binding code runs inside the process on every runtime path, so heap use there on a native path breaks runtime mode as surely as heap use in the element (`+req~ssr-heap-none~2+`). A serialized or owned route may allocate where it declares it and setup admits it, and that permission cannot reach native work or metadata a native route shares. Allocation inside middleware is outside the binding's own code, so it is declared as a permit, admitted only by a waiver (`+req~ssr-waiver-required~1+`), and reported apart from the binding's own.
+*Rationale.*
+Binding code runs inside the process on every runtime path.
+So heap use there on a native path breaks runtime mode as surely as heap use in the element (`+req~ssr-heap-none~2+`).
+
+A serialized or owned route may allocate where it declares it and setup admits it.
+That permission cannot reach native work or metadata a native route shares.
+
+Allocation inside middleware is outside the binding's own code.
+So it is declared as a permit, admitted only by a waiver (`+req~ssr-waiver-required~1+`), and reported apart from the binding's own.
 
 == Lazy state is forced, and threads are idle, before running
 
 [.specitem,oft-sid="req~ssr-binding-lazy-forced~1",oft-title="Lazy state is forced, and threads are idle, before running",oft-needs="impl,utest",oft-tags="SafetyBinding"]
 --
-A binding *MUST* take every first lock at construction or route preparation, and force every lazy primitive, before its transition to running returns. Every thread it starts *MUST* have reached its idle loop by then.
+A binding *MUST* take every first lock at construction or route preparation, and force every lazy primitive, before its transition to running returns.
+
+Every thread it starts *MUST* have reached its idle loop by then.
 --
 
 [horizontal]
@@ -35,13 +63,44 @@ Allocated to:: each binding
 Verification:: heap-window (first traffic, through the binding contract suite), fault-injection
 Status:: Draft
 
-*Rationale.* The element's own rule (`+req~ssr-heap-lazy-forced~1+`) would not hold if a binding left a lock or a thread to set itself up on first traffic, inside runtime mode. The binding contract states the same rule, and `+assert_binding_contract+` checks it (`+core/src/transport/binding.rs+`). A serialized route's declared allocation excuses no lazy first use on any path.
+*Rationale.*
+The element's own rule (`+req~ssr-heap-lazy-forced~1+`) would not hold if a binding left a lock or a thread to set itself up on first traffic, inside runtime mode.
+The binding contract states the same rule, and its contract suite checks it.
 
-== A frame's destructor frees nothing, never blocks, and cannot panic but for one bounded exception
+A serialized route's declared allocation excuses no lazy first use on any path.
+
+== A frame's destructor frees only what its route admits, never blocks, and cannot panic but for one bounded exception
 
 [.specitem,oft-sid="req~ssr-binding-frame-drop~4",oft-title="A frame's destructor frees only what its route admits, never blocks, and cannot panic but for one bounded exception",oft-needs="impl,utest",oft-tags="SafetyBinding"]
 --
-Dropping a binding's received frame *MUST NOT* block. It takes no lock that can wait behind other work, and any retry is lock-free and bounded by other threads' progress. On a native route, and on any route whose heap class is none, it *MUST* free no heap. On a serialized or owned route whose declared heap class admits the binding's allocation (`+req~ssr-heap-declared~2+`), it releases, exactly once, only the storage the binding allocated for that frame under that class, at once only where the binding's declared policy establishes that this release cannot wait, and otherwise through the binding's deferred return, as for a retained owner; it releases no other binding resource and revokes no retained owner. Where the underlying transport's own release of a retained frame can wait, the drop instead hands the frame, without waiting, to the binding's deferred return. A release that the deferred return performs is pending cleanup, charged until it completes and isolated as `+req~ssr-release-lease-drop~3+` states, and on a native route it frees no heap and never frees the backing that the frame lives in. Setup admits that allocation only where releasing it, at once or through the deferred return, is established not to panic or abort, through the allocator and every dependency it reaches (`+req~ssr-heap-slot-types~2+`), and otherwise refuses the route by name. It cannot panic, on the drop or in the deferred return that completes it, with one exception. iceoryx2's per-port mutex, whose failure on lock or on unlock reaches a `+fatal_panic!+`, is allowed only while three things stay true:
+*No blocking.*
+Dropping a binding's received frame *MUST NOT* block.
+It takes no lock that can wait behind other work, and any retry is lock-free and bounded by other threads' progress.
+
+*Native and heap-free routes.*
+On a native route, and on any route whose heap class is none, it *MUST* free no heap.
+
+*Routes that admit the binding's allocation.*
+On a serialized or owned route whose declared heap class admits the binding's allocation (`+req~ssr-heap-declared~2+`), it releases, exactly once, only the storage the binding allocated for that frame under that class:
+
+* at once only where the binding's declared policy establishes that this release cannot wait;
+* otherwise through the binding's deferred return, as for a retained owner.
+
+It releases no other binding resource and revokes no retained owner.
+
+*Deferred return.*
+Where the underlying transport's own release of a retained frame can wait, the drop instead hands the frame, without waiting, to the binding's deferred return.
+
+A release that the deferred return performs is pending cleanup, charged until it completes and isolated as `+req~ssr-release-lease-drop~3+` states.
+On a native route it frees no heap and never frees the backing that the frame lives in.
+
+*Admission.*
+Setup admits that allocation only where releasing it, at once or through the deferred return, is established not to panic or abort, through the allocator and every dependency it reaches (`+req~ssr-heap-slot-types~2+`).
+Otherwise setup refuses the route by name.
+
+*No panic, with one exception.*
+It cannot panic, on the drop or in the deferred return that completes it, with one exception.
+iceoryx2's per-port mutex, whose failure on lock or on unlock reaches a `+fatal_panic!+`, is allowed only while three things stay true:
 
 * that failure is reachable solely through a fault of the process-private lock: corrupted process memory, a recursion-count overflow, or an OS error;
 * none of these is reachable through any peer input, sequence, death or restart, nor through any sequence of calls an application can make through the element, such as dropping a frame while the same thread holds the port;
@@ -53,16 +112,57 @@ The exception is never a waiver, and covers no other middleware panic path, no o
 [horizontal]
 ASIL:: B
 Allocated to:: each binding
-Verification:: test (the binding contract suite; on a serialized route that admits the binding's allocation, one release per frame of exactly what the binding allocated for it, a release that can wait taken off the drop through the deferred return, a binding allocation whose release is not established not to panic refused at setup by name; a deferred return held behind one port's lock while the binding's calls, arrival reports and the returns of owners on other ports continue), heap-window (no free on a native route; on a serialized route, only the declared release), fault-injection (peer input, death and restart never reach the panic path), review (the binding's lock use, for every call sequence the element allows; the README's known-anomaly row)
+Verification:: test, heap-window, fault-injection, review
+* *test*
+** The binding contract suite.
+** On a serialized route that admits the binding's allocation, one release per frame of exactly what the binding allocated for it.
+** A release that can wait taken off the drop through the deferred return.
+** A binding allocation whose release is not established not to panic refused at setup by name.
+** A deferred return held behind one port's lock while the binding's calls, arrival reports and the returns of owners on other ports continue.
+* *heap-window*
+** No free on a native route.
+** On a serialized route, only the declared release.
+* *fault-injection*: peer input, death and restart never reach the panic path.
+* *review*
+** The binding's lock use, for every call sequence the element allows.
+** The README's known-anomaly row.
 Status:: Draft
 
-*Rationale.* Track iceoryx2's issue #763. On a serialized route that admits a binding's allocation, a frame's destructor releases what the binding allocated for that frame, once, under the declared class; on a native or heap-free route it frees nothing. Returning a received frame is part of the application runtime path, so a middleware lock that can wait is still a blocking operation even when its uncontended release is brief. Where the middleware's own release can wait, the binding defers it: the drop pushes the retained owner onto a lock-free queue whose capacity covers every admitted retained owner, and the binding's deferred return performs the release as pending cleanup. A worker of its own is not by itself the isolation that pending cleanup needs: while it waits for the port's lock, it holds nothing that a binding call, an arrival report or the return of an owner on another port needs, and one stalled return does not stop the others. That queue holds ownership awaiting return, never unread traffic, so it is not a second receive queue; a stalled worker shows as counted capacity pressure, never as a drop that waits. A measured lock delay is not an accepted wait.
+*Rationale.*
+Track iceoryx2's issue #763.
+
+_What the destructor releases._
+On a serialized route that admits a binding's allocation, a frame's destructor releases what the binding allocated for that frame, once, under the declared class.
+On a native or heap-free route it frees nothing.
+
+_Why a waiting release is deferred._
+Returning a received frame is part of the application runtime path.
+So a middleware lock that can wait is still a blocking operation even when its uncontended release is brief.
+
+Where the middleware's own release can wait, the binding defers it.
+The drop pushes the retained owner onto a lock-free queue whose capacity covers every admitted retained owner, and the binding's deferred return performs the release as pending cleanup.
+
+_Isolation._
+A worker of its own is not by itself the isolation that pending cleanup needs.
+While it waits for the port's lock, it holds nothing that a binding call, an arrival report or the return of an owner on another port needs, and one stalled return does not stop the others.
+
+_Not a second queue._
+That queue holds ownership awaiting return, never unread traffic, so it is not a second receive queue.
+A stalled worker shows as counted capacity pressure, never as a drop that waits.
+
+A measured lock delay is not an accepted wait.
 
 == No panic on any peer input
 
 [.specitem,oft-sid="req~ssr-binding-no-panic~4",oft-title="No panic on any peer input",oft-needs="impl,utest",oft-tags="SafetyBinding"]
 --
-Binding code *MUST NOT* panic on any frame, length or sequence a peer produces, or when a peer dies or restarts. A panic path inside the middleware is made unreachable by a setup check or by sizing. The paths allowed are named here, each as an instance, each disclosed as a known anomaly in the binding's README, and none is a waiver. In iceoryx2:
+*The rule.*
+Binding code *MUST NOT* panic on any frame, length or sequence a peer produces, or when a peer dies or restarts.
+A panic path inside the middleware is made unreachable by a setup check or by sizing.
+
+*Allowed paths.*
+The paths allowed are named here, each as an instance, each disclosed as a known anomaly in the binding's README, and none is a waiver.
+In iceoryx2:
 
 * its two `+unwrap+`s in `+blocking_send+`, which only a failing OS clock call reaches, behind the clock check the binding makes at startup (`+UPD-IOX2-0002+`);
 * its per-port mutex failure, on lock and on unlock, bounded as `+req~ssr-binding-frame-drop~4+` states (`+UPD-IOX2-0001+`, revision 2);
@@ -71,24 +171,47 @@ Binding code *MUST NOT* panic on any frame, length or sequence a peer produces, 
 * `+close()+` or `+munmap()+` failing when it releases a departed peer's descriptor or mapping, which only a descriptor closed elsewhere, a corrupted mapping or an error that Linux does not document for these calls can cause (`+UPD-IOX2-0004+`);
 * a queue's push counter that never wraps: accepted on 64-bit targets, where it needs over 580 years at 10^9^ sends per second; on a 32-bit target the binding refuses a service that keeps history (`+UPD-IOX2-0005+`).
 
-Heap exhaustion during a peer change aborts iceoryx2's process rather than panicking it. It is part of the deployment's heap sizing under `+UPW-iceoryx2-1+` (`+UPD-IOX2-0006+`). Every publisher on a service the binding uses has a static data segment: the binding records that on the service, its own peers require it when they open the service, and it checks the publishers present at setup.
+*Heap exhaustion during a peer change.*
+Heap exhaustion during a peer change aborts iceoryx2's process rather than panicking it.
+It is part of the deployment's heap sizing under `+UPW-iceoryx2-1+` (`+UPD-IOX2-0006+`).
 
-Any other middleware panic path, including another one that only a broken OS can reach, needs its own explicit acceptance decision. iceoryx2's known failures of this item are not allowed paths: `+aou~seooc-qualified-bindings-and-wires~5+` lists them.
+*Static data segments.*
+Every publisher on a service the binding uses has a static data segment: the binding records that on the service, its own peers require it when they open the service, and it checks the publishers present at setup.
+
+*Any other path.*
+Any other middleware panic path, including another one that only a broken OS can reach, needs its own explicit acceptance decision.
+iceoryx2's known failures of this item are not allowed paths: `+aou~seooc-qualified-bindings-and-wires~5+` lists them.
 --
 
 [horizontal]
 ASIL:: B
 Allocated to:: each binding
-Verification:: fault-injection (malformed frames; peers killed and restarted), test (the binding contract suite; on iceoryx2, three tests, each in a child process on real iceoryx2, that reproduce its index bug on a connection change, a full expired-connection buffer, and a completion-queue entry written before the first send), gate (on iceoryx2, the panic inventory re-run on every iceoryx2 version change and on every binding change to its entry points; a new runtime panic site holds the change until it is decided)
+Verification:: fault-injection, test, gate
+* *fault-injection*: malformed frames; peers killed and restarted.
+* *test*
+** The binding contract suite.
+** On iceoryx2, three tests, each in a child process on real iceoryx2, that reproduce its index bug on a connection change, a full expired-connection buffer, and a completion-queue entry written before the first send.
+* *gate*: on iceoryx2, the panic inventory re-run on every iceoryx2 version change and on every binding change to its entry points.
+A new runtime panic site holds the change until it is decided.
 Status:: Draft
 
-*Rationale.* A heap waiver cannot excuse a panic; each accepted middleware anomaly needs its own bounded instance, and peer-triggered known failures cannot be reclassified as accepted anomalies. The panic sites in iceoryx2's wait path that a binding-owned `+poll(2)+` loop was chosen to make unreachable stay reachable until that loop, or a reviewed equivalent with a source-backed argument, is in the binding; until then they are known failures, and the named descriptor anomaly above cannot excuse them. A faulty peer's shared-memory writes that reach a middleware panic are known failures too, whatever anomaly is acknowledged.
+*Rationale.*
+A heap waiver cannot excuse a panic.
+Each accepted middleware anomaly needs its own bounded instance, and peer-triggered known failures cannot be reclassified as accepted anomalies.
+
+The panic sites in iceoryx2's wait path stay known failures until the binding makes them unreachable, by a binding-owned `+poll(2)+` loop or a reviewed equivalent with an argument at source level.
+The named descriptor anomaly above cannot excuse them.
+
+A faulty peer's shared-memory writes that reach a middleware panic are known failures too, whatever anomaly is acknowledged.
 
 == Peer identity is stable, and incarnations rise
 
 [.specitem,oft-sid="req~ssr-binding-peer-identity~1",oft-title="Peer identity is stable, and incarnations rise",oft-needs="impl,utest",oft-tags="SafetyBinding"]
 --
-A binding *MUST* give each frame a peer identity that is stable across that peer's restarts, with an incarnation that starts at 1 and only rises, and *MUST* report a peer's loss or restart where its middleware allows. A binding that cannot identify peers *MUST* say so, and its routes then rely on deadlines only.
+A binding *MUST* give each frame a peer identity that is stable across that peer's restarts, with an incarnation that starts at 1 and only rises.
+It *MUST* report a peer's loss or restart where its middleware allows.
+
+A binding that cannot identify peers *MUST* say so, and its routes then rely on deadlines only.
 --
 
 [horizontal]
@@ -97,43 +220,80 @@ Allocated to:: each binding
 Verification:: test (a test double that restarts; a real restart)
 Status:: Draft
 
-*Rationale.* A stable identity with a rising incarnation lets the element tell a restarted peer from its earlier self, and refuse a frame from the earlier one as stale (`+ReceiveError::StalePeer+` in `+core/src/transport/error.rs+`). A binding with no peer identity reports `+PeerRef::UNKNOWN+`, and then only deadlines can show that a peer has gone (`+core/src/transport/binding.rs+`).
+*Rationale.*
+A stable identity with a rising incarnation lets the element tell a restarted peer from its earlier self, and refuse a frame from the earlier one as stale (`+req~ssr-peer-stale-rejected~3+`).
+
+A binding with no peer identity reports the peer as unknown, and then only deadlines can show that a peer has gone.
 
 == A binding honors or refuses each declared setting
 
 [.specitem,oft-sid="req~ssr-binding-qos-capability~1",oft-title="A binding honors or refuses each declared setting",oft-needs="impl,utest",oft-tags="SafetyBinding"]
 --
-A binding *MUST* declare its QoS capability truthfully, honor every route setting it admits, and in route preparation refuse any setting it cannot serve: QoS, peer-table size, payload bound or truncation. It *MUST NOT* replace a declared setting silently.
+A binding *MUST* declare its QoS capability truthfully, honor every route setting it admits, and in route preparation refuse any setting it cannot serve: QoS, peer-table size, payload bound or truncation.
+
+It *MUST NOT* replace a declared setting silently.
 --
 
 [horizontal]
 ASIL:: B
 Allocated to:: each binding
-Verification:: test (the QoS contract suite and the binding contract suite on each binding, observing what an application receives from the documented read call alone; a handoff binding that does not apply the route's policy in its own queue must fail it)
+Verification:: test
+* The QoS contract suite and the binding contract suite on each binding, observing what an application receives from the documented read call alone.
+* A handoff binding that does not apply the route's policy in its own queue must fail it.
 Status:: Draft
 
-*Rationale.* 
+*Rationale.*
 
 == A binding bounds its own work and its waits
 
 [.specitem,oft-sid="req~ssr-binding-bounded~2",oft-title="A binding bounds its own work and its waits",oft-needs="impl,utest",oft-tags="SafetyBinding,SafetyBindingPull"]
 --
-A binding's receive *MUST* give up at most the route's bound per call and keep the rest in a bounded queue under the route's QoS. A binding call *MUST NOT* wait without a bound, and *MUST NOT* wait for a deferred return to complete. Apart from a deliberate idle wait (`+req~ssr-bound-wait~2+`), the only binding work that *MAY* wait without a finite logical deadline is a release that its deferred return performs as pending cleanup (`+req~ssr-binding-frame-drop~4+`), isolated as `+req~ssr-release-lease-drop~3+` states; the binding's other work, its worker loops, dispatch and wake paths included, is bounded, and nothing that a binding call, an arrival report or a health report needs waits behind that release. A carrier ingress *MUST* take pulled or retained frames, never borrowed ones whose carriage would need a staged copy.
+*Bounded receive.*
+A binding's receive *MUST* give up at most the route's bound per call and keep the rest in a bounded queue under the route's QoS.
+
+*Bounded waits.*
+A binding call *MUST NOT* wait without a bound, and *MUST NOT* wait for a deferred return to complete.
+
+*The one wait without a deadline.*
+Apart from a deliberate idle wait (`+req~ssr-bound-wait~2+`), the only binding work that *MAY* wait without a finite logical deadline is a release that its deferred return performs as pending cleanup (`+req~ssr-binding-frame-drop~4+`), isolated as `+req~ssr-release-lease-drop~3+` states.
+
+* The binding's other work, its worker loops, dispatch and wake paths included, is bounded.
+* Nothing that a binding call, an arrival report or a health report needs waits behind that release.
+
+*Carrier ingress.*
+A carrier ingress *MUST* take pulled or retained frames, never borrowed ones whose carriage would need a staged copy.
 --
 
 [horizontal]
 ASIL:: B
 Allocated to:: each binding
-Verification:: fault-injection (a flood; a deferred return held behind the middleware's lock while the binding's calls, arrival reports and the returns of owners that do not need that lock continue), test (no binding call waits for a deferred return)
+Verification:: fault-injection, test
+* *fault-injection*
+** A flood.
+** A deferred return held behind the middleware's lock while the binding's calls, arrival reports and the returns of owners that do not need that lock continue.
+* *test*: no binding call waits for a deferred return.
 Status:: Draft
 
-*Rationale.* A receive that gave up any number of frames per call could hold its caller for as long as a peer keeps sending. The bound on a binding's waits is logical, as every wait's is (`+req~ssr-bound-wait~2+`); a physical bound on when the caller resumes is a timing claim of a supported configuration. A carrier ingress refuses a borrowed delivery, because its bytes live only for that call and a carrier may not stage a copy (`+core/src/transport/binding.rs+`). Revision 1 bounded every binding call but did not say what a binding's deferred return of a retained owner may wait for. That release can wait behind the middleware's own lock (`+req~ssr-binding-frame-drop~4+`), so this revision names it as the one binding wait without a deadline, keeps every binding call and report from waiting behind it, and bounds the binding's other work.
+*Rationale.*
+A receive that gave up any number of frames per call could hold its caller for as long as a peer keeps sending.
+
+The bound on a binding's waits is logical, as every wait's is (`+req~ssr-bound-wait~2+`).
+A physical bound on when the caller resumes is a timing claim of a supported configuration.
+
+A carrier ingress refuses a borrowed delivery, because its bytes live only for that call and a carrier may not stage a copy.
+
+_Why revision 2._
+Revision 1 bounded every binding call but did not say what a binding's deferred return of a retained owner may wait for.
+That release can wait behind the middleware's own lock (`+req~ssr-binding-frame-drop~4+`).
+So this revision names it as the one binding wait without a deadline, keeps every binding call and report from waiting behind it, and bounds the binding's other work.
 
 == A binding cleans up after a dead predecessor, in initialization
 
 [.specitem,oft-sid="req~ssr-binding-predecessor-cleanup~1",oft-title="A binding cleans up after a dead predecessor, in initialization",oft-needs="impl,utest",oft-tags="SafetyBinding"]
 --
-A binding *MUST* recover or remove the resources a dead predecessor left, before any route is prepared, in its own initialization. Survivors in runtime mode *MUST NOT* clean up after a dead peer.
+A binding *MUST* recover or remove the resources a dead predecessor left, before any route is prepared, in its own initialization.
+
+Survivors in runtime mode *MUST NOT* clean up after a dead peer.
 --
 
 [horizontal]
@@ -142,13 +302,25 @@ Allocated to:: each binding
 Verification:: fault-injection (a peer killed; a restart with its leftovers present)
 Status:: Draft
 
-*Rationale.* Cleanup in runtime mode would put work of unknown size, and perhaps the heap, on a survivor's runtime path, while initialization may do both (`+req~ssr-mode-restart~1+`). The binding contract's `+recover_predecessor+` runs in the constructor, before any route (`+BindingSetup+` in `+core/src/transport/binding.rs+`). On iceoryx2, creating a node checks for dead nodes and cleans up their stale resources by default (https://github.com/eclipse-iceoryx/iceoryx2/blob/806442b5273d87380511bb5ffcab316d129af31c/iceoryx2/src/config.rs[`+config.rs+` in iceoryx2 0.9.2]), so the cleanup runs in the successor's initialization.
+*Rationale.*
+Cleanup in runtime mode would put work of unknown size, and perhaps the heap, on a survivor's runtime path, while initialization may do both (`+req~ssr-mode-restart~1+`).
+So the binding contract places that recovery in the binding's construction, before any route.
+
+On iceoryx2, creating a node checks for dead nodes and cleans up their stale resources by default (https://github.com/eclipse-iceoryx/iceoryx2/blob/806442b5273d87380511bb5ffcab316d129af31c/iceoryx2/src/config.rs[`+config.rs+` in iceoryx2 0.9.2]).
+So the cleanup runs in the successor's initialization.
 
 == The README says what the middleware cannot guarantee
 
 [.specitem,oft-sid="req~ssr-binding-readme~1",oft-title="The README says what the middleware cannot guarantee",oft-needs="uman",oft-tags="SafetyBinding"]
 --
-Each binding's README *MUST* list every runtime guarantee its middleware cannot make, with measured figures where they exist and the permit a deployment *MUST* waive. For shared memory, it discloses that a write racing a zero-copy read is undefined behaviour even for a type that accepts every bit pattern; that the setup integrity check catches misdeployment, not a peer that lies about its level; that a private payload copy does not validate middleware-owned offsets, lengths or other shared state; and that end-to-end protection, OS partitioning and timing budgets remain the integrator's duties.
+Each binding's README *MUST* list every runtime guarantee its middleware cannot make, with measured figures where they exist and the permit a deployment *MUST* waive.
+
+For shared memory, it discloses that:
+
+* a write racing a zero-copy read is undefined behaviour even for a type that accepts every bit pattern;
+* the setup integrity check catches misdeployment, not a peer that lies about its level;
+* a private payload copy does not validate middleware-owned offsets, lengths or other shared state;
+* end-to-end protection, OS partitioning and timing budgets remain the integrator's duties.
 --
 
 [horizontal]
@@ -157,13 +329,22 @@ Allocated to:: each binding
 Verification:: review (checks every README)
 Status:: Draft
 
-*Rationale.* A deployment decision needs the limits of the middleware underneath the binding, including limits that setup declarations cannot remove. Timing budgets here are the system's allocation; where a supported configuration offers a timing package, that package is its maintainers' (`+aou~seooc-timing-budgets~6+`). End-to-end protection means whatever the system supplies; the SDK's E2E wire is deferred and not part of this delivery.
+*Rationale.*
+A deployment decision needs the limits of the middleware underneath the binding, including limits that setup declarations cannot remove.
+
+Timing budgets here are the system's allocation.
+Where a supported configuration offers a timing package, that package is its maintainers' (`+aou~seooc-timing-budgets~6+`).
+
+End-to-end protection means whatever the system supplies.
+The SDK's E2E wire is deferred and not part of this delivery.
 
 == iceoryx2's service depth comes from deployment data
 
 [.specitem,oft-sid="req~ssr-binding-depth-from-deployment~1",oft-title="iceoryx2's service depth comes from deployment data",oft-needs="impl,utest",oft-tags="SafetyIceoryx2"]
 --
-The iceoryx2 binding *MUST* take each service's depth from deployment data, and create the service with it. When it opens a service that already exists, it *MUST* compare that service's depth with the deployment's, and refuse a mismatch at setup, naming the route and both depths.
+The iceoryx2 binding *MUST* take each service's depth from deployment data, and create the service with it.
+
+When it opens a service that already exists, it *MUST* compare that service's depth with the deployment's, and refuse a mismatch at setup, naming the route and both depths.
 --
 
 [horizontal]
@@ -172,13 +353,21 @@ Allocated to:: the iceoryx2 binding
 Verification:: test (services created in both start orders; a stale depth refused)
 Status:: Draft
 
-*Rationale.* 
+*Rationale.*
 
 == A lending binding records and reports the writer's level
 
 [.specitem,oft-sid="req~ssr-binding-integrity-level~1",oft-title="A lending binding records and reports the writer's level",oft-needs="impl,utest",oft-tags="SafetyBinding"]
 --
-A lending binding *MUST* record each writer's integrity level in the shared definition of its service, where its middleware can, and *MUST* report to the element the level it finds there. A level it cannot record or read *MUST* be reported as unknown. A publisher whose level is below the level the service records *MUST* be refused at its own setup, naming the route and both levels. A handoff binding hands the element a private copy, so the check does not apply to it, and its README *MUST* say so.
+*Lending bindings.*
+
+* A lending binding *MUST* record each writer's integrity level in the shared definition of its service, where its middleware can.
+* It *MUST* report to the element the level it finds there.
+* A level it cannot record or read *MUST* be reported as unknown.
+* A publisher whose level is below the level the service records *MUST* be refused at its own setup, naming the route and both levels.
+
+*Handoff bindings.*
+A handoff binding hands the element a private copy, so the check does not apply to it, and its README *MUST* say so.
 --
 
 [horizontal]
@@ -187,13 +376,17 @@ Allocated to:: each binding
 Verification:: test (the binding contract suite), fault-injection (a publisher below the recorded level, with real processes)
 Status:: Draft
 
-*Rationale.* The element can compare levels only if each binding records them where every process of a service can read them, and a level nobody can read counts as unknown, as on a receive route (`+req~ssr-integrity-zero-copy~4+`).
+*Rationale.*
+The element can compare levels only if each binding records them where every process of a service can read them.
+A level nobody can read counts as unknown, as on a receive route (`+req~ssr-integrity-zero-copy~4+`).
 
 == A binding this project ships inventories its own `+unsafe+`
 
 [.specitem,oft-sid="req~ssr-binding-unsafe-inventory~1",oft-title="A binding this project ships inventories its own `unsafe`",oft-needs="impl,utest",oft-tags="SafetyBinding"]
 --
-Every `+unsafe+` site in a binding this project ships *MUST* state the memory-safety obligation it relies on, and sit under a reviewed row of the binding's own inventory, checked by the same gate as the element's. CI *MUST* refuse a new, changed or vanished site until the inventory is updated.
+Every `+unsafe+` site in a binding this project ships *MUST* state the memory-safety obligation it relies on, and sit under a reviewed row of the binding's own inventory, checked by the same gate as the element's.
+
+CI *MUST* refuse a new, changed or vanished site until the inventory is updated.
 --
 
 [horizontal]
@@ -202,4 +395,6 @@ Allocated to:: each binding this project ships
 Verification:: gate (the binding's copy of the inventory check, with a negative control)
 Status:: Draft
 
-*Rationale.* A binding's `+unsafe+` code runs on the same runtime paths as the element's, so its obligations need the same record and the same gate (`+tools/ci/check_unsafe_inventory.py+`, `+req~ssr-unsafe-inventory~3+`).
+*Rationale.*
+A binding's `+unsafe+` code runs on the same runtime paths as the element's.
+So its obligations need the same record and the same gate (`+req~ssr-unsafe-inventory~3+`).

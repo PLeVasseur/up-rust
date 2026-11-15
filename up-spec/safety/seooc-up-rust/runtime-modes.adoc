@@ -3,13 +3,16 @@
 
 The key words "*MUST*", "*MUST NOT*", "*REQUIRED*", "*SHALL*", "*SHALL NOT*", "*SHOULD*", "*SHOULD NOT*", "*RECOMMENDED*", "*MAY*", and "*OPTIONAL*" in this document are to be interpreted as described in https://www.rfc-editor.org/info/bcp14[IETF BCP14 (RFC2119 & RFC8174)]
 
-Conventions, tags and status words: xref:../README.adoc[the safety area's README]. Scope and element boundary: xref:README.adoc[the SEooC's README].
+Conventions, tags and status words: xref:../README.adoc[the safety area's README].
+Scope and element boundary: xref:README.adoc[the SEooC's README].
 
 == Two modes, as two types
 
 [.specitem,oft-sid="req~ssr-mode-two-types~1",oft-title="Two modes, as two types",oft-needs="impl,utest",oft-tags="SafetyUpRustCore"]
 --
-Each lending and each handoff transport *MUST* have an initialization mode and a runtime mode, and each mode *MUST* be a distinct non-generic type. A transport built directly in code and one built from deployment data *MUST* have the same types, so transports chosen at run time can sit in one list.
+Each lending and each handoff transport *MUST* have an initialization mode and a runtime mode, and each mode *MUST* be a distinct non-generic type.
+
+A transport built directly in code and one built from deployment data *MUST* have the same types, so transports chosen at run time can sit in one list.
 --
 
 [horizontal]
@@ -19,13 +22,18 @@ Verification:: test, review
 Status:: Draft
 ISO 26262:: 6-6.4.2 g, 6-7.4.5 (part-clause numbers only)
 
-*Rationale.* Giving each mode its own type lets the compiler refuse setup after the transition and traffic before it (`+req~ssr-mode-no-setup-at-runtime~1+`, `+req~ssr-mode-no-traffic-before-runtime~1+`). Non-generic types let a forwarder such as the Streamer hold transports chosen from configuration at run time in one list (`+core/src/transport/mod.rs+`).
+*Rationale.*
+Giving each mode its own type lets the compiler refuse setup after the transition and traffic before it (`+req~ssr-mode-no-setup-at-runtime~1+`, `+req~ssr-mode-no-traffic-before-runtime~1+`).
+
+Non-generic types let a forwarder such as the Streamer hold transports chosen from configuration at run time in one list.
 
 == Setup is impossible in runtime mode
 
 [.specitem,oft-sid="req~ssr-mode-no-setup-at-runtime~1",oft-title="Setup is impossible in runtime mode",oft-needs="impl,utest",oft-tags="SafetyUpRustCore"]
 --
-Once a transport is in runtime mode, it *MUST NOT* be possible to declare, prepare or change a route, role, wire, QoS setting, integrity level, waiver, peer list or capacity, through the transport or through any handle activated from it. The API *MUST NOT* offer the operation, and misuse *MUST NOT* compile.
+Once a transport is in runtime mode, it *MUST NOT* be possible to declare, prepare or change a route, role, wire, QoS setting, integrity level, waiver, peer list or capacity, through the transport or through any handle activated from it.
+
+The API *MUST NOT* offer the operation, and misuse *MUST NOT* compile.
 --
 
 [horizontal]
@@ -35,13 +43,21 @@ Verification:: compile-fail
 Status:: Draft
 ISO 26262:: 6-6.4.2 g (part-clause numbers only)
 
-*Rationale.* Runtime mode runs only what setup admitted and placed, and a change after the transition could be neither checked nor given storage without the work of initialization (`+req~ssr-mode-entry-admission~1+`). `+TransportSetup::enter_runtime+` consumes the setup value, so no setup call can be written afterwards (`+core/src/transport/mode.rs+`).
+*Rationale.*
+Runtime mode runs only what setup admitted and placed.
+A change after the transition could be neither checked nor given storage without the work of initialization (`+req~ssr-mode-entry-admission~1+`).
+
+The transition consumes the setup value, so no setup call can be written afterwards (`+req~ssr-mode-entry~5+`).
 
 == Traffic is impossible before runtime mode
 
 [.specitem,oft-sid="req~ssr-mode-no-traffic-before-runtime~1",oft-title="Traffic is impossible before runtime mode",oft-needs="impl,utest",oft-tags="SafetyUpRustCore"]
 --
-A send, receive, publish, notify, invoke, respond, wait or forward operation *MUST NOT* exist on an initialization-mode value. A handle that can carry traffic *MUST* be obtained only by activating its setup against a transport in runtime mode. Misuse *MUST NOT* compile.
+A send, receive, publish, notify, invoke, respond, wait or forward operation *MUST NOT* exist on an initialization-mode value.
+
+A handle that can carry traffic *MUST* be obtained only by activating its setup against a transport in runtime mode.
+
+Misuse *MUST NOT* compile.
 --
 
 [horizontal]
@@ -51,13 +67,21 @@ Verification:: compile-fail
 Status:: Draft
 ISO 26262:: 6-6.4.2 g (part-clause numbers only)
 
-*Rationale.* Traffic before the transition would run before every route is admitted and its storage placed, which is what the transition checks (`+req~ssr-mode-entry-admission~1+`). In the code, every traffic operation lives on a handle activated from a `+TransportRuntime+`, and a role's setup value has no way to send (`+core/src/transport/mode.rs+`, `+core/src/communication/two_mode.rs+`).
+*Rationale.*
+Traffic before the transition would run before every route is admitted and its storage placed, which is what the transition checks (`+req~ssr-mode-entry-admission~1+`).
+
+So every traffic operation belongs to a handle activated from a transport in runtime mode, and a role's setup value has no way to send.
 
 == Run-time refusal only where types cannot reach
 
 [.specitem,oft-sid="req~ssr-mode-backstop~1",oft-title="Run-time refusal only where types cannot reach",oft-needs="impl,utest",oft-tags="SafetyUpRustCore"]
 --
-Where the type system cannot enforce the mode, the element *MUST* refuse the operation at run time with a named error and change nothing. This covers activating a handle against another transport's runtime, placing from startup memory after it is sealed, and any C ABI entry point added later.
+Where the type system cannot enforce the mode, the element *MUST* refuse the operation at run time with a named error and change nothing.
+This covers:
+
+* activating a handle against another transport's runtime;
+* placing from startup memory after it is sealed;
+* any C ABI entry point added later.
 --
 
 [horizontal]
@@ -66,13 +90,30 @@ Allocated to:: the element
 Verification:: test
 Status:: Draft
 
-*Rationale.* Types keep the modes apart inside Rust, but they cannot follow a call through a C ABI, and every transport's runtime has the same type (`+core/src/transport/mode.rs+`), so those cases need a check when the call is made. Activating a role against another runtime returns `+StartupError::WrongTransport+`, and a placement after the seal returns `+RegionSealed+` (`+core/src/transport/error.rs+`, `+core/src/memory.rs+`).
+*Rationale.*
+Types keep the modes apart inside Rust, but they cannot follow a call through a C ABI.
+Every transport's runtime also has the same type (`+req~ssr-mode-two-types~1+`).
+So those cases need a check when the call is made.
+
+A named error for each case, such as a wrong transport or a sealed region, tells the caller which rule the call broke.
 
 == Entering runtime mode is one all-or-nothing operation
 
 [.specitem,oft-sid="req~ssr-mode-entry~5",oft-title="Entering runtime mode is one all-or-nothing operation",oft-needs="impl,utest",oft-tags="SafetyUpRustCore"]
 --
-A transport *MUST* enter runtime mode only through one operation that consumes its initialization value. The operation is all or nothing for that transport: it succeeds only when every entry condition holds for every route declared on it. Otherwise it returns an error, no runtime-mode value exists for that transport, and that transport starts no traffic. Where several transports enter together, each one's transition is its own: a transport that has entered stays in runtime mode if a later one is refused, and its runtime duties bind it from its own transition. The entry conditions are these, each a requirement of its own, named here without its revision:
+*One operation.*
+A transport *MUST* enter runtime mode only through one operation that consumes its initialization value.
+
+*All or nothing, per transport.*
+The operation is all or nothing for that transport: it succeeds only when every entry condition holds for every route declared on it.
+Otherwise it returns an error, no runtime-mode value exists for that transport, and that transport starts no traffic.
+
+*Several transports.*
+Where several transports enter together, each one's transition is its own.
+A transport that has entered stays in runtime mode if a later one is refused, and its runtime duties bind it from its own transition.
+
+*The entry conditions.*
+The entry conditions are these, each a requirement of its own, named here without its revision:
 
 * every route admitted, with its storage placed (`+req~ssr-mode-entry-admission+`);
 * the wall clock read, from a time provider that passed its setup check (`+req~ssr-mode-entry-clock+`);
@@ -89,17 +130,33 @@ A transport *MUST* enter runtime mode only through one operation that consumes i
 [horizontal]
 ASIL:: B
 Allocated to:: the element
-Verification:: compile-fail (the setup value is consumed), test (a refused transition leaves no runtime-mode value for that transport and starts no traffic on it; one refusal for each condition; with several transports entering together, a later refusal leaves an entered transport in runtime mode under its own duties)
+Verification:: compile-fail, test
+* *compile-fail*: the setup value is consumed.
+* *test*
+** A refused transition leaves no runtime-mode value for that transport and starts no traffic on it.
+** One refusal for each condition.
+** With several transports entering together, a later refusal leaves an entered transport in runtime mode under its own duties.
 Status:: Draft
 ISO 26262:: 6-6.4.2 g, 6-7.4.5 (part-clause numbers only)
 
-*Rationale.* The list is in the statement, and a new condition raises this item's revision. The transition is a conjunction of its prerequisites; checking only some of them cannot establish readiness for runtime. All or nothing holds for each transport, not for a group: a transport that has entered runtime mode cannot be taken back (`+req~ssr-mode-one-way~1+`), so a group's later refusal does not roll it back, and a refusal ends the process for a restart (`+enter_runtime_all+` in `+core/src/transport/mode.rs+`).
+*Rationale.*
+The list is in the statement, and a new condition raises this item's revision.
+
+The transition is a conjunction of its prerequisites.
+Checking only some of them cannot establish readiness for runtime.
+
+All or nothing holds for each transport, not for a group.
+A transport that has entered runtime mode cannot be taken back (`+req~ssr-mode-one-way~1+`), so a group's later refusal does not roll it back, and a refusal ends the process for a restart.
 
 == Every route is admitted before runtime mode
 
 [.specitem,oft-sid="req~ssr-mode-entry-admission~1",oft-title="Every route is admitted before runtime mode",oft-needs="impl,utest",oft-tags="SafetyUpRustCore"]
 --
-Before a transport enters runtime mode, the element *MUST* have admitted every declared route, against its binding's declared capability. Every route *MUST* have passed the setup checks on envelope, payload bound and capacity, and have its storage placed. A route that fails any of them *MUST* make the transition fail, naming the route and the setting.
+Before a transport enters runtime mode, the element *MUST* have admitted every declared route, against its binding's declared capability.
+
+Every route *MUST* have passed the setup checks on envelope, payload bound and capacity, and have its storage placed.
+
+A route that fails any of them *MUST* make the transition fail, naming the route and the setting.
 --
 
 [horizontal]
@@ -108,13 +165,25 @@ Allocated to:: the element
 Verification:: test
 Status:: Draft
 
-*Rationale.* The SDK owns admission, as it owns the mode state machine and the startup slots (`+core/src/transport/binding.rs+`), so every binding's routes meet the same checks. A route that cannot be served then fails setup by name instead of failing its first message: a refused carrier leg, for one, reports the route, the binding and the reason (`+StartupError::CarrierRefused+` in `+core/src/transport/error.rs+`).
+*Rationale.*
+The SDK owns admission, as it owns the mode state machine and the startup slots.
+So every binding's routes meet the same checks.
+
+A route that cannot be served then fails setup by name instead of failing its first message.
+A refused carrier leg, for one, reports the route, the binding and the reason.
 
 == The wall clock is read before runtime mode
 
 [.specitem,oft-sid="req~ssr-mode-entry-clock~2",oft-title="The wall clock is read before runtime mode",oft-needs="impl,utest",oft-tags="SafetyUpRustCore"]
 --
-A transport *MUST* enter runtime mode only after the wall clock of the platform's time provider has been read successfully and the provider has passed the setup check of its package's stated contract (`+req~ssr-platform-contract~2+`). A provider known to fall short of that contract, such as one that supplies uptime or a fixed value as wall time, *MUST* fail the check. If the clock cannot be read, or the provider fails its check, the transition *MUST* fail with an error that says so.
+A transport *MUST* enter runtime mode only after both of these:
+
+* the wall clock of the platform's time provider has been read successfully;
+* the provider has passed the setup check of its package's stated contract (`+req~ssr-platform-contract~2+`).
+
+A provider known to fall short of that contract, such as one that supplies uptime or a fixed value as wall time, *MUST* fail the check.
+
+If the clock cannot be read, or the provider fails its check, the transition *MUST* fail with an error that says so.
 --
 
 [horizontal]
@@ -123,7 +192,17 @@ Allocated to:: the element
 Verification:: test (an unreadable clock; a provider that supplies uptime as wall time; a provider that passes its check)
 Status:: Draft
 
-*Rationale.* Message IDs carry a timestamp (xref:../../basics/uuid.adoc[UUID]), and a message's expiry is judged against its creation time plus its TTL (`+dsn~up-attributes-ttl-timeout~1+`), both in wall time. `+TransportSetup::enter_runtime+` reads the clock once before the transition, so a clock that cannot be read fails setup instead of every later message (`+core/src/transport/mode.rs+`). A board without a synchronized wall clock is a real configuration, and quietly using uptime there would make every TTL decision wrong while appearing to work, so the provider's contract is checked where it can be, and a known substitution is refused. Simulated time and test seeds establish only the behaviour of a test harness.
+*Rationale.*
+Message IDs carry a timestamp (xref:../../basics/uuid.adoc[UUID]), and a message's expiry is judged against its creation time plus its TTL (`+dsn~up-attributes-ttl-timeout~1+`).
+Both are in wall time.
+
+Reading the clock once before the transition makes a clock that cannot be read fail setup instead of every later message.
+
+A board without a synchronized wall clock is a real configuration.
+Quietly using uptime there would make every TTL decision wrong while appearing to work.
+So the provider's contract is checked where it can be, and a known substitution is refused.
+
+Simulated time and test seeds establish only the behaviour of a test harness.
 
 == Nothing is refused at runtime for a reason setup already knew
 
@@ -138,13 +217,21 @@ Allocated to:: the element
 Verification:: test, review (each runtime refusal reason checked for whether setup could have known it)
 Status:: Draft
 
-*Rationale.* A route admitted only to refuse all its traffic looks healthy at setup and fails only in operation, where the cause is harder to see. Setup refuses, for example, a wire with no size bound when the route also has no `+max_payload+` bound (`+StartupError::PayloadUnbounded+`) and a variable-size wire on a binding that cannot carry a short payload (`+TruncationNotSupported+`).
+*Rationale.*
+A route admitted only to refuse all its traffic looks healthy at setup and fails only in operation, where the cause is harder to see.
+
+Setup refuses, for example:
+
+* a wire with no size bound when the route also has no payload bound;
+* a variable-size wire on a binding that cannot carry a short payload.
 
 == There is no way back
 
 [.specitem,oft-sid="req~ssr-mode-one-way~1",oft-title="There is no way back",oft-needs="impl,utest",oft-tags="SafetyUpRustCore"]
 --
-An operation *MUST NOT* take a transport, a handle or the Streamer from runtime mode back to initialization mode. Runtime mode *MUST* end only when the process ends.
+An operation *MUST NOT* take a transport, a handle or the Streamer from runtime mode back to initialization mode.
+
+Runtime mode *MUST* end only when the process ends.
 --
 
 [horizontal]
@@ -154,29 +241,112 @@ Verification:: compile-fail (the setup value is consumed), review (no such opera
 Status:: Draft
 ISO 26262:: 6-6.4.2 g (part-clause numbers only)
 
-*Rationale.* A way back would reopen setup, which runtime code never reaches (`+req~ssr-mode-no-setup-at-runtime~1+`), and every guarantee that rests on setup being over would need a run-time check. Comparable systems make the change of phase one-way too: the first call to AUTOSAR's `+StartOS+` does not return (https://www.autosar.org/fileadmin/standards/R24-11/CP/AUTOSAR_CP_SWS_OS.pdf[AUTOSAR CP SWS OS]), and an RTIC application's `+idle+` task, which runs after `+init+`, never returns (https://rtic.rs/2/book/en/by-example/app_idle.html[the RTIC book]). The code has no such path: a transport that started cannot be taken back out of runtime mode, and a refusal means the process exits and is restarted (`+enter_runtime_all+` in `+core/src/transport/mode.rs+`).
+*Rationale.*
+A way back would reopen setup, which runtime code never reaches (`+req~ssr-mode-no-setup-at-runtime~1+`).
+Every guarantee that rests on setup being over would then need a run-time check.
+
+Comparable systems make the change of phase one-way too:
+
+* the first call to AUTOSAR's `+StartOS+` does not return (https://www.autosar.org/fileadmin/standards/R24-11/CP/AUTOSAR_CP_SWS_OS.pdf[AUTOSAR CP SWS OS]);
+* an RTIC application's `+idle+` task, which runs after `+init+`, never returns (https://rtic.rs/2/book/en/by-example/app_idle.html[the RTIC book]).
+
+So a transport that started cannot be taken back out of runtime mode, and a refusal means the process exits and is restarted.
 
 == Initialization failure
 
 [.specitem,oft-sid="req~ssr-mode-init-failure~3",oft-title="Initialization failure",oft-needs="impl,utest",oft-tags="SafetyUpRustCore"]
 --
-Every refusal during initialization or the transition, including one that a memory source, region helper or allocation provider used by setup reports, *MUST* be returned as an error that names its cause, the route where there is one, and the setter to change. Initialization *MUST NOT* panic or abort; where setup relies on a memory source, helper or provider for this, its stated contract, not the shape of its interface, decides whether it can. A source, helper or provider whose contract permits a panic or process termination on a request *MUST NOT* receive that request unless setup has first excluded that outcome, such as by checking the request against the limit the contract states; otherwise setup refuses it by name before relying on it, and reporting its contract does not meet this item. A refusal *MUST* leave each resource and each initialized value that setup acquired with one stated disposition, returned to its owner, destroyed once or retained under the configuration's stated retention policy. A stated disposition *MUST* itself meet this item, and setup *MUST* have it before it takes or creates what it might have to dispose of: it destroys a value only where its destruction is established not to panic or abort, as `+req~ssr-heap-slot-types~2+` requires on a runtime path, and to complete within setup's own bound (`+req~ssr-mode-bounded-startup~2+`); it retains only startup storage and what is placed in it, where every other duty of this item holds; and otherwise it returns the untouched value to its owner or refuses before taking it. Setup *MUST NOT* hand anything to a release service, or leave it as pending cleanup, to dispose of a refusal, and it returns the refusal itself within setup's logical bound. A refusal *MUST NOT* release storage that a successful owner can still reach, leave a runtime-mode value, start traffic, or leave anything that stops a successor process from initializing.
+*Refusals are errors.*
+Every refusal during initialization or the transition, including one that a memory source, region helper or allocation provider used by setup reports, *MUST* be returned as an error that names its cause, the route where there is one, and the setter to change.
+
+*No panic or abort.*
+Initialization *MUST NOT* panic or abort.
+Where setup relies on a memory source, helper or provider for this, its stated contract, not the shape of its interface, decides whether it can.
+
+A source, helper or provider whose contract permits a panic or process termination on a request *MUST NOT* receive that request unless setup has first excluded that outcome, such as by checking the request against the limit the contract states.
+Otherwise setup refuses it by name before relying on it.
+Reporting its contract does not meet this item.
+
+*One stated disposition.*
+A refusal *MUST* leave each resource and each initialized value that setup acquired with one stated disposition:
+
+* returned to its owner;
+* destroyed once; or
+* retained under the configuration's stated retention policy.
+
+A stated disposition *MUST* itself meet this item, and setup *MUST* have it before it takes or creates what it might have to dispose of:
+
+* It destroys a value only where its destruction is established not to panic or abort, as `+req~ssr-heap-slot-types~2+` requires on a runtime path, and to complete within setup's own bound (`+req~ssr-mode-bounded-startup~2+`).
+* It retains only startup storage and what is placed in it, where every other duty of this item holds.
+* Otherwise it returns the untouched value to its owner or refuses before taking it.
+
+*No release service for a refusal.*
+Setup *MUST NOT* hand anything to a release service, or leave it as pending cleanup, to dispose of a refusal.
+It returns the refusal itself within setup's logical bound.
+
+*What a refusal leaves behind.*
+A refusal *MUST NOT*:
+
+* release storage that a successful owner can still reach;
+* leave a runtime-mode value;
+* start traffic; or
+* leave anything that stops a successor process from initializing.
 --
 
 [horizontal]
 ASIL:: B
 Allocated to:: the element
-Verification:: test (each refusal names its route and setter; a refusal injected at each placement and provider request, with every acquired value returned, destroyed once or retained as stated and no storage of a successful owner released; no value whose destruction may wait without a bound destroyed by setup or handed to a release service; a request that a provider's contract lets panic prevented, or the provider refused by name), review (no panic path in setup code; every panic site in the middleware's setup read, and decided by group; each relied-on source, helper and provider contract; each destruction setup performs on refusal, including a dropped input, against its admission evidence and setup's bound), fault-injection (a kill at each startup step)
+Verification:: test, review, fault-injection
+* *test*
+** Each refusal names its route and setter.
+** A refusal injected at each placement and provider request, with every acquired value returned, destroyed once or retained as stated and no storage of a successful owner released.
+** No value whose destruction may wait without a bound destroyed by setup or handed to a release service.
+** A request that a provider's contract lets panic prevented, or the provider refused by name.
+* *review*
+** No panic path in setup code.
+** Every panic site in the middleware's setup read, and decided by group.
+** Each relied-on source, helper and provider contract.
+** Each destruction setup performs on refusal, including a dropped input, against its admission evidence and setup's bound.
+* *fault-injection*: a kill at each startup step.
 Status:: Draft, pending owner (S0 O-34)
 ISO 26262:: 6-6.4.2 g (part-clause numbers only)
 
-*Rationale.* In a build that aborts on panic (`+req~ssr-build-panic-abort~3+`), a setup mistake that panicked would end the process, and its restart would run straight into the same panic. An error that names its cause, its route and the setter to change tells the integrator what to fix instead. Leaving nothing behind lets a successor start cleanly, since it recovers what a dead predecessor left before it prepares a route (`+req~ssr-mode-restart~1+`). Revision 2 left the fate of what a failed setup had acquired unstated. A refusal may hand a value back to its caller, destroy one it took, or leave startup storage claimed, because startup memory is never given back in the process (`+req~ssr-memory-sealed~3+`); each is acceptable only when it is the stated one and also meets this item's other duties: none may free storage that an owner that succeeded still uses, and a destruction during setup, such as dropping a refused input, may not panic or abort, so naming an outcome does not by itself make it acceptable. A standard allocation interface may let an allocator end the process on exhaustion or panic on a request it cannot serve, which a fallible call does not prevent, so a provider's own contract decides whether setup can rely on it, and disclosing that contract does not make a request it lets panic admissible. This item does not ask a refused group of transports to roll back one that has already entered runtime mode (`+req~ssr-mode-entry~5+`). Setup has no release service to lean on: using the runtime exception for pending cleanup would let a setup failure leave work running after its refusal, so a destruction that setup performs is bounded like any other setup step, and where that is not established the value is handed back or never taken.
+*Rationale.*
+In a build that aborts on panic (`+req~ssr-build-panic-abort~3+`), a setup mistake that panicked would end the process, and its restart would run straight into the same panic.
+An error that names its cause, its route and the setter to change tells the integrator what to fix instead.
+
+Leaving nothing behind lets a successor start cleanly, since it recovers what a dead predecessor left before it prepares a route (`+req~ssr-mode-restart~1+`).
+
+_Dispositions._
+Revision 2 left the fate of what a failed setup had acquired unstated.
+A refusal may hand a value back to its caller, destroy one it took, or leave startup storage claimed, because startup memory is never given back in the process (`+req~ssr-memory-sealed~3+`).
+Each is acceptable only when it is the stated one and also meets this item's other duties:
+
+* none may free storage that an owner that succeeded still uses;
+* a destruction during setup, such as dropping a refused input, may not panic or abort.
+
+So naming an outcome does not by itself make it acceptable.
+
+_Providers._
+A standard allocation interface may let an allocator end the process on exhaustion or panic on a request it cannot serve, which a fallible call does not prevent.
+So a provider's own contract decides whether setup can rely on it, and disclosing that contract does not make a request it lets panic admissible.
+
+_Groups of transports._
+This item does not ask a refused group of transports to roll back one that has already entered runtime mode (`+req~ssr-mode-entry~5+`).
+
+_No release service._
+Setup has no release service to lean on.
+Using the runtime exception for pending cleanup would let a setup failure leave work running after its refusal.
+So a destruction that setup performs is bounded like any other setup step, and where that is not established the value is handed back or never taken.
 
 == A restart is an initialization
 
 [.specitem,oft-sid="req~ssr-mode-restart~1",oft-title="A restart is an initialization",oft-needs="impl,utest",oft-tags="SafetyUpRustCore"]
 --
-A restarted process *MUST* run the same initialization path as a first start. Each binding *MUST* recover or remove what a dead predecessor left before it prepares any route. The successor *MUST* reach runtime mode with stale predecessor state present, and peers that stayed up *MUST NOT* need anything from it.
+* A restarted process *MUST* run the same initialization path as a first start.
+* Each binding *MUST* recover or remove what a dead predecessor left before it prepares any route.
+* The successor *MUST* reach runtime mode with stale predecessor state present.
+* Peers that stayed up *MUST NOT* need anything from it.
 --
 
 [horizontal]
@@ -186,13 +356,25 @@ Verification:: fault-injection (a kill and restart at every startup step and dur
 Status:: Draft
 ISO 26262:: 6-Table 15 (part-clause numbers only)
 
-*Rationale.* A process can die at any instruction (`+req~ssr-peer-failure-normal~2+`), so what it held can be left in any state, and only the next initialization can deal with it. Recovering through the one initialization path keeps a single tested way to start, instead of a second path that runs only after a failure. Other systems recover the same way: Hubris deliberately uses one code path to start a task at boot and to restart it (https://github.com/oxidecomputer/hubris/blob/da639495cb6a31cffda53b2b822334672dd0bd33/doc/tasks.adoc[Hubris's task documentation]), and LoLa's take-over of shared memory runs on every start, with or without a crash before it (https://github.com/eclipse-score/communication/blob/f5e8f2c8a9247b025b1d425af399588e0264698a/score/mw/com/dependability/software_architectural_design/partial_restart/README.md[LoLa's partial-restart design]). A binding that cannot recover its predecessor refuses setup (`+core/src/transport/mode.rs+`).
+*Rationale.*
+A process can die at any instruction (`+req~ssr-peer-failure-normal~2+`), so what it held can be left in any state, and only the next initialization can deal with it.
+
+Recovering through the one initialization path keeps a single tested way to start, instead of a second path that runs only after a failure.
+A binding that cannot recover its predecessor refuses setup.
+
+Other systems recover the same way:
+
+* Hubris deliberately uses one code path to start a task at boot and to restart it (https://github.com/oxidecomputer/hubris/blob/da639495cb6a31cffda53b2b822334672dd0bd33/doc/tasks.adoc[Hubris's task documentation]).
+* LoLa's take-over of shared memory runs on every start, with or without a crash before it (https://github.com/eclipse-score/communication/blob/f5e8f2c8a9247b025b1d425af399588e0264698a/score/mw/com/dependability/software_architectural_design/partial_restart/README.md[LoLa's partial-restart design]).
 
 == No shutdown in runtime mode
 
 [.specitem,oft-sid="req~ssr-mode-no-shutdown~1",oft-title="No shutdown in runtime mode",oft-needs="impl,utest",oft-tags="SafetyUpRustCore"]
 --
-The element *MUST NOT* offer a shutdown, teardown or departure operation in runtime mode. A process in runtime mode leaves by exit, crash or kill, and a correctness property of the element or of its peers *MUST NOT* depend on a destructor, an exit handler or a departure notice running.
+The element *MUST NOT* offer a shutdown, teardown or departure operation in runtime mode.
+
+A process in runtime mode leaves by exit, crash or kill.
+A correctness property of the element or of its peers *MUST NOT* depend on a destructor, an exit handler or a departure notice running.
 --
 
 [horizontal]
@@ -202,13 +384,21 @@ Verification:: review, fault-injection (peers survive a kill at representative p
 Status:: Draft
 ISO 26262:: 6-7.4.5 (part-clause numbers only)
 
-*Rationale.* A process that crashes or is killed runs no destructor and no exit handler, so a property that needed one would fail exactly when a peer fails. Even without a crash, Rust does not promise that destructors run: `+mem::forget+` is safe, and `+process::exit+` skips them (https://doc.rust-lang.org/1.88.0/std/mem/fn.forget.html[Rust's `+mem::forget+` documentation]). In the code, liveness comes from the service tick and the transport, never from a destructor (`+TransportRuntime::service+` in `+core/src/transport/mode.rs+`).
+*Rationale.*
+A process that crashes or is killed runs no destructor and no exit handler.
+So a property that needed one would fail exactly when a peer fails.
+
+Even without a crash, Rust does not promise that destructors run: `+mem::forget+` is safe, and `+process::exit+` skips them (https://doc.rust-lang.org/1.88.0/std/mem/fn.forget.html[Rust's `+mem::forget+` documentation]).
+
+Liveness therefore comes from the service tick and the transport, never from a destructor.
 
 == Classic routes never enter runtime mode
 
 [.specitem,oft-sid="req~ssr-mode-classic-excluded~1",oft-title="Classic routes never enter runtime mode",oft-needs="impl,utest",oft-tags="SafetyUpRustCore"]
 --
-Classic `+UTransport+` and `+UMessage+` routes *MUST NOT* be able to enter runtime mode under any waiver. Deployment data that puts a classic endpoint on an ASIL route, including a Streamer route, *MUST* be refused at setup by name.
+Classic `+UTransport+` and `+UMessage+` routes *MUST NOT* be able to enter runtime mode under any waiver.
+
+Deployment data that puts a classic endpoint on an ASIL route, including a Streamer route, *MUST* be refused at setup by name.
 --
 
 [horizontal]
@@ -218,13 +408,27 @@ Verification:: compile-fail (a classic transport cannot stand where a two-mode s
 Status:: Draft
 ISO 26262:: 6-7.4.8 (part-clause numbers only)
 
-*Rationale.* The classic API allocates in the SDK's own code: `+UTransport+` is an async trait, and the compatibility path keeps its async-trait allocation (`+src/utransport.rs+`, `+src/wire_transport/owned.rs+`). A waiver covers allocation inside a binding's middleware only, never in SDK or binding code (`+core/src/transport/waiver.rs+`), so no waiver can admit a classic route. The item keeps classic routes out of the two-mode contract; it does not withdraw the classic API, which stays available for ordinary use outside that contract, and a compatibility re-export of a two-mode type from `+up-rust+` is not itself a classic route.
+*Rationale.*
+The classic API allocates in the SDK's own code.
+A waiver covers allocation inside a binding's middleware only, never in SDK or binding code (`+req~ssr-waiver-scope~1+`).
+So no waiver can admit a classic route.
+
+The item keeps classic routes out of the two-mode contract.
+It does not withdraw the classic API, which stays available for ordinary use outside that contract.
+A compatibility re-export of a two-mode type from `+up-rust+` is not itself a classic route.
 
 == Setup never waits without a bound
 
 [.specitem,oft-sid="req~ssr-mode-bounded-startup~2",oft-title="Setup never waits without a bound",oft-needs="impl,utest",oft-tags="SafetyUpRustCore"]
 --
-An initialization step *MUST NOT* wait without a bound. A wait for a service or for the clock *MUST* have a bound from deployment data or from the binding's declared limit, and when the bound expires, setup *MUST* fail with an error naming what it waited for. A missing peer *MUST NOT* fail setup: its route is admitted and reports that it waits for the peer, or its binding refuses the route by name. In runtime mode, a route *MUST* treat a missing peer as silence, under its deadline.
+*Bounded waits.*
+An initialization step *MUST NOT* wait without a bound.
+A wait for a service or for the clock *MUST* have a bound from deployment data or from the binding's declared limit.
+When the bound expires, setup *MUST* fail with an error naming what it waited for.
+
+*A missing peer.*
+A missing peer *MUST NOT* fail setup: its route is admitted and reports that it waits for the peer, or its binding refuses the route by name.
+In runtime mode, a route *MUST* treat a missing peer as silence, under its deadline.
 --
 
 [horizontal]
@@ -233,4 +437,14 @@ Allocated to:: the element
 Verification:: test, fault-injection (a peer that never starts; a service that never appears)
 Status:: Draft
 
-*Rationale.* Processes start and restart in any order (`+req~ssr-mode-restart~1+`), so a peer that is not up yet is normal input, not a fault (`+req~ssr-peer-failure-normal~2+`). A wait without a bound would leave a process stuck in initialization with nothing to report, while a bound that expires ends setup with an error naming what was missing. The bound is logical, as every wait's is (`+req~ssr-bound-wait~2+`): setup fails with that error once it runs after the bound has passed, and a supervisor's own timeout covers a process that the OS does not run at all. A destruction that setup performs on a refusal is a setup step too: it is bounded or not performed (`+req~ssr-mode-init-failure~3+`), and the runtime exception for pending cleanup (`+req~ssr-release-lease-drop~3+`) does not reach setup.
+*Rationale.*
+Processes start and restart in any order (`+req~ssr-mode-restart~1+`), so a peer that is not up yet is normal input, not a fault (`+req~ssr-peer-failure-normal~2+`).
+
+A wait without a bound would leave a process stuck in initialization with nothing to report.
+A bound that expires ends setup with an error naming what was missing.
+
+The bound is logical, as every wait's is (`+req~ssr-bound-wait~2+`).
+Setup fails with that error once it runs after the bound has passed, and a supervisor's own timeout covers a process that the OS does not run at all.
+
+A destruction that setup performs on a refusal is a setup step too.
+It is bounded or not performed (`+req~ssr-mode-init-failure~3+`), and the runtime exception for pending cleanup (`+req~ssr-release-lease-drop~3+`) does not reach setup.
