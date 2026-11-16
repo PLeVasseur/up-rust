@@ -119,10 +119,25 @@ It never reaches the Streamer's own forwarding, control or error paths, or a nat
 [[req-ssr-streamer-byte-identity]]
 == Carriage keeps the bytes
 
-[.specitem,oft-sid="req~ssr-streamer-byte-identity~1",oft-title="Carriage keeps the bytes",oft-needs="impl,utest",oft-tags="SafetyStreamer"]
+[.specitem,oft-sid="req~ssr-streamer-byte-identity~2",oft-title="Carriage keeps the bytes",oft-needs="impl,utest",oft-tags="SafetyStreamer"]
 --
+*Identifier, presence and bytes.*
 A carrier *MUST* keep identifier and payload bytes unchanged on every hop, with at most one payload copy per hop and no automatic negotiation or transcoding.
+An absent payload *MUST* stay absent, and a present payload *MUST* stay present with its identifier, a zero-length payload included.
 
+*No reader is needed.*
+A payload whose frame names no native representation is a serialized payload: a carrier carries its bytes without reading them, whatever its encoding identifier is.
+For such a payload, a carrier:
+
+* *MUST NOT* require a wire, a decoder or any other reader of the encoding;
+* *MUST NOT* refuse the frame because the identifier is reserved, unassigned, private or unknown to it, or because no wire of the route names it;
+* *MUST NOT* give the identifier a meaning of its own, so `0xFFFF` is carried as any other identifier is.
+
+*The one refusal by identifier.*
+A route's encoding filter is the only reason for which a carrier refuses a serialized payload by its identifier (<<req-ssr-streamer-qos-per-leg,Both legs are checked, at setup and per frame>>).
+A route has no filter unless its deployment data states one, and a route without one refuses no serialized payload for its identifier.
+
+*No staging.*
 Already-serialized input *MUST NOT* be staged:
 
 * a byte-only egress receives the ingress bytes directly;
@@ -132,14 +147,44 @@ A different egress envelope *MUST* re-encode the metadata only.
 --
 
 [horizontal]
-ID:: `+req~ssr-streamer-byte-identity~1+`
+ID:: `+req~ssr-streamer-byte-identity~2+`
 ASIL:: B
 Allocated to:: the Streamer
-Verification:: test (byte identity on every route kind; loan-address checks)
+Verification:: test
+* *test*
+** Byte identity on every route kind, and the loan-address checks.
+** On a route with no encoding filter, a serialized payload under an identifier that no wire of the route names, carried with its identifier and bytes unchanged: an assigned identifier, an unassigned one, a reserved one, a private-use one, `0` and `0xFFFF`.
+** An absent payload kept absent, and a present zero-length payload kept present with its identifier, between two different envelopes.
+** The same frames carried the same way after a wire that reads their encoding is added to the route.
+** A control: a carrier that refuses a frame because no wire of the route names its identifier fails.
 Status:: Draft
 
 *Rationale.*
 up-spec makes a component that only carries or forwards a message keep its identifier and payload bytes unchanged, with no decoder needed (xref:../../basics/payload_encoding_registry.adoc#acceptance[the payload encoding registry, "Carrying a Payload versus Reading It"]).
+
+_No reader._
+The same rule keeps such a component from refusing carriage because an identifier is reserved, unassigned, private or unknown to it.
+The registry states it as an assumption of use, and leaves a component's own requirement to that component's specification (xref:../../basics/payload_encoding_registry.adoc#obligations[the payload encoding registry, "Requirement Ownership"]).
+So this item states it for the Streamer.
+
+A route's wires are named when the route is set up (<<req-ssr-streamer-route-lock,Routes and subscriptions are locked at activation>>).
+If carriage depended on them, a payload that only its endpoints read could cross a Streamer only after the Streamer's deployment data had been changed for it.
+Learning later what an identifier means must not change how a payload is carried, so adding a wire to a route changes nothing for the frames that the route already carried.
+
+_The one refusal by identifier._
+A deployment can still decide which encodings one of its routes forwards.
+That is a choice about the route, and it is stated as one: an encoding filter in the route's deployment data, which <<req-ssr-streamer-qos-per-leg,Both legs are checked, at setup and per frame>> bounds.
+It is kept apart from what a carrier can read, so that no route starts to refuse an identifier because a wire or a decoder is missing.
+Whether a route with a filter still meets up-spec's rule for a component that only carries is not decided, and this item does not say that it does (xref:../../contract-generations.adoc#transition[the transition table]).
+
+_Presence._
+A payload and its identifier are present together or absent together (xref:../../basics/uattributes.adoc#common-attributes[UAttributes], `payloadEncodingId`).
+So keeping the identifier unchanged keeps the presence too.
+The statement says so because a different egress envelope writes the metadata again, and an envelope that could not tell an absent payload from an empty one would lose the difference.
+
+_A native representation._
+A reader borrows a native representation in place, so a frame that names one is not carried as bytes under this item.
+<<req-ssr-streamer-qos-per-leg,Both legs are checked, at setup and per frame>> says when a leg carries it.
 
 Unchanged bytes let a check made at the endpoints, such as end-to-end protection, cover every hop (xref:../seooc-up-rust/e2e-wire.adoc#req-ssr-e2e-survives-hops[Protection survives every allowed hop]).
 A copy staged on the way would add work and a buffer for nothing.
@@ -197,28 +242,97 @@ A bound on another route's delay in time is a timing claim of a supported config
 [[req-ssr-streamer-qos-per-leg]]
 == Both legs are checked, at setup and per frame
 
-[.specitem,oft-sid="req~ssr-streamer-qos-per-leg~1",oft-title="Both legs are checked, at setup and per frame",oft-needs="impl,utest",oft-tags="SafetyStreamer"]
+[.specitem,oft-sid="req~ssr-streamer-qos-per-leg~2",oft-title="Both legs are checked, at setup and per frame",oft-needs="impl,utest",oft-tags="SafetyStreamer"]
 --
 *At setup.*
 When a route is set up, the QoS of both its legs *MUST* be checked, and a refusal *MUST* name the leg.
+Setup *MUST* report, for each route, whether it has an encoding filter and which identifiers the filter names.
 
 *Per frame.*
-Before each frame is forwarded, it *MUST* be checked against the egress leg's own limits (payload size, token length, wire set) on every forwarding path, and against its TTL.
+Before each frame is forwarded, it *MUST* be checked against the egress leg's own limits on every forwarding path, and against its TTL.
+A leg's limits are:
+
+* the payload size;
+* the token length;
+* what the leg's envelope can represent;
+* for a frame whose header names a native representation, the native representations that the route's wires name;
+* the route's encoding filter, where its deployment data states one.
+
+*A native representation.*
+A frame whose header names a native representation that none of the route's wires names *MUST* be refused.
+It *MUST NOT* be carried as serialized bytes, and what names its representation *MUST NOT* be removed or changed.
+
+*The encoding identifier.*
+The encoding identifier of a payload that a leg carries as serialized bytes is not a limit of the leg.
+A leg *MUST NOT* refuse such a payload for its identifier, except through the route's encoding filter.
+
+*An encoding filter.*
+A route's deployment data *MAY* state an encoding filter: the list of the encoding identifiers of the serialized payloads that the route forwards.
+
+* A route has no filter unless its deployment data states one.
+A filter *MUST NOT* be derived from the route's wires, from the decoders that a build contains or from any other reader.
+* A route with a filter *MUST* refuse a serialized payload whose identifier the list does not name.
+It *MUST* forward one whose identifier the list names exactly as a route without a filter does, with or without a reader of that encoding.
+* The refusal *MUST* be counted under a cause of its own, which names the filter.
+It *MUST NOT* be reported as an unknown, unsupported or invalid encoding, or as a failure to decode.
+* A filter names identifiers and nothing else.
+It gives none of them a meaning: `0xFFFF` in a filter names that one identifier and matches no other.
+It *MUST NOT* apply to a frame whose header names a native representation.
+A frame with no payload has no identifier, and a filter does not refuse it.
+* A filter is part of its route's definition, which does not change after activation (<<req-ssr-streamer-route-lock,Routes and subscriptions are locked at activation>>).
 --
 
 [horizontal]
-ID:: `+req~ssr-streamer-qos-per-leg~1+`
+ID:: `+req~ssr-streamer-qos-per-leg~2+`
 ASIL:: B
 Allocated to:: the Streamer
 Verification:: test
+* *test*
+** Each limit refusing its frame on every forwarding path, counted under a cause of its own.
+** A frame that names a native representation which none of the route's wires names: refused, with no part of it carried as serialized bytes.
+** On a route with no encoding filter, a serialized payload under an identifier that no wire of the route names: forwarded.
+** A route whose deployment data states no filter has none, whatever wires and decoders the build contains.
+** On a route with an encoding filter, a serialized payload whose identifier the filter names: forwarded with its identifier, presence and bytes unchanged, with and without a wire that reads it.
+** On a route with an encoding filter, a serialized payload whose identifier the filter does not name: refused, and counted under the filter's cause and under no other.
+** On a route with an encoding filter, a frame that names a native representation: admitted or refused by the route's wires alone.
+** The setup report of each route's filter, and of a route that has none.
+** Controls: a filter refusal counted as an unknown or invalid encoding fails, and so does a filter derived from the route's wires.
 Status:: Draft
 
 *Rationale.*
 A limit checked on one forwarding path and not on another lets a frame through on the path that skips it, so every path checks.
 
-The statement names a leg's wire set among its limits and does not say what that set is.
-up-spec's rule for a component that only carries a message is that it does not refuse carriage because a payload's encoding identifier is unknown to it (xref:../../basics/payload_encoding_registry.adoc#acceptance[the payload encoding registry, "Carrying a Payload versus Reading It"]).
-So the statement is open on whether a leg refuses a frame because no wire of its route names the frame's encoding, and a revision that states the limits is proposed (xref:../../contract-generations.adoc#transition[the transition table]).
+_What a leg can refuse._
+A leg refuses what it cannot hold or cannot express: a payload longer than its storage, a token longer than its bound, a head that its envelope cannot represent.
+Each refusal is counted under its cause (xref:../seooc-up-rust/errors.adoc#req-ssr-error-no-silent-loss[No silent loss, and each loss counted once]).
+
+_A native representation._
+A reader borrows a native representation in place, so carrying one is not carrying bytes.
+It is carried only where the route's setup agreed it (xref:../up-l1/peers.adoc#req-ssr-native-abi-agreed[A native representation never crosses an ABI]; xref:../up-l1/integrity.adoc#req-ssr-integrity-checked-at-admission[In-place frames are checked once, at admission]).
+Carrying it as bytes, or under another name, would hand a reader memory that nothing agreed.
+An encoding identifier is no part of that agreement, and a filter that names one admits no native representation.
+That a route's wires name a representation selects a frame for carriage and proves nothing about it.
+A layout, initialized storage and ownership are established by the reader's own admission, never by a name that a frame carries (xref:../up-l1/integrity.adoc#req-ssr-integrity-zero-copy[Zero-copy only from a writer at or above the reader]).
+
+_The encoding identifier._
+A carrier does not read a payload.
+So the identifier of a serialized payload changes nothing that a leg holds or expresses, and by itself it is no reason to refuse a frame (xref:../../basics/payload_encoding_registry.adoc#acceptance[the payload encoding registry, "Carrying a Payload versus Reading It"]).
+
+_Why a filter is stated, and off unless stated._
+A deployment may want a route to forward only the encodings that it names.
+A route that did so through its list of wires would refuse a payload because a reader is missing, and nobody could tell that refusal from a decision.
+So the filter is a statement of its own in the deployment data: it is absent unless stated, it is reported at setup, and its refusal has a cause that names it.
+A refused frame is then a deployment's recorded choice, and an identifier that a carrier cannot read is never refused for that.
+
+_A filter and up-spec's rule._
+up-spec's rule keeps a component that only carries from refusing carriage because an identifier is reserved, unassigned, private or unknown to it.
+It does not say whether a deployment's own choice of what a route forwards is such a refusal.
+So this item does not claim that a route with a filter meets that rule, and xref:../../contract-generations.adoc#transition[the transition table] records the question as open.
+A route with no filter refuses no serialized payload for its identifier.
+
+_What becomes of a refused frame._
+This item says when a leg refuses a frame.
+What becomes of a frame that is not forwarded, and what an RPC client is told, are stated by <<req-ssr-streamer-dispatch-obligations,Undeliverable messages are counted, never sent as dead letters>> and <<req-ssr-streamer-rpc-error-response,An RPC request that cannot be dispatched is answered, best effort>>, which this item leaves as they are.
 
 [[req-ssr-streamer-startup-report]]
 == The startup report says what will run

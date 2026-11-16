@@ -107,6 +107,28 @@ tags in the SDK. Each already named a revision older than the one current then:
 - The binding and wire items (`req~ssr-binding-frame-drop`, `req~ssr-binding-bounded`, `req~ssr-wire-heap-claim-tested`) are covered in each binding's and each wire's repository, which this note does not inventory.
 - The safety-manual entry for `aou~seooc-qualified-bindings-and-wires` covers revision 6.
 
+## Revisions raised by the opaque-carriage rule
+
+The specification states up-spec's rule for carrying a payload as a requirement
+on the Streamer, names the limits that a carrier leg checks, and allows a
+deployment to state an encoding filter for a route.
+
+| Earlier revision | Current revision |
+| --- | --- |
+| `req~ssr-streamer-byte-identity~1` | `req~ssr-streamer-byte-identity~2` |
+| `req~ssr-streamer-qos-per-leg~1` | `req~ssr-streamer-qos-per-leg~2` |
+
+- The sentences under "Items" that cite `req~ssr-streamer-byte-identity~1` were
+  written against revision 1. They describe the keeping of the bytes, which
+  revision 2 keeps. They say nothing of an encoding that no wire of a route
+  names, or of a filter.
+- The carrier primitives refuse a frame with such an encoding, and have no
+  filter that a deployment states. See [payload encoding](payload-encoding.md),
+  "Carriers".
+- Both items are covered in the Streamer's repository, which this note does not
+  inventory. A tag that names an earlier revision stays as it is until its code
+  or test has been reviewed against the current statement.
+
 ## Revisions raised by the responsibility refinement
 
 The specification now states a duty that binds only one transport, or only some

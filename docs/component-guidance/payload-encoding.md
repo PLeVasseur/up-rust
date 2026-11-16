@@ -125,8 +125,13 @@ wire, as Protobuf wires usually are, decodes into values that own what they hold
 The rule for a component that only carries a message is that it keeps the
 identifier and the payload bytes, needs no decoder, and does not refuse carriage
 because an identifier is unknown to it (`aou~payload-encoding-opaque-carriage~1`).
-The Streamer's item `req~ssr-streamer-byte-identity~1` states the keeping of the
-bytes, and cites that rule.
+The specification states that rule for the Streamer in
+`req~ssr-streamer-byte-identity~2`, and names a leg's limits in
+`req~ssr-streamer-qos-per-leg~2`: the payload size, the token length, what the
+leg's envelope can represent, for a native representation what the route's
+wires name, and an encoding filter where the route's deployment data states
+one. On a route with no filter, the encoding identifier of a serialized payload
+is not a limit.
 
 - **Implemented.** The carrier primitives never decode a payload, never
   transcode one and stage no copy (`core/src/transport/carrier.rs`).
@@ -138,26 +143,34 @@ bytes, and cites that rule.
   refused (`UFrameHeaderError::WrongPrefix`). On a carrier route, a present
   payload whose encoding and type token match no admitted wire is refused too
   (`core/src/transport/carrier.rs`, `core/src/transport/inbound.rs`).
-- **What the specification says.** `req~ssr-streamer-qos-per-leg~1` requires a
-  check of each frame against the egress leg's "wire set", and does not say what
-  that set is.
-- **So no claim of generic opaque forwarding.** A deployment that forwards
-  through a carrier route names every encoding that the route carries. A frame
-  with any other identifier is refused and counted, whether or not an endpoint
-  could read it.
+- **Not implemented: an encoding filter.** The closed list of wires is not one.
+  It follows from the route's wires, it is always on, and its refusal is
+  reported as an encoding that is not admitted. Revision 2 asks for the
+  opposite on each point: a filter is stated on its own in deployment data, a
+  route has none unless one is stated, and its refusal has a cause that names
+  the filter.
+- **So the carrier primitives do not meet revision 2 of either item.** A
+  deployment that forwards through a carrier route names every encoding that
+  the route carries. A frame with any other identifier is refused and counted,
+  whether or not an endpoint could read it.
+- **No tag moves.** A code or test tag that names revision 1 of either item
+  stays as it is until its code or test has been reviewed against revision 2.
 
-What a repair keeps:
+What the change keeps:
 
 - The envelope and the storage shape stay admission criteria. The encoding
-  identifier of a serialized payload stops being one.
-- A native representation is carried only where the route has agreed it. It is
-  never carried as serialized bytes, and its token is never removed or changed.
+  identifier of a serialized payload stops being one, unless a deployment
+  states a filter.
+- A native representation is carried only where the route's wires name it. It
+  is never carried as serialized bytes, and its token is never removed or
+  changed. A filter never admits one.
 - No decoder is registered only to make a frame pass.
 - A lending egress still needs a storage shape for a payload that no wire
   describes: its largest size, and the alignment that its loans give. A route
   declares them. An identifier does not supply them.
 - Refusals for size, token length, addressing, TTL and capacity keep causes of
-  their own (`req~ssr-error-no-silent-loss~3`).
+  their own (`req~ssr-error-no-silent-loss~3`), and so does a filter's refusal.
+  None of them is reported as an unknown or invalid encoding.
 
 ## Migrating from `UPayloadFormat`
 
@@ -216,6 +229,12 @@ not. A check on one transport is evidence for that transport only.
    way after such a wire is added. Controls: the closed-list refusal that exists
    today is detected, and so is a carrier that carries a native representation
    it has not agreed.
-7. **Both wires on both transports.** The native wire and the Protobuf wire, on
+7. **An encoding filter.** A route whose deployment data states none has none,
+   whatever wires the build contains. A route with one forwards each identifier
+   that it names, with or without a reader, and refuses every other serialized
+   payload under the filter's own cause. Controls: a filter refusal reported as
+   an unknown or invalid encoding is detected, and so is a filter that follows
+   from the route's wires.
+8. **Both wires on both transports.** The native wire and the Protobuf wire, on
    iceoryx2 and on LoLa, at one exact SDK revision. A build for a target is not
    a run on it.
