@@ -62,7 +62,7 @@ Neither the availability of a language feature nor a successful build is a quali
 An application on the ASIL path *MUST* depend at run time only on the crates of its claimed safety dependency graph:
 
 * the safety crate;
-* the bindings, wires and platform backends that its configuration qualifies as separate elements (`+aou~seooc-qualified-bindings-and-wires~6+`);
+* the bindings, wires and platform backends that its configuration qualifies as separate elements (`+aou~seooc-qualified-bindings-and-wires~7+`);
 * any optional layer of the element that its configuration admits with that layer's own allocated requirements and evidence.
 
 *Checked policy stays in the safety crate.*

@@ -1,9 +1,9 @@
 # Bindings and wires pass their contracts
 
-`uman~sdk-aou-qualified-bindings-and-wires~3`
+`uman~sdk-aou-qualified-bindings-and-wires~4`
 
 Covers:
-- aou~seooc-qualified-bindings-and-wires~6
+- aou~seooc-qualified-bindings-and-wires~7
 
 ## Status and scope
 
@@ -11,14 +11,13 @@ Draft integrator guidance against the corrected specification input. The quotati
 requirements and assumptions, including future behavior; it is not an assertion
 that the current SDK implements them.
 
-- Named records in the quote retain their classifications.
 - No binding README uman coverage is claimed by this SDK manual. Binding owners must provide it separately.
 - Revision 5 bound qualification to exact versions and configuration and to the evidence state each record has.
 - Revision 6 adds one duty: where the item relies on a stronger resource guarantee on a serialized route, the integrator requires it by name.
 - Revision 6 also describes the contract suites and the runtime port's reports instead of naming SDK identifiers. The identifiers are in the SDK's implementation traceability note.
-- Guarantee admission, its named refusal and its reports are specified. This manual does not claim that they are implemented.
-- The specification states this assumption with its transports, in `up-spec/safety/up-l1/deployment.adoc`. It is an assumption of the up-rust SEooC there as before, and its text and revision are unchanged.
-- Its iceoryx2 lists are indexed on the specification's iceoryx2 page, `up-spec/safety/up-l1/iceoryx2.adoc`. A deployment on another transport reads that transport's own README for its limits.
+- Revision 7 keeps the qualification duty, with revision 6's wording. The specification states it with its transports, in `up-spec/safety/up-l1/deployment.adoc`.
+- The duty that revision 6 added is now the [resource-guarantees](resource-guarantees.md) entry, with its wording.
+- The iceoryx2 limits, anomalies and known failures are now `aou~seooc-iceoryx2-limits~1`. The iceoryx2 binding's safety manual states it, and this manual has no entry for it. A deployment on another transport reads that transport's own README for its limits.
 
 Read [manual status](README.md) before using this entry. A documentary coverage
 link neither validates the deployment nor closes an implementation requirement.
@@ -28,38 +27,16 @@ link neither validates the deployment nor closes an implementation requirement.
 <!-- aou-statement:start -->
 > The integrator *SHALL* use on the ASIL path only bindings and wires that pass the contract suites (the binding contract suite, the QoS contract suite and the wire contract suite) on the integrator's own target, at the exact versions and configuration whose evidence its supported configuration records, and *SHALL NOT* take evidence of one state, compiled, linked, exercised, source-reviewed, composition-verified or qualified, for another.
 >
-> * *32-bit targets.* On a 32-bit target, those are only the bindings and wires whose contracts pass on that target. The iceoryx2 binding claims no 32-bit target, because iceoryx2 0.9 needs 64-bit atomics and its bare-metal port is a proof of concept.
+> * *32-bit targets.* On a 32-bit target, those are only the bindings and wires whose contracts pass on that target.
 > * *Pull bindings and deadlines.* A pull binding used for a route with a deadline reports an arrival through the runtime port only with evidence that a frame entered the route's queue, or that the queue's overflow policy discarded one, and within the arrival-report latency it declares in its QoS support. It never reports one on a wake hint alone. It reports each failure to read its own queue through the runtime port's receive-failure report. Its deadline checks of the QoS contract suite pass, on a subscriber and on a carrier ingress.
 > * *Response routes.* A push binding delivers one response route from one thread at a time, which the contract checks. A pull binding needs nothing: the element serializes the pulls of a response route itself.
 > * *Cores without coherent atomics.* A route between cores whose atomics are not coherent with each other (`+aou~seooc-target-environment~4+`) uses a transport whose qualification covers that.
-> * *Owning wires.* A wire that decodes into values that own what they hold, heap memory included, is ordinary on a serialized route that declares its allocation, and its ownership needs nothing further from the integrator. Where the item relies on panic-free cleanup, non-waiting acquisition, non-waiting release or recoverable exhaustion on such a route, the integrator *SHALL* require that guarantee in the route's declaration, and uses a supported configuration whose package establishes it for the exact type, wires, binding and allocation provider (`+req~ssr-heap-guarantees~1+`). A route that does not require a guarantee is promised none, whether or not evidence establishes it: its report shows that guarantee as not required and not admitted, and states separately whether it is established.
 >
-> The integrator accepts the limits and known anomalies that each binding's README states (`+req~ssr-binding-readme~1+`). For a deployment that uses iceoryx2, these include:
->
-> * allocation on a peer join or restart, under the waiver (`+UPW-iceoryx2-1+`);
-> * sizing of the expired-connection buffer: a receive route is refused at setup unless twice its retained budget fits in it;
-> * the service depth, which now comes from deployment data (`+req~ssr-binding-depth-from-deployment~1+`);
-> * the port mutex's panic path, on lock and on unlock, which no peer can reach (`+UPD-IOX2-0001+`, revision 2);
-> * the two `+blocking_send+` `+unwrap+`s, which only a failing OS clock call reaches (`+UPD-IOX2-0002+`);
-> * iceoryx2's other accepted panic paths: two process-private invariants; a descriptor that other code in the process closes while a socket is set up; `+close()+` failing on a departed peer's descriptor; and a sample counter's overflow on 64-bit targets, at over 580 years at 10^9^ sends per second (`+UPD-IOX2-0003+`, `+UPD-IOX2-0004+`, `+UPD-IOX2-0005+`);
-> * heap exhaustion during a peer change, which aborts, within the deployment's heap sizing under `+UPW-iceoryx2-1+` (`+UPD-IOX2-0006+`);
-> * arrival reports from its receive thread, within that thread's period plus its stated pass bound, on a drained notification of the route's data ID together with a sample in the queue or taken since the previous pass, or on the queue turning non-empty;
-> * a sender preempted between `+send+` and its notification delays the report, unless the queue was empty at the previous pass; a notification that fails at the sender while the queue holds samples leaves an arrival unreported, so a miss may be counted for a gap no longer than the deadline, and the sender counts the failure;
-> * while a new publisher's data connection is being set up, its notification can be reported while older samples are queued;
-> * iceoryx2 0.9.2 only logs a data connection that cannot be set up, under its default handler, and retries it only when the publisher list changes. So the binding installs a degradation handler on each port at setup: a failed connection is counted as `+receive_failed+`, or on the sending route, and the route then reports only a queue that turned non-empty, until the publisher list changes and an update runs clean; a queue that a healthy second publisher keeps non-empty meanwhile shows misses;
-> * the event IDs are read from the event service's static config, and a route whose lifecycle events share the data ID, or whose data ID is above the service's `+event_id_max_value+`, is refused at setup.
->
-> The README also says that a frame drop can wait for the port mutex. That is not an accepted limit, because `+req~ssr-binding-frame-drop~5+` forbids it. It is the binding's known failure `+UPF-IOX2-0001+`, open until the binding returns each dropped frame to iceoryx2 through its deferred return as pending cleanup, charged and isolated as `+req~ssr-release-lease-drop~4+` requires; a thread of its own is not by itself that isolation.
->
-> iceoryx2's other known failures are not accepted limits either, because `+req~ssr-binding-no-panic~4+` forbids them: its index bug on a connection change (`+UPF-IOX2-0002+`), until iceoryx2 fixes the index; its event-deadline panics, on QM transports only, since ASIL deployments turn those deadlines off, until iceoryx2 fixes them (`+UPF-IOX2-0005+`); and the paths through which a peer that writes values its own iceoryx2 never writes can panic its survivors, until iceoryx2 validates what peers write (`+UPF-IOX2-0004+`).
->
-> The wait thread's descriptor-set panics (`+UPF-IOX2-0006+`) remain until its own poll loop replaces that set, or a reviewed equivalent with a source-backed argument is adopted in its place, and unsafe name and queue-size configuration (`+UPF-IOX2-0007+`) remains until setup refuses it.
->
-> The expired-buffer failure is fixed by the twice-budget setup refusal; it is recorded separately as fixed, not as an accepted anomaly.
+> The integrator accepts the limits and known anomalies that each binding's README states (`+req~ssr-binding-readme~1+`). For a deployment that uses iceoryx2, `+aou~seooc-iceoryx2-limits~1+` lists them, and lists apart that binding's known failures, which are not accepted limits.
 >
 > A wire or binding from elsewhere with `+unsafe+` code of its own, such as a wire over a C codec, is a separate element, and the integrator qualifies its `+unsafe+` (`+req~ssr-unsafe-inventory~3+`). The bindings this project ships keep their own inventories under the same gate (`+req~ssr-binding-unsafe-inventory~1+`).
 >
-> In strict mode, the Enforce state refuses a binding or wire that is not on the integrator's qualified list, an ASIL process that reaches a deviation not acknowledged at its current revision, and any known failure, whatever is acknowledged; while iceoryx2's known failures stand, that refuses each affected route at ASIL, including publishers affected by shared-state faults. The report lists each binding's README limits, deviations and known failures.
+> In strict mode, the Enforce state refuses a binding or wire that is not on the integrator's qualified list, an ASIL process that reaches a deviation not acknowledged at its current revision, and any known failure, whatever is acknowledged. The report lists each binding's README limits, deviations and known failures.
 <!-- aou-statement:end -->
 
 ## Integrator actions
@@ -76,36 +53,23 @@ The integrator SHALL complete and retain the following checklist for the item:
   - Validate the declared latency and loss-observability capability.
   - Do not claim every middleware discard is counted.
 - [ ] **Read each binding README and its records.**
-  - Separate accepted UPD anomalies, open UPF failures and UPW heap waivers by ID/revision.
-  - The expired-buffer failure UPF-IOX2-0003 is recorded as fixed, not an accepted anomaly.
-- [ ] **For iceoryx2, verify its sizing and limits.**
-  - Verify retained-budget/expired-buffer sizing, deployment service depths, event/data-ID separation and maximum, connection degradation behavior, arrival-thread period and notification/preemption limits.
-  - Keep event-deadline restrictions and allocation bounds explicit.
+  - Separate accepted anomalies, open known failures and heap waivers by ID/revision.
+  - For iceoryx2, complete the binding's own entry for `aou~seooc-iceoryx2-limits~1`, which lists them.
 - [ ] **Do not approve deployments affected by known failures.**
-  - Do not approve deployments affected by frame-drop blocking, shared-state faults (publishers included), connection-change index failures, wait-thread descriptor faults or unsafe setup configuration merely by acknowledging them.
+  - Do not approve a deployment affected by a binding's known failure merely by acknowledging it.
   - Verify each fix and its affected paths before removing the restriction.
-  - For the wait-thread descriptor faults, accept only the binding-owned poll loop or a reviewed, source-backed equivalent, with every claimed eliminated panic site shown unreachable.
-- [ ] **Require the resource guarantees the item relies on.**
-  - A wire that owns its values, heap-backed ones included, is ordinary on a serialized route that declares its allocation. That ownership gives no guarantee about how its cleanup behaves.
-  - Where the item relies on panic-free cleanup, non-waiting acquisition, non-waiting release or recoverable exhaustion on a route, require it in that route's declaration.
-  - Read the startup report: each guarantee is shown as required or not, established or not, and admitted or not. Rely only on a guarantee shown as admitted.
-  - A guarantee shown as established and not required is evidence that the configuration has, not a promise to the item. Require it before relying on it.
-  - Treat "not established" as absent: the evidence is missing or insufficient, whatever the route requires.
-  - Do not read an integrity level, a strict-mode state or the name of a wire or provider as a request or as evidence.
 - [ ] **Qualify external unsafe code, and mind the target.**
   - Qualify external unsafe code as its own element and retain each shipped binding's unsafe inventory.
   - For non-coherent inter-core routes use a transport qualified to synchronize those cores.
-  - iceoryx2 0.9 has no 32-bit target claim here.
+  - On a 32-bit target, use only bindings and wires whose contracts pass on that target.
 
 ## Violation manifestations
 
 - An unqualified binding can lose arrivals, misreport counters, block frame release, panic on a peer fault, corrupt shared state or allocate without a valid waiver.
 - These manifestations can violate the item even if a mock contract passed.
-- A route that relies on a resource guarantee it did not require can wait in its allocator, end the process on exhaustion or panic in a destructor, with no refusal at setup.
 
 ## Detection limits
 
 - A suite pass is limited to its exact bindings and target. It does not erase known failures or establish all deployed loads.
 - Strict known-failure refusal is required but not claimed implemented by this manual.
 - The absence of a failure report does not show all paths were exercised.
-- The SDK refuses a required guarantee that is not established. It cannot tell that the item relies on one that no route requires.

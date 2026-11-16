@@ -574,7 +574,7 @@ Waiting and panicking are different properties, and neither follows from ownersh
 
 An ordinary allocator's release can take a lock that waits.
 On a route that does not require non-waiting release, that wait is the declared policy's, on the path that ended the value.
-A route that requires non-waiting release moves it off that path, in the same way as a retained owner's deferred return (`+req~ssr-binding-frame-drop~5+`).
+A route that requires non-waiting release moves it off that path, in the same way as a retained owner's deferred return (`+req~ssr-binding-frame-drop~6+`).
 
 That hand-off holds ownership awaiting destruction, not unread traffic, so it is not a second receive queue.
 Deferral bounds nothing: the release may still wait behind the allocator's own lock, which no deadline can interrupt from outside.

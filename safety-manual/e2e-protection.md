@@ -31,8 +31,8 @@ link neither validates the deployment nor closes an implementation requirement.
 > The integrator *SHALL* decide which routes carry data that needs end-to-end protection, and *SHALL* supply protection on each of them and justify it for the item.
 >
 > * *In this delivery.* In this delivery that protection is the integrator's own mechanism: the SDK's E2E wire `+E2e<W>+` is deferred and not part of it. The integrator states which faults its mechanism detects, the boundary it covers and the residuals it leaves, and its analysis of the route rests on that statement.
-> * *Above ASIL B.* Data above ASIL B that relies on such protection stays within the decomposition and coexistence duties of `+aou~seooc-integrity-levels~5+`.
-> * *Adds, and replaces nothing.* End-to-end protection adds to the element's own duties and replaces none of them: RPC correlation, TTL, ownership, and the refusal and error handling of every route hold whether a route is protected or not, and message IDs are not authentication (`+aou~seooc-peer-access~4+`).
+> * *Above ASIL B.* Data above ASIL B that relies on such protection stays within the decomposition and coexistence duties of `+aou~seooc-capability-ceiling~1+`.
+> * *Adds, and replaces nothing.* End-to-end protection adds to the element's own duties and replaces none of them: RPC correlation, TTL, ownership, and the refusal and error handling of every route hold whether a route is protected or not, and message IDs are not authentication (`+aou~seooc-peer-access~5+`).
 > * *Not required by the element.* Nothing in the element requires end-to-end protection on any route, including routes at an ASIL integrity level.
 > * *Strict mode.* In strict mode, on an ASIL route over a transport the integrator classifies as a black channel, the route names the integrator's own protection or, once the E2E wire is delivered and selected for it, uses that wire; the report lists the protection named for each route, and warns of an unclassified transport.
 >
@@ -75,7 +75,7 @@ The integrator SHALL complete and retain the following checklist for the item:
 - [ ] **Classify each transport.**
   - Classify each transport as trusted or as a black channel.
   - For every ASIL route over a black channel, name the protection supplied.
-  - For data above ASIL B, keep the decomposition and coexistence arguments that integrity-levels requires.
+  - For data above ASIL B, keep the decomposition and coexistence arguments that the [capability-ceiling](capability-ceiling.md) entry requires.
   - Keep the element's RPC correlation, TTL, ownership and error handling in the analysis: protection replaces none of them, and message IDs are not authentication.
 - [ ] **Only for a route that selects the deferred E2E wire, once it is delivered: record its declarations.**
   - Record exact non-wildcard senders and receiver peers, derived data IDs and their collision domain, resync_frames, one live sender per data ID, role-specific addressing and at most one E2E wrapper per route.

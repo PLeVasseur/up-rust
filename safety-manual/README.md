@@ -1,7 +1,8 @@
 # SDK safety manual — draft integrator guidance
 
-This manual describes the 17 SDK assumptions of use of the up-rust SEooC
-specification in this repository (`up-spec/safety`), one entry each.
+This manual describes the 19 assumptions of use of the up-rust SEooC
+specification in this repository (`up-spec/safety`) that the SDK owns, one entry
+each.
 It is a review proposal, not a certified release, safety case, assessment,
 deployment approval or implementation claim.
 
@@ -13,15 +14,17 @@ concerns, and indexes all of them in
 
 | Part of the specification | Entries |
 | --- | --- |
-| Transports, `up-spec/safety/up-l1/deployment.adoc` | peer-access, qualified-bindings-and-wires |
-| The element and its deployment, `up-spec/safety/seooc-up-rust/assumptions-of-use.adoc` | the other fifteen |
+| Every transport, `up-spec/safety/up-l1/deployment.adoc` | peer-access, integrity-levels, qualified-bindings-and-wires |
+| The element and its deployment, `up-spec/safety/seooc-up-rust/assumptions-of-use.adoc` | the other sixteen |
 
 - Every entry is an assumption of the up-rust SEooC wherever it is filed, and
   binds the same integrator. Filing one with a layer makes it no duty of another
   SDK or transport.
-- Some assumptions hold clauses of more than one layer. The specification lists
-  them, with who acts, beside the assumptions. Its iceoryx2 page,
-  `up-spec/safety/up-l1/iceoryx2.adoc`, indexes every clause that names iceoryx2.
+- A duty that binds only one transport, or only some deployments, is an
+  assumption of its own. Four assumptions of the element are owned by another
+  repository and have no entry here: see "Assumptions owned elsewhere" below.
+- Where an assumption still names a rule of another part, the specification's
+  table beside it says which part that is and who acts.
 - A deployment duty and a software requirement stay separate. This manual states
   deployment duties; the requirements they rest on are the specification's.
 
@@ -179,11 +182,16 @@ The revisions quoted here rose where meaning changed:
 | --- | --- |
 | supervisor-restart | 4 |
 | process-isolation | 3 |
-| integrity-levels | 5 |
-| timing-budgets | 6 |
+| integrity-levels | 6 |
+| capability-ceiling | 1 |
+| peer-access | 5 |
+| timing-budgets | 7 |
 | clock | 3 |
+| waiver-approval | 3 |
 | e2e-protection | 7 |
-| qualified-bindings-and-wires | 6 |
+| qualified-bindings-and-wires | 7 |
+| resource-guarantees | 1 |
+| deployment-data | 6 |
 | target-environment | 4 |
 | build-configuration | 5 |
 | capacity-sizing | 3 |
@@ -192,10 +200,8 @@ The revisions quoted here rose where meaning changed:
 
 - The target-environment entry is new; earlier versions of this folder listed it
   without providing it.
-- The peer-access and peer-rates statements changed only the revisions of the
-  items they cite.
-- Filing the assumptions by layer changed no statement and no revision: every
-  quotation here is the same text as before.
+- The peer-rates statement changed only the revisions of the items it cites.
+- Filing the assumptions by layer changed no statement and no revision.
 - The deployment-data entry's own guidance changed while its assumption did not.
 - The build-configuration and capacity-sizing entries were corrected in place at
   the revisions above.
@@ -209,6 +215,28 @@ The revisions quoted here rose where meaning changed:
 - The capacity-sizing statement cites a raised revision of the lease-drop
   requirement, with no other change.
 - The remaining entries are unchanged.
+
+The latest change separates responsibilities and changes no duty:
+
+- peer-access (5), integrity-levels (6), qualified-bindings-and-wires (7),
+  waiver-approval (3) and deployment-data (6) rose because clauses left them.
+  Each keeps its remaining duties with their wording.
+- capability-ceiling and resource-guarantees are new entries. Their text was part
+  of integrity-levels 5 and of qualified-bindings-and-wires 6, and its wording is
+  unchanged.
+- The clauses that bind only a deployment on iceoryx2 are two assumptions of
+  their own, which the iceoryx2 binding owns.
+- What a faulty peer may do is defined once, in `up-spec/safety/README.adoc`.
+  The peer-access entry names that definition instead of repeating it.
+- The process-isolation, e2e-protection and target-environment statements
+  changed only the items they cite.
+- timing-budgets (7) rose for one clarification. Allowing for a middleware lock
+  in a budget accepts no frame drop that waits for it: the drop hands its frame
+  over without waiting, and only the return that follows may wait, as pending
+  cleanup. The entry's other clauses are unchanged.
+- A violation that the specification only leaves unchecked is described as that,
+  and not as undetectable. The iceoryx2 binding's level-separation entry uses
+  this for a shared domain or OS user.
 
 Quoting a raised revision grants no product coverage and moves no code or test
 tag: code tagged with an earlier revision of a requirement still needs review
@@ -229,16 +257,29 @@ against the raised one.
   not, and admitted or not. The SDK cannot tell that an item relies on a
   guarantee that no route requires.
 
-## Streamer assumptions
+## Assumptions owned elsewhere
 
-The Streamer owns monitor-thresholds and operator-access, both revision 2 in this
-specification, which states them with the Streamer's requirements in
+Four assumptions of the element are stated in another repository's safety manual.
+This folder has no coverage items for them.
+
+**The Streamer** owns monitor-thresholds and operator-access, both revision 2 in
+this specification, which states them with the Streamer's requirements in
 `up-spec/safety/up-l2/streamer.adoc`.
 
-- Their manuals belong in its repository; this folder has no coverage items for
-  them.
+- Their manuals belong in its repository.
 - References to Streamer behavior in SDK assumptions do not transfer ownership or
   close Streamer implementation work.
+
+**The iceoryx2 binding** owns iceoryx2-level-separation and iceoryx2-limits, both
+revision 1, which the specification states in
+`up-spec/safety/up-l1/iceoryx2.adoc`.
+
+- They bind only a deployment on that binding: each integrity level in its own
+  processes, domain and OS user, and that binding's limits, anomalies and known
+  failures.
+- Their manuals belong in the binding's repository.
+- An integrator that deploys on iceoryx2 completes those two entries as well as
+  the entries here. The duties of every transport stay in this manual.
 
 ## Three registers to keep distinct
 
@@ -254,9 +295,10 @@ Keep three registers distinct:
   They do not permit runtime heap activity in SDK/binding code on a native path
   or excuse panic.
 
-The quoted binding records retain those categories, including the separately
-fixed expired-buffer failure.
-Their presence is not certification or fresh verification.
+The iceoryx2 binding's own entry quotes that binding's records in those
+categories, including the separately fixed expired-buffer failure. This manual
+no longer quotes them.
+Their presence there is not certification or fresh verification.
 Consult the binding's own published README/records for its exact version.
 The SDK manual cannot replace a binding README.
 
@@ -281,18 +323,53 @@ Run `python3 tools/ci/check_safety_manual.py --spec-root up-spec/safety` from th
 SDK checkout after every specification change.
 
 - The assumptions are filed in three parts of `up-spec/safety`, so the checker
-  reads that whole area. Its default root, `up-spec/safety/seooc-up-rust`, holds
-  fifteen of the nineteen and fails the ownership check.
-- Its unit tests build their own small fixture specification, whose revisions are
-  fixture values rather than citations of this one.
-- The committed coverage configuration keeps the seventeen SDK assumptions in its
+  reads that whole area, which is also its default root. A narrower root, such as
+  `up-spec/safety/seooc-up-rust`, holds sixteen of the twenty-three and fails the
+  ownership check.
+- Its unit tests build their own small fixture specification. The fixture uses
+  the identifiers and revisions that the checker pins, and its statements are
+  fixture text, not this specification's.
+- The committed coverage configuration keeps the nineteen SDK assumptions in its
   gating run through their gate tag and adds `SafetyManual` in its report-only
   run.
-- The checker compares the exact quoted statements and revisions and enforces the
-  17/2 ownership split.
+- The checker compares the exact quoted statements and revisions and enforces
+  the ownership split: 19 entries here, and 4 assumptions owned elsewhere, 2 by
+  the Streamer and 2 by the iceoryx2 binding.
+- It pins the revision of each of the 23 assumptions, the revision of each
+  entry's own item and each assumption's tags. A change to any of them fails
+  until the checker's ownership table is changed and reviewed with it.
+- It also fails unless the specification declares the anchor of the faulty-peer
+  definition exactly once: a line that is exactly `[[faulty-peer]]`, outside
+  every statement. A line that starts with `//` is a comment and is not read
+  for this, and a spelling directly after a backslash is escaped and ignored.
+- It fails on the other declaration spellings that it recognizes: an inline
+  `[[faulty-peer]]` or one with a label, `[[faulty-peer,...]]`; the shorthand
+  `[#faulty-peer...]`; the macro `anchor:faulty-peer[...]`; and a leading `id`
+  attribute, `[id=faulty-peer...]` or `[id="faulty-peer"...]`. A declaration
+  inside a statement fails too. The matching is exact: with white space before
+  or after it, the declaration line is no declaration and fails as another
+  spelling.
+- That list of spellings is fixed. The checker does not know every way AsciiDoc
+  can assign an ID, such as an `id` attribute that follows another attribute.
+  So it cannot rule out a second declaration in a form outside the list.
+- It checks the iceoryx2 binding's two entries only when it is given that
+  binding's manual directory, with
+  `--owner-manual-root up-transport-iceoryx2-rust=<directory>`. Without that
+  option it reports that owner's manual as `not_checked`, which is not a pass of
+  that manual. It has no such option for the Streamer's two.
+- A pass shows that the documents match the ownership table. It does not show
+  that the ownership is right.
 - It cannot judge the adequacy of an integrator's evidence or certify the product.
 - Its supported Markdown/AsciiDoc grammar is deliberately narrow and fails on
-  unrecognized item markup.
+  unrecognized item markup. Inside a statement as well as outside one, it fails
+  on a line that is exactly `////`, `----`, `....` or `++++`, and on a line
+  that starts with three backticks, `~~~`, `include::`, `ifdef::`, `ifndef::`,
+  `ifeval::` or `endif::`. It does so before it compares any quotation, and it
+  includes, evaluates and renders nothing.
+- That grammar is a list of lines that fail, not a parser. It does not reject a
+  delimiter line longer than four characters, a table, an example, sidebar or
+  quotation block, a line comment inside a statement, an attribute entry or
+  inline markup. So a pass says nothing about them.
 
 ## References
 
@@ -305,12 +382,14 @@ No private assessment or licensed standard text is reproduced as guidance.
 - [supervisor-restart](supervisor-restart.md)
 - [process-isolation](process-isolation.md)
 - [integrity-levels](integrity-levels.md)
+- [capability-ceiling](capability-ceiling.md)
 - [peer-access](peer-access.md)
 - [timing-budgets](timing-budgets.md)
 - [clock](clock.md)
 - [waiver-approval](waiver-approval.md)
 - [e2e-protection](e2e-protection.md)
 - [qualified-bindings-and-wires](qualified-bindings-and-wires.md)
+- [resource-guarantees](resource-guarantees.md)
 - [target-environment](target-environment.md)
 - [build-configuration](build-configuration.md)
 - [deployment-data](deployment-data.md)

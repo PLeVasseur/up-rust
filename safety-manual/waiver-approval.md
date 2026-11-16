@@ -1,9 +1,9 @@
 # Waivers are approved with an interference argument
 
-`uman~sdk-aou-waiver-approval~1`
+`uman~sdk-aou-waiver-approval~2`
 
 Covers:
-- aou~seooc-waiver-approval~2
+- aou~seooc-waiver-approval~3
 
 ## Status and scope
 
@@ -13,6 +13,7 @@ that the current SDK implements them.
 
 - Strict waiver evidence checks are prospective.
 - Existing permit admission is not evidence of the final strict approval/report contract.
+- Revision 3 keeps the duty that every permit brings, with revision 2's wording. The iceoryx2 permit and what a failed allocation does on iceoryx2 are now in `aou~seooc-iceoryx2-limits~1`, which the iceoryx2 binding's safety manual states.
 
 Read [manual status](README.md) before using this entry. A documentary coverage
 link neither validates the deployment nor closes an implementation requirement.
@@ -20,10 +21,10 @@ link neither validates the deployment nor closes an implementation requirement.
 ## Assumption (verbatim)
 
 <!-- aou-statement:start -->
-> For each permit a binding ships (for iceoryx2, `+UPW-iceoryx2-1+`), the deployment's owner *SHALL* review the allocation it covers, file a waiver record approved by someone other than its author, and argue how interference from that allocation is excluded: by partition, by qualification, or by analysis.
+> For each permit a binding ships, the deployment's owner *SHALL* review the allocation it covers, file a waiver record approved by someone other than its author, and argue how interference from that allocation is excluded: by partition, by qualification, or by analysis.
 >
 > * *Review again.* The waiver *SHALL* be reviewed again when the middleware version or the deployment changes.
-> * *Heap sizing.* The deployment *SHALL* size the heap the permit draws on for the bound it states: on iceoryx2 an allocation that fails during a peer change aborts the process (`+UPD-IOX2-0006+`).
+> * *Heap sizing.* The deployment *SHALL* size the heap the permit draws on for the bound it states. For iceoryx2, `+aou~seooc-iceoryx2-limits~1+` names the permit and what a failed allocation under it does.
 > * *Strict mode.* In strict mode, the Enforce state refuses a waiver that does not name its interference argument's kind and a reference, and the report lists each waiver with its approver and its argument.
 <!-- aou-statement:end -->
 
@@ -36,7 +37,7 @@ The integrator SHALL complete and retain the following checklist for the item:
   - Review the interference argument (partition, qualification or analysis) and reference its evidence.
 - [ ] **Size the affected heap.**
   - Size the affected heap for worst-case peer changes and concurrent load, including failure behavior.
-  - Treat UPW-iceoryx2-1 as a middleware heap waiver, and review UPD-IOX2-0006's abort residual separately.
+  - For iceoryx2, the binding's own entry names the permit and the abort on a failed allocation.
 - [ ] **Re-review on change, and keep the registers apart.**
   - Re-review the waiver when middleware or deployment changes.
   - Keep a waiver register distinct from accepted anomalies and open failures.
@@ -46,7 +47,7 @@ The integrator SHALL complete and retain the following checklist for the item:
 
 ## Violation manifestations
 
-- An undersized heap can abort during a peer change.
+- An undersized heap fails an allocation under the permit. On iceoryx2 that aborts the process during a peer change.
 - A rubber-stamped waiver can leave allocation interference unbounded.
 - A stale waiver can omit a new middleware allocation path.
 

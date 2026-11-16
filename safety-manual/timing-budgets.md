@@ -1,9 +1,9 @@
 # Timing claims rest on a supported configuration, and the item's budgets are the integrator's
 
-`uman~sdk-aou-timing-budgets~2`
+`uman~sdk-aou-timing-budgets~3`
 
 Covers:
-- aou~seooc-timing-budgets~6
+- aou~seooc-timing-budgets~7
 
 ## Status and scope
 
@@ -11,7 +11,8 @@ Draft integrator guidance against the corrected specification input. The quotati
 requirements and assumptions, including future behavior; it is not an assertion
 that the current SDK implements them.
 
-- Revision 6 rests timing claims on a supported configuration's package.
+- The statement rests timing claims on a supported configuration's package, as revision 6 did.
+- Revision 7 adds one clarification, to the clause on middleware locks: allowing for a lock accepts no frame drop that waits for it. It adds no duty and removes none.
 - It ends J at the winning counter update and its visibility, with the application's later read outside it.
 - It keeps the narrowed-value watchdog and one-word servicing duties only where a configuration keeps those representations. At this revision no supported profile does, so neither duty binds a current configuration.
 - No configuration establishes a finite J yet.
@@ -38,7 +39,7 @@ link neither validates the deployment nor closes an implementation requirement.
 > * *Refused RPC copies on the E2E wire.* A request that the E2E wire refuses is answered, final or advisory; only a corrupt one is not. On an RPC route with the E2E wire, a response the client refuses at arrival, including the Streamer's best-effort error response with no E2E header, gives the claimed call slot back to await another response (`+req~ssr-rpc-check-at-arrival~2+`). That refusal does not complete the call. A later acceptable response or protected final refusal answer can complete it before TTL; a call with no such later response or final answer ends at its TTL, naming the refusal. The TTL remains the guarantee when no earlier completion occurs.
 > * *Fail-silent routes.* The Streamer's safe state is fail-silent per route, so a receiver sees a gated route as silence. An RPC client whose request arrives on a gated route gets the best-effort `+Unavailable+` response when the reverse route can carry it (`+req~ssr-streamer-rpc-error-response~4+`), and otherwise its call's outcome becomes expiry once its TTL has passed. A client that uses the E2E wire refuses that response as unprotected and counts the refusal apart from corruption; it gives the slot back, and its call ends at TTL naming the refusal only if no later acceptable response or protected final answer completes it.
 > * *Deadlines for detecting silence.* Every safety-related receiver whose safety reaction depends on detecting silence *SHALL* declare a deadline. An explicit `+event_only()+` declaration permits a route without a deadline, but supplies no deadline-based silence or delay detection; the integrator *SHALL NOT* rely on that route's deadline monitor for such a reaction.
-> * *Priority inversion through middleware locks.* iceoryx2, for example, holds its port lock for up to a wait's bound, and takes it briefly when a frame is dropped (its README).
+> * *Priority inversion through middleware locks.* iceoryx2, for example, holds its port lock for up to a wait's bound, and takes it briefly when a frame is dropped (its README). Allowing for such a lock accepts no frame drop that waits for it. Where returning a dropped frame needs the lock, the drop hands the frame to the binding's deferred return without waiting, and only that return may then wait for the lock, as pending cleanup that stays charged and isolated (`+req~ssr-binding-frame-drop~6+`, `+req~ssr-release-lease-drop~4+`); a thread of its own is not by itself that isolation. "Briefly" states no bound on acquiring a lock. A drop that itself waits for the lock is a failure of its binding against `+req~ssr-binding-frame-drop~6+`, never a limit that a budget accepts (for iceoryx2, `+aou~seooc-iceoryx2-limits~1+`).
 > * *Watchdog and reuse.* Where a configuration's representation keeps the narrowed generations that `+req~ssr-atomic-windows~2+` lists for the predecessor 32-bit-word representation, the integrator's watchdog supervises every thread that calls the element, and detects one that makes no progress inside the element for longer than its period `+T_wd+`. `+T_wd+` times the highest reuse rate of any one call slot stays below 2^28^, and of any one peer-table entry below 2^22^.
 > * *The watchdog's reaction and coverage.* Its reaction restarts the process, or on an MCU the partition or OS-Application, that holds the element's memory, before the stalled thread can act inside the element again. It also covers the wrap windows that remain: a stalled expiry of a call, or a stalled failure of a peer's older calls, that would end a later call early, and a stalled retirement of a peer entry that would act as a spurious peer loss. A configuration whose package documents full-width values in their place needs no watchdog for these windows.
 > * *A producer that stalls.* Whatever the representation, a frame queued behind a producer that stalls before linking its own frame is delivered when that producer resumes, so where the item relies on such a frame within a time, a supervisor bounds that stall.
@@ -77,6 +78,8 @@ The integrator SHALL complete and retain the following checklist for the item:
   - A full-width monitor has neither inequality.
 - [ ] **Budget locks, retries and silent routes.**
   - Budget middleware lock contention, frame release, retries, notification failures and fail-silent routes.
+  - Do not budget a frame drop that waits for a middleware lock. The specification forbids it to every binding, so it is a failure of that binding to be closed, not a delay to allow for.
+  - Budget instead for what a deferred return can delay: the storage of a dropped frame stays charged until its return completes, which can show as capacity pressure.
   - Every safety-related receiver whose safety reaction depends on detecting silence must declare a deadline.
   - Qualified peer-specific progress checks complement aggregate monitoring. They do not substitute for that deadline duty.
   - An explicitly event-only route supplies no deadline-based silence/delay detection.
@@ -94,6 +97,7 @@ The integrator SHALL complete and retain the following checklist for the item:
 - Where narrowed values or a one-word monitor remain, a missed service or watchdog window can invalidate wrap/reuse assumptions.
 - Queue traffic can continue while useful work is starved.
 - Lock delays can consume the reaction budget.
+- A binding whose frame drop waits for a middleware lock can hold an application thread behind a lower-priority holder.
 
 ## Detection limits
 
@@ -101,3 +105,4 @@ The integrator SHALL complete and retain the following checklist for the item:
 - Aggregate queue-arrival deadlines do not prove application consumption or each peer's progress.
 - An event-only declaration supplies no deadline-based silence/delay detection.
 - The quoted default/strict/monitor behavior includes unimplemented requirements.
+- The quoted hand-off of a dropped frame to a deferred return is a requirement on each binding. This entry does not claim that a given binding meets it: check the binding's own published records.

@@ -246,7 +246,7 @@ For the predecessor 32-bit-word representation, which no supported profile uses 
 * the message-ID period, 2^32^ IDs of one route;
 * the ID guard, 2^31^ IDs within one 64 ms bucket, whose changes a word of their own detects; after a stale store of the bucket, one bucket's IDs stay below 2^31^ + 2 × `+T_wd+` × the ID rate;
 * the last good time's saturation, at a ±4.36-year offset of the wall clock from its reading at the route's setup, beyond which an ID needed while the clock cannot be read is refused;
-* the deadline monitor's one-word tick, wrap-aware over 2^30^ ticks, refreshed into the past, to now − 2^28^, by any check that finds a counted gap 2^29^ ticks old, the counting check included. It needs the route serviced at least every 2^29^ ticks (`+aou~seooc-application-reacts~4+`) and every wait inside the element, checks as well as arrivals, under 2^28^ ticks (`+aou~seooc-timing-budgets~6+`).
+* the deadline monitor's one-word tick, wrap-aware over 2^30^ ticks, refreshed into the past, to now − 2^28^, by any check that finds a counted gap 2^29^ ticks old, the counting check included. It needs the route serviced at least every 2^29^ ticks (`+aou~seooc-application-reacts~4+`) and every wait inside the element, checks as well as arrivals, under 2^28^ ticks (`+aou~seooc-timing-budgets~7+`).
 --
 
 [horizontal]

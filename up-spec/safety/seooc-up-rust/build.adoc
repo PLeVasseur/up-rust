@@ -168,7 +168,7 @@ Elsewhere a native asynchronous operation is not offered or is refused at setup 
 * Using the asynchronous interface adds no service duty to the application.
 * Pending cleanup never runs on, holds or occupies a scheduler context or other execution resource that progress steps, notifications, deadline and expiry accounting or other owners' returns need (`+req~ssr-release-lease-drop~4+`).
 * Where a configuration's scheduler cannot keep pending cleanup off such a resource, an asynchronous composition that needs it is refused at setup by name (`+req~ssr-release-lease-drop~4+`).
-A composition needs pending cleanup where its route requires non-waiting release over a dependency that can wait, or where its binding defers a retained owner's return (`+req~ssr-binding-frame-drop~5+`).
+A composition needs pending cleanup where its route requires non-waiting release over a dependency that can wait, or where its binding defers a retained owner's return (`+req~ssr-binding-frame-drop~6+`).
 * A release that runs inline is not pending cleanup.
 On a route that does not require non-waiting release, a release runs on a path of that route as `+req~ssr-heap-slot-types~3+` states, such as the step or the abandoning path that ends its value, and can wait there under the route's declared policy.
 No composition is refused because that release can wait, or because its configuration has no release service.

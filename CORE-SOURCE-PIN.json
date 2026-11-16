@@ -18,10 +18,10 @@
   ],
   "source_content_bytes_recorded_by_owner": 26379715,
   "source_content_bytes_verified_against_manifest": 26379932,
-  "up_spec_commit": "acd7efffc92636cd1898c9ef0d83e1d275690ddc",
+  "up_spec_commit": "5571e6ed53425bf49504a25ce229967636af5592",
   "up_spec_packaging": "Exact copied tree of the published specification commit; ordinary files, not a submodule. Reviewed requirements and paired manual accepted as a coherent, implementable Draft documentary baseline; implementation and safety qualification remain separate obligations.",
   "up_spec_repository": "https://github.com/PLeVasseur/up-spec",
   "up_spec_branch": "codex/20261112-api-redesign-backup",
-  "up_spec_tree": "4318ad1bbc1315c35b5135363e8fd9baf36d0141",
-  "up_spec_safety_tree": "b555fc6300cbd682edc49354b57822da990a6de5"
+  "up_spec_tree": "25ae09356a115e8415698cdbf93a15d765d6a7d7",
+  "up_spec_safety_tree": "60637be878af542e320eb73586d03fd57d195e32"
 }

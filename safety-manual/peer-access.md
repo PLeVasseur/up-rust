@@ -1,9 +1,9 @@
 # Only authorized processes reach the transport, and peers are faulty, never malicious
 
-`uman~sdk-aou-peer-access~1`
+`uman~sdk-aou-peer-access~2`
 
 Covers:
-- aou~seooc-peer-access~4
+- aou~seooc-peer-access~5
 
 ## Status and scope
 
@@ -13,8 +13,11 @@ that the current SDK implements them.
 
 - Strict peer listings, integrity refusals and all proposed faulty-peer containment are not claimed available at this baseline.
 - Known binding failures remain failures, including publisher exposure.
-- The specification states this assumption with its transports, in `up-spec/safety/up-l1/deployment.adoc`. It is an assumption of the up-rust SEooC there as before, and its text and revision are unchanged.
-- Its clauses span layers: access to transport resources and the zero-copy writer concern every transport, the domain and OS-user separation concerns iceoryx2, and the fault model is a shared concept that lifts no security requirement of the protocol. The specification's table beside the assumption says which is which.
+- The specification states this assumption with its transports, in `up-spec/safety/up-l1/deployment.adoc`.
+- Revision 5 keeps the integrator's duties of revision 4, with their wording.
+- What a faulty peer may do is now defined once, as the faulty-peer model in `up-spec/safety/README.adoc`, with the same content. Read it with this entry. It lifts no security requirement of the protocol.
+- The iceoryx2 domain and OS-user separation is now an assumption of its own, `aou~seooc-iceoryx2-level-separation~1`. The iceoryx2 binding's safety manual states it, and this manual has no entry for it.
+- The refusal of a port at another level than its service is the SDK's, as its requirement is allocated. Revision 4 gave it to the binding. It is a refusal by name because the specification has every refusal at setup name its cause, the route where there is one, and the setter to change (`req~ssr-mode-init-failure~4`).
 
 Read [manual status](README.md) before using this entry. A documentary coverage
 link neither validates the deployment nor closes an implementation requirement.
@@ -24,11 +27,9 @@ link neither validates the deployment nor closes an implementation requirement.
 <!-- aou-statement:start -->
 > The integrator *SHALL* restrict access to every transport's resources (shared-memory segments, sockets, service names) to the processes deployed to use them, with OS permissions or equivalent.
 >
-> * *The fault model.* Within that, this SEooC treats every peer as faulty, never malicious. A peer may send any content, at any time and in any volume, and may choose any source URI, and the requirements hold against all of it. A faulty peer includes one that writes values its own middleware never writes, into shared memory it can write.
-> * *A peer below a reader's level.* A peer below a reader's level may write its own shared memory at any moment: the reader then takes the copy route (`+req~ssr-integrity-zero-copy~4+`), and the requirements hold.
-> * *Two-way shared state.* On a binding whose ports write shared state both ways, such as iceoryx2, every process on one service runs at one integrity level; a lower-integrity consumer takes a copy route, and the binding refuses any other at setup, by name. Each level runs in its own iceoryx2 domain, and its processes under their own OS user, so that a faulty lower process cannot open, map or remove a higher level's shared memory.
+> * *The fault model.* Within that, this SEooC treats every peer as faulty, never malicious. What a faulty peer may do is defined once, for every part, as the faulty-peer model of the safety area's shared concepts. Only deliberate exploitation, such as engineering a peer-ID hash collision, is out of scope, as security.
+> * *Two-way shared state.* On a binding whose ports write shared state both ways, every process on one service runs at one integrity level; a lower-integrity consumer takes a copy route, and any other is refused at setup, by name (`+req~ssr-integrity-zero-copy~4+`). What one such binding adds is stated with that binding (for iceoryx2, `+aou~seooc-iceoryx2-level-separation~1+`).
 > * *Zero-copy routes.* On a zero-copy route, the element relies on the writer, developed to at least the reader's level, never writing a sample it has sent.
-> * *Out of scope.* Only deliberate exploitation, such as engineering a peer-ID hash collision, is out of scope, as security.
 > * *Message IDs.* Message IDs are unique only to a stated residual (`+req~ssr-ids-unique~4+`), and they are not secret, so nothing may rely on them for authentication.
 > * *Strict mode.* In strict mode, the report lists each route's declared peers and the shared-memory permissions its binding requests, and warns of an ASIL receive route that admits undeclared peers.
 <!-- aou-statement:end -->
@@ -40,7 +41,7 @@ The integrator SHALL complete and retain the following checklist for the item:
 - [ ] **Restrict access to transport resources.**
   - Allow access to service names, sockets and shared-memory resources only to deployed processes.
   - Verify OS users, permissions and namespaces.
-  - On iceoryx2 separate integrity levels into distinct domains and users.
+  - On iceoryx2, follow the binding's own entry for domains and users as well.
 - [ ] **Inventory writable shared objects.**
   - Inventory every writable shared object, including return/control structures used by subscribers.
   - Keep a single integrity level per two-way shared service, or use a separately qualified copying boundary.

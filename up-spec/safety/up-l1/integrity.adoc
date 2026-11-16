@@ -11,8 +11,9 @@ These items say how the element lends or copies shared memory between integrity 
 They are allocated to the element (tag `SafetyUpRustCore`).
 
 * A binding's part, recording and reporting the writer's level, is `+req~ssr-binding-integrity-level~1+` in xref:bindings.adoc[the duties of every binding].
-* The integrator's part, assigning each transport's level, is `+aou~seooc-integrity-levels~5+` in xref:../seooc-up-rust/assumptions-of-use.adoc[the element's assumptions of use].
-* The integrator's duties for access and for a zero-copy writer are `+aou~seooc-peer-access~4+` in xref:deployment.adoc[what a deployment provides].
+* The integrator's part, assigning each transport's level, is `+aou~seooc-integrity-levels~6+` in xref:deployment.adoc[what a deployment provides].
+* The integrator's duties for access and for a zero-copy writer are `+aou~seooc-peer-access~5+`, on the same page.
+* The integrator's duties for data above ASIL B, and for the element inside an ASIL C or D process or partition, are `+aou~seooc-capability-ceiling~1+` in xref:../seooc-up-rust/assumptions-of-use.adoc[the element's assumptions of use].
 * What a level is, and what it is not, is in xref:../README.adoc#concepts[the shared concepts].
 
 == Each transport declares one integrity level

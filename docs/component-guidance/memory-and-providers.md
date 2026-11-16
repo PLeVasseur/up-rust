@@ -245,7 +245,7 @@ can wait.
 - It acquires no heap memory and needs no call from the application to make progress.
 - It holds ownership awaiting destruction, not unread traffic, so it is not a second receive queue.
 - It is distinct from a binding's deferred return of native retained samples, which frees no heap.
-- The exact iceoryx2 port-lock anomaly keeps its bounded scope (`req~ssr-binding-frame-drop~5`) and is never a general destructor exception.
+- The exact iceoryx2 port-lock anomaly keeps its bounded scope (`req~ssr-binding-iceoryx2-panic-paths~1`, which `req~ssr-binding-frame-drop~6` cites) and is never a general destructor exception.
 
 ### Waiting releases are pending cleanup
 

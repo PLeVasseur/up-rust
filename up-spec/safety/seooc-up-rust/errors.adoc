@@ -33,7 +33,7 @@ On a native route, and on any route whose heap class is none, a refusal does not
 On a serialized or owned route, some refusals are reached only after the operation acquired heap memory under its declared heap class.
 Examples are a check after decode, a failed allocation at a declared allocation point, or a wire check whose acceptance event falls after its deadline.
 Such a refusal acquires nothing more.
-It ends the ownership already created, and what that ownership holds is released exactly once as `+req~ssr-heap-slot-types~3+` and `+req~ssr-binding-frame-drop~5+` state.
+It ends the ownership already created, and what that ownership holds is released exactly once as `+req~ssr-heap-slot-types~3+` and `+req~ssr-binding-frame-drop~6+` state.
 That release is the route's declared heap use, not part of producing the refusal.
 --
 

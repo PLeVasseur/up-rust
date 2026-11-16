@@ -57,7 +57,46 @@ A requirement of the protocol chapters, a security requirement included, stays i
 
 Several parts of this area rely on the concepts below.
 Each entry says what the concept is, where it applies, and which items state it.
-An entry summarizes those items and adds no duty: the items govern.
+
+[[shared-definitions]]
+=== Summaries and normative definitions
+
+Most entries are summaries.
+A summary names the items that state its concept and adds no duty: the items govern.
+
+An entry that says it is a normative definition is different.
+
+* It defines words that items of several parts use, and it is the one place that states the definition.
+* It is outside an item block, so it has no ID, revision or coverage of its own.
+It obliges no one by itself: each item that relies on it carries its own obligation.
+
+*What relies on a definition.*
+An item relies on a normative definition in any of these ways, and it need not name the definition to do so:
+
+* its statement uses the defined words;
+* its page states its items under the definition;
+* its rule, or the argument for its rule, depends on what the definition says.
+The argument includes the item's rationale, its verification entry and its "Violation" text.
+
+*The index of dependents.*
+A normative definition lists the items known to rely on it.
+
+* The list is an index, which helps a reader find them.
+* It is not asserted to be complete.
+An item that relies on the definition does so whether or not the list names it.
+
+*A change to a definition's meaning.*
+Such a change alters the contract, although no ID shows it.
+It is made only together with a review of its effect on every item that relies on the definition, listed or not.
+
+* The review covers each such item's statement, and the rationale, verification entry, "Violation" text and safety-manual entry that go with it.
+* An item whose meaning changes gets a raised revision, as any change of meaning does.
+* An item whose meaning stays the same keeps its revision, and any text beside it that the change makes wrong is corrected.
+* The change brings the index up to date.
+
+Rewording a definition without changing its meaning raises no revision.
+
+At this revision <<faulty-peer>> is the one normative definition here.
 
 === Software obligations and deployment duties
 
@@ -90,27 +129,60 @@ It neither raises an element's capability nor qualifies the process that declare
 * *A level is not a request.*
 An integrity level or an ASIL label requests no timing bound and no assurance scope, and it is neither a request nor evidence for a resource guarantee.
 * *Stated in.*
-`+req~ssr-integrity-declared~3+` for the software, `+aou~seooc-integrity-levels~5+` for the integrator, and xref:seooc-up-rust/README.adoc#claims[the SEooC's claims] for what a label is not.
+`+req~ssr-integrity-declared~3+` for the software, `+aou~seooc-integrity-levels~6+` for the integrator's assignment, `+aou~seooc-capability-ceiling~1+` for data above ASIL B and for the element inside an ASIL C or D process or partition, and xref:seooc-up-rust/README.adoc#claims[the SEooC's claims] for what a label is not.
 
 [[faulty-peer]]
 === The faulty-peer model
 
+This entry is a normative definition (<<shared-definitions>>).
+Requirements and assumptions of several parts rely on it, so it is stated here once.
+
+*Definition.*
 Every peer is treated as faulty, never malicious.
-A faulty peer may send any content, at any time and in any volume, may choose any source URI, and may write values its own middleware never writes into shared memory it can write.
-The requirements hold against all of it.
+
+* A peer may send any content, at any time and in any volume, and may choose any source URI, and the requirements hold against all of it.
+* A faulty peer includes one that writes values its own middleware never writes, into shared memory it can write.
+* A peer below a reader's level may write its own shared memory at any moment: the reader then takes the copy route (`+req~ssr-integrity-zero-copy~4+`), and the requirements hold.
+
+*Scope and limits.*
 
 * *Scope.*
 The peers of the up-rust SEooC, on every transport.
 The model applies within the access restriction that the integrator provides: only the processes deployed to use a transport's resources reach them.
 * *What it excludes.*
-Deliberate exploitation, such as engineering a peer-ID hash collision, which is a security matter.
+Only deliberate exploitation, such as engineering a peer-ID hash collision, is out of scope, as security.
 * *What it does not relax.*
 The model bounds the safety argument and nothing else.
 It lifts no security requirement of the protocol: a transport still provides the means against address spoofing and unauthorized access that xref:../up-l1/README.adoc[uP-L1] requires.
 It also does not make a lower-assurance process harmless because it runs apart: the rules for lending and copying cover what such a process can write into shared memory.
-* *Stated in.*
-`+aou~seooc-peer-access~4+` for the model and the access restriction.
-`+req~ssr-peer-failure-normal~3+`, `+req~ssr-refuse-no-panic~1+`, `+req~ssr-peer-admission~2+` and `+req~ssr-integrity-zero-copy~4+` for the software's side.
+
+*Items that rely on it.*
+The requirements hold against everything the model allows.
+So an item relies on the model wherever its rule, or the argument for its rule, is stated against what a peer may send, write or do.
+
+The list below is the index of its known dependents (<<shared-definitions>>).
+It is not asserted to be complete, and a change to the model is reviewed against every item that relies on it, listed or not.
+
+* *The integrator's side.*
+** `+aou~seooc-peer-access~5+`, for the access restriction and for treating deliberate exploitation as security.
+** `+aou~seooc-process-isolation~3+`, for a process that shares memory through a binding.
+** `+aou~seooc-peer-rates~2+`, for what one faulty peer can do to a route that several peers share.
+** `+aou~seooc-iceoryx2-level-separation~1+` and `+aou~seooc-iceoryx2-limits~1+`, for a deployment on iceoryx2.
+* *The element, for the peers of a transport.*
+The four items of xref:up-l1/peers.adoc[peers of a transport], which that page states against a faulty peer: `+req~ssr-peer-failure-normal~3+`, `+req~ssr-native-abi-agreed~1+`, `+req~ssr-peer-stale-rejected~3+` and `+req~ssr-peer-admission~2+`.
+* *The element, for memory safety and shared memory.*
+** `+req~ssr-unsafe-sound~1+`, whose rationale applies its promise to safe callers under this model: a peer that writes values its own middleware never writes must not let a safe call reach undefined behaviour.
+** `+req~ssr-integrity-declared~3+`, `+req~ssr-integrity-zero-copy~4+`, `+req~ssr-integrity-any-bits~1+`, `+req~ssr-integrity-checked-at-admission~1+` and `+req~ssr-integrity-carrier-crossing~2+`, for lending and copying between levels.
+* *The element, for refusal.*
+`+req~ssr-refuse-no-panic~1+`.
+* *A binding.*
+** `+req~ssr-binding-no-panic~5+`.
+** `+req~ssr-binding-iceoryx2-panic-paths~1+`, whose allowed paths no peer input, sequence, death or restart may reach, and through it the one exception of `+req~ssr-binding-frame-drop~6+`.
+** `+req~ssr-binding-readme~1+`, for what a README discloses about shared memory.
+* *A wire.*
+`+req~ssr-wire-no-panic~1+`.
+* *The Streamer.*
+`+req~ssr-config-exact-addresses~1+`, whose filter a faulty process can pass, and `+req~ssr-streamer-containment~1+`.
 
 [[process-failure]]
 === Process failure and restart
@@ -143,6 +215,7 @@ The element can neither provide nor check it.
 === How a violated assumption shows up
 
 A violated assumption of use is refused at setup, counted, or undetectable by the element.
+Where the contract only requires no check of something, an assumption's text says that instead, and gives the violation none of these classes.
 
 * *Scope.*
 The assumptions of use of the up-rust SEooC, wherever they are filed.
@@ -262,7 +335,7 @@ The repository that holds that part covers it.
 | `SafetyIceoryx2` | the iceoryx2 binding alone | `up-transport-iceoryx2-rust` | `up-l1/iceoryx2.adoc`
 | `SafetyWire` | every wire | each wire's repository | `up-l1/`
 | `SafetyE2eWire` | the end-to-end protection wire | `up-rust`, its `up-wire-e2e` member | `seooc-up-rust/`
-| `SafetyManual` | every assumption of use | `up-rust`, in its safety manual | `seooc-up-rust/`, `up-l1/`, `up-l2/`
+| `SafetyManual` | every assumption of use | the repository that owns the assumption, in its safety manual: `up-rust` for nineteen, `up-streamer-rust` for the Streamer's two, and `up-transport-iceoryx2-rust` for the iceoryx2 binding's two | `seooc-up-rust/`, `up-l1/`, `up-l2/`
 |===
 
 === Gate tags
@@ -301,6 +374,9 @@ The repository's patterns name the new part in the same merge, so that no run lo
 
 Items and text in this area cite ISO 26262 by part and clause number only, written `part-clause`, for example `6-7.4.13`, or `part-Table n`.
 No text of the standard appears here, quoted or closely paraphrased, and no table that maps it.
+
+A reference is trace metadata: it names a clause that an item relates to.
+It claims no compliance of an item, of the element or of a deployment with the standard.
 
 == Source
 

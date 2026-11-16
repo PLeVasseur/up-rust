@@ -40,7 +40,7 @@ The specification names the element's parts by crate. At the paired snapshot the
 | E4, platform | `up-rust-core::platform`, `signal` |
 
 - The `heap-window` verification method uses the Rust guard `heap_guard` and the C-level observer `heap_guard::c_level`, both in `test-util`.
-- The committed OFT coverage configuration is `.env.oft-current`. It keeps the seventeen SDK assumptions of use in the gating run through `SafetyGateUpRust`, and adds `SafetyManual` in the report-only run.
+- The committed OFT coverage configuration is `.env.oft-current`. It keeps the nineteen SDK assumptions of use in the gating run through `SafetyGateUpRust`, and adds `SafetyManual` in the report-only run.
 
 ## Revisions raised by the owning-wire applicability correction
 
@@ -85,6 +85,47 @@ tags in the SDK. Each already named a revision older than the one current then:
 - The binding and wire items (`req~ssr-binding-frame-drop`, `req~ssr-binding-bounded`, `req~ssr-wire-heap-claim-tested`) are covered in each binding's and each wire's repository, which this note does not inventory.
 - The safety-manual entry for `aou~seooc-qualified-bindings-and-wires` covers revision 6.
 
+## Revisions raised by the responsibility refinement
+
+The specification now states a duty that binds only one transport, or only some
+deployments, as an item of its own. No obligation changed. These revisions rose:
+
+| Earlier revision | Current revision |
+| --- | --- |
+| `aou~seooc-peer-access~4` | `aou~seooc-peer-access~5` |
+| `aou~seooc-integrity-levels~5` | `aou~seooc-integrity-levels~6` |
+| `aou~seooc-qualified-bindings-and-wires~6` | `aou~seooc-qualified-bindings-and-wires~7` |
+| `aou~seooc-waiver-approval~2` | `aou~seooc-waiver-approval~3` |
+| `aou~seooc-deployment-data~5` | `aou~seooc-deployment-data~6` |
+| `req~ssr-binding-frame-drop~5` | `req~ssr-binding-frame-drop~6` |
+| `req~ssr-binding-no-panic~4` | `req~ssr-binding-no-panic~5` |
+| `aou~seooc-timing-budgets~6` | `aou~seooc-timing-budgets~7` |
+
+These items are new, each with text that an earlier revision above held:
+
+| New item | Its text came from |
+| --- | --- |
+| `aou~seooc-capability-ceiling~1` | `aou~seooc-integrity-levels~5` |
+| `aou~seooc-resource-guarantees~1` | `aou~seooc-qualified-bindings-and-wires~6` |
+| `aou~seooc-iceoryx2-level-separation~1` | `aou~seooc-integrity-levels~5`, `aou~seooc-peer-access~4` |
+| `aou~seooc-iceoryx2-limits~1` | `aou~seooc-qualified-bindings-and-wires~6`, `aou~seooc-waiver-approval~2`, `aou~seooc-deployment-data~5` |
+| `req~ssr-binding-iceoryx2-panic-paths~1` | `req~ssr-binding-frame-drop~5`, `req~ssr-binding-no-panic~4` |
+
+- No code or test tag moves with these revisions, and none gains coverage from
+  them. A tag that names an earlier revision stays as it is until its code or
+  test has been reviewed against the current statement.
+- The two binding rules and the new iceoryx2 requirement are covered in each
+  binding's repository, which this note does not inventory.
+- The SDK's safety manual has an entry for each of the first two new
+  assumptions. The iceoryx2 binding owns the other two.
+- `aou~seooc-timing-budgets~7` rose for a clarified clause, not for a split:
+  allowing for a middleware lock in a budget accepts no frame drop that waits
+  for it. An assumption of use carries no code or test tag, so this revision
+  leaves none stale. The two requirements that cite it,
+  `req~ssr-qos-deadline~4` and `req~ssr-atomic-windows~2`, keep their revisions.
+- The rows under "Names that the specification describes instead" cite the
+  current revisions.
+
 ## Names that the specification describes instead
 
 The specification's statements describe these interfaces by what they do. The
@@ -92,18 +133,18 @@ SDK identifiers they stood for at the paired snapshot are:
 
 | Item | Wording in the statement | SDK identifier |
 | --- | --- | --- |
-| `aou~seooc-qualified-bindings-and-wires~6` | the binding contract suite | `assert_binding_contract` |
-| `aou~seooc-qualified-bindings-and-wires~6` | the wire contract suite | `assert_wire_contract` |
-| `aou~seooc-qualified-bindings-and-wires~6` | the QoS contract suite, and its deadline checks | `run_qos_contract` |
-| `aou~seooc-qualified-bindings-and-wires~6` | an arrival reported through the runtime port | `RuntimePort::arrived` |
-| `aou~seooc-qualified-bindings-and-wires~6` | the arrival-report latency a binding declares in its QoS support | `QosSupport::arrival_reports` |
-| `aou~seooc-qualified-bindings-and-wires~6` | the runtime port's receive-failure report | `RuntimePort::receive_failed` |
+| `aou~seooc-qualified-bindings-and-wires~7` | the binding contract suite | `assert_binding_contract` |
+| `aou~seooc-qualified-bindings-and-wires~7` | the wire contract suite | `assert_wire_contract` |
+| `aou~seooc-qualified-bindings-and-wires~7` | the QoS contract suite, and its deadline checks | `run_qos_contract` |
+| `aou~seooc-qualified-bindings-and-wires~7` | an arrival reported through the runtime port | `RuntimePort::arrived` |
+| `aou~seooc-qualified-bindings-and-wires~7` | the arrival-report latency a binding declares in its QoS support | `QosSupport::arrival_reports` |
+| `aou~seooc-qualified-bindings-and-wires~7` | the runtime port's receive-failure report | `RuntimePort::receive_failed` |
 | `aou~seooc-application-reacts~4` | the route counters' difference operation | `RouteCounters::since` |
 | `aou~seooc-build-configuration~5` | the element's ASIL build check, placed in an application's own binary | `assert_asil_build!()` |
-| `aou~seooc-timing-budgets~6`, `req~ssr-atomic-windows~2` | a stalled expiry of a call | `expire` |
-| `aou~seooc-timing-budgets~6`, `req~ssr-atomic-windows~2` | a stalled failure of a peer's older calls | `fail_older` |
-| `aou~seooc-timing-budgets~6`, `req~ssr-atomic-windows~2` | a stalled retirement of a peer entry | `retire` |
-| `aou~seooc-timing-budgets~6`, `req~ssr-atomic-windows~2` | a spurious peer loss | `peer_lost` |
+| `aou~seooc-timing-budgets~7`, `req~ssr-atomic-windows~2` | a stalled expiry of a call | `expire` |
+| `aou~seooc-timing-budgets~7`, `req~ssr-atomic-windows~2` | a stalled failure of a peer's older calls | `fail_older` |
+| `aou~seooc-timing-budgets~7`, `req~ssr-atomic-windows~2` | a stalled retirement of a peer entry | `retire` |
+| `aou~seooc-timing-budgets~7`, `req~ssr-atomic-windows~2` | a spurious peer loss | `peer_lost` |
 
 ## Status remarks moved out of the specification
 
@@ -116,7 +157,7 @@ the specification now states the rule without them.
 - "At this revision every supported profile, host and MCU alike, keeps these values at full width". Only the words "At this revision" left the statement. The obligation stays in it: every supported profile keeps those values at full width.
 - Rationale: "The list in the statement describes the representation that the supported profiles share at this revision". Only the words "at this revision" left it.
 
-**`aou~seooc-timing-budgets~6`** — Timing claims rest on a supported configuration, and the item's budgets are the integrator's
+**`aou~seooc-timing-budgets~7`** — Timing claims rest on a supported configuration, and the item's budgets are the integrator's
 
 - Of a representation that keeps the narrowed generations: "which no current profile's does".
 - Of the one-word tick representation: "which at this revision only the model tests do".
@@ -150,7 +191,7 @@ the specification now states the rule without them.
 
 ### `seooc-up-rust/assumptions-of-use.adoc`
 
-**`aou~seooc-waiver-approval~2`** — Waivers are approved with an interference argument (after the statement)
+**`aou~seooc-waiver-approval~3`** — Waivers are approved with an interference argument (after the statement)
 
 - *Rationale.* A waiver records that the deployment accepts an allocation; it is not the argument that the allocation cannot interfere, which the deployment still has to make (`core/src/transport/waiver.rs`: a permit "is not approval").
 

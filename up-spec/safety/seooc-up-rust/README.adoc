@@ -139,7 +139,7 @@ What the data means, and how the item reacts to a failure, are the integrator's.
 
 * *Bindings and wires* are separate elements.
 Their code runs inside the element's calls, but each is developed and verified on its own, against the contract suites in `test-util`.
-The items allocated to them are in xref:../up-l1/bindings.adoc[`bindings.adoc`] and xref:../up-l1/wires.adoc[`wires.adoc`] of the transport layer's part, and `+aou~seooc-qualified-bindings-and-wires~6+` restricts an integrator to those that pass.
+The items allocated to them are in xref:../up-l1/bindings.adoc[`bindings.adoc`] and xref:../up-l1/wires.adoc[`wires.adoc`] of the transport layer's part, and `+aou~seooc-qualified-bindings-and-wires~7+` restricts an integrator to those that pass.
 The end-to-end protection wire is a wire too, but it is shipped as the element's safety mechanism, so it is part E6, with its own items.
 * *Derive macros* (`up-rust-macros`: `ZeroSlot`, `StablePayload`, `StablePayloadInit`) are tools.
 The code they generate becomes part of the element and is held to its requirements.
@@ -288,7 +288,7 @@ The Streamer's "degraded" is a reported state: its safe state is fail-silent per
 | Provided to applications | L2 handles, the transition, bounded waits, route reports, counters and waiver records | the files of this directory from `runtime-modes.adoc` to `waivers.adoc`; `../up-l1/integrity.adoc` and `../up-l1/peers.adoc`; `../up-l2/interaction.adoc`
 | Provided to the Streamer | Carrier routes, the capacity check, park, the shared signal | `bounded-work.adoc`, `qos.adoc`, `../up-l1/integrity.adoc`, `../up-l2/streamer.adoc`
 | Provided to integrators | The end-to-end protection wire; strict mode and its compliance report; the Streamer's operator interface, mode report, watchdog hook and startup report | `../up-l2/streamer.adoc`, `e2e-wire.adoc`, `build.adoc`
-| Required from bindings | The lending or handoff contract, and the bindings' duties | `../up-l1/bindings.adoc`, `../up-l1/iceoryx2.adoc`; `+aou~seooc-qualified-bindings-and-wires~6+`
+| Required from bindings | The lending or handoff contract, and the bindings' duties | `../up-l1/bindings.adoc`, `../up-l1/iceoryx2.adoc`; `+aou~seooc-qualified-bindings-and-wires~7+`
 | Required from wires | The wire contract, and the wires' duties | `../up-l1/wires.adoc`
 | Provided by the element's maintainers | Versioned supported configuration packages: backend, synchronization and execution model, startup checks, sizing, supported contexts, build settings, dependency scope, evidence and limitations | <<claims>>; `platform.adoc`; `+aou~seooc-target-environment~4+`
 | Required from each platform backend | The platform's rules | `platform.adoc`; `+aou~seooc-integrator-platform~4+`
@@ -345,7 +345,7 @@ A test names what it verifies with OFT's own coverage tag, and the method after 
 [[files]]
 == Files
 
-149 items in 23 files: 98 in the 15 files of this directory, and 51 in the 8 files of the two layer parts.
+154 items in 23 files: 99 in the 15 files of this directory, and 55 in the 8 files of the two layer parts.
 
 === In this directory
 
@@ -353,7 +353,7 @@ A test names what it verifies with OFT's own coverage tag, and the method after 
 |===
 | File | Items | Tags
 
-| xref:assumptions-of-use.adoc[Assumptions of use] | 15 | `SafetyManual`
+| xref:assumptions-of-use.adoc[Assumptions of use] | 16 | `SafetyManual`
 | xref:runtime-modes.adoc[Modes and the transition] | 14 | `SafetyUpRustCore`
 | xref:heap.adoc[Heap] | 5 | `SafetyUpRustCore`
 | xref:errors.adoc[Refusal, errors and reporting] | 5 | `SafetyUpRustCore`
@@ -382,8 +382,8 @@ These are in xref:../up-l1/README.adoc[the transport layer's part].
 | xref:../up-l1/wires.adoc[Allocated to each wire] | 2 | `SafetyWire`
 | xref:../up-l1/integrity.adoc[Integrity levels] | 5 | `SafetyUpRustCore`
 | xref:../up-l1/peers.adoc[Peers of a transport] | 4 | `SafetyUpRustCore`, `SafetyBinding`
-| xref:../up-l1/iceoryx2.adoc[iceoryx2] | 1 | `SafetyIceoryx2`
-| xref:../up-l1/deployment.adoc[What a deployment provides for its transports] | 2 | `SafetyManual`
+| xref:../up-l1/iceoryx2.adoc[iceoryx2] | 4 | `SafetyIceoryx2`, `SafetyManual`
+| xref:../up-l1/deployment.adoc[What a deployment provides for its transports] | 3 | `SafetyManual`
 |===
 
 === Filed with the communication layer

@@ -106,7 +106,7 @@ A release service *MUST* be created during initialization and run for the life o
 * It keeps each value charged to its route until that value's destruction completes.
 
 *Pending cleanup.*
-A value handed to a release service, and a retained owner handed to a binding's deferred return (`+req~ssr-binding-frame-drop~5+`), is _pending cleanup_ from its hand-off until its release completes.
+A value handed to a release service, and a retained owner handed to a binding's deferred return (`+req~ssr-binding-frame-drop~6+`), is _pending cleanup_ from its hand-off until its release completes.
 Pending cleanup is ownership awaiting release, neither a completed release nor unfinished traffic.
 
 *A wait without a deadline.*
@@ -150,7 +150,7 @@ It promises neither that the capacity is recovered within a time nor sustained t
 The hand-off holds ownership awaiting release, not unread traffic, so it is not a second receive queue.
 
 *Bindings.*
-A binding's frame destructor has the same duty (`+req~ssr-binding-frame-drop~5+`).
+A binding's frame destructor has the same duty (`+req~ssr-binding-frame-drop~6+`).
 --
 
 [horizontal]
@@ -210,7 +210,7 @@ _Deferred return of a retained owner._
 Where an underlying transport's own release of a retained sample can wait, the return is deferred.
 The drop pushes the retained owner onto a lock-free queue sized for every admitted retained owner and returns, and the binding's own worker completes the release.
 That queue holds ownership awaiting return, not unread traffic.
-A stalled worker shows as counted capacity pressure, never as a drop that waits (`+req~ssr-binding-frame-drop~5+`).
+A stalled worker shows as counted capacity pressure, never as a drop that waits (`+req~ssr-binding-frame-drop~6+`).
 
 _Why no completion deadline._
 Moving a wait off the drop does not bound it.

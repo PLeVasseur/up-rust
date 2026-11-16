@@ -90,7 +90,7 @@ On a serialized or owned route whose declared heap class admits allocation, the 
 * a refused newest frame;
 * a waiting sender's frame whose bound ran out.
 
-That ownership is released exactly once as `+req~ssr-heap-slot-types~3+` and `+req~ssr-binding-frame-drop~5+` state.
+That ownership is released exactly once as `+req~ssr-heap-slot-types~3+` and `+req~ssr-binding-frame-drop~6+` state.
 That release is the only heap use an overflow causes, and it releases no route, table or other runtime resource.
 
 *Discards the binding cannot observe.*
@@ -166,7 +166,7 @@ A monitor representation that is wrap-aware over a finite range of ticks keeps t
 For the one-word tick representation that range is:
 
 * the route serviced at least every 2^29^ ticks of its monitor (`+aou~seooc-application-reacts~4+`);
-* every wait inside the element under 2^28^ ticks (`+aou~seooc-timing-budgets~6+`).
+* every wait inside the element under 2^28^ ticks (`+aou~seooc-timing-budgets~7+`).
 
 The transport's `+wait+` services its routes between inner waits of at most 2^28^ ticks of the shortest-scaled route on the transport.
 
