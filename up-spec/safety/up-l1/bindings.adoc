@@ -1,17 +1,19 @@
-= up-rust SEooC: Allocated to each binding
+= uP-L1 safety: Allocated to each binding
 :toc: preamble
 
 The key words "*MUST*", "*MUST NOT*", "*REQUIRED*", "*SHALL*", "*SHALL NOT*", "*SHOULD*", "*SHOULD NOT*", "*RECOMMENDED*", "*MAY*", and "*OPTIONAL*" in this document are to be interpreted as described in https://www.rfc-editor.org/info/bcp14[IETF BCP14 (RFC2119 & RFC8174)]
 
 Conventions, tags and status words: xref:../README.adoc[the safety area's README].
-Scope and element boundary: xref:README.adoc[the SEooC's README].
+This layer, and whom it binds: xref:README.adoc[safety at uP-L1].
+The element whose contract these duties belong to: xref:../seooc-up-rust/README.adoc[the up-rust SEooC's README].
 
 These are the duties of the binding contract.
 Each binding meets them in its own code, and covers them in its own repository, by running the contract suites against itself.
 
 * They carry the tag `SafetyBinding`.
-* The iceoryx2 binding's own items carry `SafetyIceoryx2`.
 * A duty of pull-form bindings also carries `SafetyBindingPull`.
+* The iceoryx2 binding's own items carry `SafetyIceoryx2`, and are in xref:iceoryx2.adoc[the iceoryx2 page].
+* A transport that is not written against the element's binding contract is not bound by them.
 
 == Binding code allocates nothing in runtime mode
 
@@ -355,23 +357,6 @@ Where a supported configuration offers a timing package, that package is its mai
 
 End-to-end protection means whatever the system supplies.
 The SDK's E2E wire is deferred and not part of this delivery.
-
-== iceoryx2's service depth comes from deployment data
-
-[.specitem,oft-sid="req~ssr-binding-depth-from-deployment~1",oft-title="iceoryx2's service depth comes from deployment data",oft-needs="impl,utest",oft-tags="SafetyIceoryx2"]
---
-The iceoryx2 binding *MUST* take each service's depth from deployment data, and create the service with it.
-
-When it opens a service that already exists, it *MUST* compare that service's depth with the deployment's, and refuse a mismatch at setup, naming the route and both depths.
---
-
-[horizontal]
-ASIL:: B
-Allocated to:: the iceoryx2 binding
-Verification:: test (services created in both start orders; a stale depth refused)
-Status:: Draft
-
-*Rationale.*
 
 == A lending binding records and reports the writer's level
 

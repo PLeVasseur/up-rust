@@ -1,0 +1,78 @@
+= uP-L1 safety: iceoryx2
+:toc: preamble
+
+The key words "*MUST*", "*MUST NOT*", "*REQUIRED*", "*SHALL*", "*SHALL NOT*", "*SHOULD*", "*SHOULD NOT*", "*RECOMMENDED*", "*MAY*", and "*OPTIONAL*" in this document are to be interpreted as described in https://www.rfc-editor.org/info/bcp14[IETF BCP14 (RFC2119 & RFC8174)]
+
+Conventions, tags and status words: xref:../README.adoc[the safety area's README].
+This layer, and whom it binds: xref:README.adoc[safety at uP-L1].
+The duties of every binding, which the iceoryx2 binding meets too: xref:bindings.adoc[allocated to each binding].
+
+This page is the safety counterpart of xref:../../up-l1/iceoryx2.adoc[the iceoryx2 transport chapter].
+It holds what is specific to one transport:
+
+* the items allocated to the iceoryx2 binding alone (tag `SafetyIceoryx2`), which `up-transport-iceoryx2-rust` covers;
+* an index of what other items say about iceoryx2.
+
+== Whom this page binds
+
+* The item on this page binds the iceoryx2 binding of the up-rust SEooC, and no other transport.
+* It binds no iceoryx2 transport written for another SDK, and adds nothing to the protocol's iceoryx2 chapter.
+* An entry of the index below binds whoever its own item binds: the binding, the element, or an integrator that deploys on iceoryx2 and claims the element's safety-assurance scope.
+
+== iceoryx2's service depth comes from deployment data
+
+[.specitem,oft-sid="req~ssr-binding-depth-from-deployment~1",oft-title="iceoryx2's service depth comes from deployment data",oft-needs="impl,utest",oft-tags="SafetyIceoryx2"]
+--
+The iceoryx2 binding *MUST* take each service's depth from deployment data, and create the service with it.
+
+When it opens a service that already exists, it *MUST* compare that service's depth with the deployment's, and refuse a mismatch at setup, naming the route and both depths.
+--
+
+[horizontal]
+ASIL:: B
+Allocated to:: the iceoryx2 binding
+Verification:: test (services created in both start orders; a stale depth refused)
+Status:: Draft
+
+*Rationale.*
+
+== What other items say about iceoryx2 [[index]]
+
+Some items of other pages name iceoryx2: for a restriction that only iceoryx2 has, as the transport a general rule was written for, or as an example.
+Each clause stays in its own item at this revision, and that item governs.
+This index lists the clauses so that a deployment on iceoryx2 finds them in one place.
+It adds no duty.
+
+=== Restrictions on a deployment that uses iceoryx2
+
+[cols="3,5,2",options="header"]
+|===
+| Item and clause | What it says about iceoryx2 | Who acts
+
+| `+aou~seooc-integrity-levels~5+`, opening paragraph | A transport runs at its process's integrity level | The integrator
+| `+aou~seooc-peer-access~4+`, "Two-way shared state" | Every process on one service runs at one integrity level, and a lower-integrity consumer takes a copy route. Each level runs in its own iceoryx2 domain, and its processes under their own OS user | The integrator
+| `+aou~seooc-waiver-approval~2+`, opening paragraph and "Heap sizing" | The permit `+UPW-iceoryx2-1+` needs an approved waiver, and the heap it draws on is sized for its bound (`+UPD-IOX2-0006+`) | The deployment's owner
+| `+aou~seooc-deployment-data~5+` | The service depths are part of the deployment data | The integrator
+| `+aou~seooc-qualified-bindings-and-wires~6+`, "32-bit targets" | The iceoryx2 binding claims no 32-bit target | The integrator
+| `+aou~seooc-qualified-bindings-and-wires~6+`, the limits and anomalies listed for a deployment that uses iceoryx2 | The limits and known anomalies that the integrator accepts, each by its record | The integrator
+| `+aou~seooc-qualified-bindings-and-wires~6+`, the paragraphs on known failures | The known failures, which are not accepted limits, and strict mode's refusal of each affected route at ASIL while they stand | The integrator; the element, for the refusal
+| `+aou~seooc-timing-budgets~6+`, "Priority inversion through middleware locks" | The port lock, held for up to a wait's bound, is allowed for in the item's timing | The integrator
+|===
+
+=== Rules that the binding or the element keeps
+
+[cols="3,5,2",options="header"]
+|===
+| Item and clause | What it says about iceoryx2 | Who acts
+
+| `+req~ssr-integrity-zero-copy~4+`, "Refusals at setup" | On a binding with two-way shared state, a port whose level differs from its service's recorded level is refused at setup. iceoryx2 is such a binding | The element
+| `+req~ssr-binding-frame-drop~5+`, "No panic, with one exception" | The per-port mutex exception, bounded and disclosed (`+UPD-IOX2-0001+`, revision 2) | The binding
+| `+req~ssr-binding-no-panic~4+`, "Allowed paths", "Heap exhaustion during a peer change" and "Any other path" | The panic paths allowed as named instances, the abort on heap exhaustion during a peer change, and the known failures that are not allowed paths | The binding
+| `+req~ssr-error-no-silent-loss~3+`, "Pull bindings" | A data connection that the middleware drops or fails to set up without an error, as iceoryx2's default handler does, is counted on the route | The element
+| `+aou~seooc-application-reacts~4+`, "What the element reports" | A loss the element cannot see, such as a drop-oldest eviction inside iceoryx2, is declared in the route's report (`+req~ssr-error-no-silent-loss~3+`) | The element declares it; the application uses it within its limits
+|===
+
+=== Where iceoryx2 is only the test bed or the example
+
+Verification lines and rationales of other items name iceoryx2 as the real transport a test runs on, or as the source of an example.
+Those mentions restrict nothing, and they are not listed here.

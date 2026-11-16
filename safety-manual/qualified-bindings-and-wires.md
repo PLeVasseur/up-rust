@@ -17,6 +17,8 @@ that the current SDK implements them.
 - Revision 6 adds one duty: where the item relies on a stronger resource guarantee on a serialized route, the integrator requires it by name.
 - Revision 6 also describes the contract suites and the runtime port's reports instead of naming SDK identifiers. The identifiers are in the SDK's implementation traceability note.
 - Guarantee admission, its named refusal and its reports are specified. This manual does not claim that they are implemented.
+- The specification states this assumption with its transports, in `up-spec/safety/up-l1/deployment.adoc`. It is an assumption of the up-rust SEooC there as before, and its text and revision are unchanged.
+- Its iceoryx2 lists are indexed on the specification's iceoryx2 page, `up-spec/safety/up-l1/iceoryx2.adoc`. A deployment on another transport reads that transport's own README for its limits.
 
 Read [manual status](README.md) before using this entry. A documentary coverage
 link neither validates the deployment nor closes an implementation requirement.

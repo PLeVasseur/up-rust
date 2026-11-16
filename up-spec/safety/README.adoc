@@ -2,17 +2,164 @@
 :toc: preamble
 
 This area holds safety requirements that SDKs trace with OpenFastTrace (OFT), apart from the protocol specification.
-Its first content is the software safety requirements and assumptions of use of the up-rust SEooC, in xref:seooc-up-rust/README.adoc[`seooc-up-rust/`].
+It is laid out like the protocol specification: what is shared comes first, then a part for each protocol layer, then a part for each SDK element.
+Its first content is the software safety requirements and assumptions of use of the up-rust SEooC, and of the transports, wires and Streamer that work with it.
 
 It is a draft on a feature branch.
 Every item in it is still Draft.
 
-== Where things go
+[[layout]]
+== How this area is laid out
+
+An item is filed by the protocol responsibility it concerns.
+Each obligation is stated in one place, and tables, indexes and safety manuals summarize it and link to it.
+
+[cols="2,5,3",options="header"]
+|===
+| Part | What it holds | Protocol counterpart
+
+| This page | The conventions, and the shared concepts and fault models, each with its scope (<<concepts>>) | xref:../basics/README.adoc[The basics]
+| xref:up-l1/README.adoc[`up-l1/`] | What a transport and a wire guarantee, how shared memory is lent or copied between integrity levels, and what a deployment provides for its transports | xref:../up-l1/README.adoc[The transport layer (uP-L1)]
+| xref:up-l1/iceoryx2.adoc[`up-l1/iceoryx2.adoc`] | What is specific to one transport, iceoryx2 | xref:../up-l1/iceoryx2.adoc[The iceoryx2 transport]
+| xref:up-l2/README.adoc[`up-l2/`] | RPC and message identity, and forwarding by the Streamer | xref:../up-l2/README.adoc[The communication layer (uP-L2)] and xref:../up-l2/dispatchers/README.adoc[its dispatchers]
+| xref:seooc-up-rust/README.adoc[`seooc-up-rust/`] | One SDK element: its scope and boundary, its claims and capability ceiling, its modes, memory, build and platform rules, and the index of its assumptions of use | None: an SDK element is not a protocol layer
+|===
+
+=== Where a new item goes
 
 * *Protocol requirements*, which every SDK of a kind must meet, stay in the protocol chapters (`basics/`, `up-l1/`, `up-l2/`, `up-l3/`), tagged as those chapters tag them.
-* *An SDK element's own safety requirements* go in a directory of their own here, named `seooc-<sdk>/`.
+* *A safety obligation of a protocol layer* goes in that layer's part here.
+A restriction that only one transport has goes in that transport's file, beneath its layer.
+* *An SDK element's own scope, boundary and implementation-specific rules* go in a directory of their own here, named `seooc-<sdk>/`.
 They are written for one element and its parts, and no other SDK has to meet them.
-* *Safety requirements that are language-agnostic*, if any are added, go at the top of this area, in files of their own.
+* *A concept or fault model that several parts rely on* is described on this page, with its scope.
+* *A part is added when it has content.*
+No empty directory mirrors a protocol chapter.
+
+[[filing]]
+=== Filing an item does not widen it
+
+Where an item is filed says which protocol responsibility it concerns.
+Who must meet it is a separate matter, which the item's type, tags and allocation state.
+
+* *An item binds the part its tags name* (<<tags>>), and nobody else.
+* *Every item here was written for the up-rust SEooC* and for the parts that work with it.
+An item in `up-l1/` or `up-l2/` is therefore no requirement on every transport, or on the SDK of another language.
+Another SDK or transport takes one on only by adopting its tag.
+* *An assumption of use keeps `seooc` in its ID wherever it is filed.*
+It is that element's assumption, and it binds an integrator that claims that element's safety-assurance scope.
+* *A language-agnostic safety requirement*, if one is added, gets a tag of its own and says whom it binds.
+* *Nothing here weakens the protocol.*
+A requirement of the protocol chapters, a security requirement included, stays in force beside every item of this area.
+
+[[concepts]]
+== Shared concepts and fault models
+
+Several parts of this area rely on the concepts below.
+Each entry says what the concept is, where it applies, and which items state it.
+An entry summarizes those items and adds no duty: the items govern.
+
+=== Software obligations and deployment duties
+
+[cols="2,4,3",options="header"]
+|===
+| Kind | Who meets it | How an item shows it
+
+| Software safety requirement | The part that its tags and its "Allocated to" line name: the element, a binding, a wire, a platform backend or the Streamer | Type `req`, with *MUST* and *MUST NOT*
+| Assumption of use | The integrator, including what its application, platform and deployment owner provide | Type `aou`, with *SHALL* and *SHALL NOT*
+|===
+
+* *Scope.*
+Every item of this area.
+* *The two do not stand in for each other.*
+A deployment's promise meets no software requirement, and the software discharges no deployment duty.
+* *An assumption of use obliges no software.*
+Where one describes what the software does, the description is a summary for the integrator.
+A software obligation is stated only by a requirement.
+
+[[integrity-level]]
+=== Integrity levels
+
+A transport declares one integrity level: QM, A, B, C or D, in that order.
+
+* *Scope.*
+Every transport of the up-rust SEooC, and every route on it.
+* *A level is a label.*
+Setup checks it.
+It neither raises an element's capability nor qualifies the process that declares it.
+* *A level is not a request.*
+An integrity level or an ASIL label requests no timing bound and no assurance scope, and it is neither a request nor evidence for a resource guarantee.
+* *Stated in.*
+`+req~ssr-integrity-declared~3+` for the software, `+aou~seooc-integrity-levels~5+` for the integrator, and xref:seooc-up-rust/README.adoc#claims[the SEooC's claims] for what a label is not.
+
+[[faulty-peer]]
+=== The faulty-peer model
+
+Every peer is treated as faulty, never malicious.
+A faulty peer may send any content, at any time and in any volume, may choose any source URI, and may write values its own middleware never writes into shared memory it can write.
+The requirements hold against all of it.
+
+* *Scope.*
+The peers of the up-rust SEooC, on every transport.
+The model applies within the access restriction that the integrator provides: only the processes deployed to use a transport's resources reach them.
+* *What it excludes.*
+Deliberate exploitation, such as engineering a peer-ID hash collision, which is a security matter.
+* *What it does not relax.*
+The model bounds the safety argument and nothing else.
+It lifts no security requirement of the protocol: a transport still provides the means against address spoofing and unauthorized access that xref:../up-l1/README.adoc[uP-L1] requires.
+It also does not make a lower-assurance process harmless because it runs apart: the rules for lending and copying cover what such a process can write into shared memory.
+* *Stated in.*
+`+aou~seooc-peer-access~4+` for the model and the access restriction.
+`+req~ssr-peer-failure-normal~3+`, `+req~ssr-refuse-no-panic~1+`, `+req~ssr-peer-admission~2+` and `+req~ssr-integrity-zero-copy~4+` for the software's side.
+
+[[process-failure]]
+=== Process failure and restart
+
+A process leaves runtime mode only by exit, crash or kill.
+There is no recovery inside the process: a supervisor outside it restarts the whole process or partition, or takes the item to its safe state.
+A peer's death or restart is normal input to the processes that stay up.
+
+* *Scope.*
+Every process that uses the up-rust SEooC, the Streamer included.
+* *Stated in.*
+`+aou~seooc-supervisor-restart~4+` for the supervisor.
+`+req~ssr-mode-no-shutdown~1+` and `+req~ssr-mode-restart~1+` for the element, `+req~ssr-peer-failure-normal~3+` for the survivors, and `+req~ssr-binding-predecessor-cleanup~1+` for a binding.
+
+[[memory-separation]]
+=== Memory separation
+
+The requirements assume that a faulty process cannot write another process's private memory.
+Shared memory exists only where a binding maps it, and the faulty-peer model covers what a peer writes there.
+
+* *Scope.*
+Every process or partition that uses the up-rust SEooC.
+* *Who provides it.*
+The integrator, through the memory protection of the OS or, on an MCU, the partition boundary its configuration states.
+The element can neither provide nor check it.
+* *Stated in.*
+`+aou~seooc-process-isolation~3+`.
+
+[[violation]]
+=== How a violated assumption shows up
+
+A violated assumption of use is refused at setup, counted, or undetectable by the element.
+
+* *Scope.*
+The assumptions of use of the up-rust SEooC, wherever they are filed.
+* *Stated in.*
+xref:seooc-up-rust/assumptions-of-use.adoc#violation-classes[The element's assumptions of use].
+
+[[claims-model]]
+=== Claims and guarantees
+
+Functional communication, native resource behaviour, a finite timing bound and safety assurance are four independent properties.
+A stronger resource guarantee is reported as required or not, established or not, and admitted or not, and it is admitted only where it is both required and established.
+
+* *Scope.*
+The up-rust SEooC, and each route of it.
+It is that element's model, and no rule of a protocol layer.
+* *Stated in.*
+xref:seooc-up-rust/README.adoc#claims[The SEooC's claims] and `+req~ssr-heap-guarantees~1+`.
 
 [[spec-first]]
 == The specification comes first
@@ -34,11 +181,14 @@ So:
 
 * *An SDK reads this area only by naming it.*
 Each SDK names up-spec files and directories in its OFT patterns.
-One that adopts these items names its own `seooc-<sdk>/` directory, as up-rust names `safety/seooc-up-rust`, and no SDK names `safety/` as a whole.
+One that adopts these items names the parts that hold them, as up-rust names `safety/up-l1`, `safety/up-l2` and `safety/seooc-up-rust`, and no SDK names `safety/` as a whole.
 Nothing here sits at the top of the repository, where a pattern such as `up-spec/*.adoc` would reach it.
 * *Every item here carries a tag from the table below, and no tag of the protocol chapters.*
 A run that keeps untagged items (`_`), or items tagged `LanguageLibrary`, `TransportLayerImpl` and the like, keeps none of them.
 The patterns are the first guard: a run whose tag filter is missing keeps every item its patterns reach, and still none from here.
+* *A layer part holds items of several repositories.*
+A run that names one keeps only the items whose tags its filter selects.
+So the tags, not the directories, decide what a repository covers.
 * *Nothing here links to the protocol chapters through OFT,* so they gain no coverage obligations from it.
 
 == The items
@@ -53,10 +203,11 @@ The patterns are the first guard: a run whose tag filter is missing keeps every 
 
 * A name is never changed or reused.
 * A revision rises when the meaning of a statement changes, not for a wording fix.
+* Filing an item in another part or file changes neither its name nor its revision.
 
 === Markup
 
-As in the protocol chapters: `+[.specitem,oft-sid="…",oft-title="…",oft-needs="…",oft-tags="…"]+`, then an open block (`--`) that holds the statement.
+As in the protocol chapters: a block attribute line that gives the item its `specitem` role and its `oft-sid`, `oft-title`, `oft-needs` and `oft-tags` attributes, then an open block that holds the statement.
 
 * Inside the block, a statement may use short paragraphs, labels in bold and lists.
 All of it is the statement.
@@ -94,23 +245,24 @@ A document covers it with an item of its own that covers the assumption, because
 In the end-to-end protection items, *(b)* marks text that the chosen restart design brought in: the full version, with both sender kinds.
 That text holds.
 
+[[tags]]
 == Tags
 
 Each item carries the tag of the part it is allocated to.
 The repository that holds that part covers it.
 
-[cols="2,4,3",options="header"]
+[cols="2,4,3,3",options="header"]
 |===
-| Tag | Items allocated to | Covered in
+| Tag | Items allocated to | Covered in | Parts that hold its items
 
-| `SafetyUpRustCore` | the element in `up-rust-core`: its runtime path, carrier routes, startup memory and shipped platform backends | `up-rust`
-| `SafetyStreamer` | the Streamer's data plane and its binary | `up-streamer-rust`
-| `SafetyBinding` | every binding: the duties of the binding contract | each binding's repository
-| `SafetyBindingPull` | with `SafetyBinding`, a duty of pull-form bindings only | each pull-form binding's repository
-| `SafetyIceoryx2` | the iceoryx2 binding alone | `up-transport-iceoryx2-rust`
-| `SafetyWire` | every wire | each wire's repository
-| `SafetyE2eWire` | the end-to-end protection wire | `up-rust`, its `up-wire-e2e` member
-| `SafetyManual` | every assumption of use | `up-rust`, in its safety manual
+| `SafetyUpRustCore` | the element in `up-rust-core`: its runtime path, carrier routes, startup memory and shipped platform backends | `up-rust` | `seooc-up-rust/`, `up-l1/`, `up-l2/`
+| `SafetyStreamer` | the Streamer's data plane and its binary | `up-streamer-rust` | `up-l2/`, `seooc-up-rust/`
+| `SafetyBinding` | every binding: the duties of the binding contract | each binding's repository | `up-l1/`
+| `SafetyBindingPull` | with `SafetyBinding`, a duty of pull-form bindings only | each pull-form binding's repository | `up-l1/`
+| `SafetyIceoryx2` | the iceoryx2 binding alone | `up-transport-iceoryx2-rust` | `up-l1/iceoryx2.adoc`
+| `SafetyWire` | every wire | each wire's repository | `up-l1/`
+| `SafetyE2eWire` | the end-to-end protection wire | `up-rust`, its `up-wire-e2e` member | `seooc-up-rust/`
+| `SafetyManual` | every assumption of use | `up-rust`, in its safety manual | `seooc-up-rust/`, `up-l1/`, `up-l2/`
 |===
 
 === Gate tags
@@ -130,9 +282,10 @@ Each repository that covers items here gets one gate tag, named after it: `Safet
 | `SafetyGateUpRust` | `up-rust`
 |===
 
+[[tracing]]
 == How a repository starts tracing these items
 
-. Its OFT patterns add the directory it covers, for example `up-spec/safety/seooc-up-rust`.
+. Its OFT patterns add the parts that hold the items it covers, for example `up-spec/safety/up-l1`, `up-spec/safety/up-l2` and `up-spec/safety/seooc-up-rust` for up-rust.
 . Its gating runs add its gate tag to their filter, for example `SafetyGateUpRust`, and not the tags of the table.
 Every item they keep is then covered, and every coverage tag in the repository resolves.
 . A report-only run, which fails nothing, adds the tags of the table it covers as well, for example `SafetyUpRustCore`, and shows every item still to cover.
@@ -141,6 +294,8 @@ A review log in the repository records who mapped each tag.
 . The up-spec change that defines or gates an item lands first.
 The repository moves its copy of up-spec, a submodule or a pinned copied snapshot as that repository packages it, to that change in the same merge as the commit that tags the item.
 It records which change it copied, so that no run sees a tag without its item.
+. A change that files items in another part lands the same way.
+The repository's patterns name the new part in the same merge, so that no run loses an item it kept before.
 
 == ISO 26262
 
@@ -149,7 +304,7 @@ No text of the standard appears here, quoted or closely paraphrased, and no tabl
 
 == Source
 
-The items of `seooc-up-rust/` were first written outside this repository, and are being rewritten for publication.
+The items of this area were first written outside this repository, for the up-rust SEooC, and are being rewritten for publication.
 
 * A rewritten item's statement uses the key words above, with its meaning unchanged.
 * Its rationale is written from public sources alone: up-spec, public standards, and the published documents and code of other projects, each linked at a fixed version.

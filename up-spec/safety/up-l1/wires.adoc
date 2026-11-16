@@ -1,12 +1,14 @@
-= up-rust SEooC: Allocated to each wire
+= uP-L1 safety: Allocated to each wire
 :toc: preamble
 
 The key words "*MUST*", "*MUST NOT*", "*REQUIRED*", "*SHALL*", "*SHALL NOT*", "*SHOULD*", "*SHOULD NOT*", "*RECOMMENDED*", "*MAY*", and "*OPTIONAL*" in this document are to be interpreted as described in https://www.rfc-editor.org/info/bcp14[IETF BCP14 (RFC2119 & RFC8174)]
 
 Conventions, tags and status words: xref:../README.adoc[the safety area's README].
-Scope and element boundary: xref:README.adoc[the SEooC's README].
+This layer, and whom it binds: xref:README.adoc[safety at uP-L1].
+The element whose wire contract these duties belong to: xref:../seooc-up-rust/README.adoc[the up-rust SEooC's README].
 
 Each wire meets these in its own crate, and covers them in its own repository (tag `SafetyWire`).
+A wire that is not written against the element's wire contract is not bound by them.
 
 == Encoding and decoding never panic
 

@@ -1,9 +1,10 @@
 # Implementation traceability for the up-rust SEooC requirements
 
 **Non-normative.** This note is SDK-side traceability. The specification in
-`up-spec/safety/seooc-up-rust/` defines what the SDK must satisfy, and the SDK
-traces to it. Nothing here is a requirement, a rationale or evidence, and the
-specification does not depend on this note.
+`up-spec/safety/` defines what the SDK must satisfy: the element's own rules in
+`seooc-up-rust/`, and its transport-layer and communication-layer items in
+`up-l1/` and `up-l2/`. The SDK traces to it. Nothing here is a requirement, a
+rationale or evidence, and the specification does not depend on this note.
 
 ## What this note holds
 
@@ -21,6 +22,11 @@ specification does not depend on this note.
 - Each heading under "Items" keeps the revision its sentences were written
   against. Where a revision has risen since, the table in the next section gives
   the current one.
+- The file headings under "Items" follow the specification's current layout,
+  with paths relative to `up-spec/safety/`. The specification now files the items
+  that concern a protocol layer under `up-l1/` and `up-l2/`. Each entry sits,
+  unchanged, under the file that holds its item now. Filing an item elsewhere
+  changed no ID, no revision and no statement, so no coverage tag moves.
 
 ## Element parts and tooling
 
@@ -160,29 +166,6 @@ the specification now states the rule without them.
 
 - *Rationale.* Once a transport that shares startup memory enters runtime mode, the caller's handle places nothing more, and the memory is sealed for every handle when the last setup sharing it has entered runtime mode (`StartupMemory` in `core/src/memory.rs`).
 
-### `seooc-up-rust/bindings.adoc`
-
-**`req~ssr-binding-lazy-forced~1`** — Lazy state is forced, and threads are idle, before running (after the statement)
-
-- The binding contract states the same rule, and `assert_binding_contract` checks it (`core/src/transport/binding.rs`).
-
-**`req~ssr-binding-peer-identity~1`** — Peer identity is stable, and incarnations rise (after the statement)
-
-- *Rationale.* A stable identity with a rising incarnation lets the element tell a restarted peer from its earlier self, and refuse a frame from the earlier one as stale (`ReceiveError::StalePeer` in `core/src/transport/error.rs`).
-- A binding with no peer identity reports `PeerRef::UNKNOWN`, and then only deadlines can show that a peer has gone (`core/src/transport/binding.rs`).
-
-**`req~ssr-binding-bounded~2`** — A binding bounds its own work and its waits (after the statement)
-
-- A carrier ingress refuses a borrowed delivery, because its bytes live only for that call and a carrier may not stage a copy (`core/src/transport/binding.rs`).
-
-**`req~ssr-binding-predecessor-cleanup~1`** — A binding cleans up after a dead predecessor, in initialization (after the statement)
-
-- The binding contract's `recover_predecessor` runs in the constructor, before any route (`BindingSetup` in `core/src/transport/binding.rs`).
-
-**`req~ssr-binding-unsafe-inventory~1`** — A binding this project ships inventories its own `unsafe` (after the statement)
-
-- *Rationale.* A binding's `unsafe` code runs on the same runtime paths as the element's, so its obligations need the same record and the same gate (`tools/ci/check_unsafe_inventory.py`, `req~ssr-unsafe-inventory~3`).
-
 ### `seooc-up-rust/bounded-work.adoc`
 
 **`req~ssr-bound-wait~2`** — Every bounded wait has a logical deadline (after the statement)
@@ -216,12 +199,6 @@ the specification now states the rule without them.
 **`req~ssr-crate-core-only-binary~2`** — An ASIL binary needs no crate outside its claimed graph at run time (after the statement)
 
 - An ASIL application depends directly on `up-rust-core` and imports its `up_rust_core::` paths (`core/src/lib.rs`).
-
-### `seooc-up-rust/deployment-data.adoc`
-
-**`req~ssr-config-exact-addresses~1`** — ASIL Streamer routes name exact source addresses (after the statement)
-
-- The carrier primitives already require it of a lending leg: a lending route names one physical service, and a wildcard filter on one needs an explicit physical source or is refused (`CarrierRoute` in `core/src/transport/carrier.rs`).
 
 ### `seooc-up-rust/e2e-wire.adoc`
 
@@ -268,21 +245,6 @@ the specification now states the rule without them.
 
 - A receive route's startup check refuses such a type with the reason "the decoded type owns heap memory" (`core/src/transport/inbound.rs`).
 
-### `seooc-up-rust/integrity.adoc`
-
-**`req~ssr-integrity-any-bits~1`** — In-place types accept every bit pattern (after the statement)
-
-- *Rationale.* The in-place payload contract in the code needs a validator that rejects every invalid bit pattern before a typed view exists (`StablePayload` in `core/src/payload/stable.rs`), and a check made once cannot hold while a faulty writer can still change the bytes.
-
-**`req~ssr-integrity-checked-at-admission~1`** — In-place frames are checked once, at admission (after the statement)
-
-- *Rationale.* In-place frames are borrowed through a checked typed view (`core/src/transport/inbound.rs`), and checking once, before any reader sees the frame, makes a malformed frame one counted refusal instead of an error at each reader.
-
-**`req~ssr-integrity-carrier-crossing~2`** — Upward carrier crossings copy once, or are refused (after the statement)
-
-- *Rationale.* A carrier keeps a frame's bytes unchanged and makes at most one copy, into a lending egress's loan (`core/src/transport/carrier.rs`), so that copy is the one place where a frame from a lower writer can be held still and checked.
-- A byte-only egress receives the ingress bytes directly, with no loan to copy into (`core/src/transport/carrier.rs`).
-
 ### `seooc-up-rust/memory-safety.adoc`
 
 **`req~ssr-unsafe-inventory~3`** — Every `unsafe` is inventoried and justified (after the statement)
@@ -298,24 +260,6 @@ the specification now states the rule without them.
 **`req~ssr-unsafe-binding-untrusted~1`** — No binding written in safe code can break the element's memory safety (after the statement)
 
 - The binding contracts are safe traits today, `BindingSetup`, `LendingRuntime`, `HandoffRuntime` and `Frame`, and only `PreparedTxStorage` is an `unsafe trait` (`core/src/transport/binding.rs`, `core/src/transport/mod.rs`). up-spec's iceoryx2 chapter asks the same of a Rust payload's author, through iceoryx2's `ZeroCopySend` (the iceoryx2 transport), which iceoryx2 declares as an `unsafe trait` ([`zero_copy_send.rs` in iceoryx2 0.9.2](https://github.com/eclipse-iceoryx/iceoryx2/blob/806442b5273d87380511bb5ffcab316d129af31c/iceoryx2-bb/elementary-traits/src/zero_copy_send.rs)).
-
-### `seooc-up-rust/peers.adoc`
-
-**`req~ssr-peer-failure-normal~2`** — Peer failure is normal input (after the statement)
-
-- In the code, a peer dying or restarting is normal input to a transport (`core/src/transport/mod.rs`), and a frame from an earlier incarnation of a peer is refused as stale (`ReceiveError::StalePeer`).
-
-**`req~ssr-peer-rpc-correlation~3`** — A response reaches only its own call (after the statement)
-
-- At this revision the call table compares both request-ID words and the bound peer, and claims the slot, in one exclusive step (`begin_delivery` in `core/src/transport/metadata.rs`); a mechanism that claims before it compares keeps the recheck after the claim and its give-back instead.
-
-**`req~ssr-peer-stale-rejected~3`** — Stale peers are rejected (after the statement)
-
-- At this revision the peer table keeps each peer's full 64-bit identity and incarnation in one exclusive record and has neither limit (`core/src/transport/metadata.rs`, `core/src/transport/inbound.rs`), so the requirement states the outcome that every mechanism keeps instead.
-
-**`req~ssr-ids-unique~4`** — Message IDs are unique (after the statement)
-
-- The 32-bit figures above belong to a generator with a 32-bit sequence; the generator at this revision keeps a 64-bit counter and the full last good time (`core/src/transport/ids.rs`), so its period is 2^64^ IDs of one route, and the refusal bounds that this item requires of it are its configuration's to state.
 
 ### `seooc-up-rust/platform.adoc`
 
@@ -433,16 +377,6 @@ the specification now states the rule without them.
 
 - *Rationale.* An integrator who places startup memory in a static region or a linker section has to size it before the process starts, and a request that does not fit is refused only at startup (`StartupMemory::new` in `core/src/memory.rs`).
 
-### `seooc-up-rust/streamer.adoc`
-
-**`req~ssr-streamer-byte-identity~1`** — Carriage keeps the bytes (after the statement)
-
-- The carrier primitives hold to it: a byte-only egress receives the ingress bytes directly, and a lending egress takes one copy into its loan (`core/src/transport/carrier.rs`).
-
-**`req~ssr-streamer-no-ingress-block~1`** — An egress never blocks an ingress (after the statement)
-
-- *Rationale.* The carrier primitives ask for capacity before taking a frame, and can park a frame from a lending ingress in fixed storage, within the route's retained budget (`core/src/transport/carrier.rs`).
-
 ### `seooc-up-rust/waivers.adoc`
 
 **`req~ssr-waiver-required~1`** — Middleware heap needs a named waiver (after the statement)
@@ -457,8 +391,80 @@ the specification now states the rule without them.
 
 - *Rationale.* A binding ships a permit that states the use it needs, and a deployment files a waiver against it, so accepting the allocation is the deployment's recorded decision (`core/src/transport/waiver.rs`).
 
-### `seooc-up-rust/wires.adoc`
+### `up-l1/bindings.adoc`
+
+**`req~ssr-binding-lazy-forced~1`** — Lazy state is forced, and threads are idle, before running (after the statement)
+
+- The binding contract states the same rule, and `assert_binding_contract` checks it (`core/src/transport/binding.rs`).
+
+**`req~ssr-binding-peer-identity~1`** — Peer identity is stable, and incarnations rise (after the statement)
+
+- *Rationale.* A stable identity with a rising incarnation lets the element tell a restarted peer from its earlier self, and refuse a frame from the earlier one as stale (`ReceiveError::StalePeer` in `core/src/transport/error.rs`).
+- A binding with no peer identity reports `PeerRef::UNKNOWN`, and then only deadlines can show that a peer has gone (`core/src/transport/binding.rs`).
+
+**`req~ssr-binding-bounded~2`** — A binding bounds its own work and its waits (after the statement)
+
+- A carrier ingress refuses a borrowed delivery, because its bytes live only for that call and a carrier may not stage a copy (`core/src/transport/binding.rs`).
+
+**`req~ssr-binding-predecessor-cleanup~1`** — A binding cleans up after a dead predecessor, in initialization (after the statement)
+
+- The binding contract's `recover_predecessor` runs in the constructor, before any route (`BindingSetup` in `core/src/transport/binding.rs`).
+
+**`req~ssr-binding-unsafe-inventory~1`** — A binding this project ships inventories its own `unsafe` (after the statement)
+
+- *Rationale.* A binding's `unsafe` code runs on the same runtime paths as the element's, so its obligations need the same record and the same gate (`tools/ci/check_unsafe_inventory.py`, `req~ssr-unsafe-inventory~3`).
+
+### `up-l1/integrity.adoc`
+
+**`req~ssr-integrity-any-bits~1`** — In-place types accept every bit pattern (after the statement)
+
+- *Rationale.* The in-place payload contract in the code needs a validator that rejects every invalid bit pattern before a typed view exists (`StablePayload` in `core/src/payload/stable.rs`), and a check made once cannot hold while a faulty writer can still change the bytes.
+
+**`req~ssr-integrity-checked-at-admission~1`** — In-place frames are checked once, at admission (after the statement)
+
+- *Rationale.* In-place frames are borrowed through a checked typed view (`core/src/transport/inbound.rs`), and checking once, before any reader sees the frame, makes a malformed frame one counted refusal instead of an error at each reader.
+
+**`req~ssr-integrity-carrier-crossing~2`** — Upward carrier crossings copy once, or are refused (after the statement)
+
+- *Rationale.* A carrier keeps a frame's bytes unchanged and makes at most one copy, into a lending egress's loan (`core/src/transport/carrier.rs`), so that copy is the one place where a frame from a lower writer can be held still and checked.
+- A byte-only egress receives the ingress bytes directly, with no loan to copy into (`core/src/transport/carrier.rs`).
+
+### `up-l1/peers.adoc`
+
+**`req~ssr-peer-failure-normal~2`** — Peer failure is normal input (after the statement)
+
+- In the code, a peer dying or restarting is normal input to a transport (`core/src/transport/mod.rs`), and a frame from an earlier incarnation of a peer is refused as stale (`ReceiveError::StalePeer`).
+
+**`req~ssr-peer-stale-rejected~3`** — Stale peers are rejected (after the statement)
+
+- At this revision the peer table keeps each peer's full 64-bit identity and incarnation in one exclusive record and has neither limit (`core/src/transport/metadata.rs`, `core/src/transport/inbound.rs`), so the requirement states the outcome that every mechanism keeps instead.
+
+### `up-l1/wires.adoc`
 
 **`req~ssr-wire-no-panic~1`** — Encoding and decoding never panic (after the statement)
 
 - The wire trait states the same rule: `encode` and `decode` must not panic on any input, and a malformed frame is `Err` (`core/src/wire/mod.rs`).
+
+### `up-l2/interaction.adoc`
+
+**`req~ssr-peer-rpc-correlation~3`** — A response reaches only its own call (after the statement)
+
+- At this revision the call table compares both request-ID words and the bound peer, and claims the slot, in one exclusive step (`begin_delivery` in `core/src/transport/metadata.rs`); a mechanism that claims before it compares keeps the recheck after the claim and its give-back instead.
+
+**`req~ssr-ids-unique~4`** — Message IDs are unique (after the statement)
+
+- The 32-bit figures above belong to a generator with a 32-bit sequence; the generator at this revision keeps a 64-bit counter and the full last good time (`core/src/transport/ids.rs`), so its period is 2^64^ IDs of one route, and the refusal bounds that this item requires of it are its configuration's to state.
+
+### `up-l2/streamer.adoc`
+
+**`req~ssr-config-exact-addresses~1`** — ASIL Streamer routes name exact source addresses (after the statement)
+
+- The carrier primitives already require it of a lending leg: a lending route names one physical service, and a wildcard filter on one needs an explicit physical source or is refused (`CarrierRoute` in `core/src/transport/carrier.rs`).
+
+**`req~ssr-streamer-byte-identity~1`** — Carriage keeps the bytes (after the statement)
+
+- The carrier primitives hold to it: a byte-only egress receives the ingress bytes directly, and a lending egress takes one copy into its loan (`core/src/transport/carrier.rs`).
+
+**`req~ssr-streamer-no-ingress-block~1`** — An egress never blocks an ingress (after the statement)
+
+- *Rationale.* The carrier primitives ask for capacity before taking a frame, and can park a frame from a lending ingress in fixed storage, within the route's retained budget (`core/src/transport/carrier.rs`).

@@ -1,0 +1,146 @@
+= uP-L1 safety: What a deployment provides for its transports
+:toc: preamble
+
+The key words "*MUST*", "*MUST NOT*", "*REQUIRED*", "*SHALL*", "*SHALL NOT*", "*SHOULD*", "*SHOULD NOT*", "*RECOMMENDED*", "*MAY*", and "*OPTIONAL*" in this document are to be interpreted as described in https://www.rfc-editor.org/info/bcp14[IETF BCP14 (RFC2119 & RFC8174)]
+
+Conventions, tags and status words: xref:../README.adoc[the safety area's README].
+This layer, and whom it binds: xref:README.adoc[safety at uP-L1].
+Scope and element boundary: xref:../seooc-up-rust/README.adoc[the up-rust SEooC's README].
+
+These are the two assumptions of use of the up-rust SEooC whose main duty is about transports: who can reach a transport's resources, and which bindings and wires a deployment uses.
+
+* They are that element's assumptions, as `seooc` in their IDs says.
+They bind an integrator that claims its safety-assurance scope, and no deployment of another SDK or transport (xref:../seooc-up-rust/assumptions-of-use.adoc#who[who the assumptions bind]).
+* They are deployment duties.
+No software requirement of this layer is met by them, and they replace none.
+* Each "Violation" text uses the three classes of xref:../seooc-up-rust/assumptions-of-use.adoc#violation-classes[how a violation shows up].
+* The safety manual of the SDK states them, and they carry `SafetyManual` and the gate tag `SafetyGateUpRust` (xref:../seooc-up-rust/assumptions-of-use.adoc#coverage[tags and coverage]).
+* The index of all the element's assumptions is in xref:../seooc-up-rust/assumptions-of-use.adoc[its assumptions of use].
+
+== Which part each clause concerns
+
+Each assumption below is one item, and most of its clauses concern this layer.
+The clauses in this table concern another part.
+They stay in their item at this revision, and the item governs.
+
+[cols="3,3,2,4",options="header"]
+|===
+| Assumption and clause | Part it concerns | Who acts | Where that part states it
+
+| `+aou~seooc-peer-access~4+`, "The fault model" and "Out of scope" | Shared: the faulty-peer model | The integrator keeps access to the deployed processes; the element's requirements hold against a faulty peer | xref:../README.adoc#faulty-peer[The faulty-peer model]
+| `+aou~seooc-peer-access~4+`, "Two-way shared state", last sentence | One transport: iceoryx2 domains and OS users | The integrator | xref:iceoryx2.adoc#index[The iceoryx2 index]
+| `+aou~seooc-peer-access~4+`, "Message IDs" | uP-L2: message identity | The integrator and the application | `+req~ssr-ids-unique~4+` in xref:../up-l2/interaction.adoc[interaction]
+| `+aou~seooc-peer-access~4+`, "Strict mode" | The element: strict mode | The element reports, where strict mode is used | `+req~ssr-strict-report~2+` in xref:../seooc-up-rust/build.adoc[build and shipped content]
+| `+aou~seooc-qualified-bindings-and-wires~6+`, "32-bit targets", second sentence, and the lists for a deployment that uses iceoryx2 | One transport: iceoryx2 limits, anomalies and known failures | The integrator | xref:iceoryx2.adoc#index[The iceoryx2 index]
+| `+aou~seooc-qualified-bindings-and-wires~6+`, "Pull bindings and deadlines" | The element: the deadline of a route | The binding reports arrivals; the element monitors the deadline | `+req~ssr-qos-deadline~4+` in xref:../seooc-up-rust/qos.adoc[QoS, TTL and deadlines]
+| `+aou~seooc-qualified-bindings-and-wires~6+`, "Response routes" | uP-L2: RPC responses | The binding and the element | `+req~ssr-rpc-check-at-arrival~2+` in xref:../up-l2/interaction.adoc[interaction]
+| `+aou~seooc-qualified-bindings-and-wires~6+`, "Cores without coherent atomics" | The element: its target | The integrator | `+aou~seooc-target-environment~4+`
+| `+aou~seooc-qualified-bindings-and-wires~6+`, "Owning wires" | The element: stronger resource guarantees | The integrator requires a guarantee by name; the element admits or refuses it | `+req~ssr-heap-guarantees~1+` in xref:../seooc-up-rust/heap.adoc[heap]
+| `+aou~seooc-qualified-bindings-and-wires~6+`, the paragraph on a wire or binding from elsewhere | The element: the inventory of `+unsafe+` | The integrator qualifies that code | `+req~ssr-unsafe-inventory~3+` in xref:../seooc-up-rust/memory-safety.adoc[memory safety]
+| `+aou~seooc-qualified-bindings-and-wires~6+`, the strict-mode paragraph | The element: strict mode | The element refuses, where strict mode is used | `+req~ssr-strict-report~2+` in xref:../seooc-up-rust/build.adoc[build and shipped content]
+|===
+
+The software's side of the clauses that concern this layer:
+
+* the copy route for a reader above its writer, and the refusal of a port at another level than its service: `+req~ssr-integrity-zero-copy~4+` in xref:integrity.adoc[integrity levels];
+* the refusal of malformed and undeclared frames: `+req~ssr-refuse-no-panic~1+` in xref:../seooc-up-rust/errors.adoc[refusal, errors and reporting], and `+req~ssr-peer-admission~2+` in xref:peers.adoc[peers of a transport];
+* the contracts a binding and a wire pass: xref:bindings.adoc[allocated to each binding] and xref:wires.adoc[allocated to each wire].
+
+== Only authorized processes reach the transport, and peers are faulty, never malicious
+
+[.specitem,oft-sid="aou~seooc-peer-access~4",oft-title="Only authorized processes reach the transport, and peers are faulty, never malicious",oft-needs="uman",oft-tags="SafetyManual,SafetyGateUpRust"]
+--
+The integrator *SHALL* restrict access to every transport's resources (shared-memory segments, sockets, service names) to the processes deployed to use them, with OS permissions or equivalent.
+
+* *The fault model.* Within that, this SEooC treats every peer as faulty, never malicious. A peer may send any content, at any time and in any volume, and may choose any source URI, and the requirements hold against all of it. A faulty peer includes one that writes values its own middleware never writes, into shared memory it can write.
+* *A peer below a reader's level.* A peer below a reader's level may write its own shared memory at any moment: the reader then takes the copy route (`+req~ssr-integrity-zero-copy~4+`), and the requirements hold.
+* *Two-way shared state.* On a binding whose ports write shared state both ways, such as iceoryx2, every process on one service runs at one integrity level; a lower-integrity consumer takes a copy route, and the binding refuses any other at setup, by name. Each level runs in its own iceoryx2 domain, and its processes under their own OS user, so that a faulty lower process cannot open, map or remove a higher level's shared memory.
+* *Zero-copy routes.* On a zero-copy route, the element relies on the writer, developed to at least the reader's level, never writing a sample it has sent.
+* *Out of scope.* Only deliberate exploitation, such as engineering a peer-ID hash collision, is out of scope, as security.
+* *Message IDs.* Message IDs are unique only to a stated residual (`+req~ssr-ids-unique~4+`), and they are not secret, so nothing may rely on them for authentication.
+* *Strict mode.* In strict mode, the report lists each route's declared peers and the shared-memory permissions its binding requests, and warns of an ASIL receive route that admits undeclared peers.
+--
+
+*Violation:*
+
+* Malformed or undeclared frames are refused and *counted* (`+req~ssr-refuse-no-panic~1+`, `+req~ssr-peer-admission~2+`).
+* A racing write on a zero-copy route is undefined behaviour and *undetectable*.
+* A peer at another level that the deployment lets onto a two-way service can crash or corrupt its peers' memory: *undetectable* by the element.
+* A well-formed frame from a process that should have had no access, and a deliberate exploit, are *undetectable*.
+
+[horizontal]
+ASIL:: B
+Status:: Draft
+ISO 26262:: 6-Annex D.2.4 (part-clause numbers only)
+
+*Rationale.*
+A faulty publisher writing to a sample while it is read is the copy route's case, and a lying publisher is not caught at setup.
+
+A shared reference cannot remain valid against an uncontrolled concurrent writer, and bidirectional shared state also exposes a publisher to a faulty consumer.
+
+== Bindings and wires pass their contracts
+
+[.specitem,oft-sid="aou~seooc-qualified-bindings-and-wires~6",oft-title="Bindings and wires pass their contracts",oft-needs="uman",oft-tags="SafetyManual,SafetyGateUpRust"]
+--
+The integrator *SHALL* use on the ASIL path only bindings and wires that pass the contract suites (the binding contract suite, the QoS contract suite and the wire contract suite) on the integrator's own target, at the exact versions and configuration whose evidence its supported configuration records, and *SHALL NOT* take evidence of one state, compiled, linked, exercised, source-reviewed, composition-verified or qualified, for another.
+
+* *32-bit targets.* On a 32-bit target, those are only the bindings and wires whose contracts pass on that target. The iceoryx2 binding claims no 32-bit target, because iceoryx2 0.9 needs 64-bit atomics and its bare-metal port is a proof of concept.
+* *Pull bindings and deadlines.* A pull binding used for a route with a deadline reports an arrival through the runtime port only with evidence that a frame entered the route's queue, or that the queue's overflow policy discarded one, and within the arrival-report latency it declares in its QoS support. It never reports one on a wake hint alone. It reports each failure to read its own queue through the runtime port's receive-failure report. Its deadline checks of the QoS contract suite pass, on a subscriber and on a carrier ingress.
+* *Response routes.* A push binding delivers one response route from one thread at a time, which the contract checks. A pull binding needs nothing: the element serializes the pulls of a response route itself.
+* *Cores without coherent atomics.* A route between cores whose atomics are not coherent with each other (`+aou~seooc-target-environment~4+`) uses a transport whose qualification covers that.
+* *Owning wires.* A wire that decodes into values that own what they hold, heap memory included, is ordinary on a serialized route that declares its allocation, and its ownership needs nothing further from the integrator. Where the item relies on panic-free cleanup, non-waiting acquisition, non-waiting release or recoverable exhaustion on such a route, the integrator *SHALL* require that guarantee in the route's declaration, and uses a supported configuration whose package establishes it for the exact type, wires, binding and allocation provider (`+req~ssr-heap-guarantees~1+`). A route that does not require a guarantee is promised none, whether or not evidence establishes it: its report shows that guarantee as not required and not admitted, and states separately whether it is established.
+
+The integrator accepts the limits and known anomalies that each binding's README states (`+req~ssr-binding-readme~1+`). For a deployment that uses iceoryx2, these include:
+
+* allocation on a peer join or restart, under the waiver (`+UPW-iceoryx2-1+`);
+* sizing of the expired-connection buffer: a receive route is refused at setup unless twice its retained budget fits in it;
+* the service depth, which now comes from deployment data (`+req~ssr-binding-depth-from-deployment~1+`);
+* the port mutex's panic path, on lock and on unlock, which no peer can reach (`+UPD-IOX2-0001+`, revision 2);
+* the two `+blocking_send+` `+unwrap+`s, which only a failing OS clock call reaches (`+UPD-IOX2-0002+`);
+* iceoryx2's other accepted panic paths: two process-private invariants; a descriptor that other code in the process closes while a socket is set up; `+close()+` failing on a departed peer's descriptor; and a sample counter's overflow on 64-bit targets, at over 580 years at 10^9^ sends per second (`+UPD-IOX2-0003+`, `+UPD-IOX2-0004+`, `+UPD-IOX2-0005+`);
+* heap exhaustion during a peer change, which aborts, within the deployment's heap sizing under `+UPW-iceoryx2-1+` (`+UPD-IOX2-0006+`);
+* arrival reports from its receive thread, within that thread's period plus its stated pass bound, on a drained notification of the route's data ID together with a sample in the queue or taken since the previous pass, or on the queue turning non-empty;
+* a sender preempted between `+send+` and its notification delays the report, unless the queue was empty at the previous pass; a notification that fails at the sender while the queue holds samples leaves an arrival unreported, so a miss may be counted for a gap no longer than the deadline, and the sender counts the failure;
+* while a new publisher's data connection is being set up, its notification can be reported while older samples are queued;
+* iceoryx2 0.9.2 only logs a data connection that cannot be set up, under its default handler, and retries it only when the publisher list changes. So the binding installs a degradation handler on each port at setup: a failed connection is counted as `+receive_failed+`, or on the sending route, and the route then reports only a queue that turned non-empty, until the publisher list changes and an update runs clean; a queue that a healthy second publisher keeps non-empty meanwhile shows misses;
+* the event IDs are read from the event service's static config, and a route whose lifecycle events share the data ID, or whose data ID is above the service's `+event_id_max_value+`, is refused at setup.
+
+The README also says that a frame drop can wait for the port mutex. That is not an accepted limit, because `+req~ssr-binding-frame-drop~5+` forbids it. It is the binding's known failure `+UPF-IOX2-0001+`, open until the binding returns each dropped frame to iceoryx2 through its deferred return as pending cleanup, charged and isolated as `+req~ssr-release-lease-drop~4+` requires; a thread of its own is not by itself that isolation.
+
+iceoryx2's other known failures are not accepted limits either, because `+req~ssr-binding-no-panic~4+` forbids them: its index bug on a connection change (`+UPF-IOX2-0002+`), until iceoryx2 fixes the index; its event-deadline panics, on QM transports only, since ASIL deployments turn those deadlines off, until iceoryx2 fixes them (`+UPF-IOX2-0005+`); and the paths through which a peer that writes values its own iceoryx2 never writes can panic its survivors, until iceoryx2 validates what peers write (`+UPF-IOX2-0004+`).
+
+The wait thread's descriptor-set panics (`+UPF-IOX2-0006+`) remain until its own poll loop replaces that set, or a reviewed equivalent with a source-backed argument is adopted in its place, and unsafe name and queue-size configuration (`+UPF-IOX2-0007+`) remains until setup refuses it.
+
+The expired-buffer failure is fixed by the twice-budget setup refusal; it is recorded separately as fixed, not as an accepted anomaly.
+
+A wire or binding from elsewhere with `+unsafe+` code of its own, such as a wire over a C codec, is a separate element, and the integrator qualifies its `+unsafe+` (`+req~ssr-unsafe-inventory~3+`). The bindings this project ships keep their own inventories under the same gate (`+req~ssr-binding-unsafe-inventory~1+`).
+
+In strict mode, the Enforce state refuses a binding or wire that is not on the integrator's qualified list, an ASIL process that reaches a deviation not acknowledged at its current revision, and any known failure, whatever is acknowledged; while iceoryx2's known failures stand, that refuses each affected route at ASIL, including publishers affected by shared-state faults. The report lists each binding's README limits, deviations and known failures.
+--
+
+*Violation:*
+
+* A wire that declares heap use on a native route, or a binding that declares middleware heap use without a waiver, is *refused at setup*.
+* A route that requires a stronger resource guarantee that is not established for it is *refused at setup*, by name (`+req~ssr-heap-guarantees~1+`).
+* A guarantee that the item relies on and no route requires is not admitted, and nothing is promised for it, even where evidence establishes it.
+That is *undetectable* by the element, whose report shows the guarantee as not required and not admitted.
+* On iceoryx2, a route whose lifecycle events share its data ID, or whose data ID is above the service's range, is *refused at setup*.
+* A binding or wire that breaks its contract while declaring that it keeps it, for example with a frame destructor that frees on a native route, is *undetectable* at runtime: the contract test is the only check.
+* A known anomaly accepted here is not a waiver.
+* In strict mode, a binding or wire off the qualified list, an unacknowledged deviation, and any known failure are *refused at setup* in the Enforce state.
+
+[horizontal]
+ASIL:: B
+Status:: Draft
+
+*Rationale.*
+A declaration of capability needs target-specific contract evidence.
+An accepted anomaly has a bounded justification, whereas an open known failure remains a failure.
+
+Evidence attaches to the exact pins and configuration it was produced on.
+A newer middleware release or a private variant does not inherit it, compiling is not running, and a source review is not a timing analysis.
+
+_Why revision 6._
+The element admits ordinary owning wires and gives a stronger resource guarantee only where a route requires it (`+req~ssr-heap-guarantees~1+`).
+An item that relies on such a guarantee therefore has to ask for it, and this revision adds that duty.
+It also names the contract suites and the runtime port's reports by what they are, with no change to what a binding or wire must pass.

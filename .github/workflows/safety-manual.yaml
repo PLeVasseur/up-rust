@@ -19,4 +19,4 @@ jobs:
       - name: Qualify the document checker with small independent fixtures
         run: python3 -B -m unittest discover -s tools/ci -p test_check_safety_manual.py -v
       - name: Check the pinned manual and specification
-        run: python3 tools/ci/check_safety_manual.py
+        run: python3 tools/ci/check_safety_manual.py --spec-root up-spec/safety

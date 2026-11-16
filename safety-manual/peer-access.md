@@ -13,6 +13,8 @@ that the current SDK implements them.
 
 - Strict peer listings, integrity refusals and all proposed faulty-peer containment are not claimed available at this baseline.
 - Known binding failures remain failures, including publisher exposure.
+- The specification states this assumption with its transports, in `up-spec/safety/up-l1/deployment.adoc`. It is an assumption of the up-rust SEooC there as before, and its text and revision are unchanged.
+- Its clauses span layers: access to transport resources and the zero-copy writer concern every transport, the domain and OS-user separation concerns iceoryx2, and the fault model is a shared concept that lifts no security requirement of the protocol. The specification's table beside the assumption says which is which.
 
 Read [manual status](README.md) before using this entry. A documentary coverage
 link neither validates the deployment nor closes an implementation requirement.

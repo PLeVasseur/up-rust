@@ -1,9 +1,29 @@
 # SDK safety manual — draft integrator guidance
 
 This manual describes the 17 SDK assumptions of use of the up-rust SEooC
-specification in this repository (`up-spec/safety/seooc-up-rust`), one entry each.
+specification in this repository (`up-spec/safety`), one entry each.
 It is a review proposal, not a certified release, safety case, assessment,
 deployment approval or implementation claim.
+
+## Where the specification states each entry
+
+The specification files each assumption by the protocol layer its main duty
+concerns, and indexes all of them in
+`up-spec/safety/seooc-up-rust/assumptions-of-use.adoc`.
+
+| Part of the specification | Entries |
+| --- | --- |
+| Transports, `up-spec/safety/up-l1/deployment.adoc` | peer-access, qualified-bindings-and-wires |
+| The element and its deployment, `up-spec/safety/seooc-up-rust/assumptions-of-use.adoc` | the other fifteen |
+
+- Every entry is an assumption of the up-rust SEooC wherever it is filed, and
+  binds the same integrator. Filing one with a layer makes it no duty of another
+  SDK or transport.
+- Some assumptions hold clauses of more than one layer. The specification lists
+  them, with who acts, beside the assumptions. Its iceoryx2 page,
+  `up-spec/safety/up-l1/iceoryx2.adoc`, indexes every clause that names iceoryx2.
+- A deployment duty and a software requirement stay separate. This manual states
+  deployment duties; the requirements they rest on are the specification's.
 
 ## How each entry is built
 
@@ -174,6 +194,8 @@ The revisions quoted here rose where meaning changed:
   without providing it.
 - The peer-access and peer-rates statements changed only the revisions of the
   items they cite.
+- Filing the assumptions by layer changed no statement and no revision: every
+  quotation here is the same text as before.
 - The deployment-data entry's own guidance changed while its assumption did not.
 - The build-configuration and capacity-sizing entries were corrected in place at
   the revisions above.
@@ -210,7 +232,8 @@ against the raised one.
 ## Streamer assumptions
 
 The Streamer owns monitor-thresholds and operator-access, both revision 2 in this
-specification.
+specification, which states them with the Streamer's requirements in
+`up-spec/safety/up-l2/streamer.adoc`.
 
 - Their manuals belong in its repository; this folder has no coverage items for
   them.
@@ -254,9 +277,12 @@ the code that implements them.
 
 ## Checking the manual
 
-Run `python3 tools/ci/check_safety_manual.py` from the SDK checkout after every
-specification change.
+Run `python3 tools/ci/check_safety_manual.py --spec-root up-spec/safety` from the
+SDK checkout after every specification change.
 
+- The assumptions are filed in three parts of `up-spec/safety`, so the checker
+  reads that whole area. Its default root, `up-spec/safety/seooc-up-rust`, holds
+  fifteen of the nineteen and fails the ownership check.
 - Its unit tests build their own small fixture specification, whose revisions are
   fixture values rather than citations of this one.
 - The committed coverage configuration keeps the seventeen SDK assumptions in its

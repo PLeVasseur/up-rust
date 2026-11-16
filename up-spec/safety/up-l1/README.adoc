@@ -1,0 +1,99 @@
+= Safety at the transport layer (uP-L1)
+:toc: preamble
+
+The key words "*MUST*", "*MUST NOT*", "*REQUIRED*", "*SHALL*", "*SHALL NOT*", "*SHOULD*", "*SHOULD NOT*", "*RECOMMENDED*", "*MAY*", and "*OPTIONAL*" in this document are to be interpreted as described in https://www.rfc-editor.org/info/bcp14[IETF BCP14 (RFC2119 & RFC8174)]
+
+Conventions, layout, tags and status words: xref:../README.adoc[the safety area's README].
+
+This part is the safety counterpart of xref:../../up-l1/README.adoc[the Transport & Session Layer (uP-L1)].
+It holds three things:
+
+* what a transport and a wire guarantee;
+* how shared memory is lent or copied between integrity levels;
+* what a deployment provides for its transports.
+
+Every item is still Draft.
+
+== Whom this part binds
+
+Where an item is filed says which layer it concerns.
+It does not say that every transport must meet it (xref:../README.adoc#filing[filing an item does not widen it]).
+
+* *Written for one element.*
+The items here were written for the up-rust SEooC (xref:../seooc-up-rust/README.adoc[its README]) and for the transports and wires that work with it.
+They are not protocol requirements of uP-L1, and they bind no transport or SDK of another language.
+* *Bound by tag.*
+Each requirement binds the part its tag names (xref:../README.adoc#tags[the tags]): every binding written against the element's contract (`SafetyBinding`, `SafetyBindingPull`), every wire written against it (`SafetyWire`), its iceoryx2 binding (`SafetyIceoryx2`) or the element itself (`SafetyUpRustCore`).
+* *Assumptions of use.*
+The two assumptions of use filed here are that element's.
+They bind an integrator that claims its safety-assurance scope (xref:../seooc-up-rust/assumptions-of-use.adoc#who[who the assumptions bind]).
+* *The protocol stays in force.*
+Nothing here replaces or weakens a requirement of uP-L1, its security requirements included.
+
+== Words used in this part
+
+These words are used as the items use them.
+The items give them their meaning, and this list only points to it.
+
+* A *binding* is a uP-L1 transport implementation, written against the element's lending or handoff contract.
+It adapts the element to an underlying transport such as iceoryx2.
+* A *wire* encodes and decodes a payload.
+It is filed with this layer, beside the transports that carry what it encodes.
+* A *lending* binding is one on which a reader can be given shared memory that a writer wrote (`+req~ssr-integrity-declared~3+`).
+A *handoff* binding hands the element a private copy (`+req~ssr-binding-integrity-level~1+`).
+* A *zero-copy* route gives a reader a view into shared memory.
+The *copy route* gives it a validated copy in storage the reader owns (`+req~ssr-integrity-zero-copy~4+`).
+* A binding with *two-way shared state* is one whose ports write shared state both ways (`+req~ssr-integrity-zero-copy~4+`).
+
+== Files
+
+25 items in 6 files.
+
+[cols="3,1,3,4",options="header"]
+|===
+| File | Items | Tags | What it holds
+
+| xref:bindings.adoc[Allocated to each binding] | 11 | `SafetyBinding`, `SafetyBindingPull` | The duties of the binding contract, which every binding meets
+| xref:wires.adoc[Allocated to each wire] | 2 | `SafetyWire` | The duties of every wire
+| xref:integrity.adoc[Integrity levels] | 5 | `SafetyUpRustCore` | One level per transport, the zero-copy rule, the copy route and in-place types
+| xref:peers.adoc[Peers of a transport] | 4 | `SafetyUpRustCore`, `SafetyBinding` | A peer's failure, staleness and admission, and the ABI of a native representation
+| xref:iceoryx2.adoc[iceoryx2] | 1 | `SafetyIceoryx2` | What is specific to one transport, iceoryx2
+| xref:deployment.adoc[What a deployment provides for its transports] | 2 | `SafetyManual` | Access to transport resources, and the use of bindings and wires that pass their contracts
+|===
+
+== Responsibilities at this layer
+
+Each row names who acts and where the obligation is stated.
+The item governs, and this table adds no duty.
+
+[cols="3,2,4",options="header"]
+|===
+| Responsibility | Who acts | Stated in
+
+| Runtime behaviour of binding code: heap, lazy state, frame destruction, panics, bounded work and waits, cleanup after a dead predecessor | Each binding | xref:bindings.adoc[`bindings.adoc`]
+| A retained frame whose release in the underlying transport can wait: handed to the binding's deferred return without waiting, and from then on pending cleanup, charged and isolated | Each binding, for the hand-off, and for keeping its calls and reports from waiting behind a pending release. The element, which refuses at setup a route whose pending cleanup it cannot establish to be isolated | `+req~ssr-binding-frame-drop~5+` and `+req~ssr-binding-bounded~3+` in xref:bindings.adoc[`bindings.adoc`]; `+req~ssr-release-lease-drop~4+` in xref:../seooc-up-rust/release.adoc[the element's release rules]
+| Peer identity, QoS capability and the writer's integrity level, reported to the element truthfully | Each binding | xref:bindings.adoc[`bindings.adoc`]
+| What the middleware cannot guarantee, stated for integrators | Each binding, in its README | `+req~ssr-binding-readme~1+`
+| Encoding and decoding without a panic, and a heap-free claim that is tested | Each wire | xref:wires.adoc[`wires.adoc`]
+| One integrity level per transport; a view only from a writer at or above the reader; otherwise the copy route or a refusal at setup | The element | xref:integrity.adoc[`integrity.adoc`]
+| A peer's failure, restart, staleness and admission handled as normal input; no native representation across an ABI | The element, and each binding that carries native frames | xref:peers.adoc[`peers.adoc`]
+| Restrictions of one transport | The iceoryx2 binding, and a deployment that uses it | xref:iceoryx2.adoc[`iceoryx2.adoc`]
+| Access to every transport's resources restricted to the processes deployed to use them; a zero-copy writer that never writes a sample it has sent | The integrator | `+aou~seooc-peer-access~4+` in xref:deployment.adoc[`deployment.adoc`]
+| Only bindings and wires that pass their contracts on the target | The integrator | `+aou~seooc-qualified-bindings-and-wires~6+` in xref:deployment.adoc[`deployment.adoc`]
+| Each transport's integrity level assigned in deployment data | The integrator | `+aou~seooc-integrity-levels~5+` in xref:../seooc-up-rust/assumptions-of-use.adoc[the element's assumptions of use]
+| A waiver for each permit a binding ships | The deployment's owner | `+aou~seooc-waiver-approval~2+` in xref:../seooc-up-rust/assumptions-of-use.adoc[the element's assumptions of use]
+|===
+
+== What stays with the element
+
+Some rules reach a transport and are still filed with the element, because they are rules of the element's own modes, memory and reports.
+A binding or wire author reads them in xref:../seooc-up-rust/README.adoc[the element's part]:
+
+* the heap class that every wire, binding and route declares, and the stronger resource guarantees a route may require (`+req~ssr-heap-declared~3+`, `+req~ssr-heap-guarantees~1+`);
+* waivers for middleware allocation (`+req~ssr-waiver-required~1+`);
+* QoS, TTL and deadlines of a route, which bind an L2 role's route and a carrier route alike (`+req~ssr-qos-no-downgrade~2+`, `+req~ssr-qos-deadline~4+`).
+They rest on a binding's declared capability and arrival latency, and on its middleware's own event deadlines being off on an ASIL deployment;
+* release, the release service and pending cleanup (`+req~ssr-release-lease-drop~4+`);
+* memory safety against any wire and any binding written in safe code (`+req~ssr-unsafe-wire-untrusted~1+`, `+req~ssr-unsafe-binding-untrusted~1+`), and the inventory of `+unsafe+` (`+req~ssr-unsafe-inventory~3+`);
+* the deferred end-to-end protection wire.
+It is a wire, but it is the element's own safety mechanism and reaches RPC calls and Streamer hops too, so its items stay together in xref:../seooc-up-rust/e2e-wire.adoc[`e2e-wire.adoc`].

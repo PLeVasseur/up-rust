@@ -9,6 +9,10 @@ The software safety requirements and assumptions of use of one safety element ou
 The conventions, tags and status words are in xref:../README.adoc[the safety area's README].
 Every item is still Draft.
 
+This directory holds what is specific to the element: its scope and boundary, its claims, its modes, memory, build and platform rules, and the index of its assumptions of use.
+The items that concern a protocol layer are filed with that layer, in xref:../up-l1/README.adoc[the transport layer's part] and xref:../up-l2/README.adoc[the communication layer's part].
+They are items of this element and of the parts that work with it all the same, and <<files>> lists them.
+
 == The element
 
 [cols="2,6,3",options="header"]
@@ -135,7 +139,7 @@ What the data means, and how the item reacts to a failure, are the integrator's.
 
 * *Bindings and wires* are separate elements.
 Their code runs inside the element's calls, but each is developed and verified on its own, against the contract suites in `test-util`.
-The items allocated to them are in `bindings.adoc` and `wires.adoc`, and `+aou~seooc-qualified-bindings-and-wires~6+` restricts an integrator to those that pass.
+The items allocated to them are in xref:../up-l1/bindings.adoc[`bindings.adoc`] and xref:../up-l1/wires.adoc[`wires.adoc`] of the transport layer's part, and `+aou~seooc-qualified-bindings-and-wires~6+` restricts an integrator to those that pass.
 The end-to-end protection wire is a wire too, but it is shipped as the element's safety mechanism, so it is part E6, with its own items.
 * *Derive macros* (`up-rust-macros`: `ZeroSlot`, `StablePayload`, `StablePayloadInit`) are tools.
 The code they generate becomes part of the element and is held to its requirements.
@@ -281,15 +285,15 @@ The Streamer's "degraded" is a reported state: its safe state is fail-silent per
 |===
 | Direction | Interface | Items
 
-| Provided to applications | L2 handles, the transition, bounded waits, route reports, counters and waiver records | the files from `runtime-modes.adoc` to `waivers.adoc`
-| Provided to the Streamer | Carrier routes, the capacity check, park, the shared signal | `bounded-work.adoc`, `qos.adoc`, `integrity.adoc`, `streamer.adoc`
-| Provided to integrators | The end-to-end protection wire; strict mode and its compliance report; the Streamer's operator interface, mode report, watchdog hook and startup report | `streamer.adoc`, `e2e-wire.adoc`, `build.adoc`
-| Required from bindings | The lending or handoff contract, and the bindings' duties | `bindings.adoc`; `+aou~seooc-qualified-bindings-and-wires~6+`
-| Required from wires | The wire contract, and the wires' duties | `wires.adoc`
+| Provided to applications | L2 handles, the transition, bounded waits, route reports, counters and waiver records | the files of this directory from `runtime-modes.adoc` to `waivers.adoc`; `../up-l1/integrity.adoc` and `../up-l1/peers.adoc`; `../up-l2/interaction.adoc`
+| Provided to the Streamer | Carrier routes, the capacity check, park, the shared signal | `bounded-work.adoc`, `qos.adoc`, `../up-l1/integrity.adoc`, `../up-l2/streamer.adoc`
+| Provided to integrators | The end-to-end protection wire; strict mode and its compliance report; the Streamer's operator interface, mode report, watchdog hook and startup report | `../up-l2/streamer.adoc`, `e2e-wire.adoc`, `build.adoc`
+| Required from bindings | The lending or handoff contract, and the bindings' duties | `../up-l1/bindings.adoc`, `../up-l1/iceoryx2.adoc`; `+aou~seooc-qualified-bindings-and-wires~6+`
+| Required from wires | The wire contract, and the wires' duties | `../up-l1/wires.adoc`
 | Provided by the element's maintainers | Versioned supported configuration packages: backend, synchronization and execution model, startup checks, sizing, supported contexts, build settings, dependency scope, evidence and limitations | <<claims>>; `platform.adoc`; `+aou~seooc-target-environment~4+`
 | Required from each platform backend | The platform's rules | `platform.adoc`; `+aou~seooc-integrator-platform~4+`
 | Required from the OS and hardware | Address-space isolation, or on an MCU the stated partition boundary, threads, wait and wake, a monotonic clock, a wall clock, 32-bit atomics with compare-and-swap, atomic and coherent on every core that shares them | `assumptions-of-use.adoc`
-| Required from the integrator | Supervisor and deployment data; waiver approval; the selection of a supported configuration and the item's timing budgets; the choice of routes that need end-to-end protection; peer rates; the build order and the build profile; operator access | `assumptions-of-use.adoc`
+| Required from the integrator | Supervisor and deployment data; waiver approval; the selection of a supported configuration and the item's timing budgets; the choice of routes that need end-to-end protection; peer rates; the build order and the build profile; operator access | `assumptions-of-use.adoc`, which indexes every assumption and links to the four that a layer part states
 |===
 
 == Verification methods
@@ -338,32 +342,58 @@ A test names what it verifies with OFT's own coverage tag, and the method after 
 * The method is for the check that each listed method has its evidence, which OFT does not do.
 * Code that meets an item carries `+// [impl->req~ssr-qos-ttl~4]+`.
 
+[[files]]
 == Files
 
-149 items in 20 files.
+149 items in 23 files: 98 in the 15 files of this directory, and 51 in the 8 files of the two layer parts.
+
+=== In this directory
 
 [cols="4,1,3",options="header"]
 |===
 | File | Items | Tags
 
-| xref:assumptions-of-use.adoc[Assumptions of use] | 19 | `SafetyManual`
+| xref:assumptions-of-use.adoc[Assumptions of use] | 15 | `SafetyManual`
 | xref:runtime-modes.adoc[Modes and the transition] | 14 | `SafetyUpRustCore`
 | xref:heap.adoc[Heap] | 5 | `SafetyUpRustCore`
 | xref:errors.adoc[Refusal, errors and reporting] | 5 | `SafetyUpRustCore`
 | xref:bounded-work.adoc[Bounded work and waiting] | 3 | `SafetyUpRustCore`
-| xref:peers.adoc[Peers, RPC and message identity] | 10 | `SafetyUpRustCore`, `SafetyBinding`
 | xref:release.adoc[No release path] | 3 | `SafetyUpRustCore`
 | xref:startup-memory.adoc[Startup memory] | 3 | `SafetyUpRustCore`
 | xref:qos.adoc[QoS, TTL and deadlines] | 7 | `SafetyUpRustCore`
-| xref:integrity.adoc[Integrity levels] | 5 | `SafetyUpRustCore`
 | xref:waivers.adoc[Waivers] | 3 | `SafetyUpRustCore`
 | xref:crate-isolation.adoc[Crate isolation] | 4 | `SafetyUpRustCore`, `SafetyStreamer`
-| xref:deployment-data.adoc[Deployment data] | 5 | `SafetyUpRustCore`, `SafetyStreamer`
+| xref:deployment-data.adoc[Deployment data] | 4 | `SafetyUpRustCore`
 | xref:memory-safety.adoc[Memory safety] | 4 | `SafetyUpRustCore`
 | xref:platform.adoc[Platform] | 6 | `SafetyUpRustCore`
 | xref:build.adoc[Build and shipped content] | 8 | `SafetyStreamer`, `SafetyUpRustCore`
-| xref:bindings.adoc[Allocated to each binding] | 12 | `SafetyBinding`, `SafetyBindingPull`, `SafetyIceoryx2`
-| xref:wires.adoc[Allocated to each wire] | 2 | `SafetyWire`
 | xref:e2e-wire.adoc[The end-to-end protection wire] | 14 | `SafetyE2eWire`, `SafetyUpRustCore`, `SafetyStreamer`
-| xref:streamer.adoc[Streamer] | 17 | `SafetyStreamer`
+|===
+
+=== Filed with the transport layer
+
+These are in xref:../up-l1/README.adoc[the transport layer's part].
+
+[cols="4,1,3",options="header"]
+|===
+| File | Items | Tags
+
+| xref:../up-l1/bindings.adoc[Allocated to each binding] | 11 | `SafetyBinding`, `SafetyBindingPull`
+| xref:../up-l1/wires.adoc[Allocated to each wire] | 2 | `SafetyWire`
+| xref:../up-l1/integrity.adoc[Integrity levels] | 5 | `SafetyUpRustCore`
+| xref:../up-l1/peers.adoc[Peers of a transport] | 4 | `SafetyUpRustCore`, `SafetyBinding`
+| xref:../up-l1/iceoryx2.adoc[iceoryx2] | 1 | `SafetyIceoryx2`
+| xref:../up-l1/deployment.adoc[What a deployment provides for its transports] | 2 | `SafetyManual`
+|===
+
+=== Filed with the communication layer
+
+These are in xref:../up-l2/README.adoc[the communication layer's part].
+
+[cols="4,1,3",options="header"]
+|===
+| File | Items | Tags
+
+| xref:../up-l2/interaction.adoc[RPC and message identity] | 6 | `SafetyUpRustCore`
+| xref:../up-l2/streamer.adoc[Streamer] | 20 | `SafetyStreamer`, `SafetyManual`
 |===

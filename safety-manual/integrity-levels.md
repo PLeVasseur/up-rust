@@ -14,6 +14,7 @@ that the current SDK implements them.
 - Integrity admission, strict acknowledgements and their reports require implementation/qualification. Do not infer them from this documentary coverage.
 - Revision 5 states the decomposition and coexistence duties for whatever end-to-end protection the system supplies.
 - The SDK's own E2E wire is deferred.
+- Its clauses span layers: one integrity level per transport is a transport-layer rule (`req~ssr-integrity-declared~3`), the sentence about iceoryx2 concerns that transport alone, and the capability ceiling and the decomposition duties are the element's. The specification keeps the assumption whole, with the element's other assumptions, and its table beside them says which clause is which.
 
 Read [manual status](README.md) before using this entry. A documentary coverage
 link neither validates the deployment nor closes an implementation requirement.

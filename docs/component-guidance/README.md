@@ -5,7 +5,8 @@ These pages explain how the Rust SDK intends to meet the up-rust SEooC requireme
 - They are implementation guidance and an evidence plan.
 - They are not normative, not assumptions of use, not safety-manual coverage entries and not qualification evidence.
 
-The normative statements live in up-spec, `safety/seooc-up-rust/`, and the SDK carries a copied snapshot of them under `up-spec/`.
+The normative statements live in up-spec's `safety/` area, and the SDK carries a copied snapshot of them under `up-spec/`.
+That area is laid out by protocol layer: the element's own rules are in `safety/seooc-up-rust/`, and its transport-layer and communication-layer items are in `safety/up-l1/` and `safety/up-l2/`.
 
 - Where a page cites an item, it cites the revision in that snapshot.
 - Where a page names a Rust trait, type, lifetime rule, crate or scheduler, that is the Rust mechanism chosen to meet a behavioural requirement; the requirement itself does not depend on it.

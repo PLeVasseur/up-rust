@@ -1,10 +1,19 @@
-= up-rust SEooC: Integrity levels
+= uP-L1 safety: Integrity levels
 :toc: preamble
 
 The key words "*MUST*", "*MUST NOT*", "*REQUIRED*", "*SHALL*", "*SHALL NOT*", "*SHOULD*", "*SHOULD NOT*", "*RECOMMENDED*", "*MAY*", and "*OPTIONAL*" in this document are to be interpreted as described in https://www.rfc-editor.org/info/bcp14[IETF BCP14 (RFC2119 & RFC8174)]
 
 Conventions, tags and status words: xref:../README.adoc[the safety area's README].
-Scope and element boundary: xref:README.adoc[the SEooC's README].
+This layer, and whom it binds: xref:README.adoc[safety at uP-L1].
+Scope and element boundary: xref:../seooc-up-rust/README.adoc[the up-rust SEooC's README].
+
+These items say how the element lends or copies shared memory between integrity levels.
+They are allocated to the element (tag `SafetyUpRustCore`).
+
+* A binding's part, recording and reporting the writer's level, is `+req~ssr-binding-integrity-level~1+` in xref:bindings.adoc[the duties of every binding].
+* The integrator's part, assigning each transport's level, is `+aou~seooc-integrity-levels~5+` in xref:../seooc-up-rust/assumptions-of-use.adoc[the element's assumptions of use].
+* The integrator's duties for access and for a zero-copy writer are `+aou~seooc-peer-access~4+` in xref:deployment.adoc[what a deployment provides].
+* What a level is, and what it is not, is in xref:../README.adoc#concepts[the shared concepts].
 
 == Each transport declares one integrity level
 

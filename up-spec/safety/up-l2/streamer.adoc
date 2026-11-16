@@ -1,12 +1,23 @@
-= up-rust SEooC: Streamer
+= uP-L2 safety: Streamer
 :toc: preamble
 
 The key words "*MUST*", "*MUST NOT*", "*REQUIRED*", "*SHALL*", "*SHALL NOT*", "*SHOULD*", "*SHOULD NOT*", "*RECOMMENDED*", "*MAY*", and "*OPTIONAL*" in this document are to be interpreted as described in https://www.rfc-editor.org/info/bcp14[IETF BCP14 (RFC2119 & RFC8174)]
 
 Conventions, tags and status words: xref:../README.adoc[the safety area's README].
-Scope and element boundary: xref:README.adoc[the SEooC's README].
+This layer, and whom it binds: xref:README.adoc[safety at uP-L2].
+Scope and element boundary: xref:../seooc-up-rust/README.adoc[the up-rust SEooC's README].
 
 Allocated to the Streamer and its binary, in `up-streamer` (tag `SafetyStreamer`).
+
+The last two sections are the two assumptions of use about operating the Streamer.
+
+* They are the up-rust SEooC's assumptions, as `seooc` in their IDs says.
+They bind an integrator that claims its safety-assurance scope (xref:../seooc-up-rust/assumptions-of-use.adoc#who[who the assumptions bind]).
+* They are deployment duties.
+No requirement on the Streamer is met by them, and they replace none.
+* Each "Violation" text uses the three classes of xref:../seooc-up-rust/assumptions-of-use.adoc#violation-classes[how a violation shows up].
+* They carry `SafetyManual` only (xref:../seooc-up-rust/assumptions-of-use.adoc#coverage[tags and coverage]).
+* Their sentences about strict mode concern the element's strict mode, and apply where it is used (`+req~ssr-strict-report~2+` in xref:../seooc-up-rust/build.adoc[build and shipped content]).
 
 == Routes and subscriptions are locked at activation
 
@@ -38,6 +49,36 @@ A route added or changed while traffic flows would run without the setup checks 
 
 A live subscription source would change the routes in effect from outside, at run time.
 So the directory is read once and frozen.
+
+== ASIL Streamer routes name exact source addresses
+
+[.specitem,oft-sid="req~ssr-config-exact-addresses~1",oft-title="ASIL Streamer routes name exact source addresses",oft-needs="impl,utest",oft-tags="SafetyStreamer"]
+--
+In the ASIL Streamer:
+
+* every route's source filter *MUST* name one exact address;
+* every lending leg *MUST* name its physical service exactly.
+
+A wildcard source *MUST* be refused at setup, naming the route.
+
+A frame from an address that no route reserved *MUST* be refused and counted.
+--
+
+[horizontal]
+ASIL:: B
+Allocated to:: the Streamer
+Verification:: test
+Status:: Draft
+
+*Rationale.*
+An exact source filter bounds route matching and lets the Streamer refuse and count frames carrying an undeclared address.
+
+It does not authenticate a sending process: a faulty process using a reserved address can pass the filter.
+Physical service selection does not establish that identity either.
+Access control, peer qualification and end-to-end protection retain their separate assumptions and limits.
+
+The carrier primitives require the same of a lending leg.
+A lending route names one physical service, and a wildcard filter on one needs an explicit physical source or is refused.
 
 == The Streamer allocates nothing in runtime mode
 
@@ -263,7 +304,7 @@ Creating or joining a thread in runtime mode would bring the heap and an unbound
 A fixed assignment of routes to workers, made at setup, lets each route's latency be analysed before start.
 
 Creating threads needs the operating system.
-So the `+std+` binary creates the workers, outside the `+no_std+` crate that holds the route table and the forwarding loop (xref:README.adoc[the SEooC's README]).
+So the `+std+` binary creates the workers, outside the `+no_std+` crate that holds the route table and the forwarding loop (xref:../seooc-up-rust/README.adoc[the SEooC's README]).
 
 == Each route has a heap-free gate
 
@@ -293,7 +334,7 @@ Verification:: test, heap-window
 Status:: Draft
 
 *Rationale.*
-The Streamer's safe state is fail-silent per route, through its route gates (xref:README.adoc[the SEooC's README]).
+The Streamer's safe state is fail-silent per route, through its route gates (xref:../seooc-up-rust/README.adoc[the SEooC's README]).
 So a gate silences one route while every other route carries on (`+req~ssr-streamer-containment~1+`).
 
 The gate is the only route state that changes in runtime mode (`+req~ssr-streamer-route-lock~3+`), and fixed storage lets it change without heap (`+req~ssr-heap-none~3+`).
@@ -506,3 +547,62 @@ That bound is logical (`+req~ssr-bound-wait~3+`): it decides the call's outcome,
 
 The clause about the E2E wire binds only a route whose client uses it.
 That wire is deferred and not part of this delivery, and every other clause binds now.
+
+== Only authorized operators reach the Streamer's operator interface
+
+[.specitem,oft-sid="aou~seooc-operator-access~2",oft-title="Only authorized operators reach the Streamer's operator interface",oft-needs="uman",oft-tags="SafetyManual"]
+--
+The integrator *SHALL* restrict the Streamer's operator interface (`+req~ssr-streamer-operator-control~1+`) to the parties allowed to disable or re-enable routes.
+
+It *SHALL* treat an operator's disable of an ASIL route as a loss of that route's function, which the item *SHALL* tolerate.
+
+In strict mode, the Streamer's own checks refuse an operator interface that names an ASIL route unless `+operator_may_disable+` acknowledges it, and the report lists which ASIL routes an operator can disable.
+--
+
+*Violation:*
+
+* Every change made through the interface is *counted* and reported with its cause, so an unintended disable is seen.
+* In strict mode, an operator interface that names an ASIL route without `+operator_may_disable+` is *refused at setup*.
+* Who made a change is *undetectable* by the element.
+
+[horizontal]
+ASIL:: B
+Status:: Draft
+
+*Rationale.*
+The operator interface can switch an ASIL route off at run time (`+req~ssr-streamer-operator-control~1+`).
+So whoever can reach it can remove that route's function.
+
+The element counts and reports every change with its cause, but cannot tell who made it.
+So who may make one is the integrator's to control.
+
+== Monitor thresholds allow for peers' restarts
+
+[.specitem,oft-sid="aou~seooc-monitor-thresholds~2",oft-title="Monitor thresholds allow for peers' restarts",oft-needs="uman",oft-tags="SafetyManual"]
+--
+The integrator *SHALL* set each Streamer monitor's thresholds, in deployment data, above the worst-case restart time of the peers on the routes that monitor trips, or accept that a peer's normal restart trips such a route.
+
+A tripped route stays disabled until an operator re-enables it, and a route that the operator interface does not name can then be re-enabled only by restarting the Streamer.
+
+In strict mode, the deployment data *SHALL* also declare each peer's worst-case restart time: in the Enforce state, setup refuses a monitor threshold below the declared restart time of a peer on that monitor's routes, unless `+outage_on_restart+` names the accepted outage, and strict mode's report lists every monitored route that only a Streamer restart clears.
+--
+
+*Violation:*
+
+* A threshold below a peer's worst-case restart trips the route on that restart.
+* The trip is *counted* with its cause, and the mode report shows degraded.
+* The route stays disabled until an operator re-enables it, or, where the operator interface does not name it, until the Streamer restarts.
+* In strict mode, a threshold below a peer's declared restart time is *refused at setup* in the Enforce state, unless `+outage_on_restart+` names the accepted outage.
+* Whether that outage is acceptable for the item is *undetectable* by the element.
+
+[horizontal]
+ASIL:: B
+Status:: Draft
+
+*Rationale.*
+A peer recovers from a fault by restarting, since the element has no recovery inside a process (`+aou~seooc-supervisor-restart~4+`).
+A monitor's trip holds until an operator re-enables the route (`+req~ssr-streamer-monitors~4+`).
+So a threshold below a peer's worst-case restart turns that peer's normal restart into an outage of the route, and only the item's own analysis can say whether that outage is acceptable.
+
+Declared restart times make the duty checkable.
+Setup can compare every threshold with them, and refuse a short one unless its outage is accepted by name, before any route carries traffic.

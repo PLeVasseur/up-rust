@@ -6,6 +6,8 @@ The key words "*MUST*", "*MUST NOT*", "*REQUIRED*", "*SHALL*", "*SHALL NOT*", "*
 Conventions, tags and status words: xref:../README.adoc[the safety area's README].
 Scope and element boundary: xref:README.adoc[the SEooC's README].
 
+The exact addresses that an ASIL Streamer route names are a forwarding rule, filed with the Streamer: `+req~ssr-config-exact-addresses~1+` in xref:../up-l2/streamer.adoc[the Streamer's page].
+
 == Deployment data is validated in full
 
 [.specitem,oft-sid="req~ssr-config-validated~1",oft-title="Deployment data is validated in full",oft-needs="impl,utest",oft-tags="SafetyUpRustCore"]
@@ -91,33 +93,3 @@ Status:: Draft
 up-spec fixes these ranges in its message attributes (`+dsn~up-attributes-publish-source~2+`, `+dsn~up-attributes-notification-source~2+`, `+dsn~up-attributes-notification-sink~2+`, `+dsn~up-attributes-request-sink~2+`, `+dsn~up-attributes-request-source~2+`).
 
 Checking them when the role is built finds a wrong ID in deployment data at setup, instead of in a peer's refusal of the first message.
-
-== ASIL Streamer routes name exact source addresses
-
-[.specitem,oft-sid="req~ssr-config-exact-addresses~1",oft-title="ASIL Streamer routes name exact source addresses",oft-needs="impl,utest",oft-tags="SafetyStreamer"]
---
-In the ASIL Streamer:
-
-* every route's source filter *MUST* name one exact address;
-* every lending leg *MUST* name its physical service exactly.
-
-A wildcard source *MUST* be refused at setup, naming the route.
-
-A frame from an address that no route reserved *MUST* be refused and counted.
---
-
-[horizontal]
-ASIL:: B
-Allocated to:: the Streamer
-Verification:: test
-Status:: Draft
-
-*Rationale.*
-An exact source filter bounds route matching and lets the Streamer refuse and count frames carrying an undeclared address.
-
-It does not authenticate a sending process: a faulty process using a reserved address can pass the filter.
-Physical service selection does not establish that identity either.
-Access control, peer qualification and end-to-end protection retain their separate assumptions and limits.
-
-The carrier primitives require the same of a lending leg.
-A lending route names one physical service, and a wildcard filter on one needs an explicit physical source or is refused.
