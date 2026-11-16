@@ -42,6 +42,28 @@ The specification names the element's parts by crate. At the paired snapshot the
 - The `heap-window` verification method uses the Rust guard `heap_guard` and the C-level observer `heap_guard::c_level`, both in `test-util`.
 - The committed OFT coverage configuration is `.env.oft-current`. It keeps the nineteen SDK assumptions of use in the gating run through `SafetyGateUpRust`, and adds `SafetyManual` in the report-only run.
 
+## Revisions raised by the hand-off mechanism correction
+
+The specification's rationales described one mechanism for handing a retained
+owner to a binding's deferred return, a lock-free queue served by the binding's
+own worker, and did not say that it was an example. The corrected rationales
+say that it is one mechanism among those that meet the statements. The two
+statements did not change. Their revisions rose so that every tag and every
+claim that rests on them is read against the corrected text:
+
+| Earlier revision | Current revision |
+| --- | --- |
+| `req~ssr-release-lease-drop~4` | `req~ssr-release-lease-drop~5` |
+| `req~ssr-binding-frame-drop~7` | `req~ssr-binding-frame-drop~8` |
+
+- A binding that hands a retained owner over through such a queue met the
+  earlier revisions and meets these. Nothing is added for it.
+- The SDK's tags for `req~ssr-release-lease-drop` name revision 4. Each stays
+  as it is until its code or test has been reviewed against the current
+  statement, whose text is the same.
+- `req~ssr-binding-frame-drop` is covered in each binding's repository, which
+  this note does not inventory.
+
 ## Revisions raised by the owning-wire applicability correction
 
 The specification now admits ordinary owning values on a serialized route and

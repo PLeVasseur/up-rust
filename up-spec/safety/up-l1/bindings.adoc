@@ -79,7 +79,7 @@ A serialized route's declared allocation excuses no lazy first use on any path.
 [[req-ssr-binding-frame-drop]]
 == What a received frame's destructor may do
 
-[.specitem,oft-sid="req~ssr-binding-frame-drop~7",oft-title="What a received frame's destructor may do",oft-needs="impl,utest",oft-tags="SafetyBinding"]
+[.specitem,oft-sid="req~ssr-binding-frame-drop~8",oft-title="What a received frame's destructor may do",oft-needs="impl,utest",oft-tags="SafetyBinding"]
 --
 *No blocking.*
 Dropping a binding's received frame *MUST NOT* block, with the one exception that this item states for a declared allocation domain.
@@ -120,7 +120,7 @@ A named instance is never a waiver, and covers no other middleware panic path, n
 --
 
 [horizontal]
-ID:: `+req~ssr-binding-frame-drop~7+`
+ID:: `+req~ssr-binding-frame-drop~8+`
 ASIL:: B
 Allocated to:: each binding
 Verification:: test, heap-window, fault-injection, review
@@ -154,15 +154,18 @@ Returning a received frame is part of the application runtime path.
 So a middleware lock that can wait is still a blocking operation even when its uncontended release is brief.
 
 Where the middleware's own release can wait, the binding defers it.
-The drop pushes the retained owner onto a lock-free queue whose capacity covers every admitted retained owner, and the binding's deferred return performs the release as pending cleanup.
+The drop hands the retained owner over without waiting, and the binding's deferred return performs the release as pending cleanup.
+A lock-free queue whose capacity covers every admitted retained owner is one hand-off that meets this.
+The statement requires the outcome, and no particular mechanism.
+Whatever the mechanism, every clause of the statement and of xref:../seooc-up-rust/release.adoc#req-ssr-release-lease-drop[A lease gives back its slot and nothing else] binds it: the hand-off does not wait, it has room for every retained owner that the route admits, ownership passes exactly once, and the owner stays charged until its return completes.
 
 _Isolation._
 A worker of its own is not by itself the isolation that pending cleanup needs.
 While a deferred return waits for a lock, it holds nothing that a binding call, an arrival report or the return of an owner that does not need that lock needs, and one stalled return does not stop the others.
 
 _Not a second queue._
-That queue holds ownership awaiting return, never unread traffic, so it is not a second receive queue.
-A stalled worker shows as counted capacity pressure, never as a drop that waits.
+The hand-off holds ownership awaiting return, never unread traffic, so it is not a second receive queue.
+A stalled return shows as counted capacity pressure, never as a drop that waits.
 
 A measured lock delay is not an accepted wait.
 

@@ -245,14 +245,14 @@ can wait.
 - It acquires no heap memory and needs no call from the application to make progress.
 - It holds ownership awaiting destruction, not unread traffic, so it is not a second receive queue.
 - It is distinct from a binding's deferred return of native retained samples, which frees no heap.
-- The exact iceoryx2 port-lock anomaly keeps its bounded scope (`req~ssr-binding-iceoryx2-panic-paths~2`, the one named instance that `req~ssr-binding-frame-drop~7` allows on a frame's drop) and is never a general destructor exception.
+- The exact iceoryx2 port-lock anomaly keeps its bounded scope (`req~ssr-binding-iceoryx2-panic-paths~2`, the one named instance that `req~ssr-binding-frame-drop~8` allows on a frame's drop) and is never a general destructor exception.
 
 ### Waiting releases are pending cleanup
 
 Panic-free cleanup and waiting are separate questions. A release that waits
 behind its allocator's own lock cannot see a deadline from inside that call, and
 running it on another thread does not change that. On a route that requires
-non-waiting release, `req~ssr-release-lease-drop~4` therefore treats a handed-off
+non-waiting release, `req~ssr-release-lease-drop~5` therefore treats a handed-off
 destruction, and a binding's deferred return, as *pending cleanup*:
 
 - **No completion deadline.** The operation that ended the value reports its

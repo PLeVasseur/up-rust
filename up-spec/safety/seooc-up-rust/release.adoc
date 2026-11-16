@@ -63,7 +63,7 @@ Its drop follows <<req-ssr-release-lease-drop,A lease gives back its slot and no
 [[req-ssr-release-lease-drop]]
 == A lease gives back its slot and nothing else
 
-[.specitem,oft-sid="req~ssr-release-lease-drop~4",oft-title="A lease gives back its slot and nothing else",oft-needs="impl,utest",oft-tags="SafetyUpRustCore"]
+[.specitem,oft-sid="req~ssr-release-lease-drop~5",oft-title="A lease gives back its slot and nothing else",oft-needs="impl,utest",oft-tags="SafetyUpRustCore"]
 --
 *The drop.*
 Dropping a per-message lease (a received message, an RPC call, a request, a parked frame, a loan) *MUST* give its slot back to a fixed table exactly once:
@@ -159,7 +159,7 @@ A binding's frame destructor has the same duty (xref:../up-l1/bindings.adoc#req-
 --
 
 [horizontal]
-ID:: `+req~ssr-release-lease-drop~4+`
+ID:: `+req~ssr-release-lease-drop~5+`
 ASIL:: B
 Allocated to:: the element
 Verification:: heap-window, test, miri, review
@@ -214,9 +214,11 @@ It still carries ordinary owning routes, whose destructions run where their valu
 
 _Deferred return of a retained owner._
 Where an underlying transport's own release of a retained sample can wait, the return is deferred.
-The drop pushes the retained owner onto a lock-free queue sized for every admitted retained owner and returns, and the binding's own worker completes the release.
-That queue holds ownership awaiting return, not unread traffic.
-A stalled worker shows as counted capacity pressure, never as a drop that waits (xref:../up-l1/bindings.adoc#req-ssr-binding-frame-drop[What a received frame's destructor may do]).
+The drop hands the retained owner over without waiting and returns, and the binding's deferred return completes the release.
+A lock-free queue sized for every admitted retained owner, served by a worker of the binding, is one mechanism that meets this, and the statement requires no particular one.
+Whatever the mechanism, every clause of the statement binds it: hand-off capacity fixed at setup for every owner that the route can hold, ownership passed exactly once, the owner charged until its release completes, and isolation while that release waits.
+The hand-off holds ownership awaiting return, not unread traffic.
+A stalled return shows as counted capacity pressure, never as a drop that waits (xref:../up-l1/bindings.adoc#req-ssr-binding-frame-drop[What a received frame's destructor may do]).
 
 _Why no completion deadline._
 Moving a wait off the drop does not bound it.
