@@ -1,0 +1,530 @@
+= uP-L1 safety: The native wire
+:toc: preamble
+
+The key words "*MUST*", "*MUST NOT*", "*REQUIRED*", "*SHALL*", "*SHALL NOT*", "*SHOULD*", "*SHOULD NOT*", "*RECOMMENDED*", "*MAY*", and "*OPTIONAL*" in this document are to be interpreted as described in https://www.rfc-editor.org/info/bcp14[IETF BCP14 (RFC2119 & RFC8174)]
+
+Conventions, tags and status words: xref:../README.adoc[the safety area's README].
+This layer, and whom it binds: xref:README.adoc[safety at uP-L1].
+The duties of every wire: xref:wires.adoc[allocated to each wire].
+The other kind of wire: xref:serialized-wires.adoc[serialized wires, and the values they own].
+Both kinds, end to end and on either kind of transport: xref:payload-paths.adoc[payload paths, end to end].
+
+A native wire carries a value as it lies in memory.
+A sender initializes the value in the storage that carries it, and a receiver borrows it there.
+Nothing is encoded and nothing is decoded.
+
+This page holds:
+
+* the three requirements that say what a native payload type is, that it is read only under its exactly agreed layout, and that it is written and read in place.
+The native wire is the element's own, so they carry the tag `SafetyUpRustCore`;
+* the rules of other pages that a native route rests on, in the order in which a payload meets them (<<index>>);
+* what fails, where, and with which outcome (<<failures>>);
+* who establishes each property, and what does not establish it (<<boundary>>);
+* guidance on one way to establish a layout identity, which requires nothing (<<guidance>>);
+* what is not decided (<<open>>).
+
+== Whom this page binds
+
+* The three requirements bind the element.
+They bind whether or not an implementation meets them yet: a verification row says how that is shown, and is no condition for the item.
+* A rule that <<index>> lists binds whoever its own item binds: the element, each binding that carries native frames, or a deployment.
+* A binding carries a native route as it carries any other: it lends, or hands over, storage of the size and the alignment that the route declares (xref:bindings.adoc#req-ssr-binding-lent-storage[Lent storage is exclusive, disjoint and stable for as long as it is held]).
+It does not know the type.
+* A native route runs on any binding whose capability serves it, and it is tied to no middleware (xref:payload-paths.adoc#independent[a wire and a transport are chosen apart]).
+* An application that sends or reads a native type through safe code is asked to keep no rule of this page.
+Every rule here is the element's, a binding's, a deployment's, or the author's of an inventoried `+unsafe+` declaration.
+* A wire from elsewhere that hands out views of shared memory needs `+unsafe+` code of its own.
+It is a separate element, and its integrator qualifies that code (xref:deployment.adoc#aou-seooc-qualified-bindings-and-wires[Bindings and wires pass their contracts]).
+
+== Words
+
+* A *native type* is a type that <<req-ssr-native-type,A native payload type holds its whole value in one fixed layout>> admits.
+* A *native route* is a route whose wire carries a native type in place.
+* A *layout identity* is everything that decides how the bytes of a native type are read: which type it is, and its complete layout (<<req-ssr-native-agreement,A native type is read only under its exactly agreed layout, apart from the encoding identifier>>).
+* An *agreement* is a deployment's statement of the native types that its routes carry, with the layout identity of each and the payload encoding identifier of their frames.
+* A *view* is a typed, read-only borrow of the storage in which a frame arrived (xref:integrity.adoc#req-ssr-integrity-zero-copy[Zero-copy only from a writer at or above the reader]).
+
+[[req-ssr-native-type]]
+== A native payload type holds its whole value in one fixed layout
+
+[.specitem,oft-sid="req~ssr-native-type~1",oft-title="A native payload type holds its whole value in one fixed layout",oft-needs="impl,utest",oft-tags="SafetyUpRustCore"]
+--
+*What a native type is.*
+A type that a native route carries *MUST* hold its whole value in one contiguous block of memory.
+Its declaration fixes the size, the alignment and the place of every field for an ABI, as a C declaration does.
+
+*What it cannot hold.*
+A native type *MUST NOT* hold:
+
+* a pointer, a reference, an address or a handle of any kind;
+* a field with an invalid bit pattern (xref:integrity.adoc#req-ssr-integrity-any-bits[In-place types accept every bit pattern]);
+* a value that runs a destructor when it ends (xref:../seooc-up-rust/heap.adoc#req-ssr-heap-slot-types[Decoded values and their destructors]);
+* a field whose size or place depends on the value.
+
+*No handle, of any kind.*
+A handle is a value of a type that stands for a resource of an operating system, of a process or of a middleware: a descriptor, a socket, a mapping, a lock, a thread, a process, a loan or a frame.
+No such type is native, whether or not its values would mean something in another process.
+A number is carried as a number, and the element gives a received number no meaning as a resource.
+Carrying a resource from one process to another needs a contract of its own, and this item gives none (<<open>>).
+
+*The value is the payload.*
+A native payload is the value itself.
+The element *MUST NOT* send the address of a value, of a buffer or of a shared-memory segment as a payload, or in place of one.
+
+*Decided from the declaration.*
+Whether a type is native is decided from its declaration.
+It is never taken on the word of a wire or of an application.
+A type becomes native only in one of two ways:
+
+* through the element's derive, which *MUST* refuse a type that breaks this item;
+* through an `+unsafe+` declaration whose author states these obligations, and which sits in the inventory (xref:../seooc-up-rust/memory-safety.adoc#req-ssr-unsafe-inventory[Every `+unsafe+` is inventoried and justified]).
+
+Nothing else makes a type native: not a wire's description of it, and not a size and an alignment that happen to agree.
+
+*Size.*
+A native type's encoded size is exact.
+It is the type's size in memory, and its alignment is the type's alignment.
+--
+
+[horizontal]
+ID:: `+req~ssr-native-type~1+`
+ASIL:: B
+Allocated to:: the element
+Verification:: test, review, gate
+* *test*
+** The derive's refusal of each kind of field that this item forbids, one compile-fail case for each, with a control that compiles: a pointer, a reference, a type that stands for a resource, a field with an invalid bit pattern, a field with a destructor, and a field whose size depends on the value.
+** A type that the derive accepts, with its size, its alignment and the place of each field compared with its layout as built.
+* *review*: each `+unsafe+` declaration of a native type, against the obligations of this item.
+* *gate*: the inventory check, which refuses a new or changed declaration until it is reviewed.
+Status:: Draft
+
+*Rationale.*
+A view lets a reader use bytes that another process wrote as a value of a type.
+That is sound only for a type whose every property the reader can rely on without trusting the writer.
+
+_No address._
+An address means something only in the address space that produced it.
+A receiver that followed one would read memory that the sender never meant, and no check at the receiver can tell.
+So a native type holds none, and no address travels in place of a payload.
+
+_No handle._
+A handle names a resource that someone owns and someone closes.
+For a handle to be useful in another process, a contract would have to say how it is represented for an ABI, how long it stays valid, who owns the resource and who closes it, and what a peer's death does to it.
+No item states that contract, so no handle is native.
+A ban of some handles only would leave a type's author to judge which ones are safe, and a rule that a derive cannot check is a rule that safe code is trusted to keep.
+
+_No invalid bit pattern, no destructor._
+A faulty writer can leave any bytes in a frame.
+A type that accepts every bit pattern turns that into a wrong value, which end-to-end protection can catch, and never into undefined behaviour.
+A type with a destructor would run code when a slot is overwritten, which a native route does not allow.
+
+_A declaration by a safe wire is no proof._
+A wire is written in safe code, and the element's memory safety does not depend on it (xref:../seooc-up-rust/memory-safety.adoc#req-ssr-unsafe-wire-untrusted[No wire can break the element's memory safety]).
+So a wire cannot make a type native by describing it.
+Only the derive, which checks, or an inventoried `+unsafe+` declaration, which a reviewer checks, does.
+
+[[req-ssr-native-agreement]]
+== A native type is read only under its exactly agreed layout, apart from the encoding identifier
+
+[.specitem,oft-sid="req~ssr-native-agreement~1",oft-title="A native type is read only under its exactly agreed layout, apart from the encoding identifier",oft-needs="impl,utest",oft-tags="SafetyUpRustCore"]
+--
+*Layout identity.*
+The _layout identity_ of a native type is everything that decides how its bytes are read:
+
+* which type it is, by the name under which a deployment agrees it;
+* its complete layout: its size, its alignment, and the place, the size and the scalar type of every field.
+
+Two layout identities are the same only where every part is the same.
+The ABI that a layout holds for is agreed beside it, by the fingerprint (xref:peers.adoc#req-ssr-native-abi-agreed[A native representation never crosses an ABI]).
+
+*Agreed by the deployment.*
+The element *MUST* prepare a native route only for a type that the deployment has agreed for native carriage, with its layout identity.
+
+* The agreement is deployment data, and nothing changes it in runtime mode (xref:../seooc-up-rust/runtime-modes.adoc#req-ssr-mode-no-setup-at-runtime[Setup is impossible in runtime mode]).
+* The agreement names the payload encoding identifier that the frames of its routes carry.
+The deployment chooses that identifier as the registry's rules for originating one allow (xref:wires.adoc#encoding-identifier[the encoding identifier is the registry's]).
+
+*At setup.*
+The element *MUST* refuse a native route at setup, naming the route and the type, where:
+
+* the deployment has not agreed the type;
+* the layout identity of the type as it is built differs in any part from the agreed one;
+* the agreement states its layouts for another ABI than the one that the element is built for.
+
+*Before a view.*
+The element *MUST* give a reader a view of a frame only where it has established, before any reader can see the frame, that the frame comes from a writer whose layout identity for the route is the reader's, and whose ABI is the reader's (xref:integrity.adoc#req-ssr-integrity-checked-at-admission[In-place frames are checked once, at admission]).
+
+* Where that is not established for a frame, the element *MUST* refuse the frame and count it.
+* Where the element cannot establish it for a route at all, the element *MUST* refuse the route at setup, by name.
+
+*Complete, or not established.*
+A comparison establishes it only where it tells every two different layout identities apart.
+
+* The element compares the complete layout identities, or a value computed from each for which the element states, with its argument, that two different layout identities do not share it.
+* A value that is too short for such an argument establishes nothing.
+The element *MAY* use one to select which agreed layout a frame is compared with.
+It *MUST* still refuse a frame for which the complete comparison fails, or was not made.
+* An equal size and an equal alignment establish nothing.
+* An equal payload encoding identifier and an equal ABI fingerprint establish nothing about a layout.
+
+*Three identities.*
+The payload encoding identifier, the layout identity and the ABI fingerprint say three different things:
+
+* the identifier says that the payload is a native representation under this deployment's agreement;
+* the layout identity says which type, with which complete layout;
+* the fingerprint says for which ABI.
+
+The element *MUST NOT* take one of them for another.
+
+*What agreement does not show.*
+An established layout identity shows that a writer and a reader read the same bytes in the same way.
+It does not show that the bytes of a frame are the value that the writer meant: a faulty writer can write any bytes.
+That a view is sound whatever the bytes are rests on <<req-ssr-native-type,A native payload type holds its whole value in one fixed layout>>, on the element's own checks and on xref:integrity.adoc#req-ssr-integrity-zero-copy[Zero-copy only from a writer at or above the reader].
+
+*No mechanism is fixed.*
+This item fixes no table, no digest, no algorithm, no place where a layout identity is kept or carried, and no moment of comparison other than before a view.
+--
+
+[horizontal]
+ID:: `+req~ssr-native-agreement~1+`
+ASIL:: B
+Allocated to:: the element
+Verification:: test, fault-injection, review
+* *test*
+** At setup: a type that the deployment has not agreed; a type whose layout as built differs from the agreed one in each part in turn, which are its name, its size, its alignment, and one field's place, size and scalar type; and an agreement for another ABI. Each is refused by name.
+** A writer whose layout identity differs from the reader's in each of those parts in turn: no frame of it reaches a reader, and each is refused and counted, or the writer's side is refused.
+** Two layouts of equal size and equal alignment and different fields: a frame of the one never reaches a reader of the other.
+** Where the element uses a short value to select a layout: two different layouts that are built to share that value, with the frame still refused.
+** A frame with the route's layout identity and another payload encoding identifier: refused (xref:payload-paths.adoc#req-ssr-wire-encoding-checked[A wire is given only a payload of its own encoding]).
+* *fault-injection*: a peer that is built for another layout of a type, on real processes.
+* *review*: the comparison and its argument: that it covers every part of a layout identity, that it is made before a view for every writer whose frames a reader can get, and, where a computed value is compared, why two different layout identities do not share it.
+Status:: Draft
+
+*Rationale.*
+Two processes can read one block of memory as the same value only if they agree on its layout exactly.
+The payload encoding identifier cannot carry that agreement: the registry says that an identifier does not name a type or a layout (xref:../../basics/payload_encoding_registry.adoc#type-identity[the payload encoding registry, "Encoding Identity versus Type Identity"]).
+
+_Exactly, and refused otherwise._
+Two layouts can have the same size and the same alignment, and still place different fields at the same bytes.
+A reader that took one for the other would deliver wrong values on every frame, with no error.
+So the identity is the complete layout, and a view exists only where equality has been established.
+A route for which it cannot be established is refused, and is not carried on trust.
+
+_Why nothing shorter._
+A short value can be equal for two different layouts.
+It is useful for picking, among several agreed layouts, the one to compare with.
+It cannot stand in for the comparison, however rarely two layouts share it.
+
+_Why three identities._
+A deployment can carry many native types under one private-use identifier, one type can exist with two layouts, and one layout can be built for two ABIs.
+Each of the three values tells one of these apart, and none tells another's.
+
+_Why agreement is not validity._
+A faulty peer can write any bytes into a frame, whatever it and its reader agreed.
+What makes the view sound is that the type accepts every bit pattern, that the frame's shape was checked, and that the writer's level allows a view.
+What agreement adds is that correct peers read the same fields.
+
+_Why no mechanism._
+How a layout identity is written down, where it is kept, and when two sides compare it are an implementation's choices.
+This item requires the outcome, and <<guidance>> describes one way among others.
+
+[[req-ssr-native-in-place]]
+== A native payload is written and read where it is carried, or its route is refused
+
+[.specitem,oft-sid="req~ssr-native-in-place~1",oft-title="A native payload is written and read where it is carried, or its route is refused",oft-needs="impl,utest",oft-tags="SafetyUpRustCore"]
+--
+*Sending.*
+On a native route the element *MUST* have the sender initialize the value once, directly in the storage that carries it (xref:payload-paths.adoc#req-ssr-payload-written-once[A payload is written once, into the storage that carries it]):
+
+* nothing is read from a loan before it is written, and a loan can be sent only once the whole value has been written into it;
+* sending consumes the loan, and ends the sender's access to the storage (xref:bindings.adoc#req-ssr-binding-lent-storage[Lent storage is exclusive, disjoint and stable for as long as it is held]);
+* a loan whose lease is dropped unsent is given back, exactly once (xref:../seooc-up-rust/release.adoc#req-ssr-release-lease-drop[A lease gives back its slot and nothing else]);
+* no pending operation holds a loan (xref:../seooc-up-rust/build.adoc#req-ssr-async-seam[The asynchronous interface has a written, executor-independent contract]).
+
+*Receiving.*
+The element *MUST* give a receiver a checked, typed view of the storage in which the frame arrived, wherever xref:integrity.adoc#req-ssr-integrity-zero-copy[Zero-copy only from a writer at or above the reader] allows a view and <<req-ssr-native-agreement,A native type is read only under its exactly agreed layout, apart from the encoding identifier>> is established.
+
+* The view lives no longer than the lease of its frame.
+* Nothing can be written through it.
+* When that lease is dropped, the frame is returned, exactly once (xref:bindings.adoc#req-ssr-binding-frame-drop[What a received frame's destructor may do]).
+
+*A forgotten lease.*
+Safe code can forget the lease of a loan or of a frame, and then no transition ends it.
+The loan or the frame stays charged to its route for the life of the process.
+Its storage is never returned, and it is never lent or delivered again.
+Nothing gives it a second owner (xref:bindings.adoc#req-ssr-binding-lent-storage[Lent storage is exclusive, disjoint and stable for as long as it is held]).
+No rule of this item needs a destructor to run.
+
+*The only copies.*
+Between a sender and a receiver on one transport, a native payload is copied only in two cases, each chosen at setup and reported:
+
+* on the copy route, once, into storage that the reader owns (xref:integrity.adoc#req-ssr-integrity-zero-copy[Zero-copy only from a writer at or above the reader]);
+* on a handoff binding, once, at the hand-off.
+
+What a carrier copies when it forwards a native frame is stated with the carrier (xref:../up-l2/streamer.adoc#req-ssr-streamer-byte-identity[Carriage keeps the bytes]; xref:integrity.adoc#req-ssr-integrity-carrier-crossing[Upward carrier crossings copy once, or are refused]).
+
+*No substitute.*
+The element *MUST NOT* serve a native route by a serialized encoding, by a staged copy or by a conversion of the representation.
+
+* Where a native route cannot be prepared as this item states, setup *MUST* refuse it, naming the route and the capability that is missing (xref:payload-paths.adoc#req-ssr-payload-route-form[A route's form is fixed at setup, by what the route declares and never by a name]).
+* No operation in runtime mode changes a route from native to serialized, from a view to a copy, or from lent to handed off.
+
+*Resources.*
+The rules for a native route's heap, panics, work and waits are those that <<index>> lists, on every path: success, refusal, cancellation, a peer's failure and a frame's return.
+This item restates none of them.
+--
+
+[horizontal]
+ID:: `+req~ssr-native-in-place~1+`
+ASIL:: B
+Allocated to:: the element
+Verification:: test, heap-window, miri, review
+* *test*
+** A native route on a lending test double and on each real lending binding: the value is read at the address at which it arrived.
+** A loan that was not written whole, which cannot be sent, and a write after a send, which does not compile.
+** A loan whose lease is dropped unsent, and a frame whose lease is dropped: each goes back once, counted by the test double.
+** A loan and a frame whose leases safe code forgot: each is still charged at the end of the run, and its storage is never returned, and never lent or delivered again.
+** A native route on a binding that cannot serve it, refused at setup by name, with no serialized or copied route in its place.
+** Each route's report: lent or handed off, view or copy.
+* *heap-window*: native sending, receiving, refusal, cancellation and return.
+* *miri*: the view, on a lending test double, with a forgotten lease.
+* *review*: no path from a native route into an encoder, a decoder or a staging buffer, and no property of this item that holds only if a destructor runs.
+Status:: Draft
+
+*Rationale.*
+A native route exists so that a value crosses between processes with no copy, no allocation and no code that could fail on its contents.
+A deployment that chooses one relies on exactly that.
+
+_Written where it is carried._
+A value that was built elsewhere and then copied into the loan would still arrive.
+The copy would cost time in proportion to the payload, and a place to build the value first.
+So the sender writes into the loan, and that is the only write.
+
+_One rule for how a loan and a frame end._
+A loan ends once, when it is sent or given back, and a frame ends once, when it is returned.
+Forgetting a lease is safe code, and it runs no destructor.
+So a forgotten loan or frame has no end: it costs its route a slot for good, and nobody else may end it or use its storage.
+That is the rule of every lease of the element (xref:../seooc-up-rust/release.adoc#req-ssr-release-lease-drop[A lease gives back its slot and nothing else]; xref:../seooc-up-rust/heap.adoc#req-ssr-heap-slot-types[Decoded values and their destructors]), stated here for native storage.
+
+_No substitute._
+An implementation could keep a route working by falling back to a serialized encoding or to a copy.
+Values would still arrive, and a test of values would pass.
+The route would then allocate, or take longer, in exactly the case that the deployment did not plan for.
+So a native route that cannot be served is refused at setup, where it is seen, and nothing changes a route's form afterwards.
+
+_A handoff binding._
+A binding that cannot lend takes one copy at the hand-off, and the route's report says handed off.
+That is the same representation, copied once, and it is no serialization.
+A route that requires lending is refused there (xref:payload-paths.adoc#req-ssr-payload-route-form[A route's form is fixed at setup, by what the route declares and never by a name]).
+
+[[index]]
+== A native payload, step by step
+
+Each row names the rule that governs a step, and who acts.
+The items govern, and this table adds no duty.
+
+[cols="2,5,4,2",options="header"]
+|===
+| Step | What is required | Rule | Who acts
+
+| The type is declared
+| The whole value in one fixed layout, with no address, no handle of any kind, no invalid bit pattern and no destructor
+| <<req-ssr-native-type,A native payload type holds its whole value in one fixed layout>>; xref:integrity.adoc#req-ssr-integrity-any-bits[In-place types accept every bit pattern]
+| The element's derive, or the author of an inventoried `+unsafe+` declaration
+
+| The deployment agrees its native types
+| Each type with its layout identity, and the payload encoding identifier of the frames
+| <<req-ssr-native-agreement,A native type is read only under its exactly agreed layout, apart from the encoding identifier>>; xref:../seooc-up-rust/assumptions-of-use.adoc#aou-seooc-deployment-data[Deployment data is in range, verified and protected]
+| The deployment
+
+| The route is prepared
+| The type is agreed, and its layout as built is the agreed one, for the element's ABI. The wire's heap class is none in each direction that the route uses. The binding lends or hands over storage of the type's size and alignment, or refuses the route by name. Peers' ABI fingerprints are compared
+| <<req-ssr-native-agreement,A native type is read only under its exactly agreed layout, apart from the encoding identifier>>; xref:peers.adoc#req-ssr-native-abi-agreed[A native representation never crosses an ABI]; xref:../seooc-up-rust/heap.adoc#req-ssr-heap-declared[The heap class is declared, with no default], "Refusal at the transition"; xref:../seooc-up-rust/heap.adoc#req-ssr-heap-slot-types[Decoded values and their destructors], "Native routes"; xref:bindings.adoc#req-ssr-binding-qos-capability[A binding honors or refuses each declared setting]; xref:payload-paths.adoc#req-ssr-payload-route-form[A route's form is fixed at setup, by what the route declares and never by a name]
+| The element. Each binding, for its capability and for exchanging the fingerprint
+
+| The levels are compared
+| A view only from a writer at or above the reader. Otherwise the copy route, or a refusal at setup
+| xref:integrity.adoc#req-ssr-integrity-declared[Each transport declares one integrity level]; xref:integrity.adoc#req-ssr-integrity-zero-copy[Zero-copy only from a writer at or above the reader]; xref:bindings.adoc#req-ssr-binding-integrity-level[A lending binding records and reports the writer's level]; xref:bindings.adoc#req-ssr-binding-shared-state[A lending binding says which way its ports write shared state]
+| The element. Each lending binding, for what it reports
+
+| A value is sent
+| Initialized once in the storage that carries it, whole before it is sent. The loan is consumed by the send, or given back when its lease is dropped, exactly once. No pending operation holds one. A loan whose lease safe code forgot stays charged, and is never lent again
+| <<req-ssr-native-in-place,A native payload is written and read where it is carried, or its route is refused>>; xref:payload-paths.adoc#req-ssr-payload-written-once[A payload is written once, into the storage that carries it]; xref:bindings.adoc#req-ssr-binding-lent-storage[Lent storage is exclusive, disjoint and stable for as long as it is held]; xref:../seooc-up-rust/release.adoc#req-ssr-release-lease-drop[A lease gives back its slot and nothing else]; xref:../seooc-up-rust/build.adoc#req-ssr-async-seam[The asynchronous interface has a written, executor-independent contract]
+| The element and the binding
+
+| A frame arrives
+| Before any reader sees it: its payload encoding identifier is the wire's, its size and its alignment are the route's, and its writer's layout identity is established to be the reader's. A frame that fails any of these is refused and counted
+| xref:payload-paths.adoc#req-ssr-wire-encoding-checked[A wire is given only a payload of its own encoding]; <<req-ssr-native-agreement,A native type is read only under its exactly agreed layout, apart from the encoding identifier>>; xref:integrity.adoc#req-ssr-integrity-checked-at-admission[In-place frames are checked once, at admission]
+| The element
+
+| A value is read
+| Through a checked, typed, read-only view that lives no longer than the frame's lease
+| <<req-ssr-native-in-place,A native payload is written and read where it is carried, or its route is refused>>; xref:integrity.adoc#req-ssr-integrity-zero-copy[Zero-copy only from a writer at or above the reader]
+| The element
+
+| The frame is returned
+| When its lease is dropped, the storage goes back, exactly once. The drop does not block, and it frees no heap. A frame whose lease safe code forgot is never returned, stays charged, and its storage is never handed out again
+| xref:bindings.adoc#req-ssr-binding-frame-drop[What a received frame's destructor may do]; xref:../seooc-up-rust/release.adoc#req-ssr-release-lease-drop[A lease gives back its slot and nothing else]; xref:bindings.adoc#req-ssr-binding-lent-storage[Lent storage is exclusive, disjoint and stable for as long as it is held]
+| The binding and the element
+
+| On every path
+| No heap memory is acquired or released, nothing panics, and work and waits are bounded: on success, refusal, cancellation, a peer's failure and a frame's return
+| xref:../seooc-up-rust/heap.adoc#req-ssr-heap-none[No heap in runtime mode]; xref:bindings.adoc#req-ssr-binding-no-heap[Binding code allocates nothing in runtime mode]; xref:../seooc-up-rust/errors.adoc#req-ssr-refuse-before-heap[Refuse before touching the heap]; xref:../seooc-up-rust/errors.adoc#req-ssr-refuse-no-panic[No panic on runtime paths]; xref:../seooc-up-rust/bounded-work.adoc#req-ssr-bound-work[Work per call is bounded by setup data]; xref:../seooc-up-rust/bounded-work.adoc#req-ssr-bound-wait[Every wait is bounded]; xref:peers.adoc#req-ssr-peer-failure-normal[Peer failure is normal input]
+| The element and the binding
+
+| The route is reported
+| Lent or handed off, view or copy, and its heap class, with a permit by name where the middleware allocates
+| xref:../seooc-up-rust/errors.adoc#req-ssr-error-route-report[Each route reports what it got]; xref:integrity.adoc#req-ssr-integrity-zero-copy[Zero-copy only from a writer at or above the reader]
+| The element
+|===
+
+[[failures]]
+== What fails, where, and with which outcome
+
+[cols="4,2,4,3",options="header"]
+|===
+| What | Where | Outcome | Rule
+
+| A type that the deployment has not agreed, a layout as built that differs from the agreed one in any part, or an agreement for another ABI
+| Setup
+| The element refuses the route by name
+| <<req-ssr-native-agreement,A native type is read only under its exactly agreed layout, apart from the encoding identifier>>
+
+| A route for which the element cannot establish that a writer's layout identity is the reader's
+| Setup
+| The element refuses the route by name
+| <<req-ssr-native-agreement,A native type is read only under its exactly agreed layout, apart from the encoding identifier>>
+
+| A peer whose ABI fingerprint differs, or that records none
+| Setup
+| The route is refused. The refusal names both ABIs, and the copying route as the fix
+| xref:peers.adoc#req-ssr-native-abi-agreed[A native representation never crosses an ABI]
+
+| A binding that cannot lend or hand over storage of the type's size and alignment
+| Route preparation
+| The binding refuses the route by name, and no serialized or copied route takes its place
+| xref:bindings.adoc#req-ssr-binding-qos-capability[A binding honors or refuses each declared setting]; <<req-ssr-native-in-place,A native payload is written and read where it is carried, or its route is refused>>
+
+| A wire or a binding that declares allocation in a direction that the route uses
+| The transition
+| The element refuses the route by name
+| xref:../seooc-up-rust/heap.adoc#req-ssr-heap-declared[The heap class is declared, with no default]
+
+| A writer below the reader's level, or at an unknown level
+| Setup
+| The copy route, or a refusal where the reader demands a view
+| xref:integrity.adoc#req-ssr-integrity-zero-copy[Zero-copy only from a writer at or above the reader]
+
+| No loan is free
+| Runtime
+| A returned error, with no heap use
+| xref:../seooc-up-rust/errors.adoc#req-ssr-refuse-before-heap[Refuse before touching the heap]
+
+| A frame whose writer's layout identity is not established to be the reader's, a layout of the same size and the same alignment included
+| Admission
+| Refused and counted. No reader sees it
+| <<req-ssr-native-agreement,A native type is read only under its exactly agreed layout, apart from the encoding identifier>>; xref:integrity.adoc#req-ssr-integrity-checked-at-admission[In-place frames are checked once, at admission]
+
+| A frame with another size, alignment or payload encoding identifier than the route's
+| Admission
+| Refused and counted. No reader sees it
+| xref:integrity.adoc#req-ssr-integrity-checked-at-admission[In-place frames are checked once, at admission]; xref:payload-paths.adoc#req-ssr-wire-encoding-checked[A wire is given only a payload of its own encoding]
+
+| A peer that dies while a view of its frame is held
+| Runtime
+| The view stays valid for as long as the frame is held. Survivors see the loss as silence, a counted miss or a reported loss
+| xref:bindings.adoc#req-ssr-binding-lent-storage[Lent storage is exclusive, disjoint and stable for as long as it is held]; xref:peers.adoc#req-ssr-peer-failure-normal[Peer failure is normal input]
+
+| A faulty peer that writes wrong contents with the right shape
+| Not detected by the wire
+| A wrong value, and never undefined behaviour. End-to-end protection catches it where a route needs that
+| xref:integrity.adoc#req-ssr-integrity-any-bits[In-place types accept every bit pattern]; xref:../seooc-up-rust/assumptions-of-use.adoc#aou-seooc-e2e-protection[The integrator decides which routes need end-to-end protection]
+
+| A write that races a view
+| Not made defined by anything on this page
+| Excluded by the conditions under which a view is allowed, and by what a deployment provides
+| xref:integrity.adoc#req-ssr-integrity-zero-copy[Zero-copy only from a writer at or above the reader], "When a view is allowed"; xref:deployment.adoc#aou-seooc-peer-access[Only authorized processes reach the transport, and peers are faulty, never malicious], "Zero-copy routes"
+|===
+
+[[boundary]]
+== Who establishes what
+
+A native route rests on properties that safe code cannot check.
+The table says who states each one, what establishes it, and what does not.
+
+[cols="3,2,3,3",options="header"]
+|===
+| Property | Who states it | What establishes it | What does not establish it
+
+| The type holds its whole value, with no address, no handle, no invalid bit pattern and no destructor
+| The derive, or the author of an `+unsafe+` declaration
+| The derive's refusal of every other type, or a source-level review of the inventoried declaration (<<req-ssr-native-type,A native payload type holds its whole value in one fixed layout>>)
+| A wire's description of the type. A size and an alignment that agree. An application's care
+
+| A writer and a reader have the same layout identity
+| The deployment's agreement, and each side's type as it is built
+| A comparison that tells every two different layout identities apart, made before any view (<<req-ssr-native-agreement,A native type is read only under its exactly agreed layout, apart from the encoding identifier>>)
+| A short value that two layouts can share. An equal size and alignment. A matching payload encoding identifier
+
+| Both sides have the same ABI
+| The fingerprint
+| Its exchange at setup (xref:peers.adoc#req-ssr-native-abi-agreed[A native representation never crosses an ABI])
+| The name of an operating system or of a toolchain
+
+| Lent storage is exclusive, disjoint, stable, and of the declared size and alignment, for as long as it is held
+| The binding, through the `+unsafe+` interface of the binding contract
+| A source-level argument at each site that makes the claim, under the binding's inventory (xref:bindings.adoc#req-ssr-binding-lent-storage[Lent storage is exclusive, disjoint and stable for as long as it is held]; xref:../seooc-up-rust/memory-safety.adoc#req-ssr-unsafe-binding-untrusted[No binding written in safe code can break the element's memory safety])
+| A capability value. A passed test, which shows the cases that it ran. A destructor that is expected to run
+
+| The bytes of a frame are a value of the type
+| Nobody
+| A type that accepts every bit pattern, the admission check and the writer's level together (xref:integrity.adoc#req-ssr-integrity-any-bits[In-place types accept every bit pattern]; xref:integrity.adoc#req-ssr-integrity-checked-at-admission[In-place frames are checked once, at admission]; xref:integrity.adoc#req-ssr-integrity-zero-copy[Zero-copy only from a writer at or above the reader])
+| An established layout identity
+
+| No heap use, no panic and bounded waits on the route's paths
+| The wire and the binding, each by its declared class
+| The heap window and the contract suites, on the deployment's target (xref:wires.adoc#req-ssr-wire-heap-claim-tested[A heap-free claim passes the wire contract]; xref:deployment.adoc#aou-seooc-qualified-bindings-and-wires[Bindings and wires pass their contracts])
+| The declaration itself
+|===
+
+[[guidance]]
+== Guidance: one way to establish a layout identity
+
+This section is guidance.
+It requires nothing, and an implementation that does none of it can meet every item of this page.
+
+* *A table fixed when a binary is built.*
+A deployment can write its agreement as a table that lists each native type with a canonical description of its layout.
+A table that is built in can be reviewed as one file, and nothing at run time changes it.
+* *Deriving the layout again at setup.*
+The element can compute the description of a type's layout from the type as it is compiled, and compare it with the table.
+That finds a table that no longer matches the code before any frame.
+* *Comparing between the two sides.*
+Each side of a route can record its complete description, or a digest of it that comes with a collision argument, where the other side reads it when the route is prepared.
+The ABI fingerprint is exchanged in the same way.
+* *A short value on each frame.*
+A few bytes taken from a layout's description can tell the frames of several agreed types apart at little cost.
+Such a value only selects.
+The complete comparison still has to have been made, for the writer or for the frame, before a view (<<req-ssr-native-agreement,A native type is read only under its exactly agreed layout, apart from the encoding identifier>>, "Complete, or not established").
+
+[[open]]
+== What is not decided
+
+* *A handle that is valid in more than one process.*
+No handle is native (<<req-ssr-native-type,A native payload type holds its whole value in one fixed layout>>).
+Whether a native type may one day carry a resource to another process is not decided.
+It would need an item that states how the handle is represented for an ABI, how long it is valid, who owns the resource and who closes it, what a peer's death does to it, and how the derive and an `+unsafe+` declaration admit it.
+* *A type of size zero.*
+Whether a type with no bytes can be a native type, and what its frame then carries, is not decided.
+A deployment does not rely on one.
+* *Unions.*
+Whether a union can be a native type is not decided.
+A deployment does not rely on one.
+* *Padding.*
+What the padding bytes of a native type hold when it is sent, and whether the derive refuses a type that has padding, is not decided.
+* *Another language.*
+A layout identity is stated here for types of the up-rust element.
+Whether a type of another language can be agreed, and how its layout identity is then formed, is not decided.
+Until it is, this page agrees a layout only between binaries that use the element.
+
+Each of these is the element's maintainers' to decide, and none of them withholds a duty above.

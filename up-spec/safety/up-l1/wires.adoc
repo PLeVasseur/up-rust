@@ -12,6 +12,7 @@ A wire that is not written against the element's wire contract is not bound by t
 
 These duties name no wire format, and each wire meets them for its own format.
 What depends on the kind of payload a wire carries is listed in <<one-wire>>.
+Each kind of wire has a page of its own: xref:native-wire.adoc[the native wire] and xref:serialized-wires.adoc[serialized wires, and the values they own].
 
 [[req-ssr-wire-no-panic]]
 == Encoding and decoding never panic
@@ -132,12 +133,42 @@ A check of the decoding call alone would let a value that frees memory only when
 So the check covers replacement and destruction too.
 The same check lets a heap-free route admit a type whose destructor uses no heap (xref:../seooc-up-rust/heap.adoc#req-ssr-heap-slot-types[Decoded values and their destructors]).
 
+[[req-ssr-wire-readme]]
+== A wire's README says what its format is and what it cannot detect
+
+[.specitem,oft-sid="req~ssr-wire-readme~1",oft-title="A wire's README says what its format is and what it cannot detect",oft-needs="uman",oft-tags="SafetyWire"]
+--
+Each wire's README *MUST* state:
+
+* its format: the payload encoding identifier that it writes and reads, and the specification of that format at a fixed version or, for a native representation, the agreement that its types are carried under;
+* what agrees the type of a payload between a sender and a receiver, and what the wire checks of it;
+* what its format cannot detect, such as an input that was cut to another valid encoding, or a field whose meaning changed;
+* its heap class for each direction, with the policy of each direction that allocates, an unknown stated as unknown (xref:../seooc-up-rust/heap.adoc#req-ssr-heap-declared[The heap class is declared, with no default]);
+* its largest encoding, or that it has none.
+
+The README *MUST* agree with what the wire declares to the element.
+--
+
+[horizontal]
+ID:: `+req~ssr-wire-readme~1+`
+ASIL:: B
+Allocated to:: each wire
+Verification:: review (the README against the wire's declarations and against the format's specification), test (the declared identifier, sizes and heap classes compared with the README's, by the wire contract suite)
+Status:: Draft
+
+*Rationale.*
+An integrator chooses a wire for a message, and decides which routes need end-to-end protection (xref:../seooc-up-rust/assumptions-of-use.adoc#aou-seooc-e2e-protection[The integrator decides which routes need end-to-end protection]).
+Both choices need to know what the wire's format can and cannot show, and what the wire costs.
+A binding's README already says what its middleware cannot guarantee (xref:bindings.adoc#req-ssr-binding-readme[The README says what the middleware cannot guarantee]).
+This item asks the same of a wire.
+
 [[one-wire]]
 == What depends on the payload a wire carries
 
-No requirement of this area is allocated to the native wire alone or to the Protobuf wire alone.
-The two duties above bind every wire.
-The rules that depend on what a wire carries are stated with their owner, and this table lists them.
+The three duties above bind every wire.
+The rules that depend on what a wire carries are stated with their owner: for a native representation on xref:native-wire.adoc[the native wire's page], and for a serialized encoding on xref:serialized-wires.adoc[the page of serialized wires].
+No requirement is allocated to the Protobuf wire alone: Protobuf is one profile of the rules for serialized wires (xref:serialized-wires.adoc#protobuf[one profile: Protobuf]).
+This table lists the rules.
 It adds no duty, and each item governs.
 
 [cols="2,5,3",options="header"]
@@ -146,6 +177,9 @@ It adds no duty, and each item governs.
 
 | A native representation, which a reader borrows in place
 a|
+* xref:native-wire.adoc#req-ssr-native-type[A native payload type holds its whole value in one fixed layout]
+* xref:native-wire.adoc#req-ssr-native-agreement[A native type is read only under its exactly agreed layout, apart from the encoding identifier]
+* xref:native-wire.adoc#req-ssr-native-in-place[A native payload is written and read where it is carried, or its route is refused]
 * xref:peers.adoc#req-ssr-native-abi-agreed[A native representation never crosses an ABI]
 * xref:integrity.adoc#req-ssr-integrity-zero-copy[Zero-copy only from a writer at or above the reader], "When a view is allowed"
 * xref:integrity.adoc#req-ssr-integrity-any-bits[In-place types accept every bit pattern]
@@ -158,6 +192,8 @@ a|
 
 | A serialized encoding, decoded into a value that owns what it holds, as Protobuf messages usually are
 a|
+* xref:serialized-wires.adoc#req-ssr-wire-serialized-format[A serialized wire reads and writes one stated format]
+* xref:serialized-wires.adoc#req-ssr-wire-encode-decode[A serialized wire encodes once into the storage it is given, and decodes into a value that its slot owns]
 * xref:../seooc-up-rust/heap.adoc#req-ssr-heap-declared[The heap class is declared, with no default], "What a class covers"
 * xref:../seooc-up-rust/heap.adoc#req-ssr-heap-guarantees[A stronger resource guarantee is required by name], "Ordinary ownership"
 * xref:../seooc-up-rust/heap.adoc#req-ssr-heap-slot-types[Decoded values and their destructors], "Routes that declare allocation"
@@ -198,5 +234,6 @@ A route's heap class, and each stronger guarantee that a route requires, are dec
 * *Reading and carrying.*
 A component that reads a payload first determines its encoding, and rejects a payload whose encoding it cannot determine or does not support.
 A component that only carries a payload keeps it, whatever its identifier (xref:../../basics/payload_encoding_registry.adoc#acceptance[the payload encoding registry, "Carrying a Payload versus Reading It"]).
+For the element, the check before a wire reads is xref:payload-paths.adoc#req-ssr-wire-encoding-checked[A wire is given only a payload of its own encoding].
 
 Where the items of this area meet these rules is in xref:../../contract-generations.adoc#transition[the transition table].

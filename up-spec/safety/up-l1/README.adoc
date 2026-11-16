@@ -23,13 +23,13 @@ It does not say that every transport must meet it (xref:../README.adoc#filing[fi
 The items here were written for the up-rust SEooC (xref:../seooc-up-rust/README.adoc[its README]) and for the transports and wires that work with it.
 They are not protocol requirements of uP-L1, and they bind no transport or SDK of another language.
 * *Bound by tag.*
-Each requirement binds the part its tag names (xref:../README.adoc#tags[the tags]): every binding written against the element's contract (`SafetyBinding`, `SafetyBindingPull`), every wire written against it (`SafetyWire`), one binding alone, where it has a tag of its own (<<one-binding>>), or the element itself (`SafetyUpRustCore`).
+Each requirement binds the part its tag names (xref:../README.adoc#tags[the tags]): every binding written against the element's contract (`SafetyBinding`, `SafetyBindingPull`), every wire written against it (`SafetyWire`), every serialized wire (`SafetyWireSerialized`), one binding alone, where it has a tag of its own (<<one-binding>>), or the element itself (`SafetyUpRustCore`).
 * *Assumptions of use.*
 The five assumptions of use filed here are that element's: three about every transport, and two about one transport, iceoryx2.
 They bind an integrator that claims its safety-assurance scope (xref:../seooc-up-rust/assumptions-of-use.adoc#who[who the assumptions bind]).
 * *The protocol chapter stays in force for whoever follows it.*
 No item here lifts a requirement of uP-L1, its security requirements included, from an implementation that follows it.
-Where an item here differs from that chapter, or stands beside it with no stated relation, xref:../../contract-generations.adoc#transition[the transition table] says so: for an empty payload, for a native representation, for the iceoryx2 version and for the interface between an SDK and a transport.
+Where an item here differs from that chapter, or stands beside it with no stated relation, xref:../../contract-generations.adoc#transition[the transition table] says so: for an empty payload, for a native representation, for the iceoryx2 version, for a transport on LoLa and for the interface between an SDK and a transport.
 
 == Words used in this part
 
@@ -44,21 +44,26 @@ It is filed with this layer, beside the transports that carry what it encodes.
 A *handoff* binding hands the element a private copy (xref:bindings.adoc#req-ssr-binding-integrity-level[A lending binding records and reports the writer's level]).
 * A *zero-copy* route gives a reader a view into shared memory.
 The *copy route* gives it a validated copy in storage the reader owns (xref:integrity.adoc#req-ssr-integrity-zero-copy[Zero-copy only from a writer at or above the reader]).
-* A binding with *two-way shared state* is one whose ports write shared state both ways (xref:integrity.adoc#req-ssr-integrity-zero-copy[Zero-copy only from a writer at or above the reader]).
+* A binding with *two-way shared state* is one whose ports write shared state both ways (xref:integrity.adoc#req-ssr-integrity-zero-copy[Zero-copy only from a writer at or above the reader]; xref:bindings.adoc#req-ssr-binding-shared-state[A lending binding says which way its ports write shared state]).
+* A *native* route carries a value as it lies in memory, and a *serialized* route carries an encoding of it in one stated format (xref:payload-paths.adoc#paths[the two kinds of route, side by side]).
 
 == Files
 
-30 items in 6 files.
+47 items in 10 files.
 
 [cols="3,1,3,4",options="header"]
 |===
 | File | Items | Tags | What it holds
 
-| xref:bindings.adoc[Allocated to each binding] | 11 | `SafetyBinding`, `SafetyBindingPull` | The duties of the binding contract, which every binding meets
-| xref:wires.adoc[Allocated to each wire] | 2 | `SafetyWire` | The duties of every wire, and a list of the rules that depend on the payload a wire carries
+| xref:bindings.adoc[Allocated to each binding] | 13 | `SafetyBinding`, `SafetyBindingPull` | The duties of the binding contract, which every binding meets, and the two that every lending binding meets for the storage it lends and for its shared state
+| xref:wires.adoc[Allocated to each wire] | 3 | `SafetyWire` | The duties of every wire, and a list of the rules that depend on the payload a wire carries
+| xref:native-wire.adoc[The native wire] | 3 | `SafetyUpRustCore` | What a native payload type is, that it is read only under its exactly agreed layout, apart from the encoding identifier, and that it is written and read in place, with the whole native contract step by step
+| xref:serialized-wires.adoc[Serialized wires, and the values they own] | 2 | `SafetyWireSerialized` | A serialized wire's format, its sizing, encoding and decoding, what owning means, allocation and each stronger guarantee, and one profile, Protobuf
+| xref:payload-paths.adoc[Payload paths, end to end] | 3 | `SafetyUpRustCore` | One write of a payload, the admission of a route or its refusal for a named reason, a route's form fixed at setup and the encoding check before a wire reads, with both kinds of route on both kinds of binding side by side
 | xref:integrity.adoc[Integrity levels] | 5 | `SafetyUpRustCore` | One level per transport, the zero-copy rule, the copy route and in-place types
 | xref:peers.adoc[Peers of a transport] | 4 | `SafetyUpRustCore`, `SafetyBinding` | A peer's failure, staleness and admission, and the ABI of a native representation
 | xref:iceoryx2.adoc[iceoryx2] | 5 | `SafetyIceoryx2`, `SafetyManual` | What is specific to one transport, iceoryx2: three requirements of its binding, two assumptions of a deployment on it, and what the general rules meet on it
+| xref:lola.adoc[LoLa] | 6 | `SafetyLola` | What is specific to one transport, LoLa: six requirements of its binding, what the general rules ask on it, and ten matters on which evidence or a decision is still missing
 | xref:deployment.adoc[What a deployment provides for its transports] | 3 | `SafetyManual` | Access to transport resources, each transport's integrity level, and the use of bindings and wires that pass their contracts
 |===
 
@@ -73,7 +78,7 @@ What only one binding must meet, and what only a deployment on it provides, is s
 | Binding | Items of its own | What that means
 
 | iceoryx2 | Three requirements (tag `SafetyIceoryx2`) and two assumptions of use, in xref:iceoryx2.adoc[the iceoryx2 page] | Its allowed panic paths, its static data segments and its service depth are stated there, with the limits, known anomalies and known failures that a deployment on it accepts or sees listed, and its separation of integrity levels
-| LoLa | None at this revision | The LoLa binding is bound by the duties of every binding, and a deployment on it by the assumptions about every transport. No item of this area names an allowed panic path, a permit or an accepted limit for it. So it has no allowed panic path (xref:bindings.adoc#req-ssr-binding-no-panic[No panic on any peer input]), and its permits, limits and known anomalies are those that its README states (xref:bindings.adoc#req-ssr-binding-readme[The README says what the middleware cannot guarantee])
+| LoLa | Six requirements (tag `SafetyLola`) and no assumption of use, in xref:lola.adoc[the LoLa page] | Both kinds of route, its counts and its storage, the boundary to LoLa's C++ code, the life of a subscription and of what LoLa is given, and LoLa's own assumptions of use are stated there, with what the general rules ask on LoLa. The LoLa binding is bound by the duties of every binding as well, and a deployment on it by the assumptions about every transport. No item of this area names an allowed panic path, a permit or an accepted limit for it. So it has no allowed panic path (xref:bindings.adoc#req-ssr-binding-no-panic[No panic on any peer input]), and its permits, limits and known anomalies are those that its README states (xref:bindings.adoc#req-ssr-binding-readme[The README says what the middleware cannot guarantee])
 |===
 
 * *No item of its own is not an exemption.*
@@ -97,10 +102,15 @@ The item governs, and this table adds no duty.
 | A retained frame whose release in the underlying transport can wait: handed to the binding's deferred return without waiting, and from then on pending cleanup, charged and isolated | Each binding, for the hand-off, and for keeping its calls and reports from waiting behind a pending release. The element, which refuses at setup a route whose pending cleanup it cannot establish to be isolated | xref:bindings.adoc#req-ssr-binding-frame-drop[What a received frame's destructor may do] and xref:bindings.adoc#req-ssr-binding-bounded[A binding bounds its own work and its waits] in xref:bindings.adoc[`bindings.adoc`]; xref:../seooc-up-rust/release.adoc#req-ssr-release-lease-drop[A lease gives back its slot and nothing else] in xref:../seooc-up-rust/release.adoc[the element's release rules]
 | Peer identity, QoS capability and the writer's integrity level, reported to the element truthfully | Each binding | xref:bindings.adoc[`bindings.adoc`]
 | What the middleware cannot guarantee, stated for integrators | Each binding, in its README | xref:bindings.adoc#req-ssr-binding-readme[The README says what the middleware cannot guarantee]
-| Encoding and decoding without a panic, and a heap-free claim that is tested | Each wire | xref:wires.adoc[`wires.adoc`]
+| Encoding and decoding without a panic, a heap-free claim that is tested, and a README that says what the format is and what it cannot detect | Each wire | xref:wires.adoc[`wires.adoc`]
+| A serialized payload: one stated format, one encoding into the storage that carries it, and a decoded value that its slot owns | Each serialized wire | xref:serialized-wires.adoc[`serialized-wires.adoc`]
+| A native payload: its type, its exactly agreed layout, and writing and reading it in place | The element | xref:native-wire.adoc[`native-wire.adoc`]
+| One write of a payload, the admission of a declared route or its refusal for a named reason, a route's form fixed at setup, and the encoding check before a wire reads | The element | xref:payload-paths.adoc[`payload-paths.adoc`]
+| Lent storage that is exclusive, disjoint and stable, and a statement of which way a binding's ports write shared state | Each lending binding | xref:bindings.adoc#req-ssr-binding-lent-storage[Lent storage is exclusive, disjoint and stable for as long as it is held] and xref:bindings.adoc#req-ssr-binding-shared-state[A lending binding says which way its ports write shared state] in xref:bindings.adoc[`bindings.adoc`]
 | One integrity level per transport; a view only from a writer at or above the reader; otherwise the copy route or a refusal at setup | The element | xref:integrity.adoc[`integrity.adoc`]
 | A peer's failure, restart, staleness and admission handled as normal input; no native representation across an ABI | The element, and each binding that carries native frames | xref:peers.adoc[`peers.adoc`]
 | What one transport adds: its binding's named panic paths, static data segments and service depth | The iceoryx2 binding | xref:iceoryx2.adoc#req-ssr-binding-iceoryx2-panic-paths[iceoryx2's allowed panic paths are named, bounded and disclosed]; xref:iceoryx2.adoc#req-ssr-binding-iceoryx2-static-segments[On iceoryx2, every publisher has a static data segment] and xref:iceoryx2.adoc#req-ssr-binding-depth-from-deployment[iceoryx2's service depth comes from deployment data] in xref:iceoryx2.adoc[`iceoryx2.adoc`]
+| What another transport adds: both kinds of route, its declared counts, the boundary to LoLa's C++ code, the life of a subscription and of what LoLa is given, and LoLa's own assumptions of use | The LoLa binding | The six items of xref:lola.adoc[`lola.adoc`]
 | What a deployment on one transport adds: levels kept apart, and that binding's limits accepted | The integrator that deploys on iceoryx2 | xref:iceoryx2.adoc#aou-seooc-iceoryx2-level-separation[On iceoryx2, each integrity level has its own processes, domain and OS user] and xref:iceoryx2.adoc#aou-seooc-iceoryx2-limits[A deployment on iceoryx2 accepts that binding's limits, and no known failure as one] in xref:iceoryx2.adoc[`iceoryx2.adoc`]
 | Access to every transport's resources restricted to the processes deployed to use them; a zero-copy writer that never writes a sample it has sent | The integrator | xref:deployment.adoc#aou-seooc-peer-access[Only authorized processes reach the transport, and peers are faulty, never malicious] in xref:deployment.adoc[`deployment.adoc`]
 | Only bindings and wires that pass their contracts on the target | The integrator | xref:deployment.adoc#aou-seooc-qualified-bindings-and-wires[Bindings and wires pass their contracts] in xref:deployment.adoc[`deployment.adoc`]

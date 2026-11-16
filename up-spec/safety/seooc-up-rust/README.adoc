@@ -346,7 +346,7 @@ A test names what it verifies with OFT's own coverage tag, and the method after 
 [[files]]
 == Files
 
-155 items in 23 files: 99 in the 15 files of this directory, and 56 in the 8 files of the two layer parts.
+172 items in 27 files: 99 in the 15 files of this directory, and 73 in the 12 files of the two layer parts.
 
 === In this directory
 
@@ -379,11 +379,15 @@ These are in xref:../up-l1/README.adoc[the transport layer's part].
 |===
 | File | Items | Tags
 
-| xref:../up-l1/bindings.adoc[Allocated to each binding] | 11 | `SafetyBinding`, `SafetyBindingPull`
-| xref:../up-l1/wires.adoc[Allocated to each wire] | 2 | `SafetyWire`
+| xref:../up-l1/bindings.adoc[Allocated to each binding] | 13 | `SafetyBinding`, `SafetyBindingPull`
+| xref:../up-l1/wires.adoc[Allocated to each wire] | 3 | `SafetyWire`
+| xref:../up-l1/native-wire.adoc[The native wire] | 3 | `SafetyUpRustCore`
+| xref:../up-l1/serialized-wires.adoc[Serialized wires, and the values they own] | 2 | `SafetyWireSerialized`
+| xref:../up-l1/payload-paths.adoc[Payload paths, end to end] | 3 | `SafetyUpRustCore`
 | xref:../up-l1/integrity.adoc[Integrity levels] | 5 | `SafetyUpRustCore`
 | xref:../up-l1/peers.adoc[Peers of a transport] | 4 | `SafetyUpRustCore`, `SafetyBinding`
 | xref:../up-l1/iceoryx2.adoc[iceoryx2] | 5 | `SafetyIceoryx2`, `SafetyManual`
+| xref:../up-l1/lola.adoc[LoLa] | 6 | `SafetyLola`
 | xref:../up-l1/deployment.adoc[What a deployment provides for its transports] | 3 | `SafetyManual`
 |===
 

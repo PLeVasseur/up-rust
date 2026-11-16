@@ -201,6 +201,12 @@ for identity and presence. The chapters govern.
 | `up-spec/up-l1/someip.adoc`, the `payload_encoding_id` row of its attribute table | No field: the service-interface contract defines the encoding | Outgoing, the message's identifier is checked against the contract. Incoming, the binding sets the contract's identifier, or `0` where the contract defines the encoding without one. A payload whose encoding cannot be established, or does not match, is rejected. Nothing defaults |
 | `up-spec/up-l1/iceoryx2.adoc`, `dsn~up-transport-iceoryx2-attributes-mapping~1` | The serialized `UAttributes` in the user header | How the redesigned iceoryx2 binding relates to this chapter is not stated |
 
+LoLa has no protocol chapter, so this table has no row for it. What the LoLa
+binding owes is in `up-spec/safety/up-l1/lola.adoc`. What a typed reader checks
+before a wire reads is `req~ssr-wire-encoding-checked~1`, in
+`up-spec/safety/up-l1/payload-paths.adoc`, and the two kinds of wire are in
+`native-wire.adoc` and `serialized-wires.adoc` beside it.
+
 No implementation of these mappings was inspected for this page. Their state is
 unknown, which is not the same as failing.
 

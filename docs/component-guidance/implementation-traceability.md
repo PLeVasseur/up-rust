@@ -193,6 +193,51 @@ This item is new, with text that an earlier revision above held:
 - A tag there that names an earlier revision stays as it is until its code or
   test has been reviewed against the current statement.
 
+## Items added by the LoLa and wire contracts
+
+The specification gained seventeen items and four pages under `up-spec/safety/up-l1/`: `lola.adoc`, `native-wire.adoc`, `serialized-wires.adoc` and `payload-paths.adoc`.
+They state the intended contract.
+No source file of this repository carries a tag for any of them at this revision, so none is claimed here as implemented or as tested, and no revision of an existing item was raised.
+Each is conformance work for the repository that its tag names.
+
+| Item | Page | Tag | Covered in |
+| --- | --- | --- | --- |
+| `req~ssr-native-type~1` | `up-l1/native-wire.adoc` | `SafetyUpRustCore` | this repository |
+| `req~ssr-native-agreement~1` | `up-l1/native-wire.adoc` | `SafetyUpRustCore` | this repository |
+| `req~ssr-native-in-place~1` | `up-l1/native-wire.adoc` | `SafetyUpRustCore` | this repository |
+| `req~ssr-payload-written-once~1` | `up-l1/payload-paths.adoc` | `SafetyUpRustCore` | this repository |
+| `req~ssr-payload-route-form~1` | `up-l1/payload-paths.adoc` | `SafetyUpRustCore` | this repository |
+| `req~ssr-wire-encoding-checked~1` | `up-l1/payload-paths.adoc` | `SafetyUpRustCore` | this repository |
+| `req~ssr-binding-lent-storage~1` | `up-l1/bindings.adoc` | `SafetyBinding` | each lending binding's repository |
+| `req~ssr-binding-shared-state~1` | `up-l1/bindings.adoc` | `SafetyBinding` | each lending binding's repository |
+| `req~ssr-wire-readme~1` | `up-l1/wires.adoc` | `SafetyWire` | each wire's repository, in its README |
+| `req~ssr-wire-serialized-format~1` | `up-l1/serialized-wires.adoc` | `SafetyWireSerialized` | each serialized wire's repository |
+| `req~ssr-wire-encode-decode~1` | `up-l1/serialized-wires.adoc` | `SafetyWireSerialized` | each serialized wire's repository |
+| `req~ssr-binding-lola-profiles~1` | `up-l1/lola.adoc` | `SafetyLola` | `up-transport-lola-rust` |
+| `req~ssr-binding-lola-capacity~1` | `up-l1/lola.adoc` | `SafetyLola` | `up-transport-lola-rust` |
+| `req~ssr-binding-lola-foreign-boundary~1` | `up-l1/lola.adoc` | `SafetyLola` | `up-transport-lola-rust` |
+| `req~ssr-binding-lola-sample-lifetime~1` | `up-l1/lola.adoc` | `SafetyLola` | `up-transport-lola-rust` |
+| `req~ssr-binding-lola-callbacks~1` | `up-l1/lola.adoc` | `SafetyLola` | `up-transport-lola-rust` |
+| `req~ssr-binding-lola-assumptions~1` | `up-l1/lola.adoc` | `SafetyLola` | `up-transport-lola-rust` |
+
+Two tags are new: `SafetyLola`, for the LoLa binding alone, and `SafetyWireSerialized`, for every serialized wire.
+
+For the six items that this repository covers, the code at this revision has mechanisms of the kind that some of them ask for.
+That is a pointer for whoever does the conformance work.
+It is not a claim that the code meets an item, and no check of this note compares the two.
+
+- `req~ssr-native-type~1`: the `StablePayload` bound that `borrow_checked` and `NativeWire` require (`core/src/payload/loan.rs`, `core/src/wire/native.rs`).
+- `req~ssr-native-agreement~1`: the item requires an outcome and fixes no mechanism. The code has one candidate mechanism: `NativeAgreement`, a table fixed at build time; `NativeWire::new`, which derives a type's layout description again at setup and refuses a wrong target, an unlisted type and a mismatch (`core/src/payload/agreement.rs`, `core/src/wire/native.rs`); and a short token in `WirePayloadIdentity`. Under the item a short token only selects a layout, and establishes none. Whether a complete comparison is made for every writer before a view is conformance work that this note does not answer.
+- `req~ssr-native-in-place~1`: the in-place wire mode and `borrow_checked` (`core/src/wire/mod.rs`, `core/src/payload/loan.rs`).
+- `req~ssr-payload-written-once~1`: `Wire::encode` writes through a `PayloadWriter` over transport storage (`core/src/wire/mod.rs`).
+- `req~ssr-payload-route-form~1` and `req~ssr-wire-encoding-checked~1`: no mechanism is pointed to here.
+
+For the LoLa binding no item is claimed as met, and no route's heap class is claimed.
+A native route on LoLa is declared with the class none only with evidence for the binding and for LoLa. Until then the binding declares a permit, which needs its waiver.
+
+Until tags and tests exist, a trace run that reports every `SafetyUpRustCore` item is expected to list these six as uncovered.
+That expectation was not run for this note.
+
 ## Names that the specification describes instead
 
 The specification's statements describe these interfaces by what they do. The

@@ -28,6 +28,7 @@ Each obligation is stated in one place, and tables, indexes and safety manuals s
 | This page | The conventions, and the shared concepts and fault models, each with its scope (<<concepts>>) | xref:../basics/README.adoc[The basics]
 | xref:up-l1/README.adoc[`up-l1/`] | What a transport and a wire guarantee, how shared memory is lent or copied between integrity levels, and what a deployment provides for its transports | xref:../up-l1/README.adoc[The transport layer (uP-L1)]
 | xref:up-l1/iceoryx2.adoc[`up-l1/iceoryx2.adoc`] | What is specific to one transport, iceoryx2 | xref:../up-l1/iceoryx2.adoc[The iceoryx2 transport]
+| xref:up-l1/lola.adoc[`up-l1/lola.adoc`] | What is specific to one transport, LoLa | None: the protocol specification has no LoLa chapter
 | xref:up-l2/README.adoc[`up-l2/`] | RPC and message identity, and forwarding by the Streamer | xref:../up-l2/README.adoc[The communication layer (uP-L2)] and xref:../up-l2/dispatchers/README.adoc[its dispatchers]
 | xref:seooc-up-rust/README.adoc[`seooc-up-rust/`] | One SDK element: its scope and boundary, its claims and capability ceiling, its modes, memory, build and platform rules, and the index of its assumptions of use | None: an SDK element is not a protocol layer
 |===
@@ -353,8 +354,10 @@ The repository that holds that part covers it.
 | `SafetyStreamer` | the Streamer's data plane and its binary | `up-streamer-rust` | `up-l2/`, `seooc-up-rust/`
 | `SafetyBinding` | every binding: the duties of the binding contract | each binding's repository | `up-l1/`
 | `SafetyBindingPull` | with `SafetyBinding`, a duty of pull-form bindings only | each pull-form binding's repository | `up-l1/`
-| `SafetyIceoryx2` | the iceoryx2 binding alone. A binding or a wire gets a tag of its own with the first item that is allocated to it alone, and at this revision only this binding has one | `up-transport-iceoryx2-rust` | `up-l1/iceoryx2.adoc`
+| `SafetyIceoryx2` | the iceoryx2 binding alone. A binding or a wire gets a tag of its own with the first item that is allocated to it alone | `up-transport-iceoryx2-rust` | `up-l1/iceoryx2.adoc`
+| `SafetyLola` | the LoLa binding alone | `up-transport-lola-rust` | `up-l1/lola.adoc`
 | `SafetyWire` | every wire | each wire's repository | `up-l1/`
+| `SafetyWireSerialized` | every serialized wire: the duties that only a wire with an encoding has | each serialized wire's repository | `up-l1/serialized-wires.adoc`
 | `SafetyE2eWire` | the end-to-end protection wire | `up-rust`, its `up-wire-e2e` member | `seooc-up-rust/`
 | `SafetyManual` | every assumption of use | the repository that owns the assumption, in its safety manual: `up-rust` for nineteen, `up-streamer-rust` for the Streamer's two, and `up-transport-iceoryx2-rust` for the iceoryx2 binding's two | `seooc-up-rust/`, `up-l1/`, `up-l2/`
 |===

@@ -408,3 +408,145 @@ Status:: Draft
 *Rationale.*
 A binding's `+unsafe+` code runs on the same runtime paths as the element's.
 So its obligations need the same record and the same gate (xref:../seooc-up-rust/memory-safety.adoc#req-ssr-unsafe-inventory[Every `+unsafe+` is inventoried and justified]).
+
+[[req-ssr-binding-lent-storage]]
+== Lent storage is exclusive, disjoint and stable for as long as it is held
+
+[.specitem,oft-sid="req~ssr-binding-lent-storage~1",oft-title="Lent storage is exclusive, disjoint and stable for as long as it is held",oft-needs="impl,utest",oft-tags="SafetyBinding"]
+--
+*Scope.*
+This item binds a lending binding, whatever wire a route uses.
+
+*Held.*
+A loan is _held_ from the moment the binding lends it until it is sent or given back.
+A received frame is _held_ from the moment the binding hands it to the element until it is returned.
+A loan or a frame whose lease safe code forgot is never sent, given back or returned, so it is held for the life of the process.
+
+*A transmit loan.*
+For as long as a loan is held, the binding *MUST* keep its storage:
+
+* live, mapped and at one address;
+* valid for writes of at least the size that the route declares, in one piece, at an address with the alignment that the route declares;
+* apart from every other held loan and from every held frame of this process;
+* handed out in this process through that loan alone, with no second way for safe code to read or write it.
+
+The binding promises nothing about the bytes of a fresh loan.
+
+*A received frame.*
+For as long as a frame is held, the binding *MUST* keep its storage:
+
+* live, mapped and at one address;
+* valid for reads of the frame's whole length, in one piece, at an address with the route's alignment;
+* unwritten by the binding and by its middleware in this process.
+
+What another process writes there is not the binding's to prevent.
+xref:integrity.adoc#req-ssr-integrity-zero-copy[Zero-copy only from a writer at or above the reader] and xref:deployment.adoc#aou-seooc-peer-access[Only authorized processes reach the transport, and peers are faulty, never malicious] cover it.
+
+*How a loan and a frame end.*
+Three transitions end a held loan or frame.
+Each one that happens *MUST* end it exactly once:
+
+* a send consumes the loan, so that no safe call can write its storage afterwards;
+* the drop of an unsent loan's lease gives the loan back (xref:../seooc-up-rust/release.adoc#req-ssr-release-lease-drop[A lease gives back its slot and nothing else]);
+* the drop of a frame's lease returns the frame to the middleware, through the frame's destructor or the deferred return that completes it (<<req-ssr-binding-frame-drop,What a received frame's destructor may do>>).
+
+The binding *MUST NOT* end a loan or a frame in any other way.
+
+*A forgotten lease.*
+None of these transitions happens for a loan or a frame whose lease safe code forgot, and nothing requires one to.
+The binding cannot tell a forgotten lease from one that is still in use, and it treats both alike.
+The binding *MUST* keep such a loan or frame charged to its route for the life of the process.
+The binding *MUST NOT* lend or deliver its storage again, give it a second owner, or return or destroy it by another path.
+No property of this item depends on a destructor running.
+
+*Fixed before the transition.*
+The binding *MUST* have sized and mapped the storage that it lends from before its transition returns.
+Where its middleware can enlarge, move or map again such storage while a process is in runtime mode, the binding *MUST* turn that off, or refuse in route preparation every route that would use it.
+
+*An empty payload.*
+A loan or a frame of zero bytes still has an address that is not null and has the route's alignment.
+
+*How the claim is made.*
+A binding states these properties to the element only through the `+unsafe+` interface of the binding contract, and each site that makes the claim is in its inventory (xref:../seooc-up-rust/memory-safety.adoc#req-ssr-unsafe-binding-untrusted[No binding written in safe code can break the element's memory safety]; <<req-ssr-binding-unsafe-inventory,A binding this project ships inventories its own `+unsafe+`>>).
+A declaration, a capability value or a passed test does not establish them.
+
+*A binding that cannot.*
+A binding that cannot keep these properties for a route *MUST* refuse to lend for it, in route preparation, naming the route and the property.
+It *MUST NOT* present storage that it copies into or out of as lent (<<req-ssr-binding-qos-capability,A binding honors or refuses each declared setting>>).
+--
+
+[horizontal]
+ID:: `+req~ssr-binding-lent-storage~1+`
+ASIL:: B
+Allocated to:: each lending binding
+Verification:: test, miri, review
+* *test*
+** The binding contract suite: every held loan and every held frame at its own address, apart from every other, with the declared size and alignment.
+** A loan sent twice, and a write after a send, neither of which compiles.
+** A loan whose lease is dropped unsent, and a frame whose lease is dropped: the storage goes back once, counted by the suite.
+** A loan and a frame whose leases safe code forgot: each is still charged at the end of the run, its storage is never lent or delivered again, and nothing is returned or destroyed for it.
+** A loan and a frame of zero bytes, each with an aligned address that is not null.
+** A middleware that could enlarge or map again its storage in runtime mode: turned off, or the route refused.
+* *miri*: the lending test double, under the same suite, forgotten leases included.
+* *review*: each site of the binding that makes the claim, at source level; each path that ends a loan or returns a frame; and that no property rests on a destructor running.
+Status:: Draft
+
+*Rationale.*
+The element builds a writer on a loan and a typed view on a received frame.
+Both are sound only if the storage is what the binding says: there, alone, and unmoved.
+Safe code cannot check that, so the element takes it only through an `+unsafe+` interface with stated obligations (xref:../seooc-up-rust/memory-safety.adoc#req-ssr-unsafe-binding-untrusted[No binding written in safe code can break the element's memory safety]).
+This item states those obligations once, for every lending binding.
+
+_Once, or never._
+A loan or a frame ends once, by the send, the give-back or the return.
+Forgetting a lease is safe code, and it runs no destructor.
+So a forgotten loan or frame never ends: its route pays a slot for good, and the storage is never handed out again.
+The element's own leases follow the same rule (xref:../seooc-up-rust/release.adoc#req-ssr-release-lease-drop[A lease gives back its slot and nothing else]; xref:../seooc-up-rust/heap.adoc#req-ssr-heap-slot-types[Decoded values and their destructors]).
+
+_A test is not the argument._
+A suite shows the loans that it took.
+Whether two loans can ever overlap, or a frame's storage can go back twice, is a property of every path of the binding, and it is argued at the source.
+So the verification asks for both, and neither a capability value nor a passed suite stands in for the argument.
+
+_Fixed before the transition._
+Nothing is set up in runtime mode (xref:../seooc-up-rust/runtime-modes.adoc#req-ssr-mode-no-setup-at-runtime[Setup is impossible in runtime mode]).
+A middleware that grew or moved its storage there would do set-up work on a runtime path, and could move a frame under a view.
+One binding meets this with a check of its own that this area names.
+The duty is every lending binding's, and the means are each binding's.
+
+[[req-ssr-binding-shared-state]]
+== A lending binding says which way its ports write shared state
+
+[.specitem,oft-sid="req~ssr-binding-shared-state~1",oft-title="A lending binding says which way its ports write shared state",oft-needs="impl,utest",oft-tags="SafetyBinding"]
+--
+*The statement.*
+A lending binding *MUST* state, for each kind of port that it opens, whether that port writes shared state that another process of the same service reads.
+
+* A binding on which a receiving port writes such state is a binding whose ports write shared state both ways.
+* The binding states it to the element at setup, and its README repeats it (<<req-ssr-binding-readme,The README says what the middleware cannot guarantee>>).
+
+*Where it is not established.*
+Where it is not established which way a kind of port writes, the binding *MUST* state that its ports write both ways.
+
+*What rests on it.*
+The element applies the refusals for two-way shared state from this statement (xref:integrity.adoc#req-ssr-integrity-zero-copy[Zero-copy only from a writer at or above the reader]), and a deployment applies its rule for such a binding from it (xref:deployment.adoc#aou-seooc-peer-access[Only authorized processes reach the transport, and peers are faulty, never malicious]).
+--
+
+[horizontal]
+ID:: `+req~ssr-binding-shared-state~1+`
+ASIL:: B
+Allocated to:: each lending binding
+Verification:: test, review
+* *test*
+** The binding contract suite: a binding that states two-way shared state has a port of another level refused at setup, on every port kind.
+** A binding that states one-way shared state: a receiving port of the suite's double that writes shared state fails the suite.
+* *review*: the middleware's shared state, by kind of port, at the revision that the binding is built against.
+Status:: Draft
+
+*Rationale.*
+A process that writes shared state which a higher process reads can corrupt that process, whatever the payload rules say.
+The rules for that case exist, and they bind "a binding whose ports write shared state both ways".
+Only the binding knows whether its middleware is one, and until this item no duty made a binding say so.
+
+An answer that is not established is given as the unfavourable one, as an unknown writer's level is (<<req-ssr-binding-integrity-level,A lending binding records and reports the writer's level>>).
+So a binding never gains a cross-level view by leaving the question open.
