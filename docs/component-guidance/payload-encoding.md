@@ -60,9 +60,10 @@ no reason to drop a frame on a route that does not read it.
   `Envelope::parse` refuses a frame whose payload and identifier disagree on
   presence, and the native whole-frame envelope writes a presence flag apart
   from the payload's length (`core/src/transport/envelope.rs`).
-- A present empty payload that reaches a wire's decoding is an error under
-  `req~ssr-wire-no-panic~1` as that item stands, even where the wire's format
-  gives a value an empty encoding. That item is about decoding. It does not
+- A present empty payload that reaches a wire's decoding is decoded or refused
+  as the wire's format decides (`req~ssr-wire-no-panic~2`): decoded to the
+  value that the format makes it the encoding of, and refused where the format
+  gives the type no empty encoding. That item is about decoding. It does not
   make a carrier drop or change an empty payload.
 
 ## An identifier is not a type or a layout

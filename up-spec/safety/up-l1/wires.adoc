@@ -16,20 +16,43 @@ What depends on the kind of payload a wire carries is listed in <<one-wire>>.
 [[req-ssr-wire-no-panic]]
 == Encoding and decoding never panic
 
-[.specitem,oft-sid="req~ssr-wire-no-panic~1",oft-title="Encoding and decoding never panic",oft-needs="impl,utest",oft-tags="SafetyWire"]
+[.specitem,oft-sid="req~ssr-wire-no-panic~2",oft-title="Encoding and decoding never panic",oft-needs="impl,utest",oft-tags="SafetyWire"]
 --
+*No panic.*
 A wire's encode and decode *MUST NOT* panic on any input.
 
-A malformed, truncated, oversized or empty frame *MUST* be an error.
+*Invalid input.*
+Decoding *MUST* return an error for every input that is not, in the wire's format, an encoding of a value of the type it decodes.
+An input that is malformed, that ends inside an element of its encoding, or that carries bytes its format does not accept is such an input.
+An input that the format makes an encoding of some value of the type is not such an input, however it came to be: a shorter or a longer input than a sender wrote can be one.
+
+*An empty input.*
+The wire's format decides whether an empty input is an encoding, and of which value.
+Nothing else does: not the wire's own encoder, and not a default.
+
+* Where the format gives the type no empty encoding, an empty input *MUST* be an error.
+* Where the format makes the empty input the encoding of a value of the type, decoding it *MUST* yield that value, whether or not the wire's own encoder writes that value as empty.
+* A wire *MUST NOT* accept an empty input for any other reason.
+
+*A frame's envelope is not a wire's input.*
+A wire decodes a payload's bytes.
+A frame's header and envelope are the element's to parse and to refuse (xref:../seooc-up-rust/errors.adoc#req-ssr-refuse-no-panic[No panic on runtime paths]), and a frame that lacks them is malformed whatever its wire.
 --
 
 [horizontal]
-ID:: `+req~ssr-wire-no-panic~1+`
+ID:: `+req~ssr-wire-no-panic~2+`
 ASIL:: B
 Allocated to:: each wire
 Verification:: test, fault-injection
 * *test*
-** The wire contract suite's truncated, oversized and empty frames.
+** Every expected result of the wire contract suite is stated from the wire's format and from the type decoded, before the wire runs. None is taken from the wire under test, its encoder included, or from the length of a sample's encoding.
+** Invalid inputs that the format defines, each refused: a malformed one, one that ends inside an element of its encoding, and one that carries bytes the format does not accept.
+** Where the format makes a shorter or a longer input an encoding of another value of the type, no case expects that input to be refused.
+** An empty input for a type to which the format gives no empty encoding: refused.
+** An empty input for a type whose format makes it the encoding of a value: decoded, and the result compared with the value that the case states from the format.
+** No case requires a wire's encoder to write one particular encoding of a value where the format allows several.
+** Controls on the suite itself, each a wire that the suite must fail: one whose decoder returns a default for an empty input that the format does not define; one whose decoder refuses an empty input that the format defines; one whose decoder and encoder agree with each other against the format.
+** A control that the suite must pass: a wire that decodes the empty input which its format defines, and whose encoder writes the same value with a non-empty encoding that the format also allows.
 ** A property test over arbitrary byte strings, run under `+catch_unwind+` on the unwinding diagnostic profile and inside the heap guard.
 Status:: Draft
 
@@ -37,9 +60,30 @@ Status:: Draft
 Decoding reads bytes a peer sent.
 So a panic on bad input would let any faulty peer end the receiving process (xref:../seooc-up-rust/errors.adoc#req-ssr-refuse-no-panic[No panic on runtime paths]).
 
-The statement makes every empty frame an error.
-A format can give a value an empty encoding, and the protocol treats a zero-length payload as a present payload (xref:../../contract-generations.adoc#transition[the transition table]).
-So the statement is open on that point, and a revision that follows the wire's format is proposed.
+_What is valid is the format's._
+Which inputs are encodings is defined by the wire's format, which a message names through its payload encoding (xref:../../basics/payload_encoding_registry.adoc[the payload encoding registry]).
+This item restates no format.
+It adds the safety constraint: whatever the format does not define is an error, and nothing is a panic.
+
+A format can make a shortened input, or an input with further elements, an encoding of another value.
+No decoder can refuse such an input, so this item asks for no refusal of it.
+Whoever needs such a change detected supplies end-to-end protection (xref:../seooc-up-rust/assumptions-of-use.adoc#aou-seooc-e2e-protection[The integrator decides which routes need end-to-end protection]).
+
+_Empty inputs._
+An empty input is not malformed by being empty.
+
+* The protocol treats an explicitly set zero-length payload as a present payload (xref:../../basics/umessage.adoc[UMessage]).
+* Its error model has an operation that returns no data answer with an empty message, which its consumer receives as an empty payload (xref:../../basics/error_model.adoc[the error model]).
+* A format with a fixed layout of non-zero size has no empty encoding, and a wire of such a format refuses an empty input.
+
+So the rule follows the format.
+An empty input is refused wherever it is not an encoding, and it is never accepted as a default.
+
+_Why each expected result comes from the format._
+A check that asks a wire's own encoder what its decoder should accept shows only that the two agree.
+Two faults that agree pass such a check, and a correct wire whose encoder writes another encoding of the same value fails it.
+A check that accepts a refusal of every empty input passes a decoder that refuses the empty encoding its format defines.
+So the suite states each expected result from the format, and its controls show that it tells these wires apart.
 
 [[req-ssr-wire-heap-claim-tested]]
 == A heap-free claim passes the wire contract

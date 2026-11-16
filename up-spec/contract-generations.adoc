@@ -206,9 +206,9 @@ It is a comparison of documents, and it claims nothing about whether two impleme
 
 | An empty payload
 | xref:basics/umessage.adoc[UMessage]: an explicitly set zero-length payload is a present payload. xref:basics/error_model.adoc[The error model]: an operation that returns no data answers with an empty message, which its consumer receives as an empty payload. xref:basics/payload_encoding_registry.adoc[The payload encoding registry] names each encoding's format.
-| xref:safety/up-l1/wires.adoc#req-ssr-wire-no-panic[Encoding and decoding never panic]: a wire's decoding returns an error for "a malformed, truncated, oversized or empty frame".
-| Open.
-| As written, the successor rule makes every empty input an error, and with it the empty encoding that a format can give a value. A revision that follows the wire's format is proposed. Affected: every wire, and the wire contract suite.
+| xref:safety/up-l1/wires.adoc#req-ssr-wire-no-panic[Encoding and decoding never panic]: a wire's decoding returns an error for every input that is not an encoding in the wire's format, and the format alone decides whether an empty input is one, and of which value.
+| Retained and refined.
+| The presence of a payload and the format of an encoding are the existing contract's. The successor adds that nothing is a panic, that whatever the format does not define is an error, and that an empty input which the format defines is decoded to the value it encodes. Affected: every wire, and the wire contract suite.
 
 | The iceoryx2 version of an iceoryx2 transport
 | xref:up-l1/iceoryx2.adoc[iceoryx2], "iceoryx2 Version": a transport that implements that chapter uses version `0.6.1` of the iceoryx2 protocol.

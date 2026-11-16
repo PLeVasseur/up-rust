@@ -508,6 +508,16 @@ the specification now states the rule without them.
 **`req~ssr-wire-no-panic~1`** — Encoding and decoding never panic (after the statement)
 
 - The wire trait states the same rule: `encode` and `decode` must not panic on any input, and a malformed frame is `Err` (`core/src/wire/mod.rs`).
+- The specification has raised this item to `req~ssr-wire-no-panic~2`: an input
+  that is not an encoding in the wire's format is an error, and the format alone
+  decides whether an empty input is an encoding, and of which value. The
+  sentence above was written against revision 1. No SDK code or test tag names
+  this item.
+- Revision 2's verification states every expected result from the format and
+  from the type decoded, never from the wire under test. The wire contract
+  suite (`src/test_util/contract.rs`) is to be read against that before any tag
+  cites revision 2: a check that takes its expectation from a sample's own
+  encoding, or from that encoding's length, does not meet it.
 
 ### `up-l2/interaction.adoc`
 
