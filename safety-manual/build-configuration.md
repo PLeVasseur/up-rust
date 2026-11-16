@@ -16,6 +16,7 @@ that the current SDK implements them.
 - Revision 5 judges the binary by its claimed safety dependency graph and exact toolchain scope.
 - It leaves code outside that graph, such as the up-rust compatibility facade, async integrations and the classic Streamer, to ordinary use.
 - A crate is in or out of the graph by what it actually brings into the image, not by its name.
+- The statement was reworded in place: it describes the element's ASIL build check instead of naming an SDK macro, and no longer states the present minimum compiler version. Its meaning is unchanged.
 
 Read [manual status](README.md) before using this entry. A documentary coverage
 link neither validates the deployment nor closes an implementation requirement.
@@ -26,9 +27,9 @@ link neither validates the deployment nor closes an implementation requirement.
 > The integrator *SHALL* build the ASIL binary so that, at run time, it depends only on its claimed safety dependency graph: `+up-rust-core+`, the ASIL Streamer crate where it is used, the bindings, wires and platform backends its configuration qualifies, and any optional layer its configuration admits with its own evidence (`+req~ssr-crate-core-only-binary~2+`).
 >
 > * *Nothing from outside the graph.* It *SHALL NOT* link code from outside that graph into the binary's image. A crate belongs to the graph by what it actually brings into the image, with its features and target-selected paths, never by its name: a compatibility re-export is judged by the dependencies it brings, and code outside the graph, such as the `+up-rust+` compatibility facade, an async integration or the classic Streamer, keeps its ordinary use, which claims no assurance scope.
-> * *Toolchain.* It *SHALL* use the exact compiler release, target, library modules and options that its configuration records for the release, with the supplier's qualification evidence for that scope where the claim needs it; the minimum supported Rust version, 1.88 today, and the availability of an API are not that evidence.
+> * *Toolchain.* It *SHALL* use the exact compiler release, target, library modules and options that its configuration records for the release, with the supplier's qualification evidence for that scope where the claim needs it; the minimum supported Rust version and the availability of an API are not that evidence.
 > * *Profile.* It *SHALL* use the ASIL profile: `+panic = "abort"+` and `+overflow-checks = true+`.
-> * *Strict mode.* In strict mode's locked build, `+--cfg up_rust_strict+` in the integrator's build configuration allows only the Enforce state, and refuses a crate or route that the declared graph does not admit, naming its replacement (`+req~ssr-strict-lock~2+`). Strict mode also refuses an ASIL process built with unwinding, and `+assert_asil_build!()+` gives any ASIL binary the Streamer binary's check; its report lists overflow checks as a checklist item.
+> * *Strict mode.* In strict mode's locked build, `+--cfg up_rust_strict+` in the integrator's build configuration allows only the Enforce state, and refuses a crate or route that the declared graph does not admit, naming its replacement (`+req~ssr-strict-lock~2+`). Strict mode also refuses an ASIL process built with unwinding, and the element's ASIL build check, placed in an application's own binary, gives any ASIL binary the Streamer binary's check; its report lists overflow checks as a checklist item.
 <!-- aou-statement:end -->
 
 ## Integrator actions

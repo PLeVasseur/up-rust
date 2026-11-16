@@ -8,7 +8,7 @@ owes.
 
 | Responsibility | Owner | Anchors |
 | --- | --- | --- |
-| The application layer's role operations: publish, subscribe, notify, listen, invoke and serve, owned and native | SDK application-layer maintainers | Product R27 to R30; `req~ssr-mode-no-traffic-before-runtime~1`, `req~ssr-mode-no-setup-at-runtime~1`, `req~ssr-mode-entry-admission~1`, `req~ssr-qos-no-downgrade~2`, `req~ssr-error-fixed-size~1`, `req~ssr-error-no-silent-loss~3`, `req~ssr-error-route-report~2`, `req~ssr-async-seam~2` |
+| The application layer's role operations: publish, subscribe, notify, listen, invoke and serve, owned and native | SDK application-layer maintainers | Product R27 to R30; `req~ssr-mode-no-traffic-before-runtime~1`, `req~ssr-mode-no-setup-at-runtime~1`, `req~ssr-mode-entry-admission~1`, `req~ssr-qos-no-downgrade~2`, `req~ssr-error-fixed-size~1`, `req~ssr-error-no-silent-loss~3`, `req~ssr-error-route-report~2`, `req~ssr-async-seam~3` |
 | Reacting to what the element reports: errors, counters, silence | The integrator's application | `aou~seooc-application-reacts~4` |
 
 The second is an assumption of use; it cannot stand in for the first. An

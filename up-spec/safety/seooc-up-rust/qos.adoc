@@ -90,7 +90,7 @@ On a serialized or owned route whose declared heap class admits allocation, the 
 * a refused newest frame;
 * a waiting sender's frame whose bound ran out.
 
-That ownership is released exactly once as `+req~ssr-heap-slot-types~2+` and `+req~ssr-binding-frame-drop~4+` state.
+That ownership is released exactly once as `+req~ssr-heap-slot-types~3+` and `+req~ssr-binding-frame-drop~5+` state.
 That release is the only heap use an overflow causes, and it releases no route, table or other runtime resource.
 
 *Discards the binding cannot observe.*
@@ -278,7 +278,7 @@ The statement discloses the early refusal this can cause.
 
 Expiry is judged at the element's checks, when a frame reaches its route and when it is taken.
 TTL decides which frames those checks accept.
-It does not bound when a descheduled reader next takes a frame, or when an application reacts to one it has taken, which is a timing claim of a supported configuration (`+req~ssr-bound-wait~2+`).
+It does not bound when a descheduled reader next takes a frame, or when an application reacts to one it has taken, which is a timing claim of a supported configuration (`+req~ssr-bound-wait~3+`).
 
 == Meaningless QoS is refused at setup
 

@@ -88,7 +88,7 @@ They stay QM.
 
 === Async integrations
 
-* The planned executor-independent async layer (working name `up-rust-async`) keeps futures and executor hooks above core's synchronous seam, and keeps the asynchronous contract of `+req~ssr-async-seam~2+`.
+* The planned executor-independent async layer (working name `up-rust-async`) keeps futures and executor hooks above core's synchronous seam, and keeps the asynchronous contract of `+req~ssr-async-seam~3+`.
 * The existing `up-rust-tokio` is the integration that layer is to replace.
 * Core, synchronous use and the async layer itself require no particular executor.
 * An executor's own resources are outside the element's claims.
@@ -135,7 +135,7 @@ What the data means, and how the item reacts to a failure, are the integrator's.
 
 * *Bindings and wires* are separate elements.
 Their code runs inside the element's calls, but each is developed and verified on its own, against the contract suites in `test-util`.
-The items allocated to them are in `bindings.adoc` and `wires.adoc`, and `+aou~seooc-qualified-bindings-and-wires~5+` restricts an integrator to those that pass.
+The items allocated to them are in `bindings.adoc` and `wires.adoc`, and `+aou~seooc-qualified-bindings-and-wires~6+` restricts an integrator to those that pass.
 The end-to-end protection wire is a wire too, but it is shipped as the element's safety mechanism, so it is part E6, with its own items.
 * *Derive macros* (`up-rust-macros`: `ZeroSlot`, `StablePayload`, `StablePayloadInit`) are tools.
 The code they generate becomes part of the element and is held to its requirements.
@@ -162,6 +162,26 @@ Its absence never refuses ordinary use.
 Strict mode checks what a configuration declares before any assurance package exists, and reports assurance that is not established as Draft and unassessed.
 * A passing setup or strict-mode check shows that its observable predicates held.
 It is not a qualification or an assessment.
+
+=== Ordinary ownership and stronger resource guarantees
+
+A serialized or owned route may carry values that own what they hold, heap memory included.
+Most wire formats decode into such values, and a route that declares its allocation carries them with no timing or safety package (`+req~ssr-heap-guarantees~1+`).
+
+* *What every route keeps.*
+Memory safety and the ownership rules, the functional semantics a route offers, the native rule and the duties of element code hold on every route, whatever it is labelled.
+A fault against one of them is a defect, never a missing package.
+* *What a route declares.*
+Its heap class, and the resource and failure policy of whatever allocates, as its allocator's contract states them (`+req~ssr-heap-declared~3+`).
+An allocator that can wait for a lock or end the process on exhaustion is declared as one.
+* *What a route may require.*
+Panic-free cleanup, non-waiting acquisition, non-waiting release and recoverable exhaustion, each by name and each for its own operations only.
+A required guarantee is admitted on evidence for the exact type, wires, binding, provider, build and contexts, or the route is refused at setup by name.
+Each route's report states a guarantee as required or not, established or not, and admitted or not.
+A guarantee is admitted only where it is both required and established.
+One that a route does not require refuses nothing by its absence, and evidence that establishes it stays reported.
+* *What is neither a request nor evidence.*
+An integrity level, an ASIL label, a strict-mode state, an operating system, a toolchain, or the name of a crate, wire format or provider.
 
 === Supported configuration packages
 
@@ -238,8 +258,9 @@ Allowed::
 * Bounded waits.
 * Deadline service.
 * The Streamer's route gates.
-* On a serialized or owned route, only two kinds of heap use: the allocation that its declared heap class admits, after the refusals that can come first; and the release, exactly once, of what that allocation produced when its ownership ends, by a destruction that setup admitted only as unable to panic or abort.
-That release happens at once or on the route's release service, where it may stay pending, charged and isolated, with no completion deadline (`+req~ssr-heap-declared~2+`, `+req~ssr-heap-slot-types~2+`, `+req~ssr-release-lease-drop~3+`).
+* On a serialized or owned route, only two kinds of heap use: the allocation that its declared heap class admits, after the refusals that can come first; and the release, exactly once, of what that allocation produced when its ownership ends.
+That release runs under the route's declared policy on a path of that route.
+On a route that requires non-waiting release it runs at once only where it cannot wait, and otherwise on the route's release service, where it may stay pending, charged and isolated, with no completion deadline (`+req~ssr-heap-declared~3+`, `+req~ssr-heap-guarantees~1+`, `+req~ssr-heap-slot-types~3+`, `+req~ssr-release-lease-drop~4+`).
 Impossible::
 * Setup.
 * Heap use on a native path, in the work it causes, or beyond a route's declared class.
@@ -263,7 +284,7 @@ The Streamer's "degraded" is a reported state: its safe state is fail-silent per
 | Provided to applications | L2 handles, the transition, bounded waits, route reports, counters and waiver records | the files from `runtime-modes.adoc` to `waivers.adoc`
 | Provided to the Streamer | Carrier routes, the capacity check, park, the shared signal | `bounded-work.adoc`, `qos.adoc`, `integrity.adoc`, `streamer.adoc`
 | Provided to integrators | The end-to-end protection wire; strict mode and its compliance report; the Streamer's operator interface, mode report, watchdog hook and startup report | `streamer.adoc`, `e2e-wire.adoc`, `build.adoc`
-| Required from bindings | The lending or handoff contract, and the bindings' duties | `bindings.adoc`; `+aou~seooc-qualified-bindings-and-wires~5+`
+| Required from bindings | The lending or handoff contract, and the bindings' duties | `bindings.adoc`; `+aou~seooc-qualified-bindings-and-wires~6+`
 | Required from wires | The wire contract, and the wires' duties | `wires.adoc`
 | Provided by the element's maintainers | Versioned supported configuration packages: backend, synchronization and execution model, startup checks, sizing, supported contexts, build settings, dependency scope, evidence and limitations | <<claims>>; `platform.adoc`; `+aou~seooc-target-environment~4+`
 | Required from each platform backend | The platform's rules | `platform.adoc`; `+aou~seooc-integrator-platform~4+`
@@ -319,7 +340,7 @@ A test names what it verifies with OFT's own coverage tag, and the method after 
 
 == Files
 
-148 items in 20 files.
+149 items in 20 files.
 
 [cols="4,1,3",options="header"]
 |===
@@ -327,7 +348,7 @@ A test names what it verifies with OFT's own coverage tag, and the method after 
 
 | xref:assumptions-of-use.adoc[Assumptions of use] | 19 | `SafetyManual`
 | xref:runtime-modes.adoc[Modes and the transition] | 14 | `SafetyUpRustCore`
-| xref:heap.adoc[Heap] | 4 | `SafetyUpRustCore`
+| xref:heap.adoc[Heap] | 5 | `SafetyUpRustCore`
 | xref:errors.adoc[Refusal, errors and reporting] | 5 | `SafetyUpRustCore`
 | xref:bounded-work.adoc[Bounded work and waiting] | 3 | `SafetyUpRustCore`
 | xref:peers.adoc[Peers, RPC and message identity] | 10 | `SafetyUpRustCore`, `SafetyBinding`

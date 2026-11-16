@@ -87,7 +87,7 @@ ISO 26262:: 6-Annex D.2.3, 6-Table 3 1h (part-clause numbers only)
 A writer below the reader's level, or of unknown level, can change shared bytes while the reader uses them.
 So the reader works only on a copy in storage it owns, checked after the copy is made.
 
-The copy is made from storage reserved at setup, like every other runtime buffer, so it needs no heap (`+req~ssr-heap-none~2+`).
+The copy is made from storage reserved at setup, like every other runtime buffer, so it needs no heap (`+req~ssr-heap-none~3+`).
 
 iceoryx2 maps the payload memory read-only for subscribers (https://github.com/eclipse-iceoryx/iceoryx2/issues/906[iceoryx2 issue #906]; https://github.com/eclipse-iceoryx/iceoryx2/blob/806442b5273d87380511bb5ffcab316d129af31c/iceoryx2/src/port/details/data_segment.rs[`+data_segment.rs+` in iceoryx2 0.9.2]).
 So the copy reads it only through loads that are valid on a read-only mapping.

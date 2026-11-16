@@ -51,7 +51,7 @@ It leaves the inner wire's encoded bytes unchanged.
 * It adds no heap use of its own, and states the inner wire's heap claim for each direction.
 
 *Contracts.*
-It passes the sequenced wire contract, and the inner wire passes the ordinary wire contract on its own (`+req~ssr-wire-heap-claim-tested~2+`).
+It passes the sequenced wire contract, and the inner wire passes the ordinary wire contract on its own (`+req~ssr-wire-heap-claim-tested~3+`).
 --
 
 [horizontal]

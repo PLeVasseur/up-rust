@@ -13,6 +13,7 @@ that the current SDK implements them.
 
 - Revision 4 places the application's report reads outside the element's detection bound J.
 - It keeps the servicing duty only for a one-word tick monitor, which no current profile's runtime monitor uses.
+- The statement was reworded in place: it describes the counters' difference operation instead of naming an SDK identifier, and no longer remarks on the present implementation. Its meaning is unchanged.
 - The accepted E2E pre-adoption rule is exact when proven, otherwise explicitly unknown.
 - Documentary gate admission and runtime qualification remain pending.
 
@@ -27,10 +28,10 @@ link neither validates the deployment nor closes an implementation requirement.
 > * *What the element reports.* The element reports every refusal and loss it can see. A loss it cannot see, such as a drop-oldest eviction inside iceoryx2, is declared in that route's report instead (`+req~ssr-error-no-silent-loss~3+`). For such losses, and for silence, the application uses available deadline and end-to-end observations only within their declared detection limits; neither promises to detect every hidden loss.
 > * *Shared routes, and routes without a deadline.* Another peer can keep a shared route's aggregate deadline refreshed while one peer is starved, so required peer-specific progress detection follows `+aou~seooc-peer-rates~2+`. A route without a deadline, including an explicit `+event_only()+` route, supplies no deadline-based silence or delay detection.
 > * *The reaction is the application's.* The element does not decide the item's reaction. Reading a route's report is the application's own observation: its delay adds to the item's reaction, outside the element's detection bound (`+req~ssr-qos-deadline~4+`), and the element places no servicing duty on the application for that bound.
-> * *Reading counters.* The application takes differences of the flow counters (`+carried+`, `+busy+`, `+parked+`) between reads fewer than 2^32^ increments apart. It reads a fault counter at 2^32^ − 1 as saturated: at least that many, which `+RouteCounters::since+` reports as saturated, not as a difference.
+> * *Reading counters.* The application takes differences of the flow counters (`+carried+`, `+busy+`, `+parked+`) between reads fewer than 2^32^ increments apart. It reads a fault counter at 2^32^ − 1 as saturated: at least that many, which the route counters' difference operation reports as saturated, not as a difference.
 > * *Keeping up.* A route's deadline measures arrivals at its queue, not the application's reads. An application that needs to know whether it keeps up *SHALL* read the observable discard counters and account for the route's disclosed unobservable-loss limits; zero counts alone do not establish that no frame was lost.
 > * *Bad data.* Bad data is reported by its own refusal counters, which the application acts on: a peer that sends only frames refused when read shows there, and on an E2E route in E2E's figures, not in `+deadline_missed+`.
-> * *One-word tick monitors.* Where a route's monitor uses the one-word tick representation, which at this revision only the model tests do, the application services that route at least once per 2^29^ of its monitor's ticks, 2^18^ of its thresholds; a thread blocked in the transport's `+wait+` meets this, because `+wait+` runs the service between inner waits of at most 2^28^ ticks of the shortest-scaled route on the transport. A full-width monitor needs no such servicing to keep its count.
+> * *One-word tick monitors.* Where a route's monitor uses the one-word tick representation, the application services that route at least once per 2^29^ of its monitor's ticks, 2^18^ of its thresholds; a thread blocked in the transport's `+wait+` meets this, because `+wait+` runs the service between inner waits of at most 2^28^ ticks of the shortest-scaled route on the transport. A full-width monitor needs no such servicing to keep its count.
 > * *Strict mode.* In strict mode, the report lists for each route the counters the application reads and what each means, the E2E figures included.
 <!-- aou-statement:end -->
 

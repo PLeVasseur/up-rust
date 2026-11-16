@@ -41,14 +41,14 @@ It is not a bound on time:
 * Bounded work is not a worst-case execution time.
 * A worst-case execution time while running is not a scheduled response time.
 
-Those are timing claims of a supported configuration (`+req~ssr-bound-wait~2+`).
+Those are timing claims of a supported configuration (`+req~ssr-bound-wait~3+`).
 
 == Every wait is bounded
 
-[.specitem,oft-sid="req~ssr-bound-wait~2",oft-title="Every bounded wait has a logical deadline",oft-needs="impl,utest",oft-tags="SafetyUpRustCore"]
+[.specitem,oft-sid="req~ssr-bound-wait~3",oft-title="Every bounded wait has a logical deadline",oft-needs="impl,utest",oft-tags="SafetyUpRustCore"]
 --
 *No unbounded blocking.*
-A runtime operation *MUST NOT* block without a bound, except in a deliberate idle wait that the transport's documented contract supports while no bounded operation, timeout or deadline check is due.
+Element code in a runtime operation *MUST NOT* block without a bound, except in a deliberate idle wait that the transport's documented contract supports while no bounded operation, timeout or deadline check is due.
 
 *The idle wait.*
 Such an idle wait:
@@ -57,30 +57,50 @@ Such an idle wait:
 * *MUST NOT* stand in for a bounded operation or hide unbounded internal work.
 
 *Every other wait.*
-Every other wait:
+Every other wait of the element's own, for a peer, a wake, capacity, a completion or a time:
 
 * *MUST* take a finite logical deadline and *MUST NOT* intentionally wait beyond it;
 * *MUST* return on a wake, on its deadline, or when the peer it waits for has died;
 * after a spurious wake, an interruption or a late resumption, *MUST* recheck the authoritative state and the time before it waits again or returns.
 
-*The one exception: pending cleanup.*
-The one exception to a finite logical deadline is pending cleanup, as `+req~ssr-release-lease-drop~3+` defines and isolates it.
-An admitted release that has already been handed off may wait, for the dependency that its admitted policy names, without a finite completion deadline.
+*Waits inside a declared allocation domain.*
+On a serialized or owned route whose declared heap class admits allocation, an acquisition, a destruction or a release can wait inside the allocation domain that the route's declared policy names, such as behind an allocator's lock (`+req~ssr-heap-declared~3+`).
+Such a wait is the allocation domain's, not a wait of the element's own, and it cannot observe a deadline.
 
-The exception covers none of the following:
+* It *MUST* be one that the declared policy states, and the route's report *MUST* show it.
+A wait there that the policy does not state is a defect.
+* On a route that requires non-waiting acquisition, no acquisition waits.
+On a route that requires non-waiting release, a release that could wait leaves the path that ended its value as pending cleanup (`+req~ssr-heap-guarantees~1+`).
+* Each of the two limits its own operation only.
+On a route that does not require non-waiting acquisition, an acquisition's wait runs on the path that performs it.
+On a route that does not require non-waiting release, a release's wait runs on the path that performs it.
+The element promises no time for either.
+* It never occurs in a native operation, in the work one causes or in work that a native route shares (`+req~ssr-heap-none~3+`).
+* The element holds no lock or exclusion of its own across it (`+req~ssr-heap-slot-types~3+`).
 
-* a wait that an operation, a progress step, a drop or a hand-off performs itself, such as a blocking allocation, a decode, a provider, binding or callback call, a completion or an overflow wait;
+It changes no logical deadline.
+The operation's outcome is decided as this item states, however long the allocation domain took.
+
+*Pending cleanup.*
+Pending cleanup, as `+req~ssr-release-lease-drop~4+` defines and isolates it, may wait for the dependency that its policy names without a finite completion deadline.
+No bounded operation, deadline, expiry or health observation waits for pending cleanup.
+
+*What these two cover.*
+A wait inside a declared allocation domain and pending cleanup are the only waits, apart from the idle wait, that take no finite logical deadline.
+They cover none of the following:
+
+* a wait of the element's own, such as a completion or an overflow wait;
+* a wait in a binding or callback call outside the declared allocation domain (`+req~ssr-binding-bounded~3+`);
 * a worker loop;
 * a lock or other primitive shared with another process (`+req~ssr-bound-no-cross-process-lock~1+`).
-
-No bounded operation, deadline, expiry or health observation waits for pending cleanup.
 
 *What a deadline decides.*
 A deadline that passes while the operation is still pending makes its documented terminal outcome due:
 
 * The operation exposes that outcome when it next runs.
 * The operation accepts no completion whose acceptance event falls after the deadline on the clock the deadline uses.
-* Neither that outcome nor a committed one waits for the release of what the operation owned, which may stay pending as cleanup.
+* Neither that outcome nor a committed one depends on the release of what the operation owned.
+It is decided and recorded before that release starts, and the release then runs as its route's class and guarantees state (`+req~ssr-heap-slot-types~3+`).
 
 A result that the operation committed at its acceptance event before the deadline stands.
 Observing it later, because the caller was descheduled, never turns it into expiry or overwrites it.
@@ -119,6 +139,10 @@ Verification:: test, heap-window, fault-injection
 ** A completion first offered after the deadline, refused, with the expiry reported.
 ** An idle wait woken by the arrival that makes work due.
 ** An operation whose deadline passes while the release of what it ended is pending, reporting its outcome without waiting for that release.
+** On a route that requires neither non-waiting guarantee, an acquisition and a release that wait inside the declared allocation domain, with the operation's outcome decided by its deadline and the wait shown in the route's report.
+** On a route that requires non-waiting acquisition, a provider whose acquisition can wait refused at setup by name.
+** On a route that requires only non-waiting acquisition, a declared release that waits on the path that ended its value, and on a route that requires only non-waiting release, a declared acquisition that waits on the path that performs it.
+** No wait inside an allocation domain in native or shared work.
 * *heap-window*: the failure path of a QoS wait.
 * *fault-injection*: a peer killed while a sender waits.
 Status:: Draft
@@ -126,7 +150,7 @@ ISO 26262:: 6-Annex D.2.2 (part-clause numbers only)
 
 *Rationale.*
 A survivor that waited without a bound for a peer that has died would never return.
-One failed process would then stop those that stayed up (`+req~ssr-peer-failure-normal~2+`).
+One failed process would then stop those that stayed up (`+req~ssr-peer-failure-normal~3+`).
 
 _Waits that are bounded._
 
@@ -141,11 +165,26 @@ Correct code can resume after it if the OS stopped the process, a virtual machin
 So the statement bounds what the element waits for and how it recovers, and leaves a physical return bound to a configuration that can establish one.
 An idle wait with nothing due needs no timeout, provided the wake that makes work due cannot be lost.
 
+_Waits the element does not own._
+An ordinary allocator takes a lock, in an acquisition as in a release.
+The element can neither give that lock a deadline nor see inside it.
+Forbidding it would forbid ordinary serialized communication, and hiding it would misstate what a route does.
+So the wait is declared, reported and kept out of native work, and the element holds nothing of its own across it.
+A route that cannot accept it requires the guarantee that excludes it (`+req~ssr-heap-guarantees~1+`).
+
+The element's own waits are a different matter.
+Each takes a logical deadline on every route, and an operation's outcome is decided by that deadline whatever an allocation domain did meanwhile.
+
 _Why pending cleanup has no deadline._
 A release that waits behind an allocator's or an underlying transport's own lock cannot observe a deadline from inside that call.
 Running it on another thread does not make it deadline-aware.
 So no operation waits for it, and it is kept apart from everything this item bounds.
-What it owns stays charged until it completes, instead of being given a completion deadline that it cannot keep (`+req~ssr-release-lease-drop~3+`).
+What it owns stays charged until it completes, instead of being given a completion deadline that it cannot keep (`+req~ssr-release-lease-drop~4+`).
+
+_Why revision 3._
+Revision 2 allowed one wait without a deadline, pending cleanup, and forbade every blocking allocation.
+That left no place for an ordinary allocator on a route that had asked for nothing stronger.
+This revision names the allocation domain's wait for what it is, bounds where it may occur, and leaves the element's own waits and every logical deadline as they were.
 
 == No lock shared with another process
 
@@ -162,7 +201,7 @@ Verification:: review (an inventory of synchronization primitives), fault-inject
 Status:: Draft
 
 *Rationale.*
-A process can die at any instruction (`+req~ssr-peer-failure-normal~2+`).
+A process can die at any instruction (`+req~ssr-peer-failure-normal~3+`).
 A lock it shares can then be left held, with the state it guards half changed and no process left to finish the change.
 
 Eclipse S-CORE's LoLa middleware gave up an inter-process mutex for this reason: its error handling grew too complex when a process died while holding it (https://github.com/eclipse-score/communication/blob/f5e8f2c8a9247b025b1d425af399588e0264698a/score/mw/com/impl/bindings/lola/dependability/partial_restart/README.md[LoLa's partial-restart notes]).

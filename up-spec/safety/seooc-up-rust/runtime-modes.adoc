@@ -254,18 +254,21 @@ So a transport that started cannot be taken back out of runtime mode, and a refu
 
 == Initialization failure
 
-[.specitem,oft-sid="req~ssr-mode-init-failure~3",oft-title="Initialization failure",oft-needs="impl,utest",oft-tags="SafetyUpRustCore"]
+[.specitem,oft-sid="req~ssr-mode-init-failure~4",oft-title="Initialization failure",oft-needs="impl,utest",oft-tags="SafetyUpRustCore"]
 --
 *Refusals are errors.*
 Every refusal during initialization or the transition, including one that a memory source, region helper or allocation provider used by setup reports, *MUST* be returned as an error that names its cause, the route where there is one, and the setter to change.
 
 *No panic or abort.*
-Initialization *MUST NOT* panic or abort.
-Where setup relies on a memory source, helper or provider for this, its stated contract, not the shape of its interface, decides whether it can.
+Element code in initialization *MUST NOT* panic or abort.
+Where setup relies on a memory source, helper or provider, its stated contract, not the shape of its interface, decides what a request to it can do.
 
-A source, helper or provider whose contract permits a panic or process termination on a request *MUST NOT* receive that request unless setup has first excluded that outcome, such as by checking the request against the limit the contract states.
+* A request that the contract lets panic or end the process, for a condition that setup can check, *MUST NOT* be sent unless setup has first excluded that condition, such as by checking the request against the limit the contract states.
 Otherwise setup refuses it by name before relying on it.
-Reporting its contract does not meet this item.
+* An outcome that the contract permits and that setup cannot exclude, such as an allocator that may end the process on exhaustion or wait for a lock, is that provider's declared policy (`+req~ssr-heap-declared~3+`).
+Setup reports it, and *MUST* refuse by name a configuration that requires the guarantee it violates (`+req~ssr-heap-guarantees~1+`).
+
+Reporting a contract establishes nothing beyond it.
 
 *One stated disposition.*
 A refusal *MUST* leave each resource and each initialized value that setup acquired with one stated disposition:
@@ -274,11 +277,20 @@ A refusal *MUST* leave each resource and each initialized value that setup acqui
 * destroyed once; or
 * retained under the configuration's stated retention policy.
 
-A stated disposition *MUST* itself meet this item, and setup *MUST* have it before it takes or creates what it might have to dispose of:
+Setup *MUST* have that disposition before it takes or creates what it might have to dispose of, and the stated disposition *MUST* be the one that happens:
 
-* It destroys a value only where its destruction is established not to panic or abort, as `+req~ssr-heap-slot-types~2+` requires on a runtime path, and to complete within setup's own bound (`+req~ssr-mode-bounded-startup~2+`).
-* It retains only startup storage and what is placed in it, where every other duty of this item holds.
-* Otherwise it returns the untouched value to its owner or refuses before taking it.
+* _Returned._
+A value that a caller handed to setup is returned to that caller untouched, or the refusal comes before setup takes it, such as by reserving what the value needs first.
+* _Destroyed._
+Setup destroys a value itself, once, within setup and on the refusing path, and the refusal then says that setup destroyed it.
+It does so only in one of two cases:
+** nothing in the configuration requires panic-free cleanup or non-waiting release of that value (`+req~ssr-heap-guarantees~1+`), and then what the destruction does is the value's own, under its declared policy where it has one, and the element establishes nothing about it;
+** a route or a claim requires one of those guarantees of the value, and the guarantee is established for it.
+* _Retained._
+Setup retains only startup storage and what is placed in it, where every other duty of this item holds.
+
+Where none of these is available for a value, setup *MUST* refuse before taking it.
+A refusal never reports a value as untouched or turned away where setup has destroyed it or still owns it.
 
 *No release service for a refusal.*
 Setup *MUST NOT* hand anything to a release service, or leave it as pending cleanup, to dispose of a refusal.
@@ -300,15 +312,18 @@ Verification:: test, review, fault-injection
 * *test*
 ** Each refusal names its route and setter.
 ** A refusal injected at each placement and provider request, with every acquired value returned, destroyed once or retained as stated and no storage of a successful owner released.
-** No value whose destruction may wait without a bound destroyed by setup or handed to a release service.
-** A request that a provider's contract lets panic prevented, or the provider refused by name.
+** A refused caller input returned untouched, refused before it was taken, or destroyed once and reported as destroyed.
+** Where a route requires panic-free cleanup or non-waiting release, no value for which it is not established destroyed by setup.
+** Nothing handed to a release service.
+** A request that a provider's contract lets panic for a condition setup can check prevented, or the provider refused by name.
+** A provider whose contract permits an outcome that setup cannot exclude reported with it, and refused by name where the configuration requires the guarantee it violates.
 * *review*
 ** No panic path in setup code.
 ** Every panic site in the middleware's setup read, and decided by group.
 ** Each relied-on source, helper and provider contract.
-** Each destruction setup performs on refusal, including a dropped input, against its admission evidence and setup's bound.
+** Each destruction setup performs on refusal, including a dropped input, against its stated disposition and, where a guarantee is required, its evidence.
 * *fault-injection*: a kill at each startup step.
-Status:: Draft, pending owner (S0 O-34)
+Status:: Draft
 ISO 26262:: 6-6.4.2 g (part-clause numbers only)
 
 *Rationale.*
@@ -323,21 +338,36 @@ A refusal may hand a value back to its caller, destroy one it took, or leave sta
 Each is acceptable only when it is the stated one and also meets this item's other duties:
 
 * none may free storage that an owner that succeeded still uses;
-* a destruction during setup, such as dropping a refused input, may not panic or abort.
+* a destruction during setup, such as dropping a refused input, is stated as what it is.
 
 So naming an outcome does not by itself make it acceptable.
 
+A value that setup was handed by value has to go somewhere when setup refuses.
+Setup can hand it back untouched, or decide the refusal before it takes the value.
+It cannot both own a value with a destructor and claim to have refused it untouched, so the disposition names the one that happens.
+Where a route requires panic-free cleanup, the destruction is established or not performed, and elsewhere its behaviour is the value's own (`+req~ssr-heap-guarantees~1+`).
+
 _Providers._
 A standard allocation interface may let an allocator end the process on exhaustion or panic on a request it cannot serve, which a fallible call does not prevent.
-So a provider's own contract decides whether setup can rely on it, and disclosing that contract does not make a request it lets panic admissible.
+So a provider's own contract decides what setup can rely on.
+
+* A panic that setup can exclude by a check is excluded, on every configuration: sending a request that the contract says will panic would be a defect of setup.
+* An outcome that no check excludes is the provider's stated behaviour.
+An ordinary configuration runs with it reported, and a route that requires the guarantee which that outcome violates is refused by name, and no other route.
 
 _Groups of transports._
 This item does not ask a refused group of transports to roll back one that has already entered runtime mode (`+req~ssr-mode-entry~5+`).
 
 _No release service._
 Setup has no release service to lean on.
-Using the runtime exception for pending cleanup would let a setup failure leave work running after its refusal.
-So a destruction that setup performs is bounded like any other setup step, and where that is not established the value is handed back or never taken.
+Using pending cleanup would let a setup failure leave work running after its refusal.
+So a destruction that setup performs runs within setup, on the refusing path.
+Where a route requires non-waiting release and the destruction could wait, the value is handed back or never taken.
+
+_Why revision 4._
+Revision 3 let setup destroy a value only on evidence that the destruction could neither panic nor outlast setup's bound, and refused every provider whose contract permits a process end.
+An ordinary owning input and an ordinary allocator meet neither, so ordinary setup was refused for want of guarantees that it had not required.
+This revision keeps every refusal an error, keeps element code free of panics, keeps one honest disposition for everything setup acquired, and applies the cleanup and exhaustion guarantees where a route or claim requires them.
 
 == A restart is an initialization
 
@@ -357,7 +387,7 @@ Status:: Draft
 ISO 26262:: 6-Table 15 (part-clause numbers only)
 
 *Rationale.*
-A process can die at any instruction (`+req~ssr-peer-failure-normal~2+`), so what it held can be left in any state, and only the next initialization can deal with it.
+A process can die at any instruction (`+req~ssr-peer-failure-normal~3+`), so what it held can be left in any state, and only the next initialization can deal with it.
 
 Recovering through the one initialization path keeps a single tested way to start, instead of a second path that runs only after a failure.
 A binding that cannot recover its predecessor refuses setup.
@@ -419,12 +449,21 @@ A compatibility re-export of a two-mode type from `+up-rust+` is not itself a cl
 
 == Setup never waits without a bound
 
-[.specitem,oft-sid="req~ssr-mode-bounded-startup~2",oft-title="Setup never waits without a bound",oft-needs="impl,utest",oft-tags="SafetyUpRustCore"]
+[.specitem,oft-sid="req~ssr-mode-bounded-startup~3",oft-title="Setup never waits without a bound",oft-needs="impl,utest",oft-tags="SafetyUpRustCore"]
 --
 *Bounded waits.*
-An initialization step *MUST NOT* wait without a bound.
+An initialization step of the element's own *MUST NOT* wait without a bound.
 A wait for a service or for the clock *MUST* have a bound from deployment data or from the binding's declared limit.
 When the bound expires, setup *MUST* fail with an error naming what it waited for.
+
+*Waits inside a declared allocation domain.*
+A request to a memory source or allocation provider, and a destruction that a refusal performs, can wait inside the allocation domain that its declared policy names (`+req~ssr-bound-wait~3+`).
+That wait is the declared policy's, and setup reports it.
+Each non-waiting guarantee limits its own operation in setup, and neither limits the other's (`+req~ssr-heap-guarantees~1+`):
+
+* Where a route requires non-waiting acquisition, no request that setup makes for that route waits, or setup refuses the route by name.
+* Where a route or a claim requires non-waiting release of a value, setup performs no destruction of that value that could wait, and disposes of it as `+req~ssr-mode-init-failure~4+` states.
+* Requiring one refuses nothing for the other: a declared wait in a request stands where only non-waiting release is required, and a declared wait in a refusal's destruction stands where only non-waiting acquisition is required.
 
 *A missing peer.*
 A missing peer *MUST NOT* fail setup: its route is admitted and reports that it waits for the peer, or its binding refuses the route by name.
@@ -435,16 +474,23 @@ In runtime mode, a route *MUST* treat a missing peer as silence, under its deadl
 ASIL:: B
 Allocated to:: the element
 Verification:: test, fault-injection (a peer that never starts; a service that never appears)
+* *test*
+** A provider whose request can wait, reported on a route that does not require non-waiting acquisition, one that requires only non-waiting release included, and refused by name on a route that requires it.
+** A refusal's destruction that can wait, performed and reported where nothing requires non-waiting release of the value, a route that requires only non-waiting acquisition included, and not performed where that guarantee is required of the value and not established.
 Status:: Draft
 
 *Rationale.*
-Processes start and restart in any order (`+req~ssr-mode-restart~1+`), so a peer that is not up yet is normal input, not a fault (`+req~ssr-peer-failure-normal~2+`).
+Processes start and restart in any order (`+req~ssr-mode-restart~1+`), so a peer that is not up yet is normal input, not a fault (`+req~ssr-peer-failure-normal~3+`).
 
 A wait without a bound would leave a process stuck in initialization with nothing to report.
 A bound that expires ends setup with an error naming what was missing.
 
-The bound is logical, as every wait's is (`+req~ssr-bound-wait~2+`).
+The bound is logical, as every wait of the element's own is (`+req~ssr-bound-wait~3+`).
 Setup fails with that error once it runs after the bound has passed, and a supervisor's own timeout covers a process that the OS does not run at all.
 
-A destruction that setup performs on a refusal is a setup step too.
-It is bounded or not performed (`+req~ssr-mode-init-failure~3+`), and the runtime exception for pending cleanup (`+req~ssr-release-lease-drop~3+`) does not reach setup.
+A destruction that setup performs on a refusal runs within setup, on the refusing path (`+req~ssr-mode-init-failure~4+`).
+Setup has no release service, so pending cleanup (`+req~ssr-release-lease-drop~4+`) does not reach it.
+
+_Why revision 3._
+Revision 2 bounded every initialization step, an allocator's own lock included, which an ordinary provider cannot promise.
+This revision bounds the element's own waits, as before, and treats a wait inside a declared allocation domain as `+req~ssr-bound-wait~3+` does.

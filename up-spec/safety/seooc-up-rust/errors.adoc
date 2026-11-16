@@ -33,7 +33,7 @@ On a native route, and on any route whose heap class is none, a refusal does not
 On a serialized or owned route, some refusals are reached only after the operation acquired heap memory under its declared heap class.
 Examples are a check after decode, a failed allocation at a declared allocation point, or a wire check whose acceptance event falls after its deadline.
 Such a refusal acquires nothing more.
-It ends the ownership already created, and what that ownership holds is released exactly once as `+req~ssr-heap-slot-types~2+` and `+req~ssr-binding-frame-drop~4+` state.
+It ends the ownership already created, and what that ownership holds is released exactly once as `+req~ssr-heap-slot-types~3+` and `+req~ssr-binding-frame-drop~5+` state.
 That release is the route's declared heap use, not part of producing the refusal.
 --
 
@@ -64,10 +64,11 @@ This revision therefore:
 
 * keeps deciding, reporting and counting a refusal heap-free on every route;
 * keeps every refusal that can come first ahead of the first allocation;
-* leaves the release of what was already admitted to the route's declared class (`+req~ssr-heap-none~2+`), so that release is that route's declared heap use and never the refusal's.
+* leaves the release of what was already admitted to the route's declared class (`+req~ssr-heap-none~3+`), so that release is that route's declared heap use and never the refusal's.
 
-An allocation failure follows the failure policy the route declares (`+req~ssr-heap-declared~2+`).
+An allocation failure follows the failure policy the route declares (`+req~ssr-heap-declared~3+`).
 A declaration does not make an infallible library allocation fail gracefully.
+A route that needs exhaustion to be a refusal requires that guarantee by name (`+req~ssr-heap-guarantees~1+`).
 
 == No panic on runtime paths
 
@@ -100,10 +101,15 @@ So a panic reachable in runtime mode is a crash that a peer's bytes or a clock r
 
 No waiver can cover a panic: a waiver covers allocation inside middleware only (`+req~ssr-waiver-scope~1+`).
 
-Code that runs on a runtime path but that the element does not own is held to the same rule through admission.
-Examples are the destructor of an admitted owned value, an allocator's release or a dependency they reach.
-Setup admits such code only where it is established that it cannot panic or abort on whichever thread runs it, and refuses it by name otherwise (`+req~ssr-heap-slot-types~2+`, `+req~ssr-release-lease-drop~3+`).
+Code that runs on a runtime path but that the element does not own is not element code.
+Examples are the destructor of an owned value, an allocator's release or a dependency they reach.
+
+* The element keeps memory safe whatever that code does (`+req~ssr-heap-slot-types~3+`).
+* It promises nothing about that code's panics on a route that does not require panic-free cleanup: the guarantee is not admitted there, and the route's report states separately whether evidence establishes it.
+* On a route that requires it, setup admits such code only where it is established that it cannot panic or abort in any context that runs it, and refuses the route by name otherwise (`+req~ssr-heap-guarantees~1+`).
+
 Moving such work to another thread does not change this.
+A panic in element code is a defect on every route, whatever the route requires.
 
 == Errors are fixed-size diagnoses
 

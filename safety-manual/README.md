@@ -37,6 +37,12 @@ An explicitly required claim is admitted under its supported configuration or
 refused at setup by name.
 A manual states an integration contract; it is not a safety case or a certificate.
 
+A serialized route may also require four resource guarantees, each by name:
+panic-free cleanup, non-waiting acquisition, non-waiting release and recoverable
+exhaustion.
+Ordinary use of a wire that owns its values, heap-backed ones included, requires
+none of them.
+
 ## What is not established yet
 
 The specification describes behavior still under development.
@@ -79,25 +85,55 @@ native path or in the work it causes.
   failure.
 - Deciding, reporting and counting those outcomes uses no heap.
 
-**Admission.**
-An owning type, wire, binding or provider is admitted only where destroying and
-releasing what it owns is established not to panic or abort, on whichever thread
-does it; otherwise setup refuses it by name.
+**Ordinary ownership.**
 
-**A destruction or return that could wait.**
+- A serialized route that declares its allocation carries values that own what
+  they hold, heap memory included. Setup does not refuse a type for having a
+  destructor, for owning heap memory or for lacking a stronger guarantee.
+- A destructor is not evidence of heap use, of waiting or of a panic. A wire's
+  heap class for its decode direction covers a decoded value's initialization,
+  replacement and destruction.
+- On a route that requires nothing more, a value is destroyed where its ownership
+  ends, under the provider's declared policy. That destruction can wait behind
+  the allocator's lock, an allocator can end the process on exhaustion, and
+  nothing is promised about a destructor's panics. The route's report says so.
+  Each of these follows its own guarantee: requiring one changes nothing for the
+  others.
 
-- A destruction or retained return that could wait is moved off the drop that
-  ends it to the route's preallocated, permanent release service, which moves only
-  the wait.
+**Guarantees a route requires by name.**
+
+- Panic-free cleanup, non-waiting acquisition, non-waiting release and
+  recoverable exhaustion are separate guarantees, and each limits its own
+  operations only. One that a route requires is admitted only where evidence
+  establishes it for the exact type, wires, binding, provider, build and
+  contexts. Otherwise setup refuses the route by name.
+- A requirement comes from the route's declaration, or from a timing or assurance
+  claim whose package depends on it. An integrity level, an ASIL label, a
+  strict-mode state and a name are neither a requirement nor evidence.
+- A guarantee that a route does not require is not admitted for it and refuses
+  nothing. Whether it is established is reported separately, from the evidence
+  alone: established where the evidence exists, even unrequired, and not
+  established only where the evidence is absent or insufficient. An item that
+  relies on a guarantee has to require it.
+
+**A destruction or return that could wait, where non-waiting release is required.**
+
+- It is moved off the drop that ends it to the route's preallocated, permanent
+  release service, which moves only the wait.
 - It stays pending, charged and isolated from public operations, deadline and
   health accounting and other owners' returns, with no completion deadline
   promised.
-- Setup never relies on it to dispose of a refusal.
+- A configuration without a release service offers no non-waiting release over a
+  dependency that can wait. That refuses a route that requires it and no other.
+- Setup never relies on a release service to dispose of a refusal.
 
 **What does not change.**
 
+- Memory safety, exactly-once destruction and the rule that a slot is never
+  reused while its value is owned hold on every route.
 - Nothing releases runtime infrastructure.
-- A declared heap class makes allocation visible and waives nothing.
+- A declared heap class makes allocation visible. It relaxes no duty of the
+  SDK's own code and reaches no native path.
 - A middleware waiver cannot relax the native duty.
 
 ## Timing claims
@@ -110,7 +146,8 @@ Timing claims rest on a supported configuration's package.
 - No configuration establishes a finite J yet, so no entry here supplies one.
 - Duties tied to narrowed values and to the one-word tick monitor apply only where
   a configuration keeps those representations; at this revision no supported
-  profile does, host or MCU, as the narrowed-value requirement records.
+  profile does, host or MCU, as the SDK's implementation traceability note
+  records.
 - A logical deadline decides an outcome, not when a descheduled caller sees it;
   physical return, observation and reaction bounds are separate claims.
 
@@ -126,7 +163,7 @@ The revisions quoted here rose where meaning changed:
 | timing-budgets | 6 |
 | clock | 3 |
 | e2e-protection | 7 |
-| qualified-bindings-and-wires | 5 |
+| qualified-bindings-and-wires | 6 |
 | target-environment | 4 |
 | build-configuration | 5 |
 | capacity-sizing | 3 |
@@ -138,8 +175,17 @@ The revisions quoted here rose where meaning changed:
 - The peer-access and peer-rates statements changed only the revisions of the
   items they cite.
 - The deployment-data entry's own guidance changed while its assumption did not.
-- The build-configuration, capacity-sizing and qualified-bindings-and-wires
-  entries were corrected in place at the revisions above.
+- The build-configuration and capacity-sizing entries were corrected in place at
+  the revisions above.
+- The qualified-bindings-and-wires statement rose to revision 6: an integrator
+  that relies on a stronger resource guarantee requires it by name.
+- The application-reacts, build-configuration, target-environment and
+  timing-budgets statements were reworded in place. They describe SDK interfaces
+  instead of naming identifiers, and leave remarks about the present
+  implementation to the traceability note. Their meaning and revisions are
+  unchanged.
+- The capacity-sizing statement cites a raised revision of the lease-drop
+  requirement, with no other change.
 - The remaining entries are unchanged.
 
 Quoting a raised revision grants no product coverage and moves no code or test
@@ -155,8 +201,11 @@ against the raised one.
 - A refused RPC copy gives its claim on the call back, and the call stays open;
   only absence of a later acceptable response or protected final answer makes TTL
   the completion outcome.
-- A call's outcome never waits for the release of what it owned, and its slot is
-  reused only once nothing it holds is pending.
+- A call's outcome is decided before, and never changed by, the release of what
+  it owned, and its slot is reused only once nothing it holds is unfinished.
+- A route's report shows a resource guarantee as required or not, established or
+  not, and admitted or not. The SDK cannot tell that an item relies on a
+  guarantee that no route requires.
 
 ## Streamer assumptions
 

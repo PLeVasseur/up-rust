@@ -62,7 +62,7 @@ ISO 26262:: 6-Table 6 1b (part-clause numbers only)
 
 *Rationale.*
 The Streamer forwards every frame between its transports.
-So heap use on its path would break runtime mode for every route it carries (`+req~ssr-heap-none~2+`).
+So heap use on its path would break runtime mode for every route it carries (`+req~ssr-heap-none~3+`).
 
 An ASIL route through the Streamer is only as sound as the Streamer, so it cannot be left as a QM carrier.
 
@@ -258,7 +258,7 @@ Verification:: test, review
 Status:: Draft
 
 *Rationale.*
-Creating or joining a thread in runtime mode would bring the heap and an unbounded wait into the data path (`+req~ssr-heap-none~2+`, `+req~ssr-bound-wait~2+`).
+Creating or joining a thread in runtime mode would bring the heap and an unbounded wait into the data path (`+req~ssr-heap-none~3+`, `+req~ssr-bound-wait~3+`).
 
 A fixed assignment of routes to workers, made at setup, lets each route's latency be analysed before start.
 
@@ -296,7 +296,7 @@ Status:: Draft
 The Streamer's safe state is fail-silent per route, through its route gates (xref:README.adoc[the SEooC's README]).
 So a gate silences one route while every other route carries on (`+req~ssr-streamer-containment~1+`).
 
-The gate is the only route state that changes in runtime mode (`+req~ssr-streamer-route-lock~3+`), and fixed storage lets it change without heap (`+req~ssr-heap-none~2+`).
+The gate is the only route state that changes in runtime mode (`+req~ssr-streamer-route-lock~3+`), and fixed storage lets it change without heap (`+req~ssr-heap-none~3+`).
 
 A gated request is answered `+Unavailable+` where the reverse route can carry it.
 So a client without the E2E wire learns of the outage at once, not at its TTL (`+req~ssr-streamer-rpc-error-response~4+`).
@@ -453,7 +453,7 @@ It establishes neither the watchdog's independence nor a bounded reaction, which
 In ASIL mode the Streamer *MUST* report undeliverable messages through fixed counters, never through a dead-letter message.
 
 * It retries no longer than the route's bounded wait.
-* A carrier egress cannot declare a wait (`+req~ssr-bound-wait~2+`), so its only retry is resending a parked frame, within the route's retained budget and the frame's TTL.
+* A carrier egress cannot declare a wait (`+req~ssr-bound-wait~3+`), so its only retry is resending a parked frame, within the route's retained budget and the frame's TTL.
 * An RPC request it cannot dispatch also gets the best-effort error response of `+req~ssr-streamer-rpc-error-response~4+`.
 --
 
@@ -502,7 +502,7 @@ Status:: Draft
 The dispatcher can report a known delivery failure promptly without forwarding through a disabled route.
 The response is best effort and the request TTL remains the bound.
 
-That bound is logical (`+req~ssr-bound-wait~2+`): it decides the call's outcome, while when a descheduled client sees it depends on the client running.
+That bound is logical (`+req~ssr-bound-wait~3+`): it decides the call's outcome, while when a descheduled client sees it depends on the client running.
 
 The clause about the E2E wire binds only a route whose client uses it.
 That wire is deferred and not part of this delivery, and every other clause binds now.

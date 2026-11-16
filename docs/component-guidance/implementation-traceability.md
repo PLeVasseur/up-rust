@@ -18,6 +18,9 @@ specification does not depend on this note.
 - The authoritative links from code to requirements are the OFT coverage tags in
   the code and tests (`[impl->req~…]`, `[utest->req~…]`). Use this note to find
   where to look, then check the tags and the source.
+- Each heading under "Items" keeps the revision its sentences were written
+  against. Where a revision has risen since, the table in the next section gives
+  the current one.
 
 ## Element parts and tooling
 
@@ -32,6 +35,110 @@ The specification names the element's parts by crate. At the paired snapshot the
 
 - The `heap-window` verification method uses the Rust guard `heap_guard` and the C-level observer `heap_guard::c_level`, both in `test-util`.
 - The committed OFT coverage configuration is `.env.oft-current`. It keeps the seventeen SDK assumptions of use in the gating run through `SafetyGateUpRust`, and adds `SafetyManual` in the report-only run.
+
+## Revisions raised by the owning-wire applicability correction
+
+The specification now admits ordinary owning values on a serialized route and
+gives a stronger resource guarantee only where a route requires it
+(`req~ssr-heap-guarantees~1`, a new item). These revisions rose with it:
+
+| Earlier revision | Current revision |
+| --- | --- |
+| `req~ssr-heap-none~2` | `req~ssr-heap-none~3` |
+| `req~ssr-heap-declared~2` | `req~ssr-heap-declared~3` |
+| `req~ssr-heap-slot-types~2` | `req~ssr-heap-slot-types~3` |
+| `req~ssr-release-lease-drop~3` | `req~ssr-release-lease-drop~4` |
+| `req~ssr-bound-wait~2` | `req~ssr-bound-wait~3` |
+| `req~ssr-mode-init-failure~3` | `req~ssr-mode-init-failure~4` |
+| `req~ssr-mode-bounded-startup~2` | `req~ssr-mode-bounded-startup~3` |
+| `req~ssr-peer-failure-normal~2` | `req~ssr-peer-failure-normal~3` |
+| `req~ssr-binding-frame-drop~4` | `req~ssr-binding-frame-drop~5` |
+| `req~ssr-binding-bounded~2` | `req~ssr-binding-bounded~3` |
+| `req~ssr-async-seam~2` | `req~ssr-async-seam~3` |
+| `req~ssr-wire-heap-claim-tested~2` | `req~ssr-wire-heap-claim-tested~3` |
+| `aou~seooc-qualified-bindings-and-wires~5` | `aou~seooc-qualified-bindings-and-wires~6` |
+
+No code or test tag moves with these revisions, and none gains coverage from
+them. A tag that names an earlier revision stays as it is until its code or test
+has been reviewed against the current statement.
+
+When the specification was last published before this correction (up-spec commit
+`a4805bcfba227b3c4a2fb14aeacc8cc9d1d50372`), OFT's report-only run listed these
+tags in the SDK. Each already named a revision older than the one current then:
+
+| Requirement | Tags in the SDK | Revision they name |
+| --- | --- | --- |
+| `req~ssr-async-seam` | 9 `impl`, 5 `utest` | 1 |
+| `req~ssr-mode-init-failure` | 1 `impl`, 15 `utest` | 2 |
+| `req~ssr-peer-failure-normal` | 2 `impl`, 6 `utest` | 1 |
+| `req~ssr-release-lease-drop` | 1 `impl`, 4 `utest` | 2 |
+| `req~ssr-heap-none` | 2 `utest` | 1 |
+| `req~ssr-heap-declared`, `req~ssr-heap-slot-types`, `req~ssr-bound-wait`, `req~ssr-mode-bounded-startup` | none | none |
+
+- The new item `req~ssr-heap-guarantees~1` has no tag.
+- The binding and wire items (`req~ssr-binding-frame-drop`, `req~ssr-binding-bounded`, `req~ssr-wire-heap-claim-tested`) are covered in each binding's and each wire's repository, which this note does not inventory.
+- The safety-manual entry for `aou~seooc-qualified-bindings-and-wires` covers revision 6.
+
+## Names that the specification describes instead
+
+The specification's statements describe these interfaces by what they do. The
+SDK identifiers they stood for at the paired snapshot are:
+
+| Item | Wording in the statement | SDK identifier |
+| --- | --- | --- |
+| `aou~seooc-qualified-bindings-and-wires~6` | the binding contract suite | `assert_binding_contract` |
+| `aou~seooc-qualified-bindings-and-wires~6` | the wire contract suite | `assert_wire_contract` |
+| `aou~seooc-qualified-bindings-and-wires~6` | the QoS contract suite, and its deadline checks | `run_qos_contract` |
+| `aou~seooc-qualified-bindings-and-wires~6` | an arrival reported through the runtime port | `RuntimePort::arrived` |
+| `aou~seooc-qualified-bindings-and-wires~6` | the arrival-report latency a binding declares in its QoS support | `QosSupport::arrival_reports` |
+| `aou~seooc-qualified-bindings-and-wires~6` | the runtime port's receive-failure report | `RuntimePort::receive_failed` |
+| `aou~seooc-application-reacts~4` | the route counters' difference operation | `RouteCounters::since` |
+| `aou~seooc-build-configuration~5` | the element's ASIL build check, placed in an application's own binary | `assert_asil_build!()` |
+| `aou~seooc-timing-budgets~6`, `req~ssr-atomic-windows~2` | a stalled expiry of a call | `expire` |
+| `aou~seooc-timing-budgets~6`, `req~ssr-atomic-windows~2` | a stalled failure of a peer's older calls | `fail_older` |
+| `aou~seooc-timing-budgets~6`, `req~ssr-atomic-windows~2` | a stalled retirement of a peer entry | `retire` |
+| `aou~seooc-timing-budgets~6`, `req~ssr-atomic-windows~2` | a spurious peer loss | `peer_lost` |
+
+## Status remarks moved out of the specification
+
+These remarks described the SDK as it stood, inside statements, violation notes,
+the summary table or rationales. They are kept here as they were written, and
+the specification now states the rule without them.
+
+**`req~ssr-atomic-windows~2`** — Every narrowed value states its window
+
+- "At this revision every supported profile, host and MCU alike, keeps these values at full width". Only the words "At this revision" left the statement. The obligation stays in it: every supported profile keeps those values at full width.
+- Rationale: "The list in the statement describes the representation that the supported profiles share at this revision". Only the words "at this revision" left it.
+
+**`aou~seooc-timing-budgets~6`** — Timing claims rest on a supported configuration, and the item's budgets are the integrator's
+
+- Of a representation that keeps the narrowed generations: "which no current profile's does".
+- Of the one-word tick representation: "which at this revision only the model tests do".
+- "A full-width monitor, the runtime monitor of every current profile, has no such bound".
+- Summary table: "where a configuration keeps the predecessor narrowed values, which no current profile does".
+
+**`aou~seooc-application-reacts~4`** — The application reacts to what the element reports
+
+- Of the one-word tick representation: "which at this revision only the model tests do".
+- Summary table: "where a route's monitor uses the one-word tick, which no current profile's runtime monitor does".
+- Rationale: "Every current profile's runtime monitor is full width (`req~ssr-atomic-windows~2`), so the duty binds no current configuration."
+
+**`aou~seooc-target-environment~4`** — The target environment is verified
+
+- "The current SDK profiles are macOS ARM64, Linux x86-64, Linux ARM64, Windows x86-64, Cortex-M7 and RV32IMAC; QNX 7.1 and 8.x are future work, separate from each other, whose backend exists only as source."
+- "The element ships backends for Linux and macOS, and one for QNX that exists only as source: no toolchain or device has run it."
+
+**`aou~seooc-build-configuration~5`** — The ASIL binary is built from its claimed graph, with the ASIL profile
+
+- Of the minimum supported Rust version: "1.88 today".
+
+**`aou~seooc-supervisor-restart~4`** — A supervisor outside the process restarts it (violation note)
+
+- Of metadata changed in exclusive steps: "as at this revision".
+
+**`aou~seooc-clock~3`** — The platform provides the clocks (violation note)
+
+- Of a generator that keeps a 64-bit counter and the full last good time: "as every supported profile's does at this revision".
 
 ## Items
 

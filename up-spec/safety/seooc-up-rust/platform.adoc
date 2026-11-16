@@ -44,7 +44,7 @@ Status:: Draft
 
 *Rationale.*
 Runtime code reaches the operating system only through a backend.
-So a backend that broke one of these rules would break the element's runtime requirements from below, such as `+req~ssr-heap-none~2+` and `+req~ssr-refuse-no-panic~1+`.
+So a backend that broke one of these rules would break the element's runtime requirements from below, such as `+req~ssr-heap-none~3+` and `+req~ssr-refuse-no-panic~1+`.
 
 _Why revision 2._
 The earlier contract held the monotonic clock to be infallible.
@@ -217,7 +217,7 @@ Wherever an operation claims a call slot, a peer entry or another reusable recor
 No wrap, reuse or stalled operation then completes or fails another call, retires another tenure or admits a stale one.
 
 *Values kept at full width.*
-At this revision every supported profile, host and MCU alike, keeps these values at full width:
+Every supported profile, host and MCU alike, keeps these values at full width:
 
 * the deadline record's origin and count;
 * a peer's identity and incarnation;
@@ -239,8 +239,8 @@ A configuration whose representation narrows a value further *MUST* list each wi
 *The predecessor representation.*
 For the predecessor 32-bit-word representation, which no supported profile uses and whose one-word deadline monitor remains only as a model under test, these were:
 
-* a call slot's generation, 2^28^ reuses of one slot during one stalled call: a stalled `+expire+` or `+fail_older+` could time out or fail a later call early;
-* a peer-table entry's generation, 2^22^ reuses of one entry during one stalled call: a stalled `+retire+` could retire a later tenure, which acts as a spurious `+peer_lost+` for its peer;
+* a call slot's generation, 2^28^ reuses of one slot during one stalled call: a stalled expiry of a call, or a stalled failure of a peer's older calls, could time out or fail a later call early;
+* a peer-table entry's generation, 2^22^ reuses of one entry during one stalled call: a stalled retirement of a peer entry could retire a later tenure, which acts as a spurious peer loss for its peer;
 * a peer entry's 8 bits of users, 255 concurrent classifications of one peer, beyond which a frame was refused;
 * the incarnation latch's sequence word: a torn read needs 2^32^ increments, 2^31^ raises, during one stalled read;
 * the message-ID period, 2^32^ IDs of one route;
@@ -267,7 +267,7 @@ Narrowed and wrapping state is correct only inside its reuse and observation win
 Those bounds must be visible to the integrator rather than implicit in the representation.
 
 A window belongs to a representation, not to every target.
-The list in the statement describes the representation that the supported profiles share at this revision, and a configuration that narrows a value further adds its own windows.
+The list in the statement describes the representation that the supported profiles share, and a configuration that narrows a value further adds its own windows.
 
 These are facts about the representation.
 They are not a proof of its exclusion, interruption, long-suspension, coherence or arithmetic argument, which the review of each mechanism supplies.

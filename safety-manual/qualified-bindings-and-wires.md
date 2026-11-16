@@ -1,9 +1,9 @@
 # Bindings and wires pass their contracts
 
-`uman~sdk-aou-qualified-bindings-and-wires~2`
+`uman~sdk-aou-qualified-bindings-and-wires~3`
 
 Covers:
-- aou~seooc-qualified-bindings-and-wires~5
+- aou~seooc-qualified-bindings-and-wires~6
 
 ## Status and scope
 
@@ -13,7 +13,10 @@ that the current SDK implements them.
 
 - Named records in the quote retain their classifications.
 - No binding README uman coverage is claimed by this SDK manual. Binding owners must provide it separately.
-- Revision 5 binds qualification to exact versions and configuration and to the evidence state each record has.
+- Revision 5 bound qualification to exact versions and configuration and to the evidence state each record has.
+- Revision 6 adds one duty: where the item relies on a stronger resource guarantee on a serialized route, the integrator requires it by name.
+- Revision 6 also describes the contract suites and the runtime port's reports instead of naming SDK identifiers. The identifiers are in the SDK's implementation traceability note.
+- Guarantee admission, its named refusal and its reports are specified. This manual does not claim that they are implemented.
 
 Read [manual status](README.md) before using this entry. A documentary coverage
 link neither validates the deployment nor closes an implementation requirement.
@@ -21,12 +24,13 @@ link neither validates the deployment nor closes an implementation requirement.
 ## Assumption (verbatim)
 
 <!-- aou-statement:start -->
-> The integrator *SHALL* use on the ASIL path only bindings and wires that pass the contract suites (`+assert_binding_contract+`, the QoS contract, `+assert_wire_contract+`) on the integrator's own target, at the exact versions and configuration whose evidence its supported configuration records, and *SHALL NOT* take evidence of one state, compiled, linked, exercised, source-reviewed, composition-verified or qualified, for another.
+> The integrator *SHALL* use on the ASIL path only bindings and wires that pass the contract suites (the binding contract suite, the QoS contract suite and the wire contract suite) on the integrator's own target, at the exact versions and configuration whose evidence its supported configuration records, and *SHALL NOT* take evidence of one state, compiled, linked, exercised, source-reviewed, composition-verified or qualified, for another.
 >
 > * *32-bit targets.* On a 32-bit target, those are only the bindings and wires whose contracts pass on that target. The iceoryx2 binding claims no 32-bit target, because iceoryx2 0.9 needs 64-bit atomics and its bare-metal port is a proof of concept.
-> * *Pull bindings and deadlines.* A pull binding used for a route with a deadline reports an arrival through `+RuntimePort::arrived+` only with evidence that a frame entered the route's queue, or that the queue's overflow policy discarded one, and within the latency it declares in `+QosSupport::arrival_reports+`. It never reports one on a wake hint alone. It reports each failure to read its own queue through `+RuntimePort::receive_failed+`. Its `+run_qos_contract+` deadline checks pass, on a subscriber and on a carrier ingress.
+> * *Pull bindings and deadlines.* A pull binding used for a route with a deadline reports an arrival through the runtime port only with evidence that a frame entered the route's queue, or that the queue's overflow policy discarded one, and within the arrival-report latency it declares in its QoS support. It never reports one on a wake hint alone. It reports each failure to read its own queue through the runtime port's receive-failure report. Its deadline checks of the QoS contract suite pass, on a subscriber and on a carrier ingress.
 > * *Response routes.* A push binding delivers one response route from one thread at a time, which the contract checks. A pull binding needs nothing: the element serializes the pulls of a response route itself.
 > * *Cores without coherent atomics.* A route between cores whose atomics are not coherent with each other (`+aou~seooc-target-environment~4+`) uses a transport whose qualification covers that.
+> * *Owning wires.* A wire that decodes into values that own what they hold, heap memory included, is ordinary on a serialized route that declares its allocation, and its ownership needs nothing further from the integrator. Where the item relies on panic-free cleanup, non-waiting acquisition, non-waiting release or recoverable exhaustion on such a route, the integrator *SHALL* require that guarantee in the route's declaration, and uses a supported configuration whose package establishes it for the exact type, wires, binding and allocation provider (`+req~ssr-heap-guarantees~1+`). A route that does not require a guarantee is promised none, whether or not evidence establishes it: its report shows that guarantee as not required and not admitted, and states separately whether it is established.
 >
 > The integrator accepts the limits and known anomalies that each binding's README states (`+req~ssr-binding-readme~1+`). For a deployment that uses iceoryx2, these include:
 >
@@ -43,7 +47,7 @@ link neither validates the deployment nor closes an implementation requirement.
 > * iceoryx2 0.9.2 only logs a data connection that cannot be set up, under its default handler, and retries it only when the publisher list changes. So the binding installs a degradation handler on each port at setup: a failed connection is counted as `+receive_failed+`, or on the sending route, and the route then reports only a queue that turned non-empty, until the publisher list changes and an update runs clean; a queue that a healthy second publisher keeps non-empty meanwhile shows misses;
 > * the event IDs are read from the event service's static config, and a route whose lifecycle events share the data ID, or whose data ID is above the service's `+event_id_max_value+`, is refused at setup.
 >
-> The README also says that a frame drop can wait for the port mutex. That is not an accepted limit, because `+req~ssr-binding-frame-drop~4+` forbids it. It is the binding's known failure `+UPF-IOX2-0001+`, open until the binding returns each dropped frame to iceoryx2 through its deferred return as pending cleanup, charged and isolated as `+req~ssr-release-lease-drop~3+` requires; a thread of its own is not by itself that isolation.
+> The README also says that a frame drop can wait for the port mutex. That is not an accepted limit, because `+req~ssr-binding-frame-drop~5+` forbids it. It is the binding's known failure `+UPF-IOX2-0001+`, open until the binding returns each dropped frame to iceoryx2 through its deferred return as pending cleanup, charged and isolated as `+req~ssr-release-lease-drop~4+` requires; a thread of its own is not by itself that isolation.
 >
 > iceoryx2's other known failures are not accepted limits either, because `+req~ssr-binding-no-panic~4+` forbids them: its index bug on a connection change (`+UPF-IOX2-0002+`), until iceoryx2 fixes the index; its event-deadline panics, on QM transports only, since ASIL deployments turn those deadlines off, until iceoryx2 fixes them (`+UPF-IOX2-0005+`); and the paths through which a peer that writes values its own iceoryx2 never writes can panic its survivors, until iceoryx2 validates what peers write (`+UPF-IOX2-0004+`).
 >
@@ -79,6 +83,13 @@ The integrator SHALL complete and retain the following checklist for the item:
   - Do not approve deployments affected by frame-drop blocking, shared-state faults (publishers included), connection-change index failures, wait-thread descriptor faults or unsafe setup configuration merely by acknowledging them.
   - Verify each fix and its affected paths before removing the restriction.
   - For the wait-thread descriptor faults, accept only the binding-owned poll loop or a reviewed, source-backed equivalent, with every claimed eliminated panic site shown unreachable.
+- [ ] **Require the resource guarantees the item relies on.**
+  - A wire that owns its values, heap-backed ones included, is ordinary on a serialized route that declares its allocation. That ownership gives no guarantee about how its cleanup behaves.
+  - Where the item relies on panic-free cleanup, non-waiting acquisition, non-waiting release or recoverable exhaustion on a route, require it in that route's declaration.
+  - Read the startup report: each guarantee is shown as required or not, established or not, and admitted or not. Rely only on a guarantee shown as admitted.
+  - A guarantee shown as established and not required is evidence that the configuration has, not a promise to the item. Require it before relying on it.
+  - Treat "not established" as absent: the evidence is missing or insufficient, whatever the route requires.
+  - Do not read an integrity level, a strict-mode state or the name of a wire or provider as a request or as evidence.
 - [ ] **Qualify external unsafe code, and mind the target.**
   - Qualify external unsafe code as its own element and retain each shipped binding's unsafe inventory.
   - For non-coherent inter-core routes use a transport qualified to synchronize those cores.
@@ -88,9 +99,11 @@ The integrator SHALL complete and retain the following checklist for the item:
 
 - An unqualified binding can lose arrivals, misreport counters, block frame release, panic on a peer fault, corrupt shared state or allocate without a valid waiver.
 - These manifestations can violate the item even if a mock contract passed.
+- A route that relies on a resource guarantee it did not require can wait in its allocator, end the process on exhaustion or panic in a destructor, with no refusal at setup.
 
 ## Detection limits
 
 - A suite pass is limited to its exact bindings and target. It does not erase known failures or establish all deployed loads.
 - Strict known-failure refusal is required but not claimed implemented by this manual.
 - The absence of a failure report does not show all paths were exercised.
+- The SDK refuses a required guarantee that is not established. It cannot tell that the item relies on one that no route requires.

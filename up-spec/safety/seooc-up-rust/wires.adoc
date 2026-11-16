@@ -32,11 +32,12 @@ So a panic on bad input would let any faulty peer end the receiving process (`+r
 
 == A heap-free claim passes the wire contract
 
-[.specitem,oft-sid="req~ssr-wire-heap-claim-tested~2",oft-title="A heap-free claim passes the wire contract",oft-needs="impl,utest",oft-tags="SafetyWire"]
+[.specitem,oft-sid="req~ssr-wire-heap-claim-tested~3",oft-title="A heap-free claim passes the wire contract",oft-needs="impl,utest",oft-tags="SafetyWire"]
 --
 A wire that declares no heap use in a direction *MUST* pass its contract suite inside a heap window for that direction:
 
 * describing, sizing, encoding and decoding allocate and free nothing;
+* in the decode direction, replacing a decoded value in its slot and destroying one allocate and free nothing;
 * an exact size is honest;
 * decoding does not depend on what the slot held before.
 
@@ -54,6 +55,8 @@ Verification:: heap-window, test
 ** An ordinary wire fails the sequenced check.
 ** A wire that never resynchronizes fails its restart check.
 ** A wire that draws a random value per encode fails determinism.
+** A wire whose decoded value frees memory when it is replaced or destroyed fails its heap-free check for the decode direction.
+** A wire whose decoded value runs a destructor that uses no heap passes it.
 ** Once the deferred E2E wire is delivered, it fails the ordinary check.
 ** The sequenced check's interface: a sender factory that is given a start value, a receiver factory and the restart bound, with receivers' slot storage made outside the heap windows.
 Status:: Draft
@@ -64,4 +67,10 @@ So its contract tests must check that sequence rather than require identical byt
 
 The item binds the directions in which a wire claims no heap use.
 A serialized wire that declares allocation in a direction is not required to be heap-free there.
-Its declared class is checked when its route enters runtime mode (`+req~ssr-heap-declared~2+`), and a native route refuses it.
+Its declared class is checked when its route enters runtime mode (`+req~ssr-heap-declared~3+`), and a native route refuses it.
+
+_Why revision 3._
+A wire's class for its decode direction covers a decoded value's whole life (`+req~ssr-heap-declared~3+`).
+Revision 2 checked the decoding call alone, so a value that frees memory only when it ends could pass as heap-free.
+This revision checks replacement and destruction too.
+The same check lets a heap-free route admit a type whose destructor uses no heap (`+req~ssr-heap-slot-types~3+`).
