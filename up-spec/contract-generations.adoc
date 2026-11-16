@@ -1,0 +1,262 @@
+= Contract generations
+:toc: preamble
+
+This page says which requirements of this repository an implementation follows.
+It exists because the repository holds two generations of some rules at once: the existing contract of uProtocol, and a proposed successor contract for one redesigned implementation family.
+
+It is a draft on a feature branch, like the proposal it describes.
+It selects no behaviour: where the relation between two rules is not decided, it says so, and <<selection>> says what holds until it is.
+
+== Two generations
+
+[cols="2,4,4",options="header"]
+|===
+| Generation | Where it is stated | Who follows it
+
+| The existing contract
+| The chapters xref:basics/README.adoc[`basics/`], xref:up-l1/README.adoc[`up-l1/`], xref:up-l2/README.adoc[`up-l2/`] and xref:up-l3/README.adoc[`up-l3/`], with the items they tag for tracing: `LanguageLibrary`, `TransportLayerImpl` and the other tags that xref:README.adoc[the repository's README] lists
+| Every language library, transport library and dispatcher that implements uProtocol
+
+| The proposed successor contract of the redesigned up-rust stack
+| The items filed under xref:safety/README.adoc[`safety/`], which carry the `Safety…` tags
+| No implementation yet, as an accepted contract. The redesigned up-rust SDK, its wires, its transports and its Streamer are being built against it
+|===
+
+* *One implementation family.*
+The successor is written for the redesigned up-rust stack.
+It binds no other SDK, transport or dispatcher, and it is not a new version of uProtocol for everyone.
+* *More than safety.*
+Its items are filed under `safety/`, and they are not only safety material (<<claims>>).
+* *Mostly additions.*
+Most successor items add to the existing contract.
+Some state an existing rule again with more precision, and some differ from an existing rule on purpose.
+<<transition>> lists each place where the two generations meet.
+
+[[claims]]
+== Three separate questions
+
+A rule answers three questions.
+No answer follows from another, or from the directory that a rule is filed in.
+
+[cols="2,5",options="header"]
+|===
+| Question | Possible answers
+
+| Which generation?
+| The existing contract, or the proposed successor.
+
+| Whose responsibility?
+| The common protocol; a contract between parts, such as a wire, a binding or an interaction; the own contract of one SDK or one library; or a duty of whoever integrates and deploys.
+
+| What kind of claim?
+| Ordinary functional behaviour; an additional resource, fault or timing condition; or safety assurance, with its evidence and its assumptions of use.
+|===
+
+So an item under `safety/` can state ordinary functional behaviour of the redesigned SDK.
+Such an item binds every use of that SDK, with or without a safety claim.
+
+The kind of claim does not say when an item binds.
+
+* *A software requirement binds whenever its own condition holds.*
+Some requirements state no condition.
+Others name one: a native route, a route that requires a guarantee, allocation inside middleware, strict mode in a state that checks.
+Each binds the part it is allocated to whenever that condition holds, with or without a safety claim.
+* *An assumption of use is a duty of an integrator* that claims the element's safety-assurance scope (xref:safety/seooc-up-rust/assumptions-of-use.adoc#who[who the assumptions bind]).
+It is no software requirement, and it makes no software requirement wait for that claim.
+
+The successor's own account of its claims is xref:safety/seooc-up-rust/README.adoc#claims[the SEooC's claims].
+
+[[selection]]
+== Which contract an implementation follows
+
+An implementation follows a contract because of what it is and what it declares.
+The rules of this section answer that in one way for every case, and they select no behaviour.
+
+* *The existing contract stays in force for whoever it binds.*
+Every language library, transport library and dispatcher that implements uProtocol follows the protocol chapters, and a part of the redesigned up-rust stack that is one of them does too.
+A proposal lifts no rule of those chapters from anyone.
+Only a replacement that has landed does, and only for the implementations that it names (<<cutover>>).
+* *The successor contract is declared, and then followed whole.*
+An implementation of the redesigned stack that follows the successor contract declares three things:
+** the revision of this repository whose items it follows;
+** which part it is: the element, a binding, a wire or the Streamer, as xref:safety/README.adoc#tags[the tags] name the parts;
+** what it configures: its routes, their heap classes and the guarantees they require, and each optional feature that it uses, such as strict mode.
+* *What the declaration brings in.*
+From that declaration follow, with no further choice:
+** every item allocated to its part that states no condition;
+** every item allocated to its part whose stated condition its configuration meets;
+** every item that one of those items relies on, through a link in its statement or through a shared definition (xref:safety/README.adoc#shared-definitions[summaries and normative definitions]).
+* *No item is declined.*
+An implementation does not follow one successor item and decline another that its declaration brings in.
+What holds whatever a route requires is selected by nothing and waived by nothing (xref:safety/seooc-up-rust/heap.adoc#req-ssr-heap-guarantees[A stronger resource guarantee is required by name]).
+* *A tracing run selects coverage, never the contract.*
+A repository's tracing run names files and tags, and reports the items that it keeps (xref:safety/README.adoc#tracing[how a repository starts tracing]).
+Its file patterns and its tag filter add no item to an implementation's contract and remove none, so an item that a run does not keep binds just the same.
+An item's own tags are another matter: they name the part that the item is allocated to.
+* *Exact revisions.*
+A claim names each item with its revision, and its evidence is evidence for that revision.
+* *What a relation means for an implementation.*
+Each row of <<transition,the transition table>> gives the relation for one behaviour.
+The relation says what an implementation of the redesigned stack follows, and what it may claim:
+** _retained_, _refined_ or _new_: both generations hold together.
+It follows the existing rule where one binds it, and the successor items that its declaration brings in.
+** _deferred_: the successor rule binds nothing yet.
+** _replaced_, as a proposal: one implementation cannot meet both rules.
+The existing rule stays the accepted one.
+An implementation built against the successor rule says so, with the item's revision, and claims no conformance to the existing rule for that behaviour.
+** _open_: the relation is not decided, and the row says what is missing.
+Until it is decided, a claim of conformance to one rule is no claim about the other, and no claim rests on an answer that the row leaves open.
+* *Nobody claims both rules* for a behaviour where one implementation cannot meet both.
+* *Who decides.*
+Whether a successor rule replaces an existing one is decided when its slice lands (<<cutover>>), and not before.
+This page decides none.
+
+[[status]]
+== What publication does and does not mean
+
+Five statuses are separate, and none implies the next.
+
+. *Published as a draft on a feature branch.*
+The text can be read and reviewed.
+. *Source accepted.*
+An implementation's source was accepted against an item at its exact revision.
+. *Integrated.*
+The consumers of that implementation have taken it.
+. *Adopted upstream.*
+The rule has joined or replaced the existing contract in the upstream specification.
+. *Assured.*
+A safety assessment covers it for a stated configuration.
+
+At this revision every successor item has the first status and no other.
+No successor rule has replaced an existing one, none is adopted upstream, and none is assured.
+
+[[transition]]
+== Where the two generations meet
+
+Each row names one behaviour, the existing rule for it and the proposed successor rule for it.
+The relation is one of these:
+
+* _retained_: the successor keeps the existing rule;
+* _refined_: it keeps the rule and adds to it;
+* _replaced_: it differs from the rule on purpose;
+* _new_: the existing contract has no rule for the behaviour;
+* _deferred_: the successor rule binds nothing yet;
+* _open_: the relation is not decided.
+
+A row states what the two texts say.
+It is a comparison of documents, and it claims nothing about whether two implementations interoperate.
+
+[cols="2,4,4,2,4",options="header"]
+|===
+| Behaviour | Existing rule | Proposed successor rule | Relation | What is open, and who is affected
+
+| A message that a dispatcher cannot deliver
+| xref:up-l2/dispatchers/README.adoc[Dispatching], "Requirements": a dispatcher queues and retries, and a message that cannot be delivered "*MUST* be sent to the Dead Letter topic", with its header, the reason and a way to subscribe to that topic.
+| xref:safety/up-l2/streamer.adoc#req-ssr-streamer-dispatch-obligations[Undeliverable messages are counted, never sent as dead letters]: in ASIL mode the Streamer reports undeliverable messages through fixed counters, never through a dead-letter message, and retries no longer than the route's bounded wait.
+| Replaced, for a Streamer in ASIL mode. Proposed, and not decided.
+| A Streamer in ASIL mode cannot meet both rules. Whether the successor rule replaces the existing one for it is not decided, and nothing replaces it before the successor rule lands with its implementation. The successor rule is scoped to ASIL mode: it says nothing about another dispatcher, or about a Streamer outside that mode.
+
+| When a dispatcher may discard a message
+| xref:up-l2/dispatchers/README.adoc[Dispatching], "Requirements": delivery is at least once. A dispatcher queues a message that was not acknowledged, retries it, and "*MUST NOT* discard UMessages unless either UMessage has expired, or the egress queue is full".
+| xref:safety/up-l2/streamer.adoc#req-ssr-streamer-route-gate[Each route has a heap-free gate]: each Streamer route has a gate, and while the gate is not enabled, by an operator or by a monitor, the route's frames are dropped at admission and counted. xref:safety/up-l2/streamer.adoc#req-ssr-streamer-qos-per-leg[Both legs are checked, at setup and per frame]: before a frame is forwarded it is checked against the egress leg's own limits, which that item gives as "payload size, token length, wire set". xref:safety/up-l2/streamer.adoc#req-ssr-config-exact-addresses[ASIL Streamer routes name exact source addresses]: in the ASIL Streamer a frame from an address that no route reserved is refused and counted. xref:safety/seooc-up-rust/qos.adoc#req-ssr-qos-overflow[Overflow acts as declared]: a full queue acts as the route's declared overflow policy.
+| Replaced, for a Streamer route: for its gate, for a frame that a leg's limit refuses and for an address that no route reserved. Proposed, and not decided.
+| A gated route drops messages that have not expired and whose queue is not full. So does a leg that refuses a frame for one of its limits, and so does the ASIL Streamer for a frame from an address that no route reserved. The existing rule allows none of these. What becomes of a message that is not delivered is the row above. Nothing replaces the existing rule before the successor rules land with their implementation. Affected: the Streamer, and whoever relies on at-least-once delivery through it.
+
+| An RPC request that a dispatcher cannot dispatch
+| xref:up-l2/dispatchers/README.adoc[Dispatching], "RPC Error Handling": the dispatcher "is responsible to generate an RPC Response message and send it to the originator of the request", with a `commstatus` code.
+| xref:safety/up-l2/streamer.adoc#req-ssr-streamer-rpc-error-response[An RPC request that cannot be dispatched is answered, best effort]: the Streamer sends that response, with that chapter's code, as best effort: from capacity reserved at setup, only while the reverse route's gate is enabled and the route reports capacity, never blocking and never retried. The request's TTL remains the guarantee.
+| Open: refined or replaced.
+| The existing rule does not say whether a response may go unsent for want of capacity. If it may, the successor refines the rule. If it may not, the successor replaces it for the Streamer. Affected: the Streamer, and an RPC client behind it, whose call can end at its TTL with no error response.
+
+| Blocking in the communication-layer API
+| xref:up-l2/api.adoc[Communication Layer APIs]: implementations of the messaging APIs "*MUST* be non-blocking and *SHOULD* be asynchronous".
+| xref:safety/seooc-up-rust/crate-isolation.adoc#req-ssr-crate-sync-path[Traffic is synchronous or polled] and xref:safety/seooc-up-rust/bounded-work.adoc#req-ssr-bound-wait[Every wait is bounded]: the element's traffic operations are synchronous or polled. They never block without a bound, and they have bounded waits, a deliberate idle wait and waits inside a declared allocation domain. xref:safety/seooc-up-rust/build.adoc#req-ssr-async-seam[The asynchronous interface has a written, executor-independent contract] states the contract of an asynchronous layer above them.
+| Open.
+| The existing rule is about the communication-layer API, and the successor rules are about the element's synchronous core beneath it. No item says whether an asynchronous layer keeps the existing rule for the redesigned SDK, or whether the successor's waits replace it there. Affected: the redesigned SDK's API.
+
+| The format of a message ID
+| xref:basics/uuid.adoc[UUID]: a UUIDv7, as RFC 9562 defines it.
+| xref:safety/up-l2/interaction.adoc#req-ssr-ids-unique[Message IDs are unique]: the same format, and for the element's generator its source of entropy, its stated residual of repetition, its refusal bounds, and no heap use and no panic.
+| Retained and refined.
+| Nothing is open for the format, which the existing rule defines. The generator's guarantees are the successor's additions, and they bind the element.
+
+| What a payload's encoding identifier means, and when a payload is present
+| xref:basics/payload_encoding_registry.adoc[The payload encoding registry]: one 16-bit identifier says how a payload's bytes are encoded. The registry alone assigns identifiers and divides the identifier space, and `0` means an encoding that an applicable contract defines. xref:basics/uattributes.adoc#common-attributes[UAttributes], `payloadEncodingId`: the identifier and the payload are both present or both absent, a present zero-length payload is a present payload, and message validation rejects no identifier from `0x0000` to `0xFFFF` for being reserved, unassigned, private or unknown.
+| None of its own. No successor item assigns an identifier, restates a range or defines when a payload is present. Successor items use the identifier as the registry defines it: xref:safety/up-l2/interaction.adoc#req-ssr-peer-rpc-undecodable-answered[An undecodable request is answered] for a request whose encoding a server does not admit, xref:safety/up-l2/streamer.adoc#req-ssr-streamer-byte-identity[Carriage keeps the bytes] for a carrier, and xref:safety/seooc-up-rust/e2e-wire.adoc#req-ssr-e2e-wraps-any-wire[The E2E wire wraps any wire and leaves its bytes alone] for the deferred wire's private-use identifier.
+| Retained: the successor has no rule of its own, and the existing one applies.
+| Nothing is open for what an identifier means or for when a payload is present. The existing rule binds the redesigned stack as it stands, and this proposal has no registry, no assignment and no presence rule of its own. Not stated: how the element's own envelopes carry the identifier and a payload's presence, which goes with the interface between an SDK and a transport, below. Carrying a payload and a native representation are the next two rows, and an empty input to a wire's decoding is the row "An empty payload", below. Affected: every part of the redesigned stack that originates, carries or reads a message.
+
+| Carrying a payload that the carrier does not read
+| xref:basics/payload_encoding_registry.adoc#acceptance[The payload encoding registry, "Carrying a Payload versus Reading It"]: a component that only carries, routes, stores or forwards a message keeps its identifier and its payload bytes unchanged. It needs no decoder, and it does not refuse carriage because the identifier is reserved, unassigned, private or unknown to it. The registry states that as an assumption of use, and leaves a component's own requirement to the component's specification. xref:up-l1/README.adoc#send[The Transport Layer, "Send"]: a transport preserves a message's metadata and payload. xref:up-l2/dispatchers/README.adoc[Dispatching]: a router does not need to examine a payload, and a dispatcher forwards the attributes of a message's header.
+| xref:safety/up-l2/streamer.adoc#req-ssr-streamer-byte-identity[Carriage keeps the bytes]: a carrier keeps the identifier and the payload bytes unchanged on every hop, with at most one payload copy and no negotiation or transcoding. xref:safety/up-l2/streamer.adoc#req-ssr-streamer-qos-per-leg[Both legs are checked, at setup and per frame]: each frame is checked against the egress leg's limits, which include its "wire set". xref:safety/up-l2/streamer.adoc#req-ssr-streamer-route-lock[Routes and subscriptions are locked at activation]: a route's wires are part of its definition.
+| Retained and refined, for keeping the identifier and the bytes. Open for a frame whose encoding no wire of its route names.
+| No successor item says what a leg's wire set is, or whether a leg refuses a present payload because no wire of the route names its encoding identifier. If a leg does, the successor differs from the existing rule for that frame. If the set limits only what a leg can carry, such as its envelope, its storage and a native representation that the route has agreed, it does not. Neither reading is decided here, and a revision that states the limits is proposed. Affected: the Streamer, the element's carrier routes, and whoever forwards through them a payload that only its endpoints read.
+
+| What shows that a payload's type and layout are agreed
+| xref:basics/payload_encoding_registry.adoc#type-identity[The payload encoding registry, "Encoding Identity versus Type Identity"]: the identifier says how a payload is encoded, not which type, schema or memory layout it has. Alone it establishes neither schema compatibility nor native ABI compatibility. The registry defines no way to convey a type or a layout, and leaves that to the applicable contract or profile.
+| For a native representation, which a reader borrows in place: xref:safety/up-l1/peers.adoc#req-ssr-native-abi-agreed[A native representation never crosses an ABI]; xref:safety/up-l1/integrity.adoc#req-ssr-integrity-zero-copy[Zero-copy only from a writer at or above the reader]; xref:safety/up-l1/integrity.adoc#req-ssr-integrity-any-bits[In-place types accept every bit pattern] and xref:safety/up-l1/integrity.adoc#req-ssr-integrity-checked-at-admission[In-place frames are checked once, at admission]. For a serialized encoding, none: the type that a wire decodes into is the application's, under its service contract.
+| New, for a native representation: a mechanism of the kind that the existing rule leaves to a contract or profile.
+| The successor items rest no agreement on the encoding identifier. A matching identifier is no part of what they require for a view into shared memory, and it stands in for none of it. No successor item assigns an identifier to a native representation, and the registry assigns none to shared memory. Which identifier such a frame carries follows the registry's rules for whoever originates it. No item says how a deployment's agreement on a private-use identifier and the element's agreement on a representation are tied. Affected: a wire that carries a native representation, each binding that carries native frames, and the integrator.
+
+| When a message has expired
+| xref:basics/uattributes.adoc#common-attributes[UAttributes], `ttl`: "A consumer *MUST NOT* process an expired message. A message is expired if the TTL is > `0` and the consumer's current time is _after_ the message's creation time _plus_ its TTL", and "A consumer *MUST NOT* consider a message expired if it has a TTL value of `0`".
+| xref:safety/seooc-up-rust/qos.adoc#req-ssr-qos-ttl[Expired messages are not processed]: a frame whose TTL has expired is neither delivered nor forwarded, and it is counted. Expiry is judged in whole milliseconds, from the time that the frame's message ID records, between two bounds: a frame "*MUST NOT* be refused before its TTL has passed", and a frame "*MUST* always be refused once its TTL, rounded up to a whole millisecond, plus one more millisecond has passed". A frame is refused when the wall clock cannot be read, and expiry is checked before a frame is decoded.
+| Retained and refined, for a TTL greater than 0. Open for a TTL of 0.
+| The successor's second bound has no exception for a TTL of 0. As written, it has a frame with a TTL of 0 refused once one millisecond has passed, and the existing rule says that such a message is never expired. So the two texts differ for that value. Whether the successor keeps the existing meaning of 0, through an exception to its bound, or differs from it on purpose is not decided, and this page decides neither. The assumption about timing budgets states the same bound for the integrator (xref:safety/seooc-up-rust/assumptions-of-use.adoc#aou-seooc-timing-budgets[Timing claims rest on a supported configuration, and the item's budgets are the integrator's], "TTL resolution"). Affected: the element, every carrier route, and a sender that relies on a TTL of 0.
+
+| An empty payload
+| xref:basics/umessage.adoc[UMessage]: an explicitly set zero-length payload is a present payload. xref:basics/error_model.adoc[The error model]: an operation that returns no data answers with an empty message, which its consumer receives as an empty payload. xref:basics/payload_encoding_registry.adoc[The payload encoding registry] names each encoding's format.
+| xref:safety/up-l1/wires.adoc#req-ssr-wire-no-panic[Encoding and decoding never panic]: a wire's decoding returns an error for "a malformed, truncated, oversized or empty frame".
+| Open.
+| As written, the successor rule makes every empty input an error, and with it the empty encoding that a format can give a value. A revision that follows the wire's format is proposed. Affected: every wire, and the wire contract suite.
+
+| The iceoryx2 version of an iceoryx2 transport
+| xref:up-l1/iceoryx2.adoc[iceoryx2], "iceoryx2 Version": a transport that implements that chapter uses version `0.6.1` of the iceoryx2 protocol.
+| The items of xref:safety/up-l1/iceoryx2.adoc[the iceoryx2 page] are written against iceoryx2 0.9, and name versions 0.9 and 0.9.2.
+| Open.
+| No item states how the two versions relate, or whether transports on them interoperate, and this page asserts neither. Affected: the redesigned iceoryx2 binding, and every transport that follows the chapter.
+
+| The interface between an SDK and a transport
+| xref:up-l1/README.adoc[The Transport Layer]: `UTransport` and `UListener`, which each language library declares and each transport library implements.
+| The element's own binding and wire contracts: xref:safety/up-l1/bindings.adoc[allocated to each binding] and xref:safety/up-l1/wires.adoc[allocated to each wire]. Routes of the classic `UTransport` interface never enter runtime mode (xref:safety/seooc-up-rust/runtime-modes.adoc#req-ssr-mode-classic-excluded[Classic routes never enter runtime mode]).
+| New. Open for its relation to `UTransport`.
+| The successor contracts are one SDK's own, and they are no language-neutral interface. No item says whether the redesigned SDK maps them to `UTransport`, keeps both side by side or replaces `UTransport` within its own scope.
+
+| The life cycle and the ordinary functional behaviour of the redesigned SDK
+| None that is equivalent. xref:up-l2/api.adoc[Communication Layer APIs] describes the messaging interfaces at a high level.
+| The two modes and the transition between them, routes and their QoS, errors and reports, and deployment data: xref:safety/seooc-up-rust/runtime-modes.adoc[modes and the transition], xref:safety/seooc-up-rust/qos.adoc[QoS, TTL and deadlines], xref:safety/seooc-up-rust/errors.adoc[refusal, errors and reporting] and xref:safety/seooc-up-rust/deployment-data.adoc[deployment data].
+| New.
+| These items bind every use of the redesigned SDK. Where they are filed is open: they are under `safety/` today, and a home that says "the ordinary contract of this SDK" is not chosen.
+
+| Heap use, release, bounded work, memory safety, integrity levels and peers
+| None. For a native representation, the row on a payload's type and layout, above, gives what the existing contract says.
+| The items that xref:safety/seooc-up-rust/README.adoc#files[the SEooC's file list] names, in the element's own part and in the two layer parts. They include the software's strict mode (xref:safety/seooc-up-rust/build.adoc[build and shipped content]), the waiver for allocation inside middleware (xref:safety/seooc-up-rust/waivers.adoc[waivers]) and what a binding's README discloses (xref:safety/up-l1/bindings.adoc#req-ssr-binding-readme[The README says what the middleware cannot guarantee]).
+| New.
+| Additional obligations of the element, its bindings, its wires and its Streamer. They replace nothing in the existing contract. Each binds whenever its own condition holds, with or without a safety claim: strict mode produces its report in its Report and Enforce states whether or not an assurance scope is admitted, and a transport with a route whose heap class is allocation inside middleware enters runtime mode only with its named waiver, whoever deploys it.
+
+| What an integrator provides in order to claim safety assurance
+| None.
+| The assumptions of use (xref:safety/seooc-up-rust/assumptions-of-use.adoc[the element's assumptions of use]), and the safety manuals that state them.
+| New.
+| They bind an integrator that claims the element's safety-assurance scope, and ordinary use carries none of them. They are no software requirement and they suspend none: the software requirements that such a claim also rests on, strict mode and waivers among them, are in the row above and bind on their own conditions.
+
+| End-to-end protection of a payload
+| None.
+| xref:safety/seooc-up-rust/e2e-wire.adoc[The end-to-end protection wire].
+| Deferred.
+| The wire is not part of the current delivery, and its items bind once it is delivered.
+|===
+
+[[cutover]]
+== How a replacement lands
+
+* *In slices.*
+A change of behaviour lands as one slice: the changed requirements with their revisions, the rule they replace and for whom, the implementation that meets them at that revision, its evidence, and the existing text that the slice retires or scopes.
+* *A proposal first.*
+A proposed rule can be published before its implementation is complete.
+It is then a proposal, as <<status>> describes, and it has replaced nothing.
+* *One authority after the cutover.*
+After a slice lands, one rule applies to each behaviour that it covers, for each implementation that it names.
+For every other implementation the existing rule stays as it was.
+Text that no longer applies to anyone is removed from the current pages, and Git keeps it.
+* *Until then both texts stand,* labelled as this page labels them, and <<selection>> says what an implementation follows and may claim.

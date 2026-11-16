@@ -6,6 +6,7 @@ The key words "*MUST*", "*MUST NOT*", "*REQUIRED*", "*SHALL*", "*SHALL NOT*", "*
 Conventions, tags and status words: xref:../README.adoc[the safety area's README].
 Scope and element boundary: xref:README.adoc[the SEooC's README].
 
+[[req-ssr-memory-static]]
 == ASIL-path storage is static or caller-provided
 
 [.specitem,oft-sid="req~ssr-memory-static~2",oft-title="ASIL-path storage is static or caller-provided",oft-needs="impl,utest",oft-tags="SafetyUpRustCore"]
@@ -35,6 +36,7 @@ Either way:
 --
 
 [horizontal]
+ID:: `+req~ssr-memory-static~2+`
 ASIL:: B
 Allocated to:: the element
 Verification:: test, gate, review
@@ -48,7 +50,7 @@ Status:: Draft
 ISO 26262:: 6-Table 6 1b (part-clause numbers only)
 
 *Rationale.*
-The safety crate is `+no_std+` with no `+alloc+` (`+req~ssr-crate-isolated~1+`).
+The safety crate is `+no_std+` with no `+alloc+` (xref:crate-isolation.adoc#req-ssr-crate-isolated[The safety crate cannot be tainted]).
 So its storage can come only from a static region or from bytes the caller provides.
 Every placement goes through one checked reservation, which checks bounds, alignment and exclusivity.
 
@@ -58,6 +60,7 @@ There `+up-rust-std+` provides them automatically, and `+up-rust-alloc+` lets an
 
 Exclusivity is a property of live ownership, not of numeric addresses: a region may occupy addresses that an earlier, ended owner used.
 
+[[req-ssr-memory-sealed]]
 == Startup memory is sealed
 
 [.specitem,oft-sid="req~ssr-memory-sealed~3",oft-title="Startup memory is sealed",oft-needs="impl,utest",oft-tags="SafetyUpRustCore"]
@@ -72,10 +75,11 @@ Once it is sealed:
 
 `+enter_runtime_all+` reports any setup that is still alive on that memory and has not entered runtime mode.
 
-A failed `+enter_runtime_all+` seals the memory as well, so setup cannot be retried on it in the process (`+aou~seooc-supervisor-restart~4+`).
+A failed `+enter_runtime_all+` seals the memory as well, so setup cannot be retried on it in the process (xref:assumptions-of-use.adoc#aou-seooc-supervisor-restart[A supervisor outside the process restarts it]).
 --
 
 [horizontal]
+ID:: `+req~ssr-memory-sealed~3+`
 ASIL:: B
 Allocated to:: the element
 Verification:: test (including a setup kept alive with `+mem::forget+`), heap-window
@@ -84,6 +88,7 @@ Status:: Draft
 *Rationale.*
 A shared startup allocator must stop serving new requests once initialization ends, including failure paths that leave some transports active.
 
+[[req-ssr-memory-computable]]
 == Startup storage is computable before start
 
 [.specitem,oft-sid="req~ssr-memory-computable~3",oft-title="Startup storage is computable before start",oft-needs="impl,utest",oft-tags="SafetyUpRustCore"]
@@ -113,6 +118,7 @@ Where a figure depends on allocator overhead, scheduler storage, concurrency or 
 --
 
 [horizontal]
+ID:: `+req~ssr-memory-computable~3+`
 ASIL:: B
 Allocated to:: the element
 Verification:: test, review
@@ -126,15 +132,15 @@ ISO 26262:: 6-7.4.13 (part-clause numbers only)
 *Rationale.*
 An integrator who places startup memory in a static region or a linker section has to size it before the process starts, and a request that does not fit is refused only at startup.
 A size that anyone could work out in principle helps no one, so the element provides the computation itself.
-Each route's reserved storage is reported under `+req~ssr-error-route-report~2+`.
+Each route's reserved storage is reported under xref:errors.adoc#req-ssr-error-route-report[Each route reports what it got].
 
-_Why revision 3._
-Revision 2 asked for the startup memory alone.
+_What each figure measures._
+The startup memory alone is not the whole footprint.
 A report that counted only live objects would understate two things:
 
 * the backing that refused setups, growth and lost races leave claimed;
 * the storage that asynchronous registrations and deferred work need.
 
-So each figure now says what it measures, and a figure that the configuration cannot bound is reported as not established.
+So each figure says what it measures, and a figure that the configuration cannot bound is reported as not established.
 
 Sizes that depend on a scheduler's tasks and timers, an allocator's overhead or a thread's stack are the supported configuration's package to state (xref:README.adoc#claims[the SEooC's claims]).

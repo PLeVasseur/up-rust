@@ -10,12 +10,13 @@ Scope and element boundary: xref:../seooc-up-rust/README.adoc[the up-rust SEooC'
 These items say how the element lends or copies shared memory between integrity levels.
 They are allocated to the element (tag `SafetyUpRustCore`).
 
-* A binding's part, recording and reporting the writer's level, is `+req~ssr-binding-integrity-level~1+` in xref:bindings.adoc[the duties of every binding].
-* The integrator's part, assigning each transport's level, is `+aou~seooc-integrity-levels~6+` in xref:deployment.adoc[what a deployment provides].
-* The integrator's duties for access and for a zero-copy writer are `+aou~seooc-peer-access~5+`, on the same page.
-* The integrator's duties for data above ASIL B, and for the element inside an ASIL C or D process or partition, are `+aou~seooc-capability-ceiling~1+` in xref:../seooc-up-rust/assumptions-of-use.adoc[the element's assumptions of use].
+* A binding's part, recording and reporting the writer's level, is xref:bindings.adoc#req-ssr-binding-integrity-level[A lending binding records and reports the writer's level] in xref:bindings.adoc[the duties of every binding].
+* The integrator's part, assigning each transport's level, is xref:deployment.adoc#aou-seooc-integrity-levels[Each transport's integrity level is assigned correctly] in xref:deployment.adoc[what a deployment provides].
+* The integrator's duties for access and for a zero-copy writer are xref:deployment.adoc#aou-seooc-peer-access[Only authorized processes reach the transport, and peers are faulty, never malicious], on the same page.
+* The integrator's duties for data above ASIL B, and for the element inside an ASIL C or D process or partition, are xref:../seooc-up-rust/assumptions-of-use.adoc#aou-seooc-capability-ceiling[Data above ASIL B relies on measures outside the element] in xref:../seooc-up-rust/assumptions-of-use.adoc[the element's assumptions of use].
 * What a level is, and what it is not, is in xref:../README.adoc#concepts[the shared concepts].
 
+[[req-ssr-integrity-declared]]
 == Each transport declares one integrity level
 
 [.specitem,oft-sid="req~ssr-integrity-declared~3",oft-title="Each transport declares one integrity level",oft-needs="impl,utest",oft-tags="SafetyUpRustCore"]
@@ -25,13 +26,14 @@ Each transport *MUST* declare one integrity level: QM, A, B, C or D, in that ord
 Every route on the transport *MUST* carry that level, with no per-route override.
 
 *Refusal at setup.*
-At setup, a route on which a reader would see shared memory written below its own level, or at a level its binding reports as unknown, *MUST* be refused by name, as QoS is, unless it takes the copy route of `+req~ssr-integrity-zero-copy~4+`.
+At setup, a route on which a reader would see shared memory written below its own level, or at a level its binding reports as unknown, *MUST* be refused by name, as QoS is, unless it takes the copy route of <<req-ssr-integrity-zero-copy,Zero-copy only from a writer at or above the reader>>.
 
 *The writer's level.*
-Recording and reporting the writer's level is the binding's duty (`+req~ssr-binding-integrity-level~1+`).
+Recording and reporting the writer's level is the binding's duty (xref:bindings.adoc#req-ssr-binding-integrity-level[A lending binding records and reports the writer's level]).
 --
 
 [horizontal]
+ID:: `+req~ssr-integrity-declared~3+`
 ASIL:: B
 Allocated to:: the element
 Verification:: test, fault-injection
@@ -45,6 +47,7 @@ So a writer below the reader's level could corrupt data that the reader relies o
 One level per transport, with no override, keeps a route from claiming more than its transport.
 QM as the default means an undeclared transport claims nothing.
 
+[[req-ssr-integrity-zero-copy]]
 == Zero-copy only from a writer at or above the reader
 
 [.specitem,oft-sid="req~ssr-integrity-zero-copy~4",oft-title="Zero-copy only from a writer at or above the reader",oft-needs="impl,utest",oft-tags="SafetyUpRustCore"]
@@ -53,7 +56,7 @@ QM as the default means an undeclared transport claims nothing.
 A reader *MUST* get a view into shared memory only when all of these hold:
 
 * the writer's level is at or above its own;
-* the type's exact ABI, layout, alignment and initialized validity are agreed (`+req~ssr-native-abi-agreed~1+`);
+* the type's exact ABI, layout, alignment and initialized validity are agreed (xref:peers.adoc#req-ssr-native-abi-agreed[A native representation never crosses an ABI]);
 * the storage's allocation tenure stays live for the whole view;
 * the synchronization that keeps the writer from writing the storage while the view exists is in place.
 
@@ -82,6 +85,7 @@ It does not contain corrupt middleware offsets, lengths, free lists or ownership
 --
 
 [horizontal]
+ID:: `+req~ssr-integrity-zero-copy~4+`
 ASIL:: B
 Allocated to:: the element
 Verification:: fault-injection, miri[miri-sb, miri-tb, miri-strict-provenance], heap-window, review
@@ -97,10 +101,11 @@ ISO 26262:: 6-Annex D.2.3, 6-Table 3 1h (part-clause numbers only)
 A writer below the reader's level, or of unknown level, can change shared bytes while the reader uses them.
 So the reader works only on a copy in storage it owns, checked after the copy is made.
 
-The copy is made from storage reserved at setup, like every other runtime buffer, so it needs no heap (`+req~ssr-heap-none~3+`).
+The copy is made from storage reserved at setup, like every other runtime buffer, so it needs no heap (xref:../seooc-up-rust/heap.adoc#req-ssr-heap-none[No heap in runtime mode]).
 
-iceoryx2 maps the payload memory read-only for subscribers (https://github.com/eclipse-iceoryx/iceoryx2/issues/906[iceoryx2 issue #906]; https://github.com/eclipse-iceoryx/iceoryx2/blob/806442b5273d87380511bb5ffcab316d129af31c/iceoryx2/src/port/details/data_segment.rs[`+data_segment.rs+` in iceoryx2 0.9.2]).
+A lending middleware can map its payload memory read-only for readers.
 So the copy reads it only through loads that are valid on a read-only mapping.
+Where one middleware does so is described with its binding.
 
 Copying raced bytes with ordinary references or a plain memory copy is itself a data race.
 So the copy is sound only through a mechanism defined for racing access, and a route without one has no sound form.
@@ -108,6 +113,7 @@ So the copy is sound only through a mechanism defined for racing access, and a r
 The level rule protects what a reader borrows.
 Middleware control memory that a faulty peer can corrupt is a separate obligation, and running in a separate process does not make a lower-assurance writer harmless.
 
+[[req-ssr-integrity-any-bits]]
 == In-place types accept every bit pattern
 
 [.specitem,oft-sid="req~ssr-integrity-any-bits~1",oft-title="In-place types accept every bit pattern",oft-needs="impl,utest",oft-tags="SafetyUpRustCore"]
@@ -121,6 +127,7 @@ It does not make a write that races a read defined.
 --
 
 [horizontal]
+ID:: `+req~ssr-integrity-any-bits~1+`
 ASIL:: B
 Allocated to:: the element
 Verification:: compile-fail (the derive refuses such fields), test
@@ -133,11 +140,12 @@ A check made once cannot hold while a faulty writer can still change the bytes.
 With no invalid bit patterns, a later bad write can only leave a wrong value, which a checked getter or an end-to-end check can report.
 
 That prevents an invalid value from being constructed.
-It is no permission for a write that races a read through an ordinary Rust reference, which zero-copy excludes by the writer-at-or-above rule and the view's synchronization (`+req~ssr-integrity-zero-copy~4+`).
+It is no permission for a write that races a read through an ordinary Rust reference, which zero-copy excludes by the writer-at-or-above rule and the view's synchronization (<<req-ssr-integrity-zero-copy,Zero-copy only from a writer at or above the reader>>).
 
 The end-to-end check meant here is whatever protection the system supplies.
 The SDK's own E2E wire is deferred and not part of this delivery.
 
+[[req-ssr-integrity-checked-at-admission]]
 == In-place frames are checked once, at admission
 
 [.specitem,oft-sid="req~ssr-integrity-checked-at-admission~1",oft-title="In-place frames are checked once, at admission",oft-needs="impl,utest",oft-tags="SafetyUpRustCore"]
@@ -148,6 +156,7 @@ A frame that fails *MUST* be refused and counted, so a reader's typed view of an
 --
 
 [horizontal]
+ID:: `+req~ssr-integrity-checked-at-admission~1+`
 ASIL:: B
 Allocated to:: the element
 Verification:: test (a malformed in-place frame is refused at admission and counted)
@@ -157,12 +166,13 @@ Status:: Draft
 In-place frames are borrowed through a checked typed view.
 Checking once, before any reader sees the frame, makes a malformed frame one counted refusal instead of an error at each reader.
 
-Because in-place types accept every bit pattern (`+req~ssr-integrity-any-bits~1+`), the view needs no check of its bits after admission.
+Because in-place types accept every bit pattern (<<req-ssr-integrity-any-bits,In-place types accept every bit pattern>>), the view needs no check of its bits after admission.
 
 Checking once is sound only for a frame that the reader's view keeps still.
-A frame whose writer could still change it takes the copy route and is validated on the copy (`+req~ssr-integrity-zero-copy~4+`).
+A frame whose writer could still change it takes the copy route and is validated on the copy (<<req-ssr-integrity-zero-copy,Zero-copy only from a writer at or above the reader>>).
 The check replaces none of the view's alignment, tenure and synchronization obligations.
 
+[[req-ssr-integrity-carrier-crossing]]
 == Upward carrier crossings copy once, or are refused
 
 [.specitem,oft-sid="req~ssr-integrity-carrier-crossing~2",oft-title="Upward carrier crossings copy once, or are refused",oft-needs="impl,utest",oft-tags="SafetyUpRustCore"]
@@ -184,6 +194,7 @@ The copy protects the payload only, not the ingress middleware's control memory.
 --
 
 [horizontal]
+ID:: `+req~ssr-integrity-carrier-crossing~2+`
 ASIL:: B
 Allocated to:: the element (carrier routes)
 Verification:: fault-injection (a writer changing a frame while it is forwarded), test (refusal of a route whose ingress has no valid source-access mechanism), heap-window, review (each ingress's source-access mechanism, at source level)
@@ -195,7 +206,7 @@ So that copy is the one place where a frame from a lower writer can be held stil
 
 A byte-only egress receives the ingress bytes directly, with no loan to copy into.
 
-An unknown level counts as lower, as it does on a receive route (`+req~ssr-integrity-zero-copy~4+`), because a writer whose level nobody can state cannot be trusted to be at or above the reader.
+An unknown level counts as lower, as it does on a receive route (<<req-ssr-integrity-zero-copy,Zero-copy only from a writer at or above the reader>>), because a writer whose level nobody can state cannot be trusted to be at or above the reader.
 
 A copy made with ordinary loads from memory that a writer races is a data race, not a validation point.
 So the source access must be valid for racing writes.

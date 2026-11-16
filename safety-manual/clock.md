@@ -21,10 +21,10 @@ link neither validates the deployment nor closes an implementation requirement.
 ## Assumption (verbatim)
 
 <!-- aou-statement:start -->
-> The platform *SHALL* provide a monotonic clock and a wall clock through a time provider whose supported configuration states their units, resolution, monotonicity, adjustment and failure behaviour (`+req~ssr-platform-contract~2+`).
+> The platform *SHALL* provide a monotonic clock and a wall clock through a time provider whose supported configuration states their units, resolution, monotonicity, adjustment and failure behaviour (xref:platform.adoc#req-ssr-platform-contract[Every platform backend keeps the platform's rules]).
 >
 > * *Synchronization.* The wall clock is synchronized with every peer's time base, to within an error the integrator includes in its TTL and deadline choices, before the element's TTL decisions are relied on.
-> * *Wall time, not uptime.* UUIDv7 message IDs and TTL are defined in wall time, and uptime *SHALL NOT* stand in for it: a target without a synchronized wall clock supplies one through its provider, or setup refuses (`+req~ssr-mode-entry-clock~2+`).
+> * *Wall time, not uptime.* UUIDv7 message IDs and TTL are defined in wall time, and uptime *SHALL NOT* stand in for it: a target without a synchronized wall clock supplies one through its provider, or setup refuses (xref:runtime-modes.adoc#req-ssr-mode-entry-clock[The wall clock is read before runtime mode]).
 > * *RPC requests.* The TTL bound on an RPC request holds only while the client's and the server's wall clocks agree within the TTL.
 > * *Strict mode.* In strict mode, the report warns when the wall clock at setup reads earlier than the element's release date, a sign that it is not yet synchronised, and lists the time-sync source where one is declared.
 <!-- aou-statement:end -->

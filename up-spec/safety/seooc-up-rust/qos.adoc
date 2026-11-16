@@ -6,6 +6,7 @@ The key words "*MUST*", "*MUST NOT*", "*REQUIRED*", "*SHALL*", "*SHALL NOT*", "*
 Conventions, tags and status words: xref:../README.adoc[the safety area's README].
 Scope and element boundary: xref:README.adoc[the SEooC's README].
 
+[[req-ssr-qos-declared]]
 == QoS is declared per route at setup
 
 [.specitem,oft-sid="req~ssr-qos-declared~1",oft-title="QoS is declared per route at setup",oft-needs="impl,utest",oft-tags="SafetyUpRustCore"]
@@ -16,13 +17,13 @@ Priority and TTL stay per message.
 --
 
 [horizontal]
+ID:: `+req~ssr-qos-declared~1+`
 ASIL:: B
 Allocated to:: the element
 Verification:: test, compile-fail (QoS set after runtime)
 Status:: Draft
 
-*Rationale.*
-
+[[req-ssr-qos-no-downgrade]]
 == QoS is honored or refused, never weakened
 
 [.specitem,oft-sid="req~ssr-qos-no-downgrade~2",oft-title="QoS is honored or refused, never weakened",oft-needs="impl,utest",oft-tags="SafetyUpRustCore"]
@@ -51,6 +52,7 @@ A report *MUST NOT* present a passed setup check as a safety qualification.
 --
 
 [horizontal]
+ID:: `+req~ssr-qos-no-downgrade~2+`
 ASIL:: B
 Allocated to:: the element
 Verification:: test
@@ -69,6 +71,7 @@ Ordinary use needs only the first.
 Refusing it for want of the others would make a safety package a prerequisite for non-safety use.
 Granting a required stronger claim without its evidence would be a silent downgrade of that claim.
 
+[[req-ssr-qos-overflow]]
 == Overflow acts as declared
 
 [.specitem,oft-sid="req~ssr-qos-overflow~3",oft-title="Overflow acts as declared",oft-needs="impl,utest",oft-tags="SafetyUpRustCore"]
@@ -90,16 +93,17 @@ On a serialized or owned route whose declared heap class admits allocation, the 
 * a refused newest frame;
 * a waiting sender's frame whose bound ran out.
 
-That ownership is released exactly once as `+req~ssr-heap-slot-types~3+` and `+req~ssr-binding-frame-drop~6+` state.
+That ownership is released exactly once as xref:heap.adoc#req-ssr-heap-slot-types[Decoded values and their destructors] and xref:../up-l1/bindings.adoc#req-ssr-binding-frame-drop[What a received frame's destructor may do] state.
 That release is the only heap use an overflow causes, and it releases no route, table or other runtime resource.
 
 *Discards the binding cannot observe.*
-If a discard occurs entirely inside middleware and the binding cannot observe it, the route's report *MUST* explicitly disclose that limitation instead of claiming to count it (`+req~ssr-error-no-silent-loss~3+`).
+If a discard occurs entirely inside middleware and the binding cannot observe it, the route's report *MUST* explicitly disclose that limitation instead of claiming to count it (xref:errors.adoc#req-ssr-error-no-silent-loss[No silent loss, and each loss counted once]).
 This exception concerns observation only.
 It does not permit a different overflow policy or excuse an observable discard from counting.
 --
 
 [horizontal]
+ID:: `+req~ssr-qos-overflow~3+`
 ASIL:: B
 Allocated to:: the element
 Verification:: test, heap-window
@@ -119,12 +123,12 @@ Counting observable discards gives the application a local congestion signal.
 Discards hidden inside middleware require an explicit route-report limitation.
 The presence of counter fields does not establish that a binding can observe the events needed to increment them.
 
-_Why revision 3._
-Revision 2 required every overflow policy to run without heap.
-On a serialized route that admits owning values, that would forbid destroying an evicted value at all.
-This revision keeps the policy, any wait and the counting heap-free on every route.
-It lets only the release of the ownership the policy ends, under the route's declared class, touch the heap.
+_Heap use on overflow._
+The policy, any wait and the counting are heap-free on every route.
+Only the release of the ownership that the policy ends, under the route's declared class, may touch the heap.
+Without that, a serialized route that admits owning values could not destroy an evicted value at all.
 
+[[req-ssr-qos-deadline]]
 == Deadlines are monitored
 
 [.specitem,oft-sid="req~ssr-qos-deadline~4",oft-title="Deadlines are monitored",oft-needs="impl,utest",oft-tags="SafetyUpRustCore"]
@@ -165,8 +169,8 @@ A resumed operation never counts a gap twice, never credits a later gap with a s
 A monitor representation that is wrap-aware over a finite range of ticks keeps these properties only within the servicing and waiting range that its supported configuration states.
 For the one-word tick representation that range is:
 
-* the route serviced at least every 2^29^ ticks of its monitor (`+aou~seooc-application-reacts~4+`);
-* every wait inside the element under 2^28^ ticks (`+aou~seooc-timing-budgets~7+`).
+* the route serviced at least every 2^29^ ticks of its monitor (xref:assumptions-of-use.adoc#aou-seooc-application-reacts[The application reacts to what the element reports]);
+* every wait inside the element under 2^28^ ticks (xref:assumptions-of-use.adoc#aou-seooc-timing-budgets[Timing claims rest on a supported configuration, and the item's budgets are the integrator's]).
 
 The transport's `+wait+` services its routes between inner waits of at most 2^28^ ticks of the shortest-scaled route on the transport.
 
@@ -185,12 +189,13 @@ An application's later read of the report adds its own delay, outside J, and pla
 
 *Related rules.*
 
-* The deadlines setup refuses are stated in `+req~ssr-qos-invalid-refused~2+`.
+* The deadlines setup refuses are stated in <<req-ssr-qos-invalid-refused,Meaningless QoS is refused at setup>>.
 * On an ASIL deployment the binding turns its middleware's own event deadlines off.
 The element's deadline monitor is the receiver's mechanism.
 --
 
 [horizontal]
+ID:: `+req~ssr-qos-deadline~4+`
 ASIL:: B
 Allocated to:: the element
 Verification:: test, miri, fault-injection
@@ -218,7 +223,7 @@ Arrival-based monitoring observes communication independently of application rea
 An overflowed or undecodable frame still arrived, with observable discards or refusals reported separately.
 
 On a shared route another peer can keep this aggregate deadline refreshed while one peer is starved.
-Absence of a deadline miss is not evidence of that peer's progress (`+aou~seooc-peer-rates~2+`).
+Absence of a deadline miss is not evidence of that peer's progress (xref:assumptions-of-use.adoc#aou-seooc-peer-rates[Peer rates on shared routes are the integrator's]).
 
 _Full width._
 A monitor that keeps full-width origins and a saturating full-width count has no wrap window.
@@ -235,6 +240,7 @@ _The bound J._
 J depends on a configuration's scheduling, interrupts, servers and publication, which the monitor cannot establish alone.
 So the element states the detection bound only where a supported configuration establishes J, and otherwise says that it is not established.
 
+[[req-ssr-qos-ttl]]
 == Expired messages are not processed
 
 [.specitem,oft-sid="req~ssr-qos-ttl~4",oft-title="Expired messages are not processed",oft-needs="impl,utest",oft-tags="SafetyUpRustCore"]
@@ -260,6 +266,7 @@ So an expired frame is never decoded and changes no wire state.
 --
 
 [horizontal]
+ID:: `+req~ssr-qos-ttl~4+`
 ASIL:: B
 Allocated to:: the element
 Verification:: test
@@ -273,13 +280,14 @@ Status:: Draft
 The check also reads the current time in whole milliseconds, so it can see up to one millisecond less than has passed.
 The bound allows for that millisecond.
 
-A sender that cannot read its clock reuses the last good time in its IDs, so they keep working (`+req~ssr-ids-unique~4+`).
+A sender that cannot read its clock reuses the last good time in its IDs, so they keep working (xref:../up-l2/interaction.adoc#req-ssr-ids-unique[Message IDs are unique]).
 The statement discloses the early refusal this can cause.
 
 Expiry is judged at the element's checks, when a frame reaches its route and when it is taken.
 TTL decides which frames those checks accept.
-It does not bound when a descheduled reader next takes a frame, or when an application reacts to one it has taken, which is a timing claim of a supported configuration (`+req~ssr-bound-wait~3+`).
+It does not bound when a descheduled reader next takes a frame, or when an application reacts to one it has taken, which is a timing claim of a supported configuration (xref:bounded-work.adoc#req-ssr-bound-wait[Every wait is bounded]).
 
+[[req-ssr-qos-invalid-refused]]
 == Meaningless QoS is refused at setup
 
 [.specitem,oft-sid="req~ssr-qos-invalid-refused~2",oft-title="Meaningless QoS is refused at setup",oft-needs="impl,utest",oft-tags="SafetyUpRustCore"]
@@ -295,6 +303,7 @@ Six QoS declarations cannot be honored as written, and each *MUST* be refused at
 --
 
 [horizontal]
+ID:: `+req~ssr-qos-invalid-refused~2+`
 ASIL:: B
 Allocated to:: the element
 Verification:: test (each of the six refusals)
@@ -308,6 +317,7 @@ It stays until a separately proved resolution contract for the actual implementa
 
 A binding that cannot report true arrivals stays refused whatever timing claim a route makes: no label can stand in for a missing arrival hook.
 
+[[req-ssr-qos-consistent-declarations]]
 == Two declarations of one route agree
 
 [.specitem,oft-sid="req~ssr-qos-consistent-declarations~1",oft-title="Two declarations of one route agree",oft-needs="impl,utest",oft-tags="SafetyUpRustCore"]
@@ -316,11 +326,12 @@ On one transport, two declarations of the same route that differ in reliability,
 --
 
 [horizontal]
+ID:: `+req~ssr-qos-consistent-declarations~1+`
 ASIL:: B
 Allocated to:: the element
 Verification:: test
 Status:: Draft
 
 *Rationale.*
-Two declarations of one route that disagree cannot both be honored, and choosing one would silently weaken the other (`+req~ssr-qos-no-downgrade~2+`).
+Two declarations of one route that disagree cannot both be honored, and choosing one would silently weaken the other (<<req-ssr-qos-no-downgrade,QoS is honored or refused, never weakened>>).
 So setup refuses, and the refusal names the setting in conflict.

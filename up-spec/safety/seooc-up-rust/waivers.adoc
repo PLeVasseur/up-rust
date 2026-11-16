@@ -6,6 +6,7 @@ The key words "*MUST*", "*MUST NOT*", "*REQUIRED*", "*SHALL*", "*SHALL NOT*", "*
 Conventions, tags and status words: xref:../README.adoc[the safety area's README].
 Scope and element boundary: xref:README.adoc[the SEooC's README].
 
+[[req-ssr-waiver-required]]
 == Middleware heap needs a named waiver
 
 [.specitem,oft-sid="req~ssr-waiver-required~1",oft-title="Middleware heap needs a named waiver",oft-needs="impl,utest",oft-tags="SafetyUpRustCore"]
@@ -16,6 +17,7 @@ Otherwise the transition *MUST* be refused, naming the transport, the route and 
 --
 
 [horizontal]
+ID:: `+req~ssr-waiver-required~1+`
 ASIL:: B
 Allocated to:: the element
 Verification:: test (refused without the waiver, admitted with it)
@@ -23,10 +25,11 @@ Status:: Draft
 
 *Rationale.*
 Allocation inside middleware is outside the element's control.
-So it enters runtime mode only as a deployment's explicit, recorded decision (`+req~ssr-waiver-record~1+`).
+So it enters runtime mode only as a deployment's explicit, recorded decision (<<req-ssr-waiver-record,Waivers are recorded and can be found>>).
 
 A refusal that names the transport, the route and the permit tells the deployment which decision is missing.
 
+[[req-ssr-waiver-scope]]
 == A waiver covers middleware and nothing else
 
 [.specitem,oft-sid="req~ssr-waiver-scope~1",oft-title="A waiver covers middleware and nothing else",oft-needs="impl,utest",oft-tags="SafetyUpRustCore"]
@@ -41,6 +44,7 @@ It *MUST NOT* admit:
 --
 
 [horizontal]
+ID:: `+req~ssr-waiver-scope~1+`
 ASIL:: B
 Allocated to:: the element
 Verification:: test (a wire that declares allocation on a native route is refused even with a waiver), review
@@ -52,9 +56,10 @@ So a waiver covers only what middleware does inside itself, for the operations a
 
 A known anomaly in middleware, such as a panic it can reach, is a defect and is never filed as a waiver.
 
-Declared allocation on a serialized or owned route is admitted by that route's heap class (`+req~ssr-heap-declared~3+`), not by a waiver.
+Declared allocation on a serialized or owned route is admitted by that route's heap class (xref:heap.adoc#req-ssr-heap-declared[The heap class is declared, with no default]), not by a waiver.
 So a waiver cannot carry native work into allocation, and a serialized route's permission is never a waiver for anything else.
 
+[[req-ssr-waiver-record]]
 == Waivers are recorded and can be found
 
 [.specitem,oft-sid="req~ssr-waiver-record~1",oft-title="Waivers are recorded and can be found",oft-needs="impl,utest",oft-tags="SafetyUpRustCore"]
@@ -71,6 +76,7 @@ Deployment data can select a waiver compiled into the program by its id, but *MU
 --
 
 [horizontal]
+ID:: `+req~ssr-waiver-record~1+`
 ASIL:: B
 Allocated to:: the element
 Verification:: test (the runtime lists the waiver; a record that names its author as approver is refused), review (findable)

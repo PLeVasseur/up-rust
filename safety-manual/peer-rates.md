@@ -22,7 +22,7 @@ link neither validates the deployment nor closes an implementation requirement.
 <!-- aou-statement:start -->
 > On routes that several peers share, the integrator *SHALL* bound each peer's message rate, by deployment and scheduling, or accept that one faulty peer can fill a route's depth and so starve the others there.
 >
-> * *What the element does.* The element applies the route's overflow policy and counts each discard it or its binding can observe; losses entirely inside middleware that the binding cannot observe are explicitly disclosed in the route's report (`+req~ssr-qos-overflow~3+`, `+req~ssr-error-no-silent-loss~3+`). It has no per-peer quota.
+> * *What the element does.* The element applies the route's overflow policy and counts each discard it or its binding can observe; losses entirely inside middleware that the binding cannot observe are explicitly disclosed in the route's report (xref:qos.adoc#req-ssr-qos-overflow[Overflow acts as declared]; xref:errors.adoc#req-ssr-error-no-silent-loss[No silent loss, and each loss counted once]). It has no per-peer quota.
 > * *Peer-specific progress.* Where the item's safety reaction requires detecting a particular peer's lack of progress, the integrator *SHALL* supply peer-specific progress expectations and application checks, or deployment and scheduling measures that meet that requirement; an aggregate route deadline does not supply that detection.
 > * *Strict mode.* In strict mode, the report warns of an ASIL route with several declared senders and no declared per-peer rate, and lists each shared route with what one faulty peer can starve there.
 <!-- aou-statement:end -->

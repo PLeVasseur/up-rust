@@ -6,6 +6,7 @@ The key words "*MUST*", "*MUST NOT*", "*REQUIRED*", "*SHALL*", "*SHALL NOT*", "*
 Conventions, tags and status words: xref:../README.adoc[the safety area's README].
 Scope and element boundary: xref:README.adoc[the SEooC's README].
 
+[[req-ssr-bound-work]]
 == Work per call is bounded by setup data
 
 [.specitem,oft-sid="req~ssr-bound-work~2",oft-title="Work per call is bounded by setup data",oft-needs="impl,utest",oft-tags="SafetyUpRustCore"]
@@ -25,6 +26,7 @@ Lock-free retry loops depend only on other threads' progress, never on a peer's 
 --
 
 [horizontal]
+ID:: `+req~ssr-bound-work~2+`
 ASIL:: B
 Allocated to:: the element
 Verification:: fault-injection (a flood on every receive kind, through the documented read and drain calls alone), review (every loop on the runtime path and in the documented usage)
@@ -41,8 +43,9 @@ It is not a bound on time:
 * Bounded work is not a worst-case execution time.
 * A worst-case execution time while running is not a scheduled response time.
 
-Those are timing claims of a supported configuration (`+req~ssr-bound-wait~3+`).
+Those are timing claims of a supported configuration (<<req-ssr-bound-wait,Every wait is bounded>>).
 
+[[req-ssr-bound-wait]]
 == Every wait is bounded
 
 [.specitem,oft-sid="req~ssr-bound-wait~3",oft-title="Every bounded wait has a logical deadline",oft-needs="impl,utest",oft-tags="SafetyUpRustCore"]
@@ -64,25 +67,25 @@ Every other wait of the element's own, for a peer, a wake, capacity, a completio
 * after a spurious wake, an interruption or a late resumption, *MUST* recheck the authoritative state and the time before it waits again or returns.
 
 *Waits inside a declared allocation domain.*
-On a serialized or owned route whose declared heap class admits allocation, an acquisition, a destruction or a release can wait inside the allocation domain that the route's declared policy names, such as behind an allocator's lock (`+req~ssr-heap-declared~3+`).
+On a serialized or owned route whose declared heap class admits allocation, an acquisition, a destruction or a release can wait inside the allocation domain that the route's declared policy names, such as behind an allocator's lock (xref:heap.adoc#req-ssr-heap-declared[The heap class is declared, with no default]).
 Such a wait is the allocation domain's, not a wait of the element's own, and it cannot observe a deadline.
 
 * It *MUST* be one that the declared policy states, and the route's report *MUST* show it.
 A wait there that the policy does not state is a defect.
 * On a route that requires non-waiting acquisition, no acquisition waits.
-On a route that requires non-waiting release, a release that could wait leaves the path that ended its value as pending cleanup (`+req~ssr-heap-guarantees~1+`).
+On a route that requires non-waiting release, a release that could wait leaves the path that ended its value as pending cleanup (xref:heap.adoc#req-ssr-heap-guarantees[A stronger resource guarantee is required by name]).
 * Each of the two limits its own operation only.
 On a route that does not require non-waiting acquisition, an acquisition's wait runs on the path that performs it.
 On a route that does not require non-waiting release, a release's wait runs on the path that performs it.
 The element promises no time for either.
-* It never occurs in a native operation, in the work one causes or in work that a native route shares (`+req~ssr-heap-none~3+`).
-* The element holds no lock or exclusion of its own across it (`+req~ssr-heap-slot-types~3+`).
+* It never occurs in a native operation, in the work one causes or in work that a native route shares (xref:heap.adoc#req-ssr-heap-none[No heap in runtime mode]).
+* The element holds no lock or exclusion of its own across it (xref:heap.adoc#req-ssr-heap-slot-types[Decoded values and their destructors]).
 
 It changes no logical deadline.
 The operation's outcome is decided as this item states, however long the allocation domain took.
 
 *Pending cleanup.*
-Pending cleanup, as `+req~ssr-release-lease-drop~4+` defines and isolates it, may wait for the dependency that its policy names without a finite completion deadline.
+Pending cleanup, as xref:release.adoc#req-ssr-release-lease-drop[A lease gives back its slot and nothing else] defines and isolates it, may wait for the dependency that its policy names without a finite completion deadline.
 No bounded operation, deadline, expiry or health observation waits for pending cleanup.
 
 *What these two cover.*
@@ -90,9 +93,9 @@ A wait inside a declared allocation domain and pending cleanup are the only wait
 They cover none of the following:
 
 * a wait of the element's own, such as a completion or an overflow wait;
-* a wait in a binding or callback call outside the declared allocation domain (`+req~ssr-binding-bounded~3+`);
+* a wait in a binding or callback call outside the declared allocation domain (xref:../up-l1/bindings.adoc#req-ssr-binding-bounded[A binding bounds its own work and its waits]);
 * a worker loop;
-* a lock or other primitive shared with another process (`+req~ssr-bound-no-cross-process-lock~1+`).
+* a lock or other primitive shared with another process (<<req-ssr-bound-no-cross-process-lock,No lock shared with another process>>).
 
 *What a deadline decides.*
 A deadline that passes while the operation is still pending makes its documented terminal outcome due:
@@ -100,7 +103,7 @@ A deadline that passes while the operation is still pending makes its documented
 * The operation exposes that outcome when it next runs.
 * The operation accepts no completion whose acceptance event falls after the deadline on the clock the deadline uses.
 * Neither that outcome nor a committed one depends on the release of what the operation owned.
-It is decided and recorded before that release starts, and the release then runs as its route's class and guarantees state (`+req~ssr-heap-slot-types~3+`).
+It is decided and recorded before that release starts, and the release then runs as its route's class and guarantees state (xref:heap.adoc#req-ssr-heap-slot-types[Decoded values and their destructors]).
 
 A result that the operation committed at its acceptance event before the deadline stands.
 Observing it later, because the caller was descheduled, never turns it into expiry or overwrites it.
@@ -110,8 +113,8 @@ Each operation's contract states its acceptance event and its clock:
 
 * A wait's timeout and a setup bound are compared with the platform's monotonic clock.
 The acceptance event is the observation of the awaited state.
-* An RPC call's TTL is compared in wall time from the request's creation (`+req~ssr-qos-ttl~4+`).
-The acceptance event is the element's completion of the call with a response that its wire check accepted (`+req~ssr-rpc-check-at-arrival~2+`).
+* An RPC call's TTL is compared in wall time from the request's creation (xref:qos.adoc#req-ssr-qos-ttl[Expired messages are not processed]).
+The acceptance event is the element's completion of the call with a response that its wire check accepted (xref:../up-l2/interaction.adoc#req-ssr-rpc-check-at-arrival[A response completes its call only once its wire accepts it]).
 
 This holds for every logical deadline in the element, a wait's timeout, an RPC call's TTL and a setup bound alike: the deadline decides the outcome, not when a descheduled caller observes it.
 
@@ -128,6 +131,7 @@ Idle waiters *MUST NOT* wake each other.
 --
 
 [horizontal]
+ID:: `+req~ssr-bound-wait~3+`
 ASIL:: B
 Allocated to:: the element
 Verification:: test, heap-window, fault-injection
@@ -150,7 +154,7 @@ ISO 26262:: 6-Annex D.2.2 (part-clause numbers only)
 
 *Rationale.*
 A survivor that waited without a bound for a peer that has died would never return.
-One failed process would then stop those that stayed up (`+req~ssr-peer-failure-normal~3+`).
+One failed process would then stop those that stayed up (xref:../up-l1/peers.adoc#req-ssr-peer-failure-normal[Peer failure is normal input]).
 
 _Waits that are bounded._
 
@@ -170,7 +174,7 @@ An ordinary allocator takes a lock, in an acquisition as in a release.
 The element can neither give that lock a deadline nor see inside it.
 Forbidding it would forbid ordinary serialized communication, and hiding it would misstate what a route does.
 So the wait is declared, reported and kept out of native work, and the element holds nothing of its own across it.
-A route that cannot accept it requires the guarantee that excludes it (`+req~ssr-heap-guarantees~1+`).
+A route that cannot accept it requires the guarantee that excludes it (xref:heap.adoc#req-ssr-heap-guarantees[A stronger resource guarantee is required by name]).
 
 The element's own waits are a different matter.
 Each takes a logical deadline on every route, and an operation's outcome is decided by that deadline whatever an allocation domain did meanwhile.
@@ -179,13 +183,9 @@ _Why pending cleanup has no deadline._
 A release that waits behind an allocator's or an underlying transport's own lock cannot observe a deadline from inside that call.
 Running it on another thread does not make it deadline-aware.
 So no operation waits for it, and it is kept apart from everything this item bounds.
-What it owns stays charged until it completes, instead of being given a completion deadline that it cannot keep (`+req~ssr-release-lease-drop~4+`).
+What it owns stays charged until it completes, instead of being given a completion deadline that it cannot keep (xref:release.adoc#req-ssr-release-lease-drop[A lease gives back its slot and nothing else]).
 
-_Why revision 3._
-Revision 2 allowed one wait without a deadline, pending cleanup, and forbade every blocking allocation.
-That left no place for an ordinary allocator on a route that had asked for nothing stronger.
-This revision names the allocation domain's wait for what it is, bounds where it may occur, and leaves the element's own waits and every logical deadline as they were.
-
+[[req-ssr-bound-no-cross-process-lock]]
 == No lock shared with another process
 
 [.specitem,oft-sid="req~ssr-bound-no-cross-process-lock~1",oft-title="No lock shared with another process",oft-needs="impl,utest",oft-tags="SafetyUpRustCore"]
@@ -195,13 +195,14 @@ This revision names the allocation domain's wait for what it is, bounds where it
 --
 
 [horizontal]
+ID:: `+req~ssr-bound-no-cross-process-lock~1+`
 ASIL:: B
 Allocated to:: the element
 Verification:: review (an inventory of synchronization primitives), fault-injection (a peer killed at arbitrary points never hangs a survivor)
 Status:: Draft
 
 *Rationale.*
-A process can die at any instruction (`+req~ssr-peer-failure-normal~3+`).
+A process can die at any instruction (xref:../up-l1/peers.adoc#req-ssr-peer-failure-normal[Peer failure is normal input]).
 A lock it shares can then be left held, with the state it guards half changed and no process left to finish the change.
 
 Eclipse S-CORE's LoLa middleware gave up an inter-process mutex for this reason: its error handling grew too complex when a process died while holding it (https://github.com/eclipse-score/communication/blob/f5e8f2c8a9247b025b1d425af399588e0264698a/score/mw/com/impl/bindings/lola/dependability/partial_restart/README.md[LoLa's partial-restart notes]).

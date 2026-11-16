@@ -26,7 +26,7 @@ link neither validates the deployment nor closes an implementation requirement.
 > A wire that decodes into values that own what they hold, heap memory included, is ordinary on a serialized route that declares its allocation, and its ownership needs nothing further from the integrator.
 >
 > *Requiring a guarantee.*
-> Where the item relies on panic-free cleanup, non-waiting acquisition, non-waiting release or recoverable exhaustion on such a route, the integrator *SHALL* require that guarantee in the route's declaration, and uses a supported configuration whose package establishes it for the exact type, wires, binding and allocation provider (`+req~ssr-heap-guarantees~1+`).
+> Where the item relies on panic-free cleanup, non-waiting acquisition, non-waiting release or recoverable exhaustion on such a route, the integrator *SHALL* require that guarantee in the route's declaration, and uses a supported configuration whose package establishes it for the exact type, wires, binding and allocation provider (xref:heap.adoc#req-ssr-heap-guarantees[A stronger resource guarantee is required by name]).
 >
 > *A guarantee that is not required.*
 > A route that does not require a guarantee is promised none, whether or not evidence establishes it: its report shows that guarantee as not required and not admitted, and states separately whether it is established.

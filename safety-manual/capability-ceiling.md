@@ -32,7 +32,7 @@ link neither validates the deployment nor closes an implementation requirement.
 > In strict mode, the Enforce state refuses a transport or route at C or D unless `+above_capability+` names the integrator's measures, and refuses C or D data whose only protection is an end-to-end mechanism of ASIL B capability unless `+decomposition+` names the argument; the report lists both duties.
 >
 > *The level itself.*
-> A level is assigned, and is a label, as `+aou~seooc-integrity-levels~6+` states.
+> A level is assigned, and is a label, as xref:../up-l1/deployment.adoc#aou-seooc-integrity-levels[Each transport's integrity level is assigned correctly] states.
 <!-- aou-statement:end -->
 
 ## Integrator actions

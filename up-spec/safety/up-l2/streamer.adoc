@@ -17,15 +17,16 @@ They bind an integrator that claims its safety-assurance scope (xref:../seooc-up
 No requirement on the Streamer is met by them, and they replace none.
 * Each "Violation" text uses the three classes of xref:../seooc-up-rust/assumptions-of-use.adoc#violation-classes[how a violation shows up].
 * They carry `SafetyManual` only (xref:../seooc-up-rust/assumptions-of-use.adoc#coverage[tags and coverage]).
-* Their sentences about strict mode concern the element's strict mode, and apply where it is used (`+req~ssr-strict-report~2+` in xref:../seooc-up-rust/build.adoc[build and shipped content]).
+* Their sentences about strict mode concern the element's strict mode, and apply where it is used (xref:../seooc-up-rust/build.adoc#req-ssr-strict-report[Strict mode reports on every run] in xref:../seooc-up-rust/build.adoc[build and shipped content]).
 
+[[req-ssr-streamer-route-lock]]
 == Routes and subscriptions are locked at activation
 
 [.specitem,oft-sid="req~ssr-streamer-route-lock~3",oft-title="Routes and subscriptions are locked at activation",oft-needs="impl,utest",oft-tags="SafetyStreamer"]
 --
 *Routes.*
 A route *MUST NOT* be added to or removed from the Streamer after it is activated, and a route's definition *MUST NOT* change: its filters, legs, QoS and wires.
-A route's gate (`+req~ssr-streamer-route-gate~2+`) is the only route state that changes in runtime mode.
+A route's gate (<<req-ssr-streamer-route-gate,Each route has a heap-free gate>>) is the only route state that changes in runtime mode.
 
 *Subscriptions.*
 The subscription directory *MUST* be read once at setup and then frozen, and a live subscription source *MUST* be refused at setup.
@@ -38,6 +39,7 @@ A frame *MUST NOT* be forwarded before activation.
 --
 
 [horizontal]
+ID:: `+req~ssr-streamer-route-lock~3+`
 ASIL:: B
 Allocated to:: the Streamer
 Verification:: compile-fail (add or delete after activation; forward before activation; activate with a setup value), test (a live subscription source is refused)
@@ -45,11 +47,12 @@ Status:: Draft
 ISO 26262:: 6-7.4.3, 6-6.4.2 g (part-clause numbers only)
 
 *Rationale.*
-A route added or changed while traffic flows would run without the setup checks that admitted the others, through a configuration nobody validated (`+req~ssr-mode-no-setup-at-runtime~1+`).
+A route added or changed while traffic flows would run without the setup checks that admitted the others, through a configuration nobody validated (xref:../seooc-up-rust/runtime-modes.adoc#req-ssr-mode-no-setup-at-runtime[Setup is impossible in runtime mode]).
 
 A live subscription source would change the routes in effect from outside, at run time.
 So the directory is read once and frozen.
 
+[[req-ssr-config-exact-addresses]]
 == ASIL Streamer routes name exact source addresses
 
 [.specitem,oft-sid="req~ssr-config-exact-addresses~1",oft-title="ASIL Streamer routes name exact source addresses",oft-needs="impl,utest",oft-tags="SafetyStreamer"]
@@ -65,6 +68,7 @@ A frame from an address that no route reserved *MUST* be refused and counted.
 --
 
 [horizontal]
+ID:: `+req~ssr-config-exact-addresses~1+`
 ASIL:: B
 Allocated to:: the Streamer
 Verification:: test
@@ -80,6 +84,7 @@ Access control, peer qualification and end-to-end protection retain their separa
 The carrier primitives require the same of a lending leg.
 A lending route names one physical service, and a wildcard filter on one needs an explicit physical source or is refused.
 
+[[req-ssr-streamer-heap-free]]
 == The Streamer allocates nothing in runtime mode
 
 [.specitem,oft-sid="req~ssr-streamer-heap-free~1",oft-title="The Streamer allocates nothing in runtime mode",oft-needs="impl,utest",oft-tags="SafetyStreamer"]
@@ -95,6 +100,7 @@ The Streamer's own code *MUST NOT* acquire or release heap memory in runtime mod
 --
 
 [horizontal]
+ID:: `+req~ssr-streamer-heap-free~1+`
 ASIL:: B
 Allocated to:: the Streamer
 Verification:: heap-window (Rust guard and C-level observer, on Linux and macOS; QNX once a target exists), fault-injection
@@ -103,13 +109,14 @@ ISO 26262:: 6-Table 6 1b (part-clause numbers only)
 
 *Rationale.*
 The Streamer forwards every frame between its transports.
-So heap use on its path would break runtime mode for every route it carries (`+req~ssr-heap-none~3+`).
+So heap use on its path would break runtime mode for every route it carries (xref:../seooc-up-rust/heap.adoc#req-ssr-heap-none[No heap in runtime mode]).
 
 An ASIL route through the Streamer is only as sound as the Streamer, so it cannot be left as a QM carrier.
 
 A serialized leg's declared allocation belongs to that leg's wire or binding and is reported per route.
 It never reaches the Streamer's own forwarding, control or error paths, or a native leg.
 
+[[req-ssr-streamer-byte-identity]]
 == Carriage keeps the bytes
 
 [.specitem,oft-sid="req~ssr-streamer-byte-identity~1",oft-title="Carriage keeps the bytes",oft-needs="impl,utest",oft-tags="SafetyStreamer"]
@@ -125,19 +132,21 @@ A different egress envelope *MUST* re-encode the metadata only.
 --
 
 [horizontal]
+ID:: `+req~ssr-streamer-byte-identity~1+`
 ASIL:: B
 Allocated to:: the Streamer
 Verification:: test (byte identity on every route kind; loan-address checks)
 Status:: Draft
 
 *Rationale.*
-up-spec makes a component that only carries or forwards a message keep its identifier and payload bytes unchanged, with no decoder needed (`+aou~payload-encoding-opaque-carriage~1+`).
+up-spec makes a component that only carries or forwards a message keep its identifier and payload bytes unchanged, with no decoder needed (xref:../../basics/payload_encoding_registry.adoc#acceptance[the payload encoding registry, "Carrying a Payload versus Reading It"]).
 
-Unchanged bytes let a check made at the endpoints, such as end-to-end protection, cover every hop (`+req~ssr-e2e-survives-hops~1+`).
+Unchanged bytes let a check made at the endpoints, such as end-to-end protection, cover every hop (xref:../seooc-up-rust/e2e-wire.adoc#req-ssr-e2e-survives-hops[Protection survives every allowed hop]).
 A copy staged on the way would add work and a buffer for nothing.
 
 The carrier primitives hold to it: a byte-only egress receives the ingress bytes directly, and a lending egress takes one copy into its loan.
 
+[[req-ssr-streamer-no-ingress-block]]
 == An egress never blocks an ingress
 
 [.specitem,oft-sid="req~ssr-streamer-no-ingress-block~1",oft-title="An egress never blocks an ingress",oft-needs="impl,utest",oft-tags="SafetyStreamer"]
@@ -152,6 +161,7 @@ The Streamer *MUST*:
 --
 
 [horizontal]
+ID:: `+req~ssr-streamer-no-ingress-block~1+`
 ASIL:: B
 Allocated to:: the Streamer
 Verification:: fault-injection (a slow egress; a dead egress), test
@@ -162,6 +172,7 @@ ISO 26262:: 6-Annex D.2.2 (part-clause numbers only)
 The carrier primitives ask for capacity before taking a frame.
 They can park a frame from a lending ingress in fixed storage, within the route's retained budget.
 
+[[req-ssr-streamer-containment]]
 == A fault stays on its route
 
 [.specitem,oft-sid="req~ssr-streamer-containment~1",oft-title="A fault stays on its route",oft-needs="impl,utest",oft-tags="SafetyStreamer"]
@@ -170,6 +181,7 @@ A fault on one route (a dead or slow egress, a malformed header, a flood, exhaus
 --
 
 [horizontal]
+ID:: `+req~ssr-streamer-containment~1+`
 ASIL:: B
 Allocated to:: the Streamer
 Verification:: fault-injection
@@ -182,6 +194,7 @@ Counting the fault on its own route shows where it is, while the other routes ke
 The budget the Streamer enforces is a route's work and capacity: slots, retained frames and the work each pass may do for it.
 A bound on another route's delay in time is a timing claim of a supported configuration, with its scheduler and resource argument.
 
+[[req-ssr-streamer-qos-per-leg]]
 == Both legs are checked, at setup and per frame
 
 [.specitem,oft-sid="req~ssr-streamer-qos-per-leg~1",oft-title="Both legs are checked, at setup and per frame",oft-needs="impl,utest",oft-tags="SafetyStreamer"]
@@ -194,6 +207,7 @@ Before each frame is forwarded, it *MUST* be checked against the egress leg's ow
 --
 
 [horizontal]
+ID:: `+req~ssr-streamer-qos-per-leg~1+`
 ASIL:: B
 Allocated to:: the Streamer
 Verification:: test
@@ -202,6 +216,11 @@ Status:: Draft
 *Rationale.*
 A limit checked on one forwarding path and not on another lets a frame through on the path that skips it, so every path checks.
 
+The statement names a leg's wire set among its limits and does not say what that set is.
+up-spec's rule for a component that only carries a message is that it does not refuse carriage because a payload's encoding identifier is unknown to it (xref:../../basics/payload_encoding_registry.adoc#acceptance[the payload encoding registry, "Carrying a Payload versus Reading It"]).
+So the statement is open on whether a leg refuses a frame because no wire of its route names the frame's encoding, and a revision that states the limits is proposed (xref:../../contract-generations.adoc#transition[the transition table]).
+
+[[req-ssr-streamer-startup-report]]
 == The startup report says what will run
 
 [.specitem,oft-sid="req~ssr-streamer-startup-report~3",oft-title="The startup report says what will run",oft-needs="impl,utest",oft-tags="SafetyStreamer"]
@@ -217,16 +236,18 @@ A refused startup names the route and the limit.
 --
 
 [horizontal]
+ID:: `+req~ssr-streamer-startup-report~3+`
 ASIL:: B
 Allocated to:: the Streamer
 Verification:: test, heap-window
 Status:: Draft
 
 *Rationale.*
-The integrity-code check is its own item, `+req~ssr-streamer-config-integrity~1+`, because it must run before any of the data is applied.
+The integrity-code check is its own item, <<req-ssr-streamer-config-integrity,The deployment data is checked before it is applied>>, because it must run before any of the data is applied.
 
 The report exposes the admitted routes and their resources after transition, so producing it must obey the runtime heap contract.
 
+[[req-ssr-streamer-config-integrity]]
 == The deployment data is checked before it is applied
 
 [.specitem,oft-sid="req~ssr-streamer-config-integrity~1",oft-title="The deployment data is checked before it is applied",oft-needs="impl,utest",oft-tags="SafetyStreamer"]
@@ -237,6 +258,7 @@ Data whose code does not match its content *MUST* be refused, naming the mismatc
 --
 
 [horizontal]
+ID:: `+req~ssr-streamer-config-integrity~1+`
 ASIL:: B
 Allocated to:: the Streamer
 Verification:: test (a mismatched code; a truncated file; a code computed over other content)
@@ -249,6 +271,7 @@ Deployment data can be truncated or altered on its way to the Streamer, and a wr
 A code delivered with the data detects such a change only if it is compared before any of the data is used.
 So the check comes first and refuses the whole file.
 
+[[req-ssr-streamer-sync-data-plane]]
 == The Streamer's data plane is synchronous
 
 [.specitem,oft-sid="req~ssr-streamer-sync-data-plane~1",oft-title="The Streamer's data plane is synchronous",oft-needs="impl,utest",oft-tags="SafetyStreamer"]
@@ -266,20 +289,22 @@ The transports' reserved slots *MUST* be its only queues.
 --
 
 [horizontal]
+ID:: `+req~ssr-streamer-sync-data-plane~1+`
 ASIL:: B
 Allocated to:: the Streamer
-Verification:: gate (the crate's dependency set, and the token scan of `+req~ssr-crate-sync-path~1+`), heap-window
+Verification:: gate (the crate's dependency set, and the token scan of xref:../seooc-up-rust/crate-isolation.adoc#req-ssr-crate-sync-path[Traffic is synchronous or polled]), heap-window
 Status:: Draft
 
 *Rationale.*
-The Streamer is built from the element's carrier primitives, which offer traffic in synchronous or polled form with no futures, tasks or pinning (`+req~ssr-crate-sync-path~1+`).
+The Streamer is built from the element's carrier primitives, which offer traffic in synchronous or polled form with no futures, tasks or pinning (xref:../seooc-up-rust/crate-isolation.adoc#req-ssr-crate-sync-path[Traffic is synchronous or polled]).
 An async runtime on top would bring back the heap they avoid.
 
 A channel adds a queue beside the transports' reserved slots, where a frame could wait under no route's depth or overflow policy.
 
 The synchronous form is the product's own rule.
-It does not depend on which library modules a toolchain's qualification covers (`+req~ssr-crate-sync-path~1+`).
+It does not depend on which library modules a toolchain's qualification covers (xref:../seooc-up-rust/crate-isolation.adoc#req-ssr-crate-sync-path[Traffic is synchronous or polled]).
 
+[[req-ssr-streamer-workers]]
 == Workers are fixed at initialization
 
 [.specitem,oft-sid="req~ssr-streamer-workers~1",oft-title="Workers are fixed at initialization",oft-needs="impl,utest",oft-tags="SafetyStreamer"]
@@ -293,19 +318,21 @@ In runtime mode a worker *MUST NOT* be created, stopped or joined, and a worker'
 --
 
 [horizontal]
+ID:: `+req~ssr-streamer-workers~1+`
 ASIL:: B
 Allocated to:: the Streamer binary
 Verification:: test, review
 Status:: Draft
 
 *Rationale.*
-Creating or joining a thread in runtime mode would bring the heap and an unbounded wait into the data path (`+req~ssr-heap-none~3+`, `+req~ssr-bound-wait~3+`).
+Creating or joining a thread in runtime mode would bring the heap and an unbounded wait into the data path (xref:../seooc-up-rust/heap.adoc#req-ssr-heap-none[No heap in runtime mode]; xref:../seooc-up-rust/bounded-work.adoc#req-ssr-bound-wait[Every wait is bounded]).
 
 A fixed assignment of routes to workers, made at setup, lets each route's latency be analysed before start.
 
 Creating threads needs the operating system.
 So the `+std+` binary creates the workers, outside the `+no_std+` crate that holds the route table and the forwarding loop (xref:../seooc-up-rust/README.adoc[the SEooC's README]).
 
+[[req-ssr-streamer-route-gate]]
 == Each route has a heap-free gate
 
 [.specitem,oft-sid="req~ssr-streamer-route-gate~2",oft-title="Each route has a heap-free gate",oft-needs="impl,utest",oft-tags="SafetyStreamer"]
@@ -315,10 +342,10 @@ Each Streamer route *MUST* have a gate with three states, held in fixed storage:
 
 *While the gate is not enabled.*
 While a route's gate is not enabled, its frames *MUST* be dropped at admission and counted.
-An RPC request among them *MUST* get the best-effort `+Unavailable+` response of `+req~ssr-streamer-rpc-error-response~4+`.
+An RPC request among them *MUST* get the best-effort `+Unavailable+` response of <<req-ssr-streamer-rpc-error-response,An RPC request that cannot be dispatched is answered, best effort>>.
 
 *What a gate changes.*
-A gate *MUST* change its route's state only, never its definition (`+req~ssr-streamer-route-lock~3+`).
+A gate *MUST* change its route's state only, never its definition (<<req-ssr-streamer-route-lock,Routes and subscriptions are locked at activation>>).
 
 *Cost of a change.*
 Changing a gate *MUST* allocate nothing, block nothing, release nothing and change no other route, and each change *MUST* be counted with its cause.
@@ -328,6 +355,7 @@ A tripped gate *MUST* stay tripped until an operator re-enables the route.
 --
 
 [horizontal]
+ID:: `+req~ssr-streamer-route-gate~2+`
 ASIL:: B
 Allocated to:: the Streamer
 Verification:: test, heap-window
@@ -335,15 +363,16 @@ Status:: Draft
 
 *Rationale.*
 The Streamer's safe state is fail-silent per route, through its route gates (xref:../seooc-up-rust/README.adoc[the SEooC's README]).
-So a gate silences one route while every other route carries on (`+req~ssr-streamer-containment~1+`).
+So a gate silences one route while every other route carries on (<<req-ssr-streamer-containment,A fault stays on its route>>).
 
-The gate is the only route state that changes in runtime mode (`+req~ssr-streamer-route-lock~3+`), and fixed storage lets it change without heap (`+req~ssr-heap-none~3+`).
+The gate is the only route state that changes in runtime mode (<<req-ssr-streamer-route-lock,Routes and subscriptions are locked at activation>>), and fixed storage lets it change without heap (xref:../seooc-up-rust/heap.adoc#req-ssr-heap-none[No heap in runtime mode]).
 
 A gated request is answered `+Unavailable+` where the reverse route can carry it.
-So a client without the E2E wire learns of the outage at once, not at its TTL (`+req~ssr-streamer-rpc-error-response~4+`).
+So a client without the E2E wire learns of the outage at once, not at its TTL (<<req-ssr-streamer-rpc-error-response,An RPC request that cannot be dispatched is answered, best effort>>).
 
-With its cause counted, each change shows in the reports as an operator's disable or as a monitor's trip (`+req~ssr-streamer-operator-control~1+`, `+req~ssr-streamer-monitors~4+`).
+With its cause counted, each change shows in the reports as an operator's disable or as a monitor's trip (<<req-ssr-streamer-operator-control,Operator changes go through a declared interface>>; <<req-ssr-streamer-monitors,Worker and transport monitors trip routes>>).
 
+[[req-ssr-streamer-operator-control]]
 == Operator changes go through a declared interface
 
 [.specitem,oft-sid="req~ssr-streamer-operator-control~1",oft-title="Operator changes go through a declared interface",oft-needs="impl,utest",oft-tags="SafetyStreamer"]
@@ -356,6 +385,7 @@ An operator *MUST NOT* be able to disable or re-enable a route in runtime mode o
 --
 
 [horizontal]
+ID:: `+req~ssr-streamer-operator-control~1+`
 ASIL:: B
 Allocated to:: the Streamer
 Verification:: test, heap-window
@@ -364,11 +394,12 @@ Status:: Draft
 *Rationale.*
 Disabling an ASIL route removes its function.
 So the only way to do it at run time is declared at setup, bounded and shown in the reports.
-Who may use it is `+aou~seooc-operator-access~2+`.
+Who may use it is <<aou-seooc-operator-access,Only authorized operators reach the Streamer's operator interface>>.
 
-Only an operator's re-enable clears a monitor's trip (`+req~ssr-streamer-monitors~4+`).
+Only an operator's re-enable clears a monitor's trip (<<req-ssr-streamer-monitors,Worker and transport monitors trip routes>>).
 A route outside the declared interface stays disabled until the Streamer restarts.
 
+[[req-ssr-streamer-monitors]]
 == Worker and transport monitors trip routes
 
 [.specitem,oft-sid="req~ssr-streamer-monitors~4",oft-title="Worker and transport monitors trip routes",oft-needs="impl,utest",oft-tags="SafetyStreamer"]
@@ -391,12 +422,12 @@ At the least, a monitor *MUST* trip on:
 A trip:
 
 * *MUST* set the gates of the affected routes only;
-* *MUST* keep their storage and resources in place (`+req~ssr-release-none~2+`);
+* *MUST* keep their storage and resources in place (xref:../seooc-up-rust/release.adoc#req-ssr-release-none[Nothing is released in runtime mode]);
 * *MUST* be counted with the condition that caused it.
 
 *A trip latches.*
-A trip *MUST* latch: a monitor *MUST NOT* re-enable a route, even once its condition clears, and only an operator's re-enable clears it (`+req~ssr-streamer-operator-control~1+`).
-A tripped route that the operator interface does not name stays disabled until the Streamer restarts, and `+aou~seooc-monitor-thresholds~2+` gives the integrator's part.
+A trip *MUST* latch: a monitor *MUST NOT* re-enable a route, even once its condition clears, and only an operator's re-enable clears it (<<req-ssr-streamer-operator-control,Operator changes go through a declared interface>>).
+A tripped route that the operator interface does not name stays disabled until the Streamer restarts, and <<aou-seooc-monitor-thresholds,Monitor thresholds allow for peers' restarts>> gives the integrator's part.
 
 *Reaction bound.*
 Where a configuration claims a safety reaction, its bound from the fault to the safe state is that configuration's claim.
@@ -407,6 +438,7 @@ Without such a claim, the monitors still operate, and the Streamer's report *MUS
 --
 
 [horizontal]
+ID:: `+req~ssr-streamer-monitors~4+`
 ASIL:: B
 Allocated to:: the Streamer
 Verification:: fault-injection, test
@@ -422,14 +454,14 @@ Status:: Draft
 ISO 26262:: 6-7.4.12 (part-clause numbers only)
 
 *Rationale.*
-A trip turns a stalled worker or a failing egress into a counted, reported change of just the routes it affects, instead of silence with no cause on record (`+req~ssr-streamer-mode-report~1+`).
+A trip turns a stalled worker or a failing egress into a counted, reported change of just the routes it affects, instead of silence with no cause on record (<<req-ssr-streamer-mode-report,The Streamer reports degraded>>).
 
 _Why a trip latches._
 Because a trip latches, a route whose fault comes and goes cannot flap between forwarding and silence.
-The operator, who sees the cause, decides when it returns (`+req~ssr-streamer-operator-control~1+`).
+The operator, who sees the cause, decides when it returns (<<req-ssr-streamer-operator-control,Operator changes go through a declared interface>>).
 
 The latch turns a peer's normal restart into an outage where a threshold is shorter than that restart.
-So the thresholds are the integrator's to set (`+aou~seooc-monitor-thresholds~2+`).
+So the thresholds are the integrator's to set (<<aou-seooc-monitor-thresholds,Monitor thresholds allow for peers' restarts>>).
 
 _Why completion._
 A heartbeat from an interrupt can keep ticking while the forwarding loop is stuck, so only completed work counts as progress.
@@ -439,6 +471,7 @@ A monitor can support a fail-silent reaction even where delivery itself has no h
 But only a configuration that bounds the whole chain, with a monitor that does not share the fault it detects, can claim a reaction time.
 A monitor alone cannot repair memory unsoundness or prove future service.
 
+[[req-ssr-streamer-mode-report]]
 == The Streamer reports degraded
 
 [.specitem,oft-sid="req~ssr-streamer-mode-report~1",oft-title="The Streamer reports degraded",oft-needs="impl,utest",oft-tags="SafetyStreamer"]
@@ -449,6 +482,7 @@ Degraded is a report only, and *MUST NOT* change any route's behaviour.
 --
 
 [horizontal]
+ID:: `+req~ssr-streamer-mode-report~1+`
 ASIL:: B
 Allocated to:: the Streamer
 Verification:: test, heap-window
@@ -457,8 +491,9 @@ Status:: Draft
 *Rationale.*
 The incarnation lets a reader see that a restart has reset the counters it compares.
 
-A degraded mode that changed behaviour would let one route's fault act on the others (`+req~ssr-streamer-containment~1+`), so it only reports.
+A degraded mode that changed behaviour would let one route's fault act on the others (<<req-ssr-streamer-containment,A fault stays on its route>>), so it only reports.
 
+[[req-ssr-streamer-watchdog-hook]]
 == A watchdog hook shows progress
 
 [.specitem,oft-sid="req~ssr-streamer-watchdog-hook~1",oft-title="A watchdog hook shows progress",oft-needs="impl,utest",oft-tags="SafetyStreamer"]
@@ -471,6 +506,7 @@ A worker that stops making progress stops reporting through it.
 --
 
 [horizontal]
+ID:: `+req~ssr-streamer-watchdog-hook~1+`
 ASIL:: B
 Allocated to:: the Streamer
 Verification:: test (a stalled worker is seen through the hook), heap-window
@@ -481,12 +517,13 @@ ISO 26262:: 6-7.4.12 (part-clause numbers only)
 A worker that is stuck, or looping without progress, can look alive from inside the process.
 So only a watchdog outside it, told of progress, can see the stall and act on it.
 
-A worker's loop never returns (`+req~ssr-streamer-workers~1+`), so progress, not exit, is what a watchdog can check.
+A worker's loop never returns (<<req-ssr-streamer-workers,Workers are fixed at initialization>>), so progress, not exit, is what a watchdog can check.
 Progress here is a completed forwarding pass, so a timer or interrupt that keeps running while the loop is stuck cannot report for it.
 
 The hook reports progress.
-It establishes neither the watchdog's independence nor a bounded reaction, which a configuration that claims one has to argue (`+req~ssr-streamer-monitors~4+`).
+It establishes neither the watchdog's independence nor a bounded reaction, which a configuration that claims one has to argue (<<req-ssr-streamer-monitors,Worker and transport monitors trip routes>>).
 
+[[req-ssr-streamer-dispatch-obligations]]
 == Undeliverable messages are counted, never sent as dead letters
 
 [.specitem,oft-sid="req~ssr-streamer-dispatch-obligations~2",oft-title="Undeliverable messages are counted, never sent as dead letters",oft-needs="impl,utest",oft-tags="SafetyStreamer"]
@@ -494,11 +531,12 @@ It establishes neither the watchdog's independence nor a bounded reaction, which
 In ASIL mode the Streamer *MUST* report undeliverable messages through fixed counters, never through a dead-letter message.
 
 * It retries no longer than the route's bounded wait.
-* A carrier egress cannot declare a wait (`+req~ssr-bound-wait~3+`), so its only retry is resending a parked frame, within the route's retained budget and the frame's TTL.
-* An RPC request it cannot dispatch also gets the best-effort error response of `+req~ssr-streamer-rpc-error-response~4+`.
+* A carrier egress cannot declare a wait (xref:../seooc-up-rust/bounded-work.adoc#req-ssr-bound-wait[Every wait is bounded]), so its only retry is resending a parked frame, within the route's retained budget and the frame's TTL.
+* An RPC request it cannot dispatch also gets the best-effort error response of <<req-ssr-streamer-rpc-error-response,An RPC request that cannot be dispatched is answered, best effort>>.
 --
 
 [horizontal]
+ID:: `+req~ssr-streamer-dispatch-obligations~2+`
 ASIL:: B
 Allocated to:: the Streamer
 Verification:: test
@@ -508,6 +546,7 @@ Status:: Draft
 Fixed counters preserve bounded fault reporting.
 A retry, parked-frame resend and best-effort error answer each retain their separately specified limits.
 
+[[req-ssr-streamer-rpc-error-response]]
 == An RPC request that cannot be dispatched is answered, best effort
 
 [.specitem,oft-sid="req~ssr-streamer-rpc-error-response~4",oft-title="An RPC request that cannot be dispatched is answered, best effort",oft-needs="impl,utest",oft-tags="SafetyStreamer"]
@@ -530,10 +569,11 @@ The client observes that outcome when it next services or waits on the call, wit
 
 *Clients that use the E2E wire.*
 On a route whose client uses the E2E wire, the response carries no end-to-end protection, because the Streamer never opens a payload.
-That client refuses it as unprotected (`+req~ssr-e2e-rpc-echo~1+`) and counts the refusal apart from corruption, and its call ends at its TTL with an outcome that names the refusal.
+That client refuses it as unprotected (xref:../seooc-up-rust/e2e-wire.adoc#req-ssr-e2e-rpc-echo[An E2E response answers exactly its call]) and counts the refusal apart from corruption, and its call ends at its TTL with an outcome that names the refusal.
 --
 
 [horizontal]
+ID:: `+req~ssr-streamer-rpc-error-response~4+`
 ASIL:: B
 Allocated to:: the Streamer
 Verification:: test (each cause; a full egress; a full reverse route; a call whose error response was not sent ends as expired), heap-window
@@ -543,16 +583,17 @@ Status:: Draft
 The dispatcher can report a known delivery failure promptly without forwarding through a disabled route.
 The response is best effort and the request TTL remains the bound.
 
-That bound is logical (`+req~ssr-bound-wait~3+`): it decides the call's outcome, while when a descheduled client sees it depends on the client running.
+That bound is logical (xref:../seooc-up-rust/bounded-work.adoc#req-ssr-bound-wait[Every wait is bounded]): it decides the call's outcome, while when a descheduled client sees it depends on the client running.
 
 The clause about the E2E wire binds only a route whose client uses it.
 That wire is deferred and not part of this delivery, and every other clause binds now.
 
+[[aou-seooc-operator-access]]
 == Only authorized operators reach the Streamer's operator interface
 
 [.specitem,oft-sid="aou~seooc-operator-access~2",oft-title="Only authorized operators reach the Streamer's operator interface",oft-needs="uman",oft-tags="SafetyManual"]
 --
-The integrator *SHALL* restrict the Streamer's operator interface (`+req~ssr-streamer-operator-control~1+`) to the parties allowed to disable or re-enable routes.
+The integrator *SHALL* restrict the Streamer's operator interface (<<req-ssr-streamer-operator-control,Operator changes go through a declared interface>>) to the parties allowed to disable or re-enable routes.
 
 It *SHALL* treat an operator's disable of an ASIL route as a loss of that route's function, which the item *SHALL* tolerate.
 
@@ -566,16 +607,18 @@ In strict mode, the Streamer's own checks refuse an operator interface that name
 * Who made a change is *undetectable* by the element.
 
 [horizontal]
+ID:: `+aou~seooc-operator-access~2+`
 ASIL:: B
 Status:: Draft
 
 *Rationale.*
-The operator interface can switch an ASIL route off at run time (`+req~ssr-streamer-operator-control~1+`).
+The operator interface can switch an ASIL route off at run time (<<req-ssr-streamer-operator-control,Operator changes go through a declared interface>>).
 So whoever can reach it can remove that route's function.
 
 The element counts and reports every change with its cause, but cannot tell who made it.
 So who may make one is the integrator's to control.
 
+[[aou-seooc-monitor-thresholds]]
 == Monitor thresholds allow for peers' restarts
 
 [.specitem,oft-sid="aou~seooc-monitor-thresholds~2",oft-title="Monitor thresholds allow for peers' restarts",oft-needs="uman",oft-tags="SafetyManual"]
@@ -596,12 +639,13 @@ In strict mode, the deployment data *SHALL* also declare each peer's worst-case 
 * Whether that outage is acceptable for the item is *undetectable* by the element.
 
 [horizontal]
+ID:: `+aou~seooc-monitor-thresholds~2+`
 ASIL:: B
 Status:: Draft
 
 *Rationale.*
-A peer recovers from a fault by restarting, since the element has no recovery inside a process (`+aou~seooc-supervisor-restart~4+`).
-A monitor's trip holds until an operator re-enables the route (`+req~ssr-streamer-monitors~4+`).
+A peer recovers from a fault by restarting, since the element has no recovery inside a process (xref:../seooc-up-rust/assumptions-of-use.adoc#aou-seooc-supervisor-restart[A supervisor outside the process restarts it]).
+A monitor's trip holds until an operator re-enables the route (<<req-ssr-streamer-monitors,Worker and transport monitors trip routes>>).
 So a threshold below a peer's worst-case restart turns that peer's normal restart into an outage of the route, and only the item's own analysis can say whether that outage is acceptable.
 
 Declared restart times make the duty checkable.

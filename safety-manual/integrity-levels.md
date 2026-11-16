@@ -22,10 +22,10 @@ link neither validates the deployment nor closes an implementation requirement.
 ## Assumption (verbatim)
 
 <!-- aou-statement:start -->
-> The integrator *SHALL* give each transport one integrity level in the deployment data: QM, A, B, C or D, in that order. Every route on that transport carries the level (`+req~ssr-integrity-declared~3+`). Each process declares the level it was built to, and is developed to at least that level.
+> The integrator *SHALL* give each transport one integrity level in the deployment data: QM, A, B, C or D, in that order. Every route on that transport carries the level (xref:integrity.adoc#req-ssr-integrity-declared[Each transport declares one integrity level]). Each process declares the level it was built to, and is developed to at least that level.
 >
-> * *One transport's restrictions.* What one binding adds to the assignment is stated with that binding (for iceoryx2, `+aou~seooc-iceoryx2-level-separation~1+`).
-> * *Above ASIL B.* The duties for a level or for data above ASIL B are `+aou~seooc-capability-ceiling~1+`.
+> * *One transport's restrictions.* What one binding adds to the assignment is stated with that binding.
+> * *Above ASIL B.* The duties for a level or for data above ASIL B are xref:../seooc-up-rust/assumptions-of-use.adoc#aou-seooc-capability-ceiling[Data above ASIL B relies on measures outside the element].
 > * *A level is a label.* A declared level is a label checked at setup: it neither raises the element's capability nor qualifies the process that declares it.
 <!-- aou-statement:end -->
 

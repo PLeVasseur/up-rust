@@ -27,8 +27,8 @@ link neither validates the deployment nor closes an implementation requirement.
 > * each transport's integrity level;
 > * RPC client lists and expected peers;
 > * capacities;
-> * what the assumption of one binding adds for its transport (for iceoryx2, its service depths: `+aou~seooc-iceoryx2-limits~1+`);
-> * for each route that uses the E2E wire, its senders, from which its data IDs are derived, its `+resync_frames+`, and, *(b)*, for each sender, its start value's source and whether its starts are declared increasing;
+> * what the assumption of one binding adds for its transport;
+> * for each route that uses the E2E wire, its senders, from which its data IDs are derived, its `+resync_frames+`, and, for each sender, its start value's source and whether its starts are declared increasing;
 > * the selection of compiled-in waivers.
 >
 > The integrator protects the data against unintended change between release and use, and delivers the Streamer's deployment data with an integrity code over its content, which the Streamer checks.

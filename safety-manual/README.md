@@ -34,6 +34,10 @@ Each entry quotes its entire normative statement, then separates integrator
 actions, violation manifestations and detection limits.
 The original AsciiDoc inline notation is retained inside the quotation for exact
 comparison.
+A reference to another requirement or assumption appears there as an AsciiDoc
+link, `xref:<file>#<anchor>[<title>]` or `<<anchor,title>>`. The title is that
+item's heading in the specification, and a file path is relative to the
+specification file that states the quoted assumption.
 
 The specification defines the obligations, and this manual traces to it.
 Where the manual and the specification differ, the specification governs.

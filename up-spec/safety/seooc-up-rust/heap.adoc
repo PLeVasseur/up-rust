@@ -6,6 +6,7 @@ The key words "*MUST*", "*MUST NOT*", "*REQUIRED*", "*SHALL*", "*SHALL NOT*", "*
 Conventions, tags and status words: xref:../README.adoc[the safety area's README].
 Scope and element boundary: xref:README.adoc[the SEooC's README].
 
+[[req-ssr-heap-none]]
 == No heap in runtime mode
 
 [.specitem,oft-sid="req~ssr-heap-none~3",oft-title="No heap in runtime mode on a native path",oft-needs="impl,utest",oft-tags="SafetyUpRustCore"]
@@ -14,7 +15,7 @@ Scope and element boundary: xref:README.adoc[the SEooC's README].
 In runtime mode, element code *MUST NOT* acquire or release heap memory on any path that a native payload operation causes.
 
 *Every other path.*
-In runtime mode, element code *MUST NOT* acquire or release heap memory on any other path, except as a serialized or owned route's declared heap class permits and setup admits (`+req~ssr-heap-declared~3+`).
+In runtime mode, element code *MUST NOT* acquire or release heap memory on any other path, except as a serialized or owned route's declared heap class permits and setup admits (<<req-ssr-heap-declared,The heap class is declared, with no default>>).
 
 *What the native rule covers.*
 The native rule covers:
@@ -39,8 +40,8 @@ Work that a native route shares with a serialized one *MUST* meet the native rul
 *Serialized and owned routes.*
 On a serialized or owned route whose declared class admits allocation, heap use is limited to two kinds:
 
-* an acquisition at an allocation point that the class names, made only after the operation's refusals that can come first (`+req~ssr-refuse-before-heap~2+`);
-* the release, exactly once, of what such an acquisition produced, when the ownership it created ends, by whichever transition ends it (`+req~ssr-heap-slot-types~3+`).
+* an acquisition at an allocation point that the class names, made only after the operation's refusals that can come first (xref:errors.adoc#req-ssr-refuse-before-heap[Refuse before touching the heap]);
+* the release, exactly once, of what such an acquisition produced, when the ownership it created ends, by whichever transition ends it (<<req-ssr-heap-slot-types,Decoded values and their destructors>>).
 
 Deciding, reporting and counting any outcome acquires and releases nothing.
 Such a release never releases a route, role, table, startup region or other runtime resource, and it revokes no owner.
@@ -49,10 +50,10 @@ Such a release never releases a route, role, table, startup region or other runt
 A declaration makes a route's allocation visible.
 It admits the route's ordinary ownership, and it establishes nothing more:
 
-* It excuses no lazy first-use initialization (`+req~ssr-heap-lazy-forced~1+`).
+* It excuses no lazy first-use initialization (<<req-ssr-heap-lazy-forced,Lazy state is forced before runtime mode>>).
 * It reaches no native operation, none of the work one causes and none of the work a native route shares.
-* It relaxes no duty of element code, which keeps `+req~ssr-refuse-no-panic~1+`, `+req~ssr-bound-work~2+` and `+req~ssr-bound-wait~3+` on every route.
-* It establishes none of the stronger guarantees that `+req~ssr-heap-guarantees~1+` names: panic-free cleanup, non-waiting acquisition, non-waiting release and recoverable exhaustion.
+* It relaxes no duty of element code, which keeps xref:errors.adoc#req-ssr-refuse-no-panic[No panic on runtime paths]; xref:bounded-work.adoc#req-ssr-bound-work[Work per call is bounded by setup data] and xref:bounded-work.adoc#req-ssr-bound-wait[Every wait is bounded] on every route.
+* It establishes none of the stronger guarantees that <<req-ssr-heap-guarantees,A stronger resource guarantee is required by name>> names: panic-free cleanup, non-waiting acquisition, non-waiting release and recoverable exhaustion.
 The element promises a route one of them only where the route requires it and setup admits it.
 Otherwise the route's report shows the guarantee as not admitted, and states separately whether it is established.
 * It does not make an allocator whose contract can end the process on exhaustion recoverable.
@@ -62,6 +63,7 @@ These rules bind each transport from its own transition.
 --
 
 [horizontal]
+ID:: `+req~ssr-heap-none~3+`
 ASIL:: B
 Allocated to:: the element
 Verification:: heap-window, gate
@@ -85,18 +87,17 @@ It cannot reach native work or metadata a native route shares, and it does not m
 
 Ending an owned value is the only release a serialized route makes.
 Every transition that can end one uses that one rule: a release, a refusal, an overflow, a cancellation, an expiry or a peer's failure.
-So no transition needs heap of its own (`+req~ssr-refuse-before-heap~2+`, `+req~ssr-qos-overflow~3+`, `+req~ssr-peer-failure-normal~3+`).
+So no transition needs heap of its own (xref:errors.adoc#req-ssr-refuse-before-heap[Refuse before touching the heap]; xref:qos.adoc#req-ssr-qos-overflow[Overflow acts as declared]; xref:../up-l1/peers.adoc#req-ssr-peer-failure-normal[Peer failure is normal input]).
 
 An allocator working inside a pre-obtained region still allocates and frees, so the backing region's origin does not make it admissible on a native path.
 
-_Why revision 3._
-Revision 2 made every declaring route show that its cleanup could neither panic nor wait, and refused the route otherwise.
-Owning a value is ordinary for a serialized wire, so that refused ordinary communication for want of evidence that it never asked for.
-This revision keeps the declaration as what it is, a truthful statement of the route's heap use.
-What a route needs beyond that it requires by name, and it is then admitted on evidence or refused (`+req~ssr-heap-guarantees~1+`).
+_What a declaration is._
+A declaration is a truthful statement of the route's heap use, and no more.
+Owning a value is ordinary for a serialized wire.
+So a declaring route is not made to show that its cleanup can neither panic nor wait: that would refuse ordinary communication for want of evidence that it never asked for.
+What a route needs beyond its declaration it requires by name, and it is then admitted on evidence or refused (<<req-ssr-heap-guarantees,A stronger resource guarantee is required by name>>).
 
-The native rule, the limit to two kinds of heap use and the duties of element code are unchanged.
-
+[[req-ssr-heap-lazy-forced]]
 == Lazy state is forced before runtime mode
 
 [.specitem,oft-sid="req~ssr-heap-lazy-forced~1",oft-title="Lazy state is forced before runtime mode",oft-needs="impl,utest",oft-tags="SafetyUpRustCore"]
@@ -112,6 +113,7 @@ This covers:
 --
 
 [horizontal]
+ID:: `+req~ssr-heap-lazy-forced~1+`
 ASIL:: B
 Allocated to:: the element
 Verification:: heap-window, fault-injection
@@ -122,11 +124,12 @@ ISO 26262:: 6-9.4.5, 6-10.4.7 (part-clause numbers only)
 
 *Rationale.*
 A primitive that sets itself up on first use moves that work, and any allocation in it, from initialization into the first message.
-There `+req~ssr-heap-none~3+` forbids it on a native path.
+There <<req-ssr-heap-none,No heap in runtime mode>> forbids it on a native path.
 
 A serialized route's declared allocation covers the owned values that route admits.
 It never covers a primitive's first-use setup, which this item requires to be forced on every route.
 
+[[req-ssr-heap-declared]]
 == The heap class is declared, with no default
 
 [.specitem,oft-sid="req~ssr-heap-declared~3",oft-title="The heap class is declared, with no default",oft-needs="impl,utest",oft-tags="SafetyUpRustCore"]
@@ -171,10 +174,10 @@ An allocation never falls back silently to another domain.
 Stating a policy discloses it.
 It admits the route's ordinary ownership under that policy and establishes no stronger guarantee:
 
-* Setup admits a route's decoded types, and their destruction, as `+req~ssr-heap-slot-types~3+` states.
-* The element promises a route panic-free cleanup, non-waiting acquisition, non-waiting release or recoverable exhaustion only where the route requires it and setup admits it (`+req~ssr-heap-guarantees~1+`).
+* Setup admits a route's decoded types, and their destruction, as <<req-ssr-heap-slot-types,Decoded values and their destructors>> states.
+* The element promises a route panic-free cleanup, non-waiting acquisition, non-waiting release or recoverable exhaustion only where the route requires it and setup admits it (<<req-ssr-heap-guarantees,A stronger resource guarantee is required by name>>).
 * A stated policy that shows such a guarantee violated, or does not exclude the violation, refuses by name a route that requires the guarantee, and never a route that does not.
-* A release that is handed to a release service, or to a binding's deferred return, is pending cleanup, isolated as `+req~ssr-release-lease-drop~4+` states.
+* A release that is handed to a release service, or to a binding's deferred return, is pending cleanup, isolated as xref:release.adoc#req-ssr-release-lease-drop[A lease gives back its slot and nothing else] states.
 
 A release returns by a finite logical deadline only where its own mechanism does.
 Running it on another thread, or timing it from outside, does not make it do so.
@@ -187,7 +190,7 @@ The transition *MUST* refuse, naming the route and the reason:
 
 * a native route whose wire or binding declares allocation in a direction the route uses;
 * a serialized route whose wire or binding declares allocation that the route does not declare;
-* a route that requires a stronger guarantee that is not established for it (`+req~ssr-heap-guarantees~1+`).
+* a route that requires a stronger guarantee that is not established for it (<<req-ssr-heap-guarantees,A stronger resource guarantee is required by name>>).
 
 *Scope of the permission.*
 A serialized route's allocation permission *MUST NOT* extend to a native route or to metadata it shares with one.
@@ -198,10 +201,11 @@ The startup report *MUST* show each route's admitted heap class, naming which of
 * It shows every wire the route uses, in each direction, with the route's binding and each allocation provider.
 A route with several wires shows each of them, never the first alone.
 * It shows the declared policy of each that allocates, an unknown as unknown.
-* It shows, for each stronger guarantee, whether the route requires it, whether it is established and whether it is admitted (`+req~ssr-heap-guarantees~1+`).
+* It shows, for each stronger guarantee, whether the route requires it, whether it is established and whether it is admitted (<<req-ssr-heap-guarantees,A stronger resource guarantee is required by name>>).
 --
 
 [horizontal]
+ID:: `+req~ssr-heap-declared~3+`
 ASIL:: B
 Allocated to:: the element
 Verification:: test, review
@@ -238,36 +242,37 @@ So the declared policy comes from the allocator's stated contract, not from the 
 An ordinary allocator may also take a lock, in an acquisition as in a release, and the policy says so.
 
 A declaration tells the reader what the route does.
-It is not evidence for a stronger guarantee, which a route that requires one is admitted on separately (`+req~ssr-heap-guarantees~1+`).
+It is not evidence for a stronger guarantee, which a route that requires one is admitted on separately (<<req-ssr-heap-guarantees,A stronger resource guarantee is required by name>>).
 Nor is a timer around a release evidence that it returns by a deadline: a call that waits for a lock without one completes when the lock is free, whatever the timer reports.
 
-_Why revision 3._
-Revision 2 refused every route whose stated policy showed, or did not exclude, a panic or a process end in its cleanup.
-An ordinary allocator's contract seldom excludes either, so that refused ordinary serialized routes for stating the truth.
-This revision keeps the truthful statement, adds what was missing from it, and lets a stated policy refuse only a route that requires the guarantee it violates.
+_What a stated policy refuses._
+An ordinary allocator's contract seldom excludes a panic or a process end in its cleanup.
+Refusing every route whose stated policy shows one, or does not exclude one, would refuse ordinary serialized routes for stating the truth.
+So a stated policy refuses only a route that requires the guarantee it violates.
 
+[[req-ssr-heap-guarantees]]
 == A stronger resource guarantee is required by name
 
 [.specitem,oft-sid="req~ssr-heap-guarantees~1",oft-title="A stronger resource guarantee is required by name, and admitted or refused",oft-needs="impl,utest",oft-tags="SafetyUpRustCore"]
 --
 *Ordinary ownership.*
-A serialized or owned route whose declared heap class admits allocation (`+req~ssr-heap-declared~3+`) carries message types whose values own resources, heap memory included.
+A serialized or owned route whose declared heap class admits allocation (<<req-ssr-heap-declared,The heap class is declared, with no default>>) carries message types whose values own resources, heap memory included.
 Setup *MUST NOT* refuse such a route, or a message type, wire, binding or allocation provider on it:
 
 * because its values own resources;
 * because a destructor runs when one of them ends; or
 * because a guarantee of this item, a timing bound or an assurance scope is not established for it.
 
-A decoded type is admitted as `+req~ssr-heap-slot-types~3+` states.
+A decoded type is admitted as <<req-ssr-heap-slot-types,Decoded values and their destructors>> states.
 
 *What holds whatever a route requires.*
 The following are selected by nothing and waived by nothing:
 
-* memory safety and the ownership rules: one destruction of each initialized value, no reuse of storage while it is owned, and no reclamation behind a forgotten owner (`+req~ssr-unsafe-sound~1+`, `+req~ssr-heap-slot-types~3+`, `+req~ssr-release-lease-drop~4+`);
-* the functional semantics that a route offers: true arrival, identity, TTL and logical deadlines, the declared overflow policy, and truthful errors, capacity and charges (`+req~ssr-qos-no-downgrade~2+`, `+req~ssr-bound-wait~3+`, `+req~ssr-error-no-silent-loss~3+`);
-* the native rule, for every native operation, the work it causes and the work a native route shares (`+req~ssr-heap-none~3+`);
-* the duties of element code itself: no panic, bounded work, and waits of its own that take a logical deadline (`+req~ssr-refuse-no-panic~1+`, `+req~ssr-bound-work~2+`, `+req~ssr-bound-wait~3+`);
-* a truthful declaration of the heap class and its policy (`+req~ssr-heap-declared~3+`).
+* memory safety and the ownership rules: one destruction of each initialized value, no reuse of storage while it is owned, and no reclamation behind a forgotten owner (xref:memory-safety.adoc#req-ssr-unsafe-sound[Safe code cannot cause undefined behaviour]; <<req-ssr-heap-slot-types,Decoded values and their destructors>>; xref:release.adoc#req-ssr-release-lease-drop[A lease gives back its slot and nothing else]);
+* the functional semantics that a route offers: true arrival, identity, TTL and logical deadlines, the declared overflow policy, and truthful errors, capacity and charges (xref:qos.adoc#req-ssr-qos-no-downgrade[QoS is honored or refused, never weakened]; xref:bounded-work.adoc#req-ssr-bound-wait[Every wait is bounded]; xref:errors.adoc#req-ssr-error-no-silent-loss[No silent loss, and each loss counted once]);
+* the native rule, for every native operation, the work it causes and the work a native route shares (<<req-ssr-heap-none,No heap in runtime mode>>);
+* the duties of element code itself: no panic, bounded work, and waits of its own that take a logical deadline (xref:errors.adoc#req-ssr-refuse-no-panic[No panic on runtime paths]; xref:bounded-work.adoc#req-ssr-bound-work[Work per call is bounded by setup data]; xref:bounded-work.adoc#req-ssr-bound-wait[Every wait is bounded]);
+* a truthful declaration of the heap class and its policy (<<req-ssr-heap-declared,The heap class is declared, with no default>>).
 
 A fault against one of these is a defect on every route.
 It is never reported as a guarantee that is merely not established.
@@ -282,7 +287,7 @@ Destroying each initialized value that the route can own, and releasing what it 
 No acquisition that the route's declared class admits waits for a lock or other dependency.
 * _Non-waiting release._
 No call, transition or drop that ends a value the route owns waits for that value's release.
-The release cannot wait, or it leaves that path as pending cleanup, isolated as `+req~ssr-release-lease-drop~4+` states.
+The release cannot wait, or it leaves that path as pending cleanup, isolated as xref:release.adoc#req-ssr-release-lease-drop[A lease gives back its slot and nothing else] states.
 * _Recoverable exhaustion._
 Exhaustion at every allocation point that the route can reach is returned as that operation's refusal, and cannot panic or end the process.
 
@@ -291,7 +296,7 @@ Non-waiting acquisition limits acquisitions and no release, and non-waiting rele
 Requiring one does not require another, and a route is never refused over a guarantee that it does not require because it requires a different one.
 Two apply together only where the route requires both, by naming both or through a claim whose package states that it depends on both.
 
-A finite timing bound and a safety-assurance scope are the claims of `+req~ssr-qos-no-downgrade~2+`, required and admitted as that item states.
+A finite timing bound and a safety-assurance scope are the claims of xref:qos.adoc#req-ssr-qos-no-downgrade[QoS is honored or refused, never weakened], required and admitted as that item states.
 
 *When a guarantee is required.*
 A route requires one of these guarantees only where:
@@ -342,7 +347,7 @@ No declaration, record or label turns a guarantee that is not established into a
 
 *Setup.*
 A guarantee that a route requires covers what setup takes or creates for that route as well.
-A refusal disposes of it as `+req~ssr-mode-init-failure~4+` states.
+A refusal disposes of it as xref:runtime-modes.adoc#req-ssr-mode-init-failure[Initialization failure] states.
 
 *Reporting.*
 The startup report and each route's report *MUST* state separately, for each of the four guarantees:
@@ -357,6 +362,7 @@ A guarantee is reported as not established only where its evidence is absent or 
 --
 
 [horizontal]
+ID:: `+req~ssr-heap-guarantees~1+`
 ASIL:: B
 Allocated to:: the element
 Verification:: test, review
@@ -388,7 +394,7 @@ Whether a destruction can panic, whether a release can wait and whether exhausti
 So they can be shown only for a named composition.
 
 * Demanding that evidence of every owning route would make a safety package a prerequisite for ordinary use (xref:README.adoc#claims[the SEooC's claims]).
-* Granting a guarantee without it would be a silent downgrade of the guarantee (`+req~ssr-qos-no-downgrade~2+`).
+* Granting a guarantee without it would be a silent downgrade of the guarantee (xref:qos.adoc#req-ssr-qos-no-downgrade[QoS is honored or refused, never weakened]).
 
 So a guarantee is required by name, and is then admitted or refused.
 
@@ -416,14 +422,15 @@ A wire's record says nothing about a second wire on the same route.
 _Destructors._
 A destructor is a measure of nothing but itself.
 A value can have one and own no heap memory, as a value that only updates a counter does.
-A value's destruction can also free memory though its decoding acquired none (`+req~ssr-heap-declared~3+`).
+A value's destruction can also free memory though its decoding acquired none (<<req-ssr-heap-declared,The heap class is declared, with no default>>).
 So the heap class states heap use, the type states whether anything runs at all, and neither is inferred from the other.
 
 _Mechanisms._
-A release service is how a configuration gives non-waiting release over a dependency that can wait (`+req~ssr-release-lease-drop~4+`).
+A release service is how a configuration gives non-waiting release over a dependency that can wait (xref:release.adoc#req-ssr-release-lease-drop[A lease gives back its slot and nothing else]).
 A configuration that has none cannot give that guarantee, and refuses a route that requires it.
 That is no reason to refuse a route that does not.
 
+[[req-ssr-heap-slot-types]]
 == Decoded values and their destructors
 
 [.specitem,oft-sid="req~ssr-heap-slot-types~3",oft-title="A decoded value is destroyed once, as its route's class admits",oft-needs="impl,utest",oft-tags="SafetyUpRustCore"]
@@ -432,26 +439,26 @@ That is no reason to refuse a route that does not.
 On a native route, a message type whose values run a destructor when they end *MUST* be refused at setup wherever it decodes into a startup slot.
 So overwriting a slot in runtime mode never runs a destructor there.
 
-The native rule imposes this restriction because it is sufficient and the type alone decides it (`+req~ssr-heap-none~3+`).
+The native rule imposes this restriction because it is sufficient and the type alone decides it (<<req-ssr-heap-none,No heap in runtime mode>>).
 It is not a finding about what a refused type's destructor does.
 
 *Heap-free routes.*
-On a serialized or owned route whose heap class is none, a decoded type is admitted on its wire's heap-free claim for that direction (`+req~ssr-heap-declared~3+`).
+On a serialized or owned route whose heap class is none, a decoded type is admitted on its wire's heap-free claim for that direction (<<req-ssr-heap-declared,The heap class is declared, with no default>>).
 
-* That claim covers replacing and destroying the type's decoded values, and the wire's contract suite checks it (`+req~ssr-wire-heap-claim-tested~3+`).
+* That claim covers replacing and destroying the type's decoded values, and the wire's contract suite checks it (xref:../up-l1/wires.adoc#req-ssr-wire-heap-claim-tested[A heap-free claim passes the wire contract]).
 * So a type whose values run a destructor is admitted there where its wire makes that claim, and a type whose values run none needs nothing more.
 * Setup *MUST* refuse the route, naming it, the type and the wire, where the wire states allocation for that direction.
 
 A destruction on such a route acquires and releases no heap memory.
 
 *Routes that declare allocation.*
-On a serialized or owned route whose declared heap class admits allocation, a type whose values own resources, heap memory included, is admitted as `+req~ssr-heap-guarantees~1+` states.
+On a serialized or owned route whose declared heap class admits allocation, a type whose values own resources, heap memory included, is admitted as <<req-ssr-heap-guarantees,A stronger resource guarantee is required by name>> states.
 
 * Setup does not refuse it for having a destructor, for owning heap memory or because a stronger guarantee is not established for it.
 * Destroying its values frees what the route's wire, binding or allocation provider allocated, under the declared policy.
 
 *What a route requires.*
-Where a route requires panic-free cleanup or non-waiting release, setup admits a type on it only where that guarantee is established for the type with the route's wires, binding and allocation provider (`+req~ssr-heap-guarantees~1+`).
+Where a route requires panic-free cleanup or non-waiting release, setup admits a type on it only where that guarantee is established for the type with the route's wires, binding and allocation provider (<<req-ssr-heap-guarantees,A stronger resource guarantee is required by name>>).
 Otherwise setup *MUST* refuse the route by name.
 
 A declaration, a disclosure, a fallible calling interface or an implementation of an interface establishes neither.
@@ -480,7 +487,7 @@ The destruction never changes that outcome.
 Until it runs, the value stays owned and charged.
 It may wait inside the allocation domain that the policy names, and the element promises no time for it.
 * On a route that requires non-waiting release, the destruction runs at once only where it is established that it cannot wait.
-Otherwise the transition *MUST* hand the value, without waiting or panicking, to the route's release service, which performs the same destruction as pending cleanup (`+req~ssr-release-lease-drop~4+`).
+Otherwise the transition *MUST* hand the value, without waiting or panicking, to the route's release service, which performs the same destruction as pending cleanup (xref:release.adoc#req-ssr-release-lease-drop[A lease gives back its slot and nothing else]).
 
 The route's report thereby states, for each destruction the route can perform, where it runs and whether it can wait.
 Nothing promises a completion deadline for a destruction.
@@ -514,6 +521,7 @@ Its value stays owned and charged, and is never reported as released, until the 
 --
 
 [horizontal]
+ID:: `+req~ssr-heap-slot-types~3+`
 ASIL:: B
 Allocated to:: the element
 Verification:: test, heap-window, review
@@ -552,33 +560,33 @@ So this item keeps three things apart:
 
 _Native routes._
 A destructor on a native route would be unexamined code inside the native rule.
-It could free, wait or panic where `+req~ssr-heap-none~3+` forbids each.
+It could free, wait or panic where <<req-ssr-heap-none,No heap in runtime mode>> forbids each.
 Refusing every type that has one is sufficient, and a type alone decides it.
 A native payload type has no need of one.
 
 _Heap-free routes._
 A route whose class is none promises no heap use, and a destructor that uses none keeps that promise.
-The wire's heap-free claim covers the decoded value's whole life, and its contract suite checks it inside a heap window (`+req~ssr-wire-heap-claim-tested~3+`).
+The wire's heap-free claim covers the decoded value's whole life, and its contract suite checks it inside a heap window (xref:../up-l1/wires.adoc#req-ssr-wire-heap-claim-tested[A heap-free claim passes the wire contract]).
 So a type with a destructor is admitted there on that claim, and refused without it.
 
 _Routes that declare allocation._
 A serialized route that declares its allocation may free what it allocated.
 An ordinary decoded message owns strings, sequences and nested messages, and ending it returns their memory through the route's provider.
-Refusing such a type for want of a proof about its destruction would refuse ordinary serialized communication, which every profile offers (`+req~ssr-heap-guarantees~1+`).
+Refusing such a type for want of a proof about its destruction would refuse ordinary serialized communication, which every profile offers (<<req-ssr-heap-guarantees,A stronger resource guarantee is required by name>>).
 
 The value's destruction is part of that route's resource policy; it is not a release of the reservation that holds it.
-Every transition that ends a value uses this one rule, so the refusal, overflow and peer-failure items need no release of their own (`+req~ssr-refuse-before-heap~2+`, `+req~ssr-qos-overflow~3+`, `+req~ssr-peer-failure-normal~3+`).
+Every transition that ends a value uses this one rule, so the refusal, overflow and peer-failure items need no release of their own (xref:errors.adoc#req-ssr-refuse-before-heap[Refuse before touching the heap]; xref:qos.adoc#req-ssr-qos-overflow[Overflow acts as declared]; xref:../up-l1/peers.adoc#req-ssr-peer-failure-normal[Peer failure is normal input]).
 
 _Waiting._
 Waiting and panicking are different properties, and neither follows from ownership.
 
 An ordinary allocator's release can take a lock that waits.
 On a route that does not require non-waiting release, that wait is the declared policy's, on the path that ended the value.
-A route that requires non-waiting release moves it off that path, in the same way as a retained owner's deferred return (`+req~ssr-binding-frame-drop~6+`).
+A route that requires non-waiting release moves it off that path, in the same way as a retained owner's deferred return (xref:../up-l1/bindings.adoc#req-ssr-binding-frame-drop[What a received frame's destructor may do]).
 
 That hand-off holds ownership awaiting destruction, not unread traffic, so it is not a second receive queue.
 Deferral bounds nothing: the release may still wait behind the allocator's own lock, which no deadline can interrupt from outside.
-The value therefore stays owned and charged while it is pending (`+req~ssr-release-lease-drop~4+`).
+The value therefore stays owned and charged while it is pending (xref:release.adoc#req-ssr-release-lease-drop[A lease gives back its slot and nothing else]).
 
 _Panicking._
 A destruction that could panic or abort would do so wherever it runs.
@@ -590,9 +598,8 @@ A destructor that panics, calls back or never returns is still type-correct safe
 So the element keeps memory safe against all of it on every route, holds nothing of its own across it, and counts no unfinished destruction as completed.
 That protection is not a guarantee about the destructor.
 
-Rust does not promise that a destructor runs (`+req~ssr-mode-no-shutdown~1+`): a forgotten value is leaked with its slot, never reclaimed behind a live reference.
+Rust does not promise that a destructor runs (xref:runtime-modes.adoc#req-ssr-mode-no-shutdown[No shutdown in runtime mode]): a forgotten value is leaked with its slot, never reclaimed behind a live reference.
 
-_Why revision 3._
-Revision 2 refused a type with a destructor on every heap-free route, and on a declaring route admitted an owning type only with evidence that its destruction could neither panic nor wait unhandled.
-That read a destructor as heap use, and made the strongest cleanup guarantees a condition of ordinary ownership.
-This revision admits ordinary ownership, keeps the two guarantees for the routes that require them, and keeps every memory-safety rule on every route.
+_In sum._
+A destructor is not read as heap use, and the strongest cleanup guarantees are no condition of ordinary ownership.
+Ordinary ownership is admitted, the two guarantees bind the routes that require them, and every memory-safety rule holds on every route.

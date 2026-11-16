@@ -13,6 +13,7 @@ They are allocated to the element (tag `SafetyUpRustCore`), and one of them also
 * They hold against a faulty peer, as xref:../README.adoc#faulty-peer[the faulty-peer model] describes it.
 * RPC calls and message identity are in xref:../up-l2/interaction.adoc[the communication layer's part].
 
+[[req-ssr-peer-failure-normal]]
 == Peer failure is normal input
 
 [.specitem,oft-sid="req~ssr-peer-failure-normal~3",oft-title="Peer failure is normal input",oft-needs="impl,utest",oft-tags="SafetyUpRustCore"]
@@ -29,9 +30,9 @@ A peer process that dies at any instruction, or restarts, *MUST NOT* cause any o
 The one exception to the unbounded wait is the release of what the failure ends.
 It waits for no peer, and what it releases stays charged until it completes.
 
-* Where it is pending cleanup, a retained owner's deferred return included, it is isolated as `+req~ssr-release-lease-drop~4+` states.
+* Where it is pending cleanup, a retained owner's deferred return included, it is isolated as xref:../seooc-up-rust/release.adoc#req-ssr-release-lease-drop[A lease gives back its slot and nothing else] states.
 So no survivor's operation, arrival, deadline or expiry accounting, health report or other owner's return waits for it.
-* On a serialized or owned route whose declared heap class admits allocation, and which does not require non-waiting release (`+req~ssr-heap-guarantees~1+`), an owned value's release runs under the route's declared policy on a path of that route, after the failure's outcome has been recorded (`+req~ssr-heap-slot-types~3+`).
+* On a serialized or owned route whose declared heap class admits allocation, and which does not require non-waiting release (xref:../seooc-up-rust/heap.adoc#req-ssr-heap-guarantees[A stronger resource guarantee is required by name]), an owned value's release runs under the route's declared policy on a path of that route, after the failure's outcome has been recorded (xref:../seooc-up-rust/heap.adoc#req-ssr-heap-slot-types[Decoded values and their destructors]).
 * An owned value's destruction never runs in a native operation, in the work one causes or in work that a native route shares.
 
 *What survivors see.*
@@ -39,12 +40,13 @@ Those processes *MUST* see the failure only as silence, counted deadline misses,
 Each is due without waiting for that release, and each is recorded before the release of what it ended starts.
 
 *Routes that declare allocation.*
-On a serialized or owned route whose declared heap class admits allocation, a call or frame that such an outcome ends releases what it owns exactly once as `+req~ssr-heap-slot-types~3+` states.
+On a serialized or owned route whose declared heap class admits allocation, a call or frame that such an outcome ends releases what it owns exactly once as xref:../seooc-up-rust/heap.adoc#req-ssr-heap-slot-types[Decoded values and their destructors] states.
 That is the only heap use the failure causes there.
 It releases no route, role, table, startup region or other runtime resource and revokes no surviving owner.
 --
 
 [horizontal]
+ID:: `+req~ssr-peer-failure-normal~3+`
 ASIL:: B
 Allocated to:: the element
 Verification:: fault-injection inside a heap-window
@@ -58,21 +60,20 @@ ISO 26262:: 9-7.4.4 g, 6-Annex D.2.4 (part-clause numbers only)
 *Rationale.*
 Peers run in other processes, often over middleware this project does not control.
 So each process has to protect itself from their failures rather than rely on them.
-A peer dying or restarting is therefore normal input to a transport, and a frame from an earlier incarnation of a peer is refused as stale (`+req~ssr-peer-stale-rejected~3+`).
+A peer dying or restarting is therefore normal input to a transport, and a frame from an earlier incarnation of a peer is refused as stale (<<req-ssr-peer-stale-rejected,Stale peers are rejected>>).
 
-_Why revision 2._
-Revision 1 forbade any heap use in a surviving process.
-A serialized route cannot meet that when a peer's failure ends a call that holds a decoded owned response: that value must still be destroyed, once.
+_Heap use after a failure._
+A peer's failure can end a call that holds a decoded owned response, and that value must still be destroyed, once.
+So the failure's own handling acquires no heap anywhere, and releases none on native and heap-free routes.
+The release of what the failure ends is confined to the route's declared class (xref:../seooc-up-rust/heap.adoc#req-ssr-heap-none[No heap in runtime mode]).
 
-This revision keeps the failure's own handling free of heap acquisition everywhere, and of heap release on native and heap-free routes.
-It confines the release of what the failure ends to the route's declared class (`+req~ssr-heap-none~3+`).
+_Where that release runs._
+An ordinary owning route has no release service and requires none (xref:../seooc-up-rust/heap.adoc#req-ssr-heap-guarantees[A stronger resource guarantee is required by name]), and an owned value's release there can wait behind an allocator's lock like any other.
+So an owned value's release is kept pending and apart on a route that requires non-waiting release.
+On a route that does not, it runs under the route's declared policy, after the failure's outcome is recorded and never in native or shared work.
+A retained owner's deferred return is pending cleanup on every route, whatever the route requires.
 
-_Why revision 3._
-Revision 2 kept every such release pending and apart, which needs a release service wherever a value is owned.
-An ordinary owning route has none and requires none (`+req~ssr-heap-guarantees~1+`).
-That release can wait behind an allocator's lock like any other.
-So this revision keeps it pending and apart on a route that requires non-waiting release, and elsewhere lets it run under the route's declared policy, after the failure's outcome is recorded and never in native or shared work.
-
+[[req-ssr-native-abi-agreed]]
 == A native representation never crosses an ABI
 
 [.specitem,oft-sid="req~ssr-native-abi-agreed~1",oft-title="A native representation never crosses an ABI",oft-needs="impl,utest",oft-tags="SafetyUpRustCore,SafetyBinding"]
@@ -100,6 +101,7 @@ Each binding that carries native frames between processes exchanges the fingerpr
 --
 
 [horizontal]
+ID:: `+req~ssr-native-abi-agreed~1+`
 ASIL:: B
 Allocated to:: the element; each binding that carries native frames between processes
 Verification:: test
@@ -112,6 +114,7 @@ Status:: Draft
 Equal message identity does not imply equal in-memory layout.
 An explicit ABI agreement prevents interpreting one target layout as another.
 
+[[req-ssr-peer-stale-rejected]]
 == Stale peers are rejected
 
 [.specitem,oft-sid="req~ssr-peer-stale-rejected~3",oft-title="Stale peers are rejected",oft-needs="impl,utest",oft-tags="SafetyUpRustCore"]
@@ -131,7 +134,7 @@ The element *MUST* compare a frame's full peer identity and incarnation with the
 
 *No limit on concurrent classification.*
 Classification places no limit on how many frames of one peer are classified at once.
-A frame is refused only as stale, as undeclared (`+req~ssr-peer-admission~2+`), or because the table that its declaration sized is genuinely full.
+A frame is refused only as stale, as undeclared (<<req-ssr-peer-admission,Undeclared peers cannot lock out declared ones>>), or because the table that its declaration sized is genuinely full.
 
 *Restart reports.*
 A binding's restart report fails the calls bound to older incarnations of that peer, and is counted.
@@ -141,6 +144,7 @@ No frame is admitted as current from a stale incarnation.
 --
 
 [horizontal]
+ID:: `+req~ssr-peer-stale-rejected~3+`
 ASIL:: B
 Allocated to:: the element
 Verification:: test, fault-injection, review
@@ -158,15 +162,15 @@ Status:: Draft
 *Rationale.*
 A restarted peer must not inherit frames or calls from its predecessor, and contention must not turn a stale incarnation into a current one.
 
-_Why revision 3._
-Revision 2 named the mechanism of one representation: 32-bit words, a contended raise refused as contention, and at most 255 concurrent classifications of one peer.
-Those limits belonged to that mechanism, not to the product.
+_An outcome, not a mechanism._
+The requirement states the outcome that every mechanism keeps, and names no representation.
+A limit of one representation, such as 32-bit words with a contended raise refused as contention, or at most 255 concurrent classifications of one peer, belongs to that mechanism and not to the product.
 A mechanism that keeps each peer's full 64-bit identity and incarnation in one exclusive record has neither limit.
-So the requirement states the outcome that every mechanism keeps instead.
 
 Full width removes a wrap window.
-It does not by itself establish the exclusion argument, which the review of each mechanism supplies (`+req~ssr-atomic-width~2+`).
+It does not by itself establish the exclusion argument, which the review of each mechanism supplies (xref:../seooc-up-rust/platform.adoc#req-ssr-atomic-width[No target needs an atomic width it lacks]).
 
+[[req-ssr-peer-admission]]
 == Undeclared peers cannot lock out declared ones
 
 [.specitem,oft-sid="req~ssr-peer-admission~2",oft-title="Undeclared peers cannot lock out declared ones",oft-needs="impl,utest",oft-tags="SafetyUpRustCore"]
@@ -179,6 +183,7 @@ On a route with a declared list of peers, a frame from an undeclared source *MUS
 --
 
 [horizontal]
+ID:: `+req~ssr-peer-admission~2+`
 ASIL:: B
 Allocated to:: the element
 Verification:: fault-injection (strangers first, then declared clients; a lost peer racing its own last frame, on two threads), miri, test

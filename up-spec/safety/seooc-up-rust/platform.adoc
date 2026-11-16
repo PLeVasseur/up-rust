@@ -6,6 +6,7 @@ The key words "*MUST*", "*MUST NOT*", "*REQUIRED*", "*SHALL*", "*SHALL NOT*", "*
 Conventions, tags and status words: xref:../README.adoc[the safety area's README].
 Scope and element boundary: xref:README.adoc[the SEooC's README].
 
+[[req-ssr-platform-contract]]
 == Every platform backend keeps the platform's rules
 
 [.specitem,oft-sid="req~ssr-platform-contract~2",oft-title="Every platform backend keeps the platform's rules",oft-needs="impl,utest",oft-tags="SafetyUpRustCore"]
@@ -33,6 +34,7 @@ Each supported configuration's package *MUST* state:
 --
 
 [horizontal]
+ID:: `+req~ssr-platform-contract~2+`
 ASIL:: B
 Allocated to:: each platform backend; the element, for its handling of a failed read
 Verification:: test, review
@@ -44,17 +46,17 @@ Status:: Draft
 
 *Rationale.*
 Runtime code reaches the operating system only through a backend.
-So a backend that broke one of these rules would break the element's runtime requirements from below, such as `+req~ssr-heap-none~3+` and `+req~ssr-refuse-no-panic~1+`.
+So a backend that broke one of these rules would break the element's runtime requirements from below, such as xref:heap.adoc#req-ssr-heap-none[No heap in runtime mode] and xref:errors.adoc#req-ssr-refuse-no-panic[No panic on runtime paths].
 
-_Why revision 2._
-The earlier contract held the monotonic clock to be infallible.
-This revision removes that premise, because an OS call can fail and a successful read during initialization does not show that a later one cannot.
+_A clock read can fail._
+The contract does not hold the monotonic clock to be infallible: an OS call can fail, and a successful read during initialization does not show that a later one cannot.
 
 A failed read that ended a wait as satisfied, or a TTL check that passed with an unknown time, would turn a platform fault into a silent timing or expiry error.
 So the outcome is fail-closed and counted.
 
 The contracts a configuration states are those an integrator needs to select it without deriving them again (xref:README.adoc#claims[the SEooC's claims]).
 
+[[req-ssr-platform-init-only]]
 == Entropy and prefault stay in initialization
 
 [.specitem,oft-sid="req~ssr-platform-init-only~1",oft-title="Entropy and prefault stay in initialization",oft-needs="impl,utest",oft-tags="SafetyUpRustCore"]
@@ -63,6 +65,7 @@ The initialization-only platform services, entropy and prefault, *MUST NOT* be r
 --
 
 [horizontal]
+ID:: `+req~ssr-platform-init-only~1+`
 ASIL:: B
 Allocated to:: the element
 Verification:: compile-fail
@@ -76,6 +79,7 @@ Both services belong to setup:
 
 Handing runtime code a platform value that cannot reach back makes a call to either service a compile error instead of a rule to remember.
 
+[[req-ssr-platform-entropy]]
 == Initialization entropy comes from a declared source
 
 [.specitem,oft-sid="req~ssr-platform-entropy~2",oft-title="Initialization entropy comes from a declared source",oft-needs="impl,utest",oft-tags="SafetyUpRustCore"]
@@ -97,6 +101,7 @@ Such a requirement needs a checked persistent construction.
 --
 
 [horizontal]
+ID:: `+req~ssr-platform-entropy~2+`
 ASIL:: B
 Allocated to:: each platform backend
 Verification:: test, review
@@ -117,8 +122,9 @@ So the previous statement that entropy "differs at each start" was stronger than
 Identity requirements keep their strength: where one demands non-repetition, this item forbids resting it on entropy.
 Two starts that read different values are a smoke check, not evidence of non-repetition.
 
-A platform that a custom configuration supplies carries the same duty under `+aou~seooc-integrator-platform~4+`.
+A platform that a custom configuration supplies carries the same duty under xref:assumptions-of-use.adoc#aou-seooc-integrator-platform[A custom platform keeps the platform's rules].
 
+[[req-ssr-platform-classified]]
 == Every runtime behaviour is classified
 
 [.specitem,oft-sid="req~ssr-platform-classified~1",oft-title="Every runtime behaviour is classified",oft-needs="uman",oft-tags="SafetyUpRustCore"]
@@ -127,6 +133,7 @@ Every runtime behaviour of the element *MUST* be classified as mandated by a pla
 --
 
 [horizontal]
+ID:: `+req~ssr-platform-classified~1+`
 ASIL:: B
 Allocated to:: the element
 Verification:: review
@@ -139,6 +146,7 @@ So the two need different arguments and different tests.
 
 Keeping the platform layer as the only part of the element that talks to an operating system keeps the two kinds apart.
 
+[[req-ssr-atomic-width]]
 == No target needs an atomic width it lacks
 
 [.specitem,oft-sid="req~ssr-atomic-width~2",oft-title="No target needs an atomic width it lacks",oft-needs="impl,utest",oft-tags="SafetyUpRustCore"]
@@ -173,6 +181,7 @@ A private interrupt mask is not a lock shared with another process, and it does 
 --
 
 [horizontal]
+ID:: `+req~ssr-atomic-width~2+`
 ASIL:: B
 Allocated to:: the element; each platform backend, for its mechanism
 Verification:: gate, test, review
@@ -197,6 +206,7 @@ A target mechanism is acceptable when it keeps them, states its contexts and is 
 Host execution does not show how a masked interrupt behaves on an MCU.
 So each mechanism is verified on the targets its configuration names.
 
+[[req-ssr-atomic-windows]]
 == Every narrowed value states its window
 
 [.specitem,oft-sid="req~ssr-atomic-windows~2",oft-title="Every narrowed value states its window",oft-needs="impl,utest,uman",oft-tags="SafetyUpRustCore"]
@@ -227,11 +237,11 @@ Every supported profile, host and MCU alike, keeps these values at full width:
 *The windows that remain.*
 The windows that remain are:
 
-* a flow counter's wrap: fewer than 2^32^ increments between two reads that are compared (`+aou~seooc-application-reacts~4+`);
+* a flow counter's wrap: fewer than 2^32^ increments between two reads that are compared (xref:assumptions-of-use.adoc#aou-seooc-application-reacts[The application reacts to what the element reports]);
 * a fault counter's saturation at 2^32^ − 1, which a read reports as saturated, not as a difference;
-* a deadline count's saturation at the end of its range, which the report states (`+req~ssr-qos-deadline~4+`);
+* a deadline count's saturation at the end of its range, which the report states (xref:qos.adoc#req-ssr-qos-deadline[Deadlines are monitored]);
 * a pool's reuse count and a call slot's generation, whose exhaustion retires that pool for good, after the warning its lifetime policy states, instead of reusing a value;
-* the message-ID generator's period, 2^64^ IDs of one route, stated with its refusal bounds (`+req~ssr-ids-unique~4+`).
+* the message-ID generator's period, 2^64^ IDs of one route, stated with its refusal bounds (xref:../up-l2/interaction.adoc#req-ssr-ids-unique[Message IDs are unique]).
 
 *Further narrowing.*
 A configuration whose representation narrows a value further *MUST* list each window it adds with that configuration.
@@ -246,10 +256,11 @@ For the predecessor 32-bit-word representation, which no supported profile uses 
 * the message-ID period, 2^32^ IDs of one route;
 * the ID guard, 2^31^ IDs within one 64 ms bucket, whose changes a word of their own detects; after a stale store of the bucket, one bucket's IDs stay below 2^31^ + 2 × `+T_wd+` × the ID rate;
 * the last good time's saturation, at a ±4.36-year offset of the wall clock from its reading at the route's setup, beyond which an ID needed while the clock cannot be read is refused;
-* the deadline monitor's one-word tick, wrap-aware over 2^30^ ticks, refreshed into the past, to now − 2^28^, by any check that finds a counted gap 2^29^ ticks old, the counting check included. It needs the route serviced at least every 2^29^ ticks (`+aou~seooc-application-reacts~4+`) and every wait inside the element, checks as well as arrivals, under 2^28^ ticks (`+aou~seooc-timing-budgets~7+`).
+* the deadline monitor's one-word tick, wrap-aware over 2^30^ ticks, refreshed into the past, to now − 2^28^, by any check that finds a counted gap 2^29^ ticks old, the counting check included. It needs the route serviced at least every 2^29^ ticks (xref:assumptions-of-use.adoc#aou-seooc-application-reacts[The application reacts to what the element reports]) and every wait inside the element, checks as well as arrivals, under 2^28^ ticks (xref:assumptions-of-use.adoc#aou-seooc-timing-budgets[Timing claims rest on a supported configuration, and the item's budgets are the integrator's]).
 --
 
 [horizontal]
+ID:: `+req~ssr-atomic-windows~2+`
 ASIL:: B
 Allocated to:: the element
 Verification:: test, review

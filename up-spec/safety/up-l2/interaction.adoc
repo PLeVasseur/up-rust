@@ -13,6 +13,7 @@ They are allocated to the element (tag `SafetyUpRustCore`).
 * How the element treats the peers of a transport is in xref:../up-l1/peers.adoc[the transport layer's part].
 * The clauses about the end-to-end protection wire bind only a route that uses it, and that wire is deferred (xref:../seooc-up-rust/e2e-wire.adoc[`e2e-wire.adoc`]).
 
+[[req-ssr-peer-rpc-ends]]
 == RPC calls always end
 
 [.specitem,oft-sid="req~ssr-peer-rpc-ends~2",oft-title="RPC calls always end",oft-needs="impl,utest",oft-tags="SafetyUpRustCore"]
@@ -28,12 +29,13 @@ The completion *MUST NOT* wait for the release of what the call owned.
 *The slot returns when nothing is pending.*
 The call's slot then returns to the table once it holds nothing whose release is pending:
 
-* A decoded response or a retained owner that the call held is released as `+req~ssr-heap-slot-types~3+` and `+req~ssr-release-lease-drop~4+` state.
+* A decoded response or a retained owner that the call held is released as xref:../seooc-up-rust/heap.adoc#req-ssr-heap-slot-types[Decoded values and their destructors] and xref:../seooc-up-rust/release.adoc#req-ssr-release-lease-drop[A lease gives back its slot and nothing else] state.
 * Until that release completes, the storage that holds it stays charged and is not reused, whether it stays with the call's slot or has passed to a release service.
 * The route's admitted capacity covers it in either place.
 --
 
 [horizontal]
+ID:: `+req~ssr-peer-rpc-ends~2+`
 ASIL:: B
 Allocated to:: the element
 Verification:: test, fault-injection
@@ -45,7 +47,7 @@ Status:: Draft
 *Rationale.*
 A vanished server cannot release its client resources, so the client needs its own expiration path and a reusable call slot.
 
-_The TTL is a logical deadline_ (`+req~ssr-bound-wait~3+`).
+_The TTL is a logical deadline_ (xref:../seooc-up-rust/bounded-work.adoc#req-ssr-bound-wait[Every wait is bounded]).
 
 * Once it has passed while the call is still pending, the call's outcome is its expiry and no response accepted after it completes the call.
 The client observes that outcome when it next services or waits on the call.
@@ -53,13 +55,13 @@ The client observes that outcome when it next services or waits on the call.
 Observing late never turns it into expiry.
 * When that observation happens is a timing claim of a supported configuration, not of this item.
 
-_Why revision 2._
-Revision 1 also returned the call's slot to the table when the call ended.
-A call that still holds a decoded owned response, or a retained owner whose return is pending, cannot do that without reusing storage that is still owned.
+_Outcome and release._
+A call's outcome and tenure end at once.
+The release of what it owned may still be in progress or pending, and is a separate matter.
+A call that still holds a decoded owned response, or a retained owner whose return is pending, cannot give its slot back when it ends without reusing storage that is still owned.
+Whether the call's slot keeps that ownership until the release completes or hands it to a release service follows what the route requires (xref:../seooc-up-rust/release.adoc#req-ssr-release-lease-drop[A lease gives back its slot and nothing else]), and the capacity covers it either way.
 
-This revision separates the call's outcome and tenure, which end at once, from the release of what it owned, which may still be in progress or pending.
-Whether the call's slot keeps that ownership until the release completes or hands it to a release service follows what the route requires (`+req~ssr-release-lease-drop~4+`), and the capacity covers it either way.
-
+[[req-ssr-peer-rpc-correlation]]
 == A response reaches only its own call
 
 [.specitem,oft-sid="req~ssr-peer-rpc-correlation~3",oft-title="A response reaches only its own call",oft-needs="impl,utest",oft-tags="SafetyUpRustCore"]
@@ -85,13 +87,14 @@ Either way no reuse, wrap or delay lets a response complete another call, on eve
 That binding comes before any wire check, so on an E2E route the echo never sees such a response.
 
 *E2E routes.*
-On an RPC route with the E2E wire, a response *MUST* also answer its call exactly (`+req~ssr-e2e-rpc-echo~1+`, `+req~ssr-rpc-check-at-arrival~2+`).
+On an RPC route with the E2E wire, a response *MUST* also answer its call exactly (xref:../seooc-up-rust/e2e-wire.adoc#req-ssr-e2e-rpc-echo[An E2E response answers exactly its call]; <<req-ssr-rpc-check-at-arrival,A response completes its call only once its wire accepts it>>).
 
 *Dependency.*
-It relies on request IDs being unique within the window (`+req~ssr-ids-unique~4+`).
+It relies on request IDs being unique within the window (<<req-ssr-ids-unique,Message IDs are unique>>).
 --
 
 [horizontal]
+ID:: `+req~ssr-peer-rpc-correlation~3+`
 ASIL:: B
 Allocated to:: the element
 Verification:: test, review
@@ -107,11 +110,10 @@ ISO 26262:: 6-Annex D.2.4 (part-clause numbers only)
 A reused slot can carry a later call.
 Binding the response's full request identity to the slot's current tenure as the slot is claimed prevents a delayed response from completing that later call.
 
-_Why revision 3._
-Revision 2 prescribed the recheck after the claim, whatever the mechanism.
-A mechanism that compares the full request ID and the bound peer, and claims the slot, in one exclusive step needs no recheck.
-A mechanism that claims before it compares keeps the recheck after the claim and its give-back instead.
-So this revision states the outcome and admits either form.
+_An outcome, not a mechanism._
+The item states the outcome and admits either form of mechanism.
+One that compares the full request ID and the bound peer, and claims the slot, in one exclusive step needs no recheck.
+One that claims before it compares keeps the recheck after the claim, and its give-back.
 
 The full width of the fields is a fact about a representation.
 The exclusion argument for the step is established by the review of each mechanism.
@@ -120,12 +122,13 @@ _Scope._
 The clauses about the E2E wire bind only a route that uses it, and that wire is deferred and not part of this delivery.
 The identity binding and the refusal of a late response bind every route now.
 
+[[req-ssr-rpc-check-at-arrival]]
 == A response completes its call only once its wire accepts it
 
 [.specitem,oft-sid="req~ssr-rpc-check-at-arrival~2",oft-title="A response completes its call only once its wire accepts it",oft-needs="impl,utest",oft-tags="SafetyUpRustCore"]
 --
 *First, the binding to the call.*
-When a response arrives, the element *MUST* first bind it to the call's current tenure as `+req~ssr-peer-rpc-correlation~3+` requires.
+When a response arrives, the element *MUST* first bind it to the call's current tenure as <<req-ssr-peer-rpc-correlation,A response reaches only its own call>> requires.
 A response that does not match completes and records nothing, and a slot claimed for it is given back.
 
 *Then, the wire check.*
@@ -150,6 +153,7 @@ The element records the call's tag before its request is sent, and refuses a res
 --
 
 [horizontal]
+ID:: `+req~ssr-rpc-check-at-arrival~2+`
 ASIL:: B
 Allocated to:: the element
 Verification:: test, miri, heap-window
@@ -163,16 +167,17 @@ Status:: Draft
 *Rationale.*
 Completing a call before checking its wire would let a corrupt first copy exclude a later intact response.
 
-Revision 1 prescribed a check of the slot after the claim.
-The identity can equally be bound in the step that claims the slot, as `+req~ssr-peer-rpc-correlation~3+` allows.
+The item prescribes no check of the slot after the claim.
+The identity can equally be bound in the step that claims the slot, as <<req-ssr-peer-rpc-correlation,A response reaches only its own call>> allows.
 
 Refusal answers come only from a wire that protects calls, which in this delivery means none: the E2E wire that would send them is deferred.
 
-A call that ends at its TTL ends logically, as `+req~ssr-peer-rpc-ends~2+` states.
+A call that ends at its TTL ends logically, as <<req-ssr-peer-rpc-ends,RPC calls always end>> states.
 
 Giving a claim back returns the call to waiting for another copy and releases nothing early.
-What the refused copy owns is released as `+req~ssr-heap-slot-types~3+` states, and storage that an unfinished release still holds is not reused (`+req~ssr-release-lease-drop~4+`).
+What the refused copy owns is released as xref:../seooc-up-rust/heap.adoc#req-ssr-heap-slot-types[Decoded values and their destructors] states, and storage that an unfinished release still holds is not reused (xref:../seooc-up-rust/release.adoc#req-ssr-release-lease-drop[A lease gives back its slot and nothing else]).
 
+[[req-ssr-peer-rpc-undecodable-answered]]
 == An undecodable request is answered
 
 [.specitem,oft-sid="req~ssr-peer-rpc-undecodable-answered~5",oft-title="An undecodable request is answered",oft-needs="impl,utest",oft-tags="SafetyUpRustCore"]
@@ -195,7 +200,7 @@ The client's call then ends with that error instead of waiting out its TTL.
 * So does a call whose answer cannot be sent, and that is counted too.
 
 *End-to-end refusals.*
-A request that an end-to-end check refuses is counted (`+req~ssr-e2e-refusal-counted~2+`) and answered by the wire's refusal answer, final or advisory (`+req~ssr-e2e-refusal-answered~1+`), except a corrupt one, which is never answered.
+A request that an end-to-end check refuses is counted (xref:../seooc-up-rust/e2e-wire.adoc#req-ssr-e2e-refusal-counted[End-to-end refusals are named, and counted once]) and answered by the wire's refusal answer, final or advisory (xref:../seooc-up-rust/e2e-wire.adoc#req-ssr-e2e-refusal-answered[A refused request is answered, final or advisory]), except a corrupt one, which is never answered.
 
 The server cannot tell a corrupted or duplicated copy from the only one, and an error answer to a copy could end a call it is still serving.
 So an end-to-end refusal never gets an error answer: an advisory refusal answer leaves the call open, and the call ends with the server's real response, or at its TTL.
@@ -212,6 +217,7 @@ Every refused request's frame is released at once.
 --
 
 [horizontal]
+ID:: `+req~ssr-peer-rpc-undecodable-answered~5+`
 ASIL:: B
 Allocated to:: the element
 Verification:: test, heap-window
@@ -233,11 +239,12 @@ _Scope._
 The end-to-end clauses bind only a route with the E2E wire, which is deferred and not part of this delivery.
 The `+InvalidArgument+` answer to an undecodable request, its counting and the release of every refused frame bind every route now.
 
-_Why revision 5._
-Revision 4 also required the answer's sending to use no heap.
-A serialized route whose binding allocates storage for every frame it sends cannot meet that.
-Producing the answer stays heap-free on every route, and sending it follows the route's own heap class, which on a native route is none (`+req~ssr-heap-none~3+`).
+_Heap use of the answer._
+Producing the answer is heap-free on every route.
+Sending it follows the route's own heap class, which on a native route is none (xref:../seooc-up-rust/heap.adoc#req-ssr-heap-none[No heap in runtime mode]).
+A serialized route whose binding allocates storage for every frame it sends could not send an answer that had to use no heap.
 
+[[req-ssr-peer-rpc-no-server]]
 == A call with no server fails at once
 
 [.specitem,oft-sid="req~ssr-peer-rpc-no-server~1",oft-title="A call with no server fails at once",oft-needs="impl,utest",oft-tags="SafetyUpRustCore"]
@@ -248,6 +255,7 @@ On any other binding, the call *MUST* end at its TTL.
 --
 
 [horizontal]
+ID:: `+req~ssr-peer-rpc-no-server~1+`
 ASIL:: B
 Allocated to:: the element
 Verification:: test (with and without the capability), heap-window
@@ -256,13 +264,14 @@ Status:: Draft
 *Rationale.*
 Waiting out the TTL of a request that no server received only delays an error the binding already knows, and holds the call's slot until then.
 
+[[req-ssr-ids-unique]]
 == Message IDs are unique
 
 [.specitem,oft-sid="req~ssr-ids-unique~4",oft-title="Message IDs are unique",oft-needs="impl,utest,uman",oft-tags="SafetyUpRustCore"]
 --
 *Format and source.*
 Every message ID the element generates *MUST* be a UUIDv7, as up-spec's rules require.
-Its 74 bits beyond the millisecond come from one generator per route, seeded once from initialization-only entropy (`+req~ssr-platform-entropy~2+`).
+Its 74 bits beyond the millisecond come from one generator per route, seeded once from initialization-only entropy (xref:../seooc-up-rust/platform.adoc#req-ssr-platform-entropy[Initialization entropy comes from a declared source]).
 
 *The stated residual.*
 Two IDs of one source can therefore collide by chance.
@@ -295,6 +304,7 @@ While it is saturated, an ID needed while the clock cannot be read is refused, a
 --
 
 [horizontal]
+ID:: `+req~ssr-ids-unique~4+`
 ASIL:: B
 Allocated to:: the element
 Verification:: review, test, heap-window

@@ -23,11 +23,11 @@ link neither validates the deployment nor closes an implementation requirement.
 ## Assumption (verbatim)
 
 <!-- aou-statement:start -->
-> A supported configuration's platform backend is its maintainers' (`+aou~seooc-target-environment~4+`), and an application team that selects one supplies no backend of its own. An integrator that supplies a platform for a target or configuration that no package supports *SHALL* treat it as an explicit extension, with its own authoring contract and evidence boundary, and supply:
+> A supported configuration's platform backend is its maintainers' (<<aou-seooc-target-environment,The target environment is verified>>), and an application team that selects one supplies no backend of its own. An integrator that supplies a platform for a target or configuration that no package supports *SHALL* treat it as an explicit extension, with its own authoring contract and evidence boundary, and supply:
 >
-> * a runtime platform that keeps the rules of `+req~ssr-platform-contract~2+`: no heap, no panic, no thread creation and no global state that needs first-use setup; clock reads that report a failure instead of panicking or substituting another time base; a wait that never loses a wake; and the contracts that a package states, written down for this platform;
-> * an initialization-only platform for prefault, and for entropy from a declared source with its stated contract, reported as failed rather than replaced by a fixed value (`+req~ssr-platform-entropy~2+`);
-> * a source-level safety argument for its synchronization and its atomic or exclusion mechanism, covering every participant that can reach that mechanism's storage (`+req~ssr-atomic-width~2+`).
+> * a runtime platform that keeps the rules of xref:platform.adoc#req-ssr-platform-contract[Every platform backend keeps the platform's rules]: no heap, no panic, no thread creation and no global state that needs first-use setup; clock reads that report a failure instead of panicking or substituting another time base; a wait that never loses a wake; and the contracts that a package states, written down for this platform;
+> * an initialization-only platform for prefault, and for entropy from a declared source with its stated contract, reported as failed rather than replaced by a fixed value (xref:platform.adoc#req-ssr-platform-entropy[Initialization entropy comes from a declared source]);
+> * a source-level safety argument for its synchronization and its atomic or exclusion mechanism, covering every participant that can reach that mechanism's storage (xref:platform.adoc#req-ssr-atomic-width[No target needs an atomic width it lacks]).
 >
 > It passes the platform contract test in `+test-util+` on that target.
 >

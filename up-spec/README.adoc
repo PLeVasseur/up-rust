@@ -35,7 +35,9 @@ To achieve the above mentioned objectives, we have split the specifications into
 
 * xref:up-l3/README.adoc[*Application Layer (uP-L3):*] Service contracts for subscription management, service/device discovery, and event caching that is common across all deployments (implementations) of uProtocol.
 
-* xref:safety/README.adoc[*Safety requirements:*] Draft safety requirements and assumptions of use that SDK elements trace, laid out by the layers above. They are apart from the protocol requirements, and bind only the parts their tags name.
+* xref:safety/README.adoc[*Proposed requirements of the redesigned up-rust stack:*] A draft proposal, published on a feature branch. It holds the proposed requirements of the redesigned up-rust SDK, its wires, its transports and its Streamer, laid out by the layers above: their ordinary functional contract, their resource and fault obligations, and their safety requirements and assumptions of use. They bind only the parts their tags name.
+
+* xref:contract-generations.adoc[*Contract generations:*] How that proposal relates to the chapters above, rule by rule: what it keeps, what it adds, where it differs on purpose, and which contract an implementation follows.
 
 
 == How to get started?

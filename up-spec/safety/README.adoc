@@ -1,12 +1,19 @@
 = Safety requirements for traceability
 :toc: preamble
 
-This area holds safety requirements that SDKs trace with OpenFastTrace (OFT), apart from the protocol specification.
+This area holds the proposed requirements of the redesigned up-rust stack, which its repositories trace with OpenFastTrace (OFT): the up-rust SEooC, and the transports, wires and Streamer that work with it.
 It is laid out like the protocol specification: what is shared comes first, then a part for each protocol layer, then a part for each SDK element.
-Its first content is the software safety requirements and assumptions of use of the up-rust SEooC, and of the transports, wires and Streamer that work with it.
 
-It is a draft on a feature branch.
-Every item in it is still Draft.
+* *A proposal.*
+It is published as a draft on a feature branch.
+Every item in it is still Draft, and none has replaced a rule of the protocol chapters.
+* *Not only safety material.*
+The area is named for its safety requirements and assumptions of use.
+It also holds what they rest on: the redesigned SDK's ordinary functional contract, and its resource and fault obligations.
+Those bind every use of that SDK, with or without a safety claim (xref:seooc-up-rust/README.adoc#claims[the SEooC's claims]).
+* *A second generation of some rules.*
+Most items add to the protocol chapters, and some differ from them on purpose.
+xref:../contract-generations.adoc[Contract generations] lists where the two meet, and says which contract an implementation follows.
 
 [[layout]]
 == How this area is laid out
@@ -43,14 +50,19 @@ Where an item is filed says which protocol responsibility it concerns.
 Who must meet it is a separate matter, which the item's type, tags and allocation state.
 
 * *An item binds the part its tags name* (<<tags>>), and nobody else.
+Those tags state an allocation.
+Which items an implementation follows comes from what it is and what it declares, never from the tags that a tracing run keeps (xref:../contract-generations.adoc#selection[which contract an implementation follows]).
 * *Every item here was written for the up-rust SEooC* and for the parts that work with it.
 An item in `up-l1/` or `up-l2/` is therefore no requirement on every transport, or on the SDK of another language.
-Another SDK or transport takes one on only by adopting its tag.
+Another SDK or transport is bound by one only once it declares that it follows the successor contract (xref:../contract-generations.adoc#selection[which contract an implementation follows]), whose items its repository then covers under their tags.
 * *An assumption of use keeps `seooc` in its ID wherever it is filed.*
 It is that element's assumption, and it binds an integrator that claims that element's safety-assurance scope.
 * *A language-agnostic safety requirement*, if one is added, gets a tag of its own and says whom it binds.
-* *Nothing here weakens the protocol.*
-A requirement of the protocol chapters, a security requirement included, stays in force beside every item of this area.
+* *The protocol chapters stay in force for whoever follows them.*
+No item here lifts a requirement of the protocol chapters, a security requirement included, from an implementation that follows that requirement.
+* *Where an item differs from a protocol chapter.*
+xref:../contract-generations.adoc#transition[The transition table] names both rules for that behaviour and gives their relation.
+xref:../contract-generations.adoc#selection[Which contract an implementation follows] says what holds until a replacement has landed: the existing rule stays the accepted one, and an implementation built against the successor rule says so and claims no conformance to the existing rule for that behaviour.
 
 [[concepts]]
 == Shared concepts and fault models
@@ -129,7 +141,7 @@ It neither raises an element's capability nor qualifies the process that declare
 * *A level is not a request.*
 An integrity level or an ASIL label requests no timing bound and no assurance scope, and it is neither a request nor evidence for a resource guarantee.
 * *Stated in.*
-`+req~ssr-integrity-declared~3+` for the software, `+aou~seooc-integrity-levels~6+` for the integrator's assignment, `+aou~seooc-capability-ceiling~1+` for data above ASIL B and for the element inside an ASIL C or D process or partition, and xref:seooc-up-rust/README.adoc#claims[the SEooC's claims] for what a label is not.
+xref:up-l1/integrity.adoc#req-ssr-integrity-declared[Each transport declares one integrity level] for the software, xref:up-l1/deployment.adoc#aou-seooc-integrity-levels[Each transport's integrity level is assigned correctly] for the integrator's assignment, xref:seooc-up-rust/assumptions-of-use.adoc#aou-seooc-capability-ceiling[Data above ASIL B relies on measures outside the element] for data above ASIL B and for the element inside an ASIL C or D process or partition, and xref:seooc-up-rust/README.adoc#claims[the SEooC's claims] for what a label is not.
 
 [[faulty-peer]]
 === The faulty-peer model
@@ -142,7 +154,7 @@ Every peer is treated as faulty, never malicious.
 
 * A peer may send any content, at any time and in any volume, and may choose any source URI, and the requirements hold against all of it.
 * A faulty peer includes one that writes values its own middleware never writes, into shared memory it can write.
-* A peer below a reader's level may write its own shared memory at any moment: the reader then takes the copy route (`+req~ssr-integrity-zero-copy~4+`), and the requirements hold.
+* A peer below a reader's level may write its own shared memory at any moment: the reader then takes the copy route (xref:up-l1/integrity.adoc#req-ssr-integrity-zero-copy[Zero-copy only from a writer at or above the reader]), and the requirements hold.
 
 *Scope and limits.*
 
@@ -164,25 +176,25 @@ The list below is the index of its known dependents (<<shared-definitions>>).
 It is not asserted to be complete, and a change to the model is reviewed against every item that relies on it, listed or not.
 
 * *The integrator's side.*
-** `+aou~seooc-peer-access~5+`, for the access restriction and for treating deliberate exploitation as security.
-** `+aou~seooc-process-isolation~3+`, for a process that shares memory through a binding.
-** `+aou~seooc-peer-rates~2+`, for what one faulty peer can do to a route that several peers share.
-** `+aou~seooc-iceoryx2-level-separation~1+` and `+aou~seooc-iceoryx2-limits~1+`, for a deployment on iceoryx2.
+** xref:up-l1/deployment.adoc#aou-seooc-peer-access[Only authorized processes reach the transport, and peers are faulty, never malicious], for the access restriction and for treating deliberate exploitation as security.
+** xref:seooc-up-rust/assumptions-of-use.adoc#aou-seooc-process-isolation[Processes or partitions are isolated], for a process that shares memory through a binding.
+** xref:seooc-up-rust/assumptions-of-use.adoc#aou-seooc-peer-rates[Peer rates on shared routes are the integrator's], for what one faulty peer can do to a route that several peers share.
+** xref:up-l1/iceoryx2.adoc#aou-seooc-iceoryx2-level-separation[On iceoryx2, each integrity level has its own processes, domain and OS user] and xref:up-l1/iceoryx2.adoc#aou-seooc-iceoryx2-limits[A deployment on iceoryx2 accepts that binding's limits, and no known failure as one], for a deployment on iceoryx2.
 * *The element, for the peers of a transport.*
-The four items of xref:up-l1/peers.adoc[peers of a transport], which that page states against a faulty peer: `+req~ssr-peer-failure-normal~3+`, `+req~ssr-native-abi-agreed~1+`, `+req~ssr-peer-stale-rejected~3+` and `+req~ssr-peer-admission~2+`.
+The four items of xref:up-l1/peers.adoc[peers of a transport], which that page states against a faulty peer: xref:up-l1/peers.adoc#req-ssr-peer-failure-normal[Peer failure is normal input]; xref:up-l1/peers.adoc#req-ssr-native-abi-agreed[A native representation never crosses an ABI]; xref:up-l1/peers.adoc#req-ssr-peer-stale-rejected[Stale peers are rejected] and xref:up-l1/peers.adoc#req-ssr-peer-admission[Undeclared peers cannot lock out declared ones].
 * *The element, for memory safety and shared memory.*
-** `+req~ssr-unsafe-sound~1+`, whose rationale applies its promise to safe callers under this model: a peer that writes values its own middleware never writes must not let a safe call reach undefined behaviour.
-** `+req~ssr-integrity-declared~3+`, `+req~ssr-integrity-zero-copy~4+`, `+req~ssr-integrity-any-bits~1+`, `+req~ssr-integrity-checked-at-admission~1+` and `+req~ssr-integrity-carrier-crossing~2+`, for lending and copying between levels.
+** xref:seooc-up-rust/memory-safety.adoc#req-ssr-unsafe-sound[Safe code cannot cause undefined behaviour], whose rationale applies its promise to safe callers under this model: a peer that writes values its own middleware never writes must not let a safe call reach undefined behaviour.
+** xref:up-l1/integrity.adoc#req-ssr-integrity-declared[Each transport declares one integrity level]; xref:up-l1/integrity.adoc#req-ssr-integrity-zero-copy[Zero-copy only from a writer at or above the reader]; xref:up-l1/integrity.adoc#req-ssr-integrity-any-bits[In-place types accept every bit pattern]; xref:up-l1/integrity.adoc#req-ssr-integrity-checked-at-admission[In-place frames are checked once, at admission] and xref:up-l1/integrity.adoc#req-ssr-integrity-carrier-crossing[Upward carrier crossings copy once, or are refused], for lending and copying between levels.
 * *The element, for refusal.*
-`+req~ssr-refuse-no-panic~1+`.
+xref:seooc-up-rust/errors.adoc#req-ssr-refuse-no-panic[No panic on runtime paths].
 * *A binding.*
-** `+req~ssr-binding-no-panic~5+`.
-** `+req~ssr-binding-iceoryx2-panic-paths~1+`, whose allowed paths no peer input, sequence, death or restart may reach, and through it the one exception of `+req~ssr-binding-frame-drop~6+`.
-** `+req~ssr-binding-readme~1+`, for what a README discloses about shared memory.
+** xref:up-l1/bindings.adoc#req-ssr-binding-no-panic[No panic on any peer input].
+** xref:up-l1/iceoryx2.adoc#req-ssr-binding-iceoryx2-panic-paths[iceoryx2's allowed panic paths are named, bounded and disclosed], whose allowed paths no peer input, sequence, death or restart may reach, and through it the one exception of xref:up-l1/bindings.adoc#req-ssr-binding-frame-drop[What a received frame's destructor may do].
+** xref:up-l1/bindings.adoc#req-ssr-binding-readme[The README says what the middleware cannot guarantee], for what a README discloses about shared memory.
 * *A wire.*
-`+req~ssr-wire-no-panic~1+`.
+xref:up-l1/wires.adoc#req-ssr-wire-no-panic[Encoding and decoding never panic].
 * *The Streamer.*
-`+req~ssr-config-exact-addresses~1+`, whose filter a faulty process can pass, and `+req~ssr-streamer-containment~1+`.
+xref:up-l2/streamer.adoc#req-ssr-config-exact-addresses[ASIL Streamer routes name exact source addresses], whose filter a faulty process can pass, and xref:up-l2/streamer.adoc#req-ssr-streamer-containment[A fault stays on its route].
 
 [[process-failure]]
 === Process failure and restart
@@ -194,8 +206,8 @@ A peer's death or restart is normal input to the processes that stay up.
 * *Scope.*
 Every process that uses the up-rust SEooC, the Streamer included.
 * *Stated in.*
-`+aou~seooc-supervisor-restart~4+` for the supervisor.
-`+req~ssr-mode-no-shutdown~1+` and `+req~ssr-mode-restart~1+` for the element, `+req~ssr-peer-failure-normal~3+` for the survivors, and `+req~ssr-binding-predecessor-cleanup~1+` for a binding.
+xref:seooc-up-rust/assumptions-of-use.adoc#aou-seooc-supervisor-restart[A supervisor outside the process restarts it] for the supervisor.
+xref:seooc-up-rust/runtime-modes.adoc#req-ssr-mode-no-shutdown[No shutdown in runtime mode] and xref:seooc-up-rust/runtime-modes.adoc#req-ssr-mode-restart[A restart is an initialization] for the element, xref:up-l1/peers.adoc#req-ssr-peer-failure-normal[Peer failure is normal input] for the survivors, and xref:up-l1/bindings.adoc#req-ssr-binding-predecessor-cleanup[A binding cleans up after a dead predecessor, in initialization] for a binding.
 
 [[memory-separation]]
 === Memory separation
@@ -209,7 +221,7 @@ Every process or partition that uses the up-rust SEooC.
 The integrator, through the memory protection of the OS or, on an MCU, the partition boundary its configuration states.
 The element can neither provide nor check it.
 * *Stated in.*
-`+aou~seooc-process-isolation~3+`.
+xref:seooc-up-rust/assumptions-of-use.adoc#aou-seooc-process-isolation[Processes or partitions are isolated].
 
 [[violation]]
 === How a violated assumption shows up
@@ -232,7 +244,7 @@ A stronger resource guarantee is reported as required or not, established or not
 The up-rust SEooC, and each route of it.
 It is that element's model, and no rule of a protocol layer.
 * *Stated in.*
-xref:seooc-up-rust/README.adoc#claims[The SEooC's claims] and `+req~ssr-heap-guarantees~1+`.
+xref:seooc-up-rust/README.adoc#claims[The SEooC's claims] and xref:seooc-up-rust/heap.adoc#req-ssr-heap-guarantees[A stronger resource guarantee is required by name].
 
 [[spec-first]]
 == The specification comes first
@@ -284,9 +296,24 @@ As in the protocol chapters: a block attribute line that gives the item its `spe
 
 * Inside the block, a statement may use short paragraphs, labels in bold and lists.
 All of it is the statement.
-* Text after the block is not part of the item: the ASIL, the allocation, the verification methods, the status, the ISO 26262 references and the rationale.
+* Text after the block is not part of the item: the `ID` row, which repeats the item's identifier for readers, the ASIL, the allocation, the verification methods, the status, the ISO 26262 references and the rationale.
+* A rationale gives the reason for the rule as it stands.
+It does not recount earlier revisions: an item's history is kept outside these pages (<<source>>).
 * A rationale cites only public sources: up-spec, public standards by part and clause number, and the published documents and code of other projects, each at a fixed version.
 It does not cite the code of the SDK that implements the item (<<spec-first>>).
+
+=== References to an item
+
+* *By title.*
+Text that refers to an item links to it, and the text of the link is the item's heading.
+* *To the item as it stands.*
+The link points at the item's anchor, which is its type and name without its revision: `req-ssr-heap-declared` for `+req~ssr-heap-declared~N+`.
+So a reference always means the current revision of the item.
+* *Identifiers stay with the item and with tracing.*
+An item's identifier and revision are in its block attribute line and in its `ID` row.
+Code and tests cite that identifier in their coverage tags (<<tracing>>).
+* *A change of meaning is reviewed with its references.*
+When an item's meaning changes, its revision rises, and each item that links to it is read again against the new text.
 
 === Key words
 
@@ -308,15 +335,8 @@ A document covers it with an item of its own that covers the assumption, because
 
 === Status
 
-* "Draft" until the requirements are signed off.
-* "Draft, pending owner (S0 O-n)" marks text that waits on an owner decision of the S0 document.
-* The words "record pending" mark text that cites a binding's record that is not committed yet: its ID is filled in when it is.
-* "Revision pending" beside a record's ID marks text that already relies on that record's next revision.
-
-=== (b)
-
-In the end-to-end protection items, *(b)* marks text that the chosen restart design brought in: the full version, with both sender kinds.
-That text holds.
+"Draft" until the requirements are signed off.
+Every item is Draft at this revision.
 
 [[tags]]
 == Tags
@@ -332,7 +352,7 @@ The repository that holds that part covers it.
 | `SafetyStreamer` | the Streamer's data plane and its binary | `up-streamer-rust` | `up-l2/`, `seooc-up-rust/`
 | `SafetyBinding` | every binding: the duties of the binding contract | each binding's repository | `up-l1/`
 | `SafetyBindingPull` | with `SafetyBinding`, a duty of pull-form bindings only | each pull-form binding's repository | `up-l1/`
-| `SafetyIceoryx2` | the iceoryx2 binding alone | `up-transport-iceoryx2-rust` | `up-l1/iceoryx2.adoc`
+| `SafetyIceoryx2` | the iceoryx2 binding alone. A binding or a wire gets a tag of its own with the first item that is allocated to it alone, and at this revision only this binding has one | `up-transport-iceoryx2-rust` | `up-l1/iceoryx2.adoc`
 | `SafetyWire` | every wire | each wire's repository | `up-l1/`
 | `SafetyE2eWire` | the end-to-end protection wire | `up-rust`, its `up-wire-e2e` member | `seooc-up-rust/`
 | `SafetyManual` | every assumption of use | the repository that owns the assumption, in its safety manual: `up-rust` for nineteen, `up-streamer-rust` for the Streamer's two, and `up-transport-iceoryx2-rust` for the iceoryx2 binding's two | `seooc-up-rust/`, `up-l1/`, `up-l2/`
@@ -378,6 +398,7 @@ No text of the standard appears here, quoted or closely paraphrased, and no tabl
 A reference is trace metadata: it names a clause that an item relates to.
 It claims no compliance of an item, of the element or of a deployment with the standard.
 
+[[source]]
 == Source
 
 The items of this area were first written outside this repository, for the up-rust SEooC, and are being rewritten for publication.

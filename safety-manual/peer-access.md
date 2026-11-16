@@ -28,9 +28,9 @@ link neither validates the deployment nor closes an implementation requirement.
 > The integrator *SHALL* restrict access to every transport's resources (shared-memory segments, sockets, service names) to the processes deployed to use them, with OS permissions or equivalent.
 >
 > * *The fault model.* Within that, this SEooC treats every peer as faulty, never malicious. What a faulty peer may do is defined once, for every part, as the faulty-peer model of the safety area's shared concepts. Only deliberate exploitation, such as engineering a peer-ID hash collision, is out of scope, as security.
-> * *Two-way shared state.* On a binding whose ports write shared state both ways, every process on one service runs at one integrity level; a lower-integrity consumer takes a copy route, and any other is refused at setup, by name (`+req~ssr-integrity-zero-copy~4+`). What one such binding adds is stated with that binding (for iceoryx2, `+aou~seooc-iceoryx2-level-separation~1+`).
+> * *Two-way shared state.* On a binding whose ports write shared state both ways, every process on one service runs at one integrity level; a lower-integrity consumer takes a copy route, and any other is refused at setup, by name (xref:integrity.adoc#req-ssr-integrity-zero-copy[Zero-copy only from a writer at or above the reader]). What one such binding adds is stated with that binding.
 > * *Zero-copy routes.* On a zero-copy route, the element relies on the writer, developed to at least the reader's level, never writing a sample it has sent.
-> * *Message IDs.* Message IDs are unique only to a stated residual (`+req~ssr-ids-unique~4+`), and they are not secret, so nothing may rely on them for authentication.
+> * *Message IDs.* Message IDs are unique only to a stated residual (xref:../up-l2/interaction.adoc#req-ssr-ids-unique[Message IDs are unique]), and they are not secret, so nothing may rely on them for authentication.
 > * *Strict mode.* In strict mode, the report lists each route's declared peers and the shared-memory permissions its binding requests, and warns of an ASIL receive route that admits undeclared peers.
 <!-- aou-statement:end -->
 

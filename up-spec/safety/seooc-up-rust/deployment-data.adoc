@@ -6,8 +6,9 @@ The key words "*MUST*", "*MUST NOT*", "*REQUIRED*", "*SHALL*", "*SHALL NOT*", "*
 Conventions, tags and status words: xref:../README.adoc[the safety area's README].
 Scope and element boundary: xref:README.adoc[the SEooC's README].
 
-The exact addresses that an ASIL Streamer route names are a forwarding rule, filed with the Streamer: `+req~ssr-config-exact-addresses~1+` in xref:../up-l2/streamer.adoc[the Streamer's page].
+The exact addresses that an ASIL Streamer route names are a forwarding rule, filed with the Streamer: xref:../up-l2/streamer.adoc#req-ssr-config-exact-addresses[ASIL Streamer routes name exact source addresses] in xref:../up-l2/streamer.adoc[the Streamer's page].
 
+[[req-ssr-config-validated]]
 == Deployment data is validated in full
 
 [.specitem,oft-sid="req~ssr-config-validated~1",oft-title="Deployment data is validated in full",oft-needs="impl,utest",oft-tags="SafetyUpRustCore"]
@@ -20,6 +21,7 @@ A value *MUST NOT* be coerced, silently defaulted or skipped.
 --
 
 [horizontal]
+ID:: `+req~ssr-config-validated~1+`
 ASIL:: B
 Allocated to:: the element
 Verification:: test (a negative configuration suite, run on both construction paths)
@@ -29,8 +31,9 @@ ISO 26262:: 6-C.4.6 (part-clause numbers only)
 *Rationale.*
 A value that is coerced, defaulted or skipped without an error runs the deployment on a configuration nobody wrote, and the integrator learns of it only from its effects.
 
-Refusing during initialization, by field, keeps every such mistake out of runtime mode, where setup can no longer change anything (`+req~ssr-mode-no-setup-at-runtime~1+`).
+Refusing during initialization, by field, keeps every such mistake out of runtime mode, where setup can no longer change anything (xref:runtime-modes.adoc#req-ssr-mode-no-setup-at-runtime[Setup is impossible in runtime mode]).
 
+[[req-ssr-config-one-path]]
 == Direct construction and deployment data are one path
 
 [.specitem,oft-sid="req~ssr-config-one-path~1",oft-title="Direct construction and deployment data are one path",oft-needs="impl,utest",oft-tags="SafetyUpRustCore"]
@@ -39,6 +42,7 @@ Building the element directly in code and building it from deployment data *MUST
 --
 
 [horizontal]
+ID:: `+req~ssr-config-one-path~1+`
 ASIL:: B
 Allocated to:: the element
 Verification:: test (the same refusals on both paths)
@@ -47,8 +51,9 @@ Status:: Draft
 *Rationale.*
 Checks that lived only in a loader would leave a program built in code unchecked, and two sets of checks could drift apart.
 
-Both paths build the same non-generic transport types (`+req~ssr-mode-two-types~1+`), so one setup runs the same checks for both.
+Both paths build the same non-generic transport types (xref:runtime-modes.adoc#req-ssr-mode-two-types[Two modes, as two types]), so one setup runs the same checks for both.
 
+[[req-ssr-config-no-code]]
 == Deployment data carries no code
 
 [.specitem,oft-sid="req~ssr-config-no-code~1",oft-title="Deployment data carries no code",oft-needs="uman",oft-tags="SafetyUpRustCore"]
@@ -59,6 +64,7 @@ It *MUST NOT* be able to carry scripts, expressions or anything else that is exe
 --
 
 [horizontal]
+ID:: `+req~ssr-config-no-code~1+`
 ASIL:: B
 Allocated to:: the element
 Verification:: review (of the schema)
@@ -66,10 +72,11 @@ Status:: Draft
 ISO 26262:: 1-3.15 (part-clause numbers only)
 
 *Rationale.*
-Values can be checked against their ranges before start (`+req~ssr-config-validated~1+`), while code carried in data would run outside the program that was verified.
+Values can be checked against their ranges before start (<<req-ssr-config-validated,Deployment data is validated in full>>), while code carried in data would run outside the program that was verified.
 
-Waivers stay compiled into the program, so deployment data can only choose among them by id (`+req~ssr-waiver-record~1+`).
+Waivers stay compiled into the program, so deployment data can only choose among them by id (xref:waivers.adoc#req-ssr-waiver-record[Waivers are recorded and can be found]).
 
+[[req-ssr-config-resource-ranges]]
 == Resource IDs are checked at setup
 
 [.specitem,oft-sid="req~ssr-config-resource-ranges~1",oft-title="Resource IDs are checked at setup",oft-needs="impl,utest",oft-tags="SafetyUpRustCore"]
@@ -84,6 +91,7 @@ An ID outside its range *MUST* be refused, naming the route and the range.
 --
 
 [horizontal]
+ID:: `+req~ssr-config-resource-ranges~1+`
 ASIL:: B
 Allocated to:: the element
 Verification:: test (each boundary value, on each role)

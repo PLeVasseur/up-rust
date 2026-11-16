@@ -6,6 +6,7 @@ The key words "*MUST*", "*MUST NOT*", "*REQUIRED*", "*SHALL*", "*SHALL NOT*", "*
 Conventions, tags and status words: xref:../README.adoc[the safety area's README].
 Scope and element boundary: xref:README.adoc[the SEooC's README].
 
+[[req-ssr-crate-isolated]]
 == The safety crate cannot be tainted
 
 [.specitem,oft-sid="req~ssr-crate-isolated~1",oft-title="The safety crate cannot be tainted",oft-needs="impl,utest",oft-tags="SafetyUpRustCore"]
@@ -17,6 +18,7 @@ Tokio, Protobuf and anything else that needs `+std+` *MUST* live in other crates
 --
 
 [horizontal]
+ID:: `+req~ssr-crate-isolated~1+`
 ASIL:: B
 Allocated to:: the element
 Verification:: gate (the manifest has no `+[features]+` and no `+[dependencies]+`; the crate builds on a sysroot with neither `+alloc+` nor `+std+`)
@@ -29,6 +31,7 @@ So only a crate with no features and no dependencies cannot have `+std+` switche
 With no `+alloc+`, the crate's URIs keep their authority inline, so this crate does not allocate a separate heap-owned authority representation.
 That representation does not determine where a caller stores an enclosing object.
 
+[[req-ssr-crate-sync-path]]
 == Traffic is synchronous or polled
 
 [.specitem,oft-sid="req~ssr-crate-sync-path~1",oft-title="Traffic is synchronous or polled",oft-needs="impl,utest",oft-tags="SafetyUpRustCore"]
@@ -39,6 +42,7 @@ Any async layer *MUST* sit above it, in a separate crate.
 --
 
 [horizontal]
+ID:: `+req~ssr-crate-sync-path~1+`
 ASIL:: B
 Allocated to:: the element
 Verification:: gate (a token scan for `+async+`, `+.await+`, `+Future+`, `+Pin+`, `+Poll+`, `+Waker+` and `+Context+`, and for grouped `+use core::{…}+` paths, with a negative control for each)
@@ -54,6 +58,7 @@ Which compiler releases, targets, library modules and options a qualification co
 This item does not rest on any one such scope.
 Neither the availability of a language feature nor a successful build is a qualification of the compiler or the library.
 
+[[req-ssr-crate-core-only-binary]]
 == An ASIL binary needs no crate outside its claimed graph at run time
 
 [.specitem,oft-sid="req~ssr-crate-core-only-binary~2",oft-title="An ASIL binary needs no crate outside its claimed graph at run time",oft-needs="impl,utest",oft-tags="SafetyUpRustCore"]
@@ -62,7 +67,7 @@ Neither the availability of a language feature nor a successful build is a quali
 An application on the ASIL path *MUST* depend at run time only on the crates of its claimed safety dependency graph:
 
 * the safety crate;
-* the bindings, wires and platform backends that its configuration qualifies as separate elements (`+aou~seooc-qualified-bindings-and-wires~7+`);
+* the bindings, wires and platform backends that its configuration qualifies as separate elements (xref:../up-l1/deployment.adoc#aou-seooc-qualified-bindings-and-wires[Bindings and wires pass their contracts]);
 * any optional layer of the element that its configuration admits with that layer's own allocated requirements and evidence.
 
 *Checked policy stays in the safety crate.*
@@ -83,6 +88,7 @@ Derives come from `+up-rust-macros+` at compile time, and the `+unsafe+` they ge
 --
 
 [horizontal]
+ID:: `+req~ssr-crate-core-only-binary~2+`
 ASIL:: B
 Allocated to:: the element
 Verification:: gate, test
@@ -103,16 +109,17 @@ An explicit dependency alias may change that local spelling.
 Linking it brings that package's dependencies into the graph, which the check then judges.
 * An application also links the bindings and wires it uses, which are separate elements qualified on their own.
 So the graph names them instead of pretending the safety crate is the whole image.
-* A derive runs at compile time and leaves only generated code in the image, and that code's `+unsafe+` is inventoried like the crate's own (`+req~ssr-unsafe-inventory~3+`).
+* A derive runs at compile time and leaves only generated code in the image, and that code's `+unsafe+` is inventoried like the crate's own (xref:memory-safety.adoc#req-ssr-unsafe-inventory[Every `+unsafe+` is inventoried and justified]).
 
-_Why the statement was corrected._
-The text first raised to revision 2 also required everything the element provides to sit in the safety crate.
-That left no way to admit an independently specified optional layer, such as an allocation-aware or asynchronous layer, into a later claimed configuration.
-The corrected statement keeps the checked policy in the safety crate and requires an admitted optional layer to carry its own allocated requirements and evidence.
+_Optional layers._
+The statement keeps the checked policy in the safety crate, and does not require everything the element provides to sit there.
+That leaves a way to admit an independently specified optional layer, such as an allocation-aware or asynchronous layer, into a later claimed configuration.
+An admitted optional layer carries its own allocated requirements and evidence.
 
 No configuration admits an optional layer at this revision.
 So every current claimed graph is the safety crate with qualified bindings, wires and platform backends.
 
+[[req-ssr-crate-streamer-isolated]]
 == The ASIL Streamer is its own untaintable crate
 
 [.specitem,oft-sid="req~ssr-crate-streamer-isolated~3",oft-title="The ASIL Streamer is its own untaintable crate",oft-needs="impl,utest",oft-tags="SafetyStreamer"]
@@ -133,6 +140,7 @@ Bindings and wires are linked by the binary that uses the crate, not by the crat
 --
 
 [horizontal]
+ID:: `+req~ssr-crate-streamer-isolated~3+`
 ASIL:: B
 Allocated to:: the Streamer
 Verification:: gate (the same gates as `+up-rust-core+`: manifest, restricted sysroot, token scan, and its own panic-link fixture; a build for `+thumbv7m-none-eabi+`)

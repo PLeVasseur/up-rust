@@ -24,7 +24,7 @@ link neither validates the deployment nor closes an implementation requirement.
 <!-- aou-statement:start -->
 > The integrator *SHALL* provide a supervisor outside every process that uses the element. It detects that a process has exited, crashed or been killed, and restarts it or takes the item to its safe state, under a restart policy the integrator sets (rate limit, escalation).
 >
-> * *No in-process recovery.* The element has no in-process recovery. In runtime mode a process leaves only by exit, crash or kill, and in the ASIL build a panic aborts the process (`+req~ssr-build-panic-abort~3+`), which the supervisor handles as a crash.
+> * *No in-process recovery.* The element has no in-process recovery. In runtime mode a process leaves only by exit, crash or kill, and in the ASIL build a panic aborts the process (xref:build.adoc#req-ssr-build-panic-abort[The ASIL build aborts on panic and checks overflow]), which the supervisor handles as a crash.
 > * *Setup errors.* The element is designed on the assumption that an application treats an initialization or transition error the same way, by exiting so that the supervisor restarts it, rather than by retrying setup in the process.
 > * *Whole process or partition.* No thread or interrupt handler that calls the element is terminated on its own: the process, or on an MCU the partition or OS-Application that holds the element's memory, is restarted as a whole.
 > * *Fresh initialization.* A restart is a fresh initialization: it revokes no storage that a surviving peer still retains, and needs no departure notice from the process that died.

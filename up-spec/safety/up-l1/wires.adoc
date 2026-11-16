@@ -10,6 +10,10 @@ The element whose wire contract these duties belong to: xref:../seooc-up-rust/RE
 Each wire meets these in its own crate, and covers them in its own repository (tag `SafetyWire`).
 A wire that is not written against the element's wire contract is not bound by them.
 
+These duties name no wire format, and each wire meets them for its own format.
+What depends on the kind of payload a wire carries is listed in <<one-wire>>.
+
+[[req-ssr-wire-no-panic]]
 == Encoding and decoding never panic
 
 [.specitem,oft-sid="req~ssr-wire-no-panic~1",oft-title="Encoding and decoding never panic",oft-needs="impl,utest",oft-tags="SafetyWire"]
@@ -20,6 +24,7 @@ A malformed, truncated, oversized or empty frame *MUST* be an error.
 --
 
 [horizontal]
+ID:: `+req~ssr-wire-no-panic~1+`
 ASIL:: B
 Allocated to:: each wire
 Verification:: test, fault-injection
@@ -30,8 +35,13 @@ Status:: Draft
 
 *Rationale.*
 Decoding reads bytes a peer sent.
-So a panic on bad input would let any faulty peer end the receiving process (`+req~ssr-refuse-no-panic~1+`).
+So a panic on bad input would let any faulty peer end the receiving process (xref:../seooc-up-rust/errors.adoc#req-ssr-refuse-no-panic[No panic on runtime paths]).
 
+The statement makes every empty frame an error.
+A format can give a value an empty encoding, and the protocol treats a zero-length payload as a present payload (xref:../../contract-generations.adoc#transition[the transition table]).
+So the statement is open on that point, and a revision that follows the wire's format is proposed.
+
+[[req-ssr-wire-heap-claim-tested]]
 == A heap-free claim passes the wire contract
 
 [.specitem,oft-sid="req~ssr-wire-heap-claim-tested~3",oft-title="A heap-free claim passes the wire contract",oft-needs="impl,utest",oft-tags="SafetyWire"]
@@ -50,6 +60,7 @@ Encoding is repeatable:
 --
 
 [horizontal]
+ID:: `+req~ssr-wire-heap-claim-tested~3+`
 ASIL:: B
 Allocated to:: each wire
 Verification:: heap-window, test
@@ -69,10 +80,79 @@ So its contract tests must check that sequence rather than require identical byt
 
 The item binds the directions in which a wire claims no heap use.
 A serialized wire that declares allocation in a direction is not required to be heap-free there.
-Its declared class is checked when its route enters runtime mode (`+req~ssr-heap-declared~3+`), and a native route refuses it.
+Its declared class is checked when its route enters runtime mode (xref:../seooc-up-rust/heap.adoc#req-ssr-heap-declared[The heap class is declared, with no default]), and a native route refuses it.
 
-_Why revision 3._
-A wire's class for its decode direction covers a decoded value's whole life (`+req~ssr-heap-declared~3+`).
-Revision 2 checked the decoding call alone, so a value that frees memory only when it ends could pass as heap-free.
-This revision checks replacement and destruction too.
-The same check lets a heap-free route admit a type whose destructor uses no heap (`+req~ssr-heap-slot-types~3+`).
+_A value's whole life._
+A wire's class for its decode direction covers a decoded value's whole life (xref:../seooc-up-rust/heap.adoc#req-ssr-heap-declared[The heap class is declared, with no default]).
+A check of the decoding call alone would let a value that frees memory only when it ends pass as heap-free.
+So the check covers replacement and destruction too.
+The same check lets a heap-free route admit a type whose destructor uses no heap (xref:../seooc-up-rust/heap.adoc#req-ssr-heap-slot-types[Decoded values and their destructors]).
+
+[[one-wire]]
+== What depends on the payload a wire carries
+
+No requirement of this area is allocated to the native wire alone or to the Protobuf wire alone.
+The two duties above bind every wire.
+The rules that depend on what a wire carries are stated with their owner, and this table lists them.
+It adds no duty, and each item governs.
+
+[cols="2,5,3",options="header"]
+|===
+| What the wire carries | Rules | Who acts
+
+| A native representation, which a reader borrows in place
+a|
+* xref:peers.adoc#req-ssr-native-abi-agreed[A native representation never crosses an ABI]
+* xref:integrity.adoc#req-ssr-integrity-zero-copy[Zero-copy only from a writer at or above the reader], "When a view is allowed"
+* xref:integrity.adoc#req-ssr-integrity-any-bits[In-place types accept every bit pattern]
+* xref:integrity.adoc#req-ssr-integrity-checked-at-admission[In-place frames are checked once, at admission]
+* xref:../seooc-up-rust/heap.adoc#req-ssr-heap-declared[The heap class is declared, with no default], "Refusal at the transition", and xref:../seooc-up-rust/heap.adoc#req-ssr-heap-slot-types[Decoded values and their destructors], "Native routes"
+a|
+* The element, for the fingerprint, the view, the admission check and the refusals.
+* Each binding that carries native frames between processes, for exchanging the fingerprint.
+* The wire, for a heap class of none in each direction that a native route uses.
+
+| A serialized encoding, decoded into a value that owns what it holds, as Protobuf messages usually are
+a|
+* xref:../seooc-up-rust/heap.adoc#req-ssr-heap-declared[The heap class is declared, with no default], "What a class covers"
+* xref:../seooc-up-rust/heap.adoc#req-ssr-heap-guarantees[A stronger resource guarantee is required by name], "Ordinary ownership"
+* xref:../seooc-up-rust/heap.adoc#req-ssr-heap-slot-types[Decoded values and their destructors], "Routes that declare allocation"
+* xref:../seooc-up-rust/assumptions-of-use.adoc#aou-seooc-resource-guarantees[A resource guarantee the item relies on is required by name]
+a|
+* The wire, for stating its heap class in each direction, allocation included.
+* The element, for admitting the route and reporting its class.
+* The integrator, for requiring by name each stronger guarantee the item relies on.
+
+| End-to-end protection around another wire's payload
+a|
+* The items of xref:../seooc-up-rust/e2e-wire.adoc[the end-to-end protection wire].
+That wire is deferred and not part of this delivery: its items bind once it is delivered, and gain no coverage or gate credit before.
+a|
+* The end-to-end protection wire, the element and the Streamer, as each item is allocated.
+|===
+
+A serialized wire is not required to be heap-free.
+A wire that declares allocation in a direction is bound by <<req-ssr-wire-heap-claim-tested,A heap-free claim passes the wire contract>> only in a direction where it claims no heap use.
+
+[[encoding-identifier]]
+=== The encoding identifier is the registry's
+
+Whatever a wire carries, the identifier that says how its payload is encoded is one of xref:../../basics/payload_encoding_registry.adoc[the payload encoding registry].
+This area assigns no identifier and has no registry of its own.
+The sentences below point to the existing contract, which governs, and they add no duty to a wire.
+
+* *Originating.*
+The registry's rules for whoever originates an identifier apply to a message sent through a wire: an identifier that the registry has assigned, a private-use one whose meaning a deployment agreement defines, or `0` where an applicable contract defines the encoding (xref:../../basics/payload_encoding_registry.adoc#allocation[the payload encoding registry, "Allocation and Origination"]).
+* *Presence.*
+A payload and its identifier are both present or both absent, and a present zero-length payload is a present payload (xref:../../basics/uattributes.adoc#common-attributes[UAttributes], `payloadEncodingId`).
+* *Not a type or a layout.*
+The identifier does not say which type, schema or memory layout a payload has (xref:../../basics/payload_encoding_registry.adoc#type-identity[the payload encoding registry, "Encoding Identity versus Type Identity"]).
+For a native representation, the rules in the first row of the table above establish what is agreed, and a matching identifier establishes none of it.
+* *Not a resource claim.*
+The identifier says nothing about heap use, about ownership or about any resource guarantee.
+A route's heap class, and each stronger guarantee that a route requires, are declared apart from it (xref:../seooc-up-rust/heap.adoc#req-ssr-heap-declared[The heap class is declared, with no default]; xref:../seooc-up-rust/heap.adoc#req-ssr-heap-guarantees[A stronger resource guarantee is required by name]).
+* *Reading and carrying.*
+A component that reads a payload first determines its encoding, and rejects a payload whose encoding it cannot determine or does not support.
+A component that only carries a payload keeps it, whatever its identifier (xref:../../basics/payload_encoding_registry.adoc#acceptance[the payload encoding registry, "Carrying a Payload versus Reading It"]).
+
+Where the items of this area meet these rules is in xref:../../contract-generations.adoc#transition[the transition table].

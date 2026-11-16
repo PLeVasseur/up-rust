@@ -24,7 +24,7 @@ link neither validates the deployment nor closes an implementation requirement.
 > For each permit a binding ships, the deployment's owner *SHALL* review the allocation it covers, file a waiver record approved by someone other than its author, and argue how interference from that allocation is excluded: by partition, by qualification, or by analysis.
 >
 > * *Review again.* The waiver *SHALL* be reviewed again when the middleware version or the deployment changes.
-> * *Heap sizing.* The deployment *SHALL* size the heap the permit draws on for the bound it states. For iceoryx2, `+aou~seooc-iceoryx2-limits~1+` names the permit and what a failed allocation under it does.
+> * *Heap sizing.* The deployment *SHALL* size the heap the permit draws on for the bound it states. Which permit a binding ships, and what a failed allocation under it does, is stated with that binding.
 > * *Strict mode.* In strict mode, the Enforce state refuses a waiver that does not name its interference argument's kind and a reference, and the report lists each waiver with its approver and its argument.
 <!-- aou-statement:end -->
 

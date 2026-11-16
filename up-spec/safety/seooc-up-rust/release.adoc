@@ -6,6 +6,7 @@ The key words "*MUST*", "*MUST NOT*", "*REQUIRED*", "*SHALL*", "*SHALL NOT*", "*
 Conventions, tags and status words: xref:../README.adoc[the safety area's README].
 Scope and element boundary: xref:README.adoc[the SEooC's README].
 
+[[req-ssr-release-none]]
 == Nothing is released in runtime mode
 
 [.specitem,oft-sid="req~ssr-release-none~2",oft-title="Nothing is released in runtime mode",oft-needs="impl,utest",oft-tags="SafetyUpRustCore"]
@@ -14,10 +15,11 @@ In runtime mode each route, role, slot table, binding resource, worker and trans
 
 * Workers created during initialization keep running and are never joined in runtime mode.
 * A route keeps its slots and its binding resources when its gate disables it.
-* A route gate (`+req~ssr-streamer-route-gate~2+`) may change the route's state, and nothing else about it.
+* A route gate (xref:../up-l2/streamer.adoc#req-ssr-streamer-route-gate[Each route has a heap-free gate]) may change the route's state, and nothing else about it.
 --
 
 [horizontal]
+ID:: `+req~ssr-release-none~2+`
 ASIL:: B
 Allocated to:: the element
 Verification:: compile-fail (for the Streamer, a delete after activation), review
@@ -28,6 +30,7 @@ ISO 26262:: 6-Table 6 1b (part-clause numbers only)
 A gate changes forwarding state without changing storage reservations or releasing resources.
 So disabling a route remains compatible with retaining its runtime storage.
 
+[[req-ssr-release-inert-drop]]
 == Dropping a runtime handle does nothing
 
 [.specitem,oft-sid="req~ssr-release-inert-drop~1",oft-title="Dropping a runtime handle does nothing",oft-needs="impl,utest",oft-tags="SafetyUpRustCore"]
@@ -44,18 +47,20 @@ This *MUST* be proved for each type at compile time.
 --
 
 [horizontal]
+ID:: `+req~ssr-release-inert-drop~1+`
 ASIL:: B
 Allocated to:: the element
 Verification:: gate (the const assertion for each handle type)
 Status:: Draft
 
 *Rationale.*
-A handle that held a reference count, such as an `+Arc+`, could free memory when the last one is dropped, which runtime mode forbids (`+req~ssr-heap-none~3+`).
+A handle that held a reference count, such as an `+Arc+`, could free memory when the last one is dropped, which runtime mode forbids (xref:heap.adoc#req-ssr-heap-none[No heap in runtime mode]).
 A proof at compile time holds for every build of every handle type, where a test could only sample it.
 
 A per-message operation, such as a lease or an asynchronous operation still in flight, is not such a handle.
-Its drop follows `+req~ssr-release-lease-drop~4+` and `+req~ssr-async-seam~3+`.
+Its drop follows <<req-ssr-release-lease-drop,A lease gives back its slot and nothing else>> and xref:build.adoc#req-ssr-async-seam[The asynchronous interface has a written, executor-independent contract].
 
+[[req-ssr-release-lease-drop]]
 == A lease gives back its slot and nothing else
 
 [.specitem,oft-sid="req~ssr-release-lease-drop~4",oft-title="A lease gives back its slot and nothing else",oft-needs="impl,utest",oft-tags="SafetyUpRustCore"]
@@ -75,13 +80,13 @@ On a native route the drop does nothing else: it frees no heap, it cannot panic 
 
 *Heap-free routes.*
 On a serialized or owned route whose heap class is none, the drop frees no heap.
-It runs a destructor only for a type that `+req~ssr-heap-slot-types~3+` admits there.
+It runs a destructor only for a type that xref:heap.adoc#req-ssr-heap-slot-types[Decoded values and their destructors] admits there.
 
 *Routes that declare allocation.*
-On a serialized or owned route whose declared heap class admits allocation, the drop also ends the initialized owned value the lease holds, exactly once, under that class (`+req~ssr-heap-slot-types~3+`).
+On a serialized or owned route whose declared heap class admits allocation, the drop also ends the initialized owned value the lease holds, exactly once, under that class (xref:heap.adoc#req-ssr-heap-slot-types[Decoded values and their destructors]).
 That destruction may free what the route's wire, binding or allocation provider allocated.
 
-* On a route that does not require non-waiting release (`+req~ssr-heap-guarantees~1+`), the drop destroys the value on its own path, under the route's declared policy.
+* On a route that does not require non-waiting release (xref:heap.adoc#req-ssr-heap-guarantees[A stronger resource guarantee is required by name]), the drop destroys the value on its own path, under the route's declared policy.
 The destruction may wait inside the allocation domain that the policy names, and the route's report says so.
 * On a route that requires non-waiting release, the drop destroys the value at once only where it is established that this destruction cannot wait.
 Otherwise it hands the value, without waiting or panicking, through a lock-free hand-off to the route's release service, which destroys it later.
@@ -91,31 +96,31 @@ Whichever applies, the drop releases no route, role, table, startup region or ot
 *When a release service is needed.*
 A release service is the mechanism of non-waiting release over a dependency that can wait.
 
-* A route that requires non-waiting release, and whose release can wait, *MUST* have one, or setup refuses the route by name (`+req~ssr-heap-guarantees~1+`).
+* A route that requires non-waiting release, and whose release can wait, *MUST* have one, or setup refuses the route by name (xref:heap.adoc#req-ssr-heap-guarantees[A stronger resource guarantee is required by name]).
 * A configuration without one offers no non-waiting release over such a dependency.
 That refuses only a route that requires it, and never a route for owning values.
 
 The rest of this item binds every release service and all pending cleanup, a binding's deferred return of a retained owner included.
 
 *The release service.*
-A release service *MUST* be created during initialization and run for the life of the process (`+req~ssr-release-none~2+`), with hand-off capacity fixed at setup.
+A release service *MUST* be created during initialization and run for the life of the process (<<req-ssr-release-none,Nothing is released in runtime mode>>), with hand-off capacity fixed at setup.
 
 * A route's capacity, its slots together with that hand-off capacity, covers every value the route can own at once, counting a hand-off in progress, a value queued or in service and a value whose lease was forgotten.
 * The service acquires no heap memory and performs only the destructions and slot returns handed to it, without a call from the application.
-* Its own work for each value, the hand-off, dispatch, bookkeeping and the change of charge, is bounded as `+req~ssr-bound-work~2+` states.
+* Its own work for each value, the hand-off, dispatch, bookkeeping and the change of charge, is bounded as xref:bounded-work.adoc#req-ssr-bound-work[Work per call is bounded by setup data] states.
 * It keeps each value charged to its route until that value's destruction completes.
 
 *Pending cleanup.*
-A value handed to a release service, and a retained owner handed to a binding's deferred return (`+req~ssr-binding-frame-drop~6+`), is _pending cleanup_ from its hand-off until its release completes.
+A value handed to a release service, and a retained owner handed to a binding's deferred return (xref:../up-l1/bindings.adoc#req-ssr-binding-frame-drop[What a received frame's destructor may do]), is _pending cleanup_ from its hand-off until its release completes.
 Pending cleanup is ownership awaiting release, neither a completed release nor unfinished traffic.
 
 *A wait without a deadline.*
 Pending cleanup *MAY* wait without a finite logical deadline, and only for the dependency that its policy names, such as the lock of an allocation domain or of the underlying transport's port.
 
 * A release handed to the service contains no unbounded computation of its own, which the evidence for non-waiting release establishes.
-* Pending cleanup waits for no lock or other primitive shared with another process and for no other process's progress (`+req~ssr-bound-no-cross-process-lock~1+`).
+* Pending cleanup waits for no lock or other primitive shared with another process and for no other process's progress (xref:bounded-work.adoc#req-ssr-bound-no-cross-process-lock[No lock shared with another process]).
 * No deadline for its completion is promised unless a supported configuration's package establishes one through the release's own mechanism.
-A deadline decides the outcome of the operation that ended the value (`+req~ssr-bound-wait~3+`), never whether or when its cleanup completes.
+A deadline decides the outcome of the operation that ended the value (xref:bounded-work.adoc#req-ssr-bound-wait[Every wait is bounded]), never whether or when its cleanup completes.
 
 *Ownership and charge.*
 Ownership passes to pending cleanup exactly once, and its route's charge and its count of completed releases change only when the release actually completes.
@@ -150,10 +155,11 @@ It promises neither that the capacity is recovered within a time nor sustained t
 The hand-off holds ownership awaiting release, not unread traffic, so it is not a second receive queue.
 
 *Bindings.*
-A binding's frame destructor has the same duty (`+req~ssr-binding-frame-drop~6+`).
+A binding's frame destructor has the same duty (xref:../up-l1/bindings.adoc#req-ssr-binding-frame-drop[What a received frame's destructor may do]).
 --
 
 [horizontal]
+ID:: `+req~ssr-release-lease-drop~4+`
 ASIL:: B
 Allocated to:: the element
 Verification:: heap-window, test, miri, review
@@ -191,14 +197,14 @@ The destruction ends that value, never the reservation that held it.
 _Where the destruction runs._
 An ordinary allocator's release can take a lock that waits.
 A route that does not require non-waiting release accepts that wait on the path that ended the value: its policy states it, and its report shows it.
-The element's own part of the drop still takes no waiting lock, and the element holds nothing of its own across the destruction (`+req~ssr-heap-slot-types~3+`).
+The element's own part of the drop still takes no waiting lock, and the element holds nothing of its own across the destruction (xref:heap.adoc#req-ssr-heap-slot-types[Decoded values and their destructors]).
 So a waiting destruction delays the path it runs on, and the element adds no lock to that wait.
 
 A route that requires non-waiting release moves a destruction that could wait off the drop, as a retained owner's return is moved, and the value stays charged until it is destroyed.
 
 Moving it moves only the wait.
 A destruction that could panic or abort would do so on the service as well.
-So a route that requires panic-free cleanup is admitted on evidence, never on deferral (`+req~ssr-heap-guarantees~1+`).
+So a route that requires panic-free cleanup is admitted on evidence, never on deferral (xref:heap.adoc#req-ssr-heap-guarantees[A stronger resource guarantee is required by name]).
 Catching an unwind cannot stand in for that evidence, since it cannot stop an abort, prevent the panic or show that the cleanup finished.
 
 _A release service is a mechanism, not a condition of ownership._
@@ -210,7 +216,7 @@ _Deferred return of a retained owner._
 Where an underlying transport's own release of a retained sample can wait, the return is deferred.
 The drop pushes the retained owner onto a lock-free queue sized for every admitted retained owner and returns, and the binding's own worker completes the release.
 That queue holds ownership awaiting return, not unread traffic.
-A stalled worker shows as counted capacity pressure, never as a drop that waits (`+req~ssr-binding-frame-drop~6+`).
+A stalled worker shows as counted capacity pressure, never as a drop that waits (xref:../up-l1/bindings.adoc#req-ssr-binding-frame-drop[What a received frame's destructor may do]).
 
 _Why no completion deadline._
 Moving a wait off the drop does not bound it.
@@ -230,10 +236,4 @@ A measured average delay is not such a bound.
 
 _Native routes._
 On a native route that return gives the retained owner back to the underlying transport through its own interface and frees no heap.
-Returning a preallocated loan never frees the backing it lives in (`+req~ssr-heap-none~3+`).
-
-_Why revision 4._
-Revision 3 made every drop on a declaring route non-waiting, and so required a release service, with its isolation, wherever a value was owned.
-A route with an ordinary allocator and no such service was refused, though it had asked for no such guarantee.
-This revision keeps the drop's own work free of waits and panics on every route, keeps the native and heap-free rules, and keeps the release service, pending cleanup and their isolation in full for a route that requires non-waiting release.
-A route that does not require it destroys its values where they end, under the policy it declared.
+Returning a preallocated loan never frees the backing it lives in (xref:heap.adoc#req-ssr-heap-none[No heap in runtime mode]).

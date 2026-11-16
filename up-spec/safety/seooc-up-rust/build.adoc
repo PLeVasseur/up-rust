@@ -6,6 +6,7 @@ The key words "*MUST*", "*MUST NOT*", "*REQUIRED*", "*SHALL*", "*SHALL NOT*", "*
 Conventions, tags and status words: xref:../README.adoc[the safety area's README].
 Scope and element boundary: xref:README.adoc[the SEooC's README].
 
+[[req-ssr-build-panic-abort]]
 == The ASIL build aborts on panic and checks overflow
 
 [.specitem,oft-sid="req~ssr-build-panic-abort~3",oft-title="The ASIL build aborts on panic and checks overflow",oft-needs="impl,utest",oft-tags="SafetyStreamer"]
@@ -26,6 +27,7 @@ So the development profile *MUST* set `+panic = "abort"+` as well, or the binary
 --
 
 [horizontal]
+ID:: `+req~ssr-build-panic-abort~3+`
 ASIL:: B
 Allocated to:: the Streamer binary
 Verification:: gate
@@ -49,9 +51,10 @@ Confirm Cargo's behaviour against the toolchain in use.
 
 _What aborting does not do._
 Aborting contains an unexpected defect.
-It does not permit a reachable panic, which stays a defect (`+req~ssr-refuse-no-panic~1+`).
-It establishes no panic-free cleanup: a route that requires that guarantee is admitted on evidence or refused (`+req~ssr-heap-guarantees~1+`).
+It does not permit a reachable panic, which stays a defect (xref:errors.adoc#req-ssr-refuse-no-panic[No panic on runtime paths]).
+It establishes no panic-free cleanup: a route that requires that guarantee is admitted on evidence or refused (xref:heap.adoc#req-ssr-heap-guarantees[A stronger resource guarantee is required by name]).
 
+[[req-ssr-build-specified-functions-only]]
 == The ASIL build contains only specified functions
 
 [.specitem,oft-sid="req~ssr-build-specified-functions-only~1",oft-title="The ASIL build contains only specified functions",oft-needs="impl,utest",oft-tags="SafetyUpRustCore,SafetyStreamer"]
@@ -62,6 +65,7 @@ Instrumentation, benchmark code and test hooks *MUST* be absent from it, or be s
 --
 
 [horizontal]
+ID:: `+req~ssr-build-specified-functions-only~1+`
 ASIL:: B
 Allocated to:: the element; the Streamer
 Verification:: gate (a symbols check on a final ASIL image, for test and benchmark entry points), review
@@ -72,18 +76,20 @@ ISO 26262:: 6-10.4.6 (part-clause numbers only)
 Code in an image that no requirement specifies is code that no requirement's verification covers, yet it can still run and change state.
 
 Hidden test hooks are the usual case.
-An ASIL image would contain them unless they are removed or specified (`+req~ssr-no-test-hooks~1+`).
+An ASIL image would contain them unless they are removed or specified (<<req-ssr-no-test-hooks,The shipped element contains no test hook>>).
 
+[[req-ssr-no-test-hooks]]
 == The shipped element contains no test hook
 
 [.specitem,oft-sid="req~ssr-no-test-hooks~1",oft-title="The shipped element contains no test hook",oft-needs="impl,utest",oft-tags="SafetyUpRustCore"]
 --
 Every item of the element that exists only for tests *MUST* compile only under the `+up_rust_test_hooks+` configuration, which no shipped build sets.
 
-The async layer's seam is not a test hook; `+req~ssr-async-seam~3+` states it.
+The async layer's seam is not a test hook; <<req-ssr-async-seam,The asynchronous interface has a written, executor-independent contract>> states it.
 --
 
 [horizontal]
+ID:: `+req~ssr-no-test-hooks~1+`
 ASIL:: B
 Allocated to:: the element
 Verification:: gate
@@ -94,6 +100,7 @@ Status:: Draft
 *Rationale.*
 A test hook that changes hidden protocol state must not become an operation available in a shipped build.
 
+[[req-ssr-async-seam]]
 == The asynchronous interface has a written, executor-independent contract
 
 [.specitem,oft-sid="req~ssr-async-seam~3",oft-title="The asynchronous interface has a written, executor-independent contract",oft-needs="impl,utest,uman",oft-tags="SafetyUpRustCore"]
@@ -113,9 +120,9 @@ It *MUST* keep the seven properties below.
 *1. Progress.*
 
 * A progress step returns a completion or a pending result.
-* It *MUST NOT* wait for a peer, for middleware, in a blocking operating-system call or in an overflow wait, and its work is bounded as `+req~ssr-bound-work~2+` states.
-* On a serialized or owned route whose declared heap class admits allocation, a step can wait inside the declared allocation domain only as `+req~ssr-bound-wait~3+` states.
-Each non-waiting guarantee limits its own operation in a step, and neither limits the other's (`+req~ssr-heap-guarantees~1+`):
+* It *MUST NOT* wait for a peer, for middleware, in a blocking operating-system call or in an overflow wait, and its work is bounded as xref:bounded-work.adoc#req-ssr-bound-work[Work per call is bounded by setup data] states.
+* On a serialized or owned route whose declared heap class admits allocation, a step can wait inside the declared allocation domain only as xref:bounded-work.adoc#req-ssr-bound-wait[Every wait is bounded] states.
+Each non-waiting guarantee limits its own operation in a step, and neither limits the other's (xref:heap.adoc#req-ssr-heap-guarantees[A stronger resource guarantee is required by name]):
 ** An acquisition in a step does not wait on a route that requires non-waiting acquisition.
 On a route that does not, it can wait as the route's declared policy states.
 ** A release in a step that could wait leaves the step as pending cleanup on a route that requires non-waiting release.
@@ -127,29 +134,29 @@ On a route that does not, it can wait in the step as the route's declared policy
 
 * Every pending operation that the admitted capacity of its route or call table allows keeps its own notification path.
 Registering, replacing its own registration, completing or abandoning one operation never removes or overwrites another's.
-* Registration storage is part of the admitted capacity (`+req~ssr-memory-computable~3+`).
-* A notification is a hint, never an arrival (`+req~ssr-qos-deadline~4+`), and the operation rechecks its state after every notification.
+* Registration storage is part of the admitted capacity (xref:startup-memory.adoc#req-ssr-memory-computable[Startup storage is computable before start]).
+* A notification is a hint, never an arrival (xref:qos.adoc#req-ssr-qos-deadline[Deadlines are monitored]), and the operation rechecks its state after every notification.
 
 *3. Abandonment and commit.*
 
 * Abandoning an operation before its submission event leaves nothing submitted.
 * Abandoning it afterwards never recalls submitted traffic or undoes anything at a peer.
-* Each owner the operation held is returned or released exactly once under its route's rules (`+req~ssr-release-lease-drop~4+`, `+req~ssr-heap-slot-types~3+`), or stays charged until that can complete.
+* Each owner the operation held is returned or released exactly once under its route's rules (xref:release.adoc#req-ssr-release-lease-drop[A lease gives back its slot and nothing else]; xref:heap.adoc#req-ssr-heap-slot-types[Decoded values and their destructors]), or stays charged until that can complete.
 * Abandonment follows the rule of a drop: the element's own work in it neither waits nor panics.
 On a route that requires non-waiting release, a release that may wait leaves the abandoning step as pending cleanup.
 On a route that does not, what the operation owned is released under the route's declared policy on the abandoning path.
-* A completion offered after the operation was abandoned, or for an earlier tenure of its slot, completes nothing (`+req~ssr-peer-rpc-correlation~3+`).
+* A completion offered after the operation was abandoned, or for an earlier tenure of its slot, completes nothing (xref:../up-l2/interaction.adoc#req-ssr-peer-rpc-correlation[A response reaches only its own call]).
 
 *4. Lifetime.*
 
 * An operation abandoned without its cleanup running, because safe code forgot it, leaves no notification or callback able to reach storage that is no longer valid.
 It keeps its capacity charged instead of letting its slot be reused while still owned.
-* Dropping an asynchronous handle to an activated role stops no service and releases no runtime resource (`+req~ssr-release-inert-drop~1+`).
+* Dropping an asynchronous handle to an activated role stops no service and releases no runtime resource (xref:release.adoc#req-ssr-release-inert-drop[Dropping a runtime handle does nothing]).
 
 *5. Deadlines.*
 
 * A scheduler's timer only causes another progress step.
-It never extends, shortens or replaces an operation's deadline, its clock or its acceptance event (`+req~ssr-bound-wait~3+`).
+It never extends, shortens or replaces an operation's deadline, its clock or its acceptance event (xref:bounded-work.adoc#req-ssr-bound-wait[Every wait is bounded]).
 * A result committed at its acceptance event before the deadline stands however late it is observed.
 * A completion whose acceptance event falls after the deadline is refused even when a timer or a timeout wrapper reports the operation ready.
 
@@ -159,18 +166,18 @@ It never extends, shortens or replaces an operation's deadline, its clock or its
 * A native receive borrow stays tied to its retained owner while suspended.
 * Abandoning an operation revokes no other borrower and never copies or serializes its payload.
 * On a native path the contract covers the registration, replacement, notification, abandonment, completion and timer work that an operation causes.
-That work keeps `+req~ssr-heap-none~3+` and `+req~ssr-refuse-no-panic~1+` only in a configuration whose package establishes that for its scheduler.
+That work keeps xref:heap.adoc#req-ssr-heap-none[No heap in runtime mode] and xref:errors.adoc#req-ssr-refuse-no-panic[No panic on runtime paths] only in a configuration whose package establishes that for its scheduler.
 Elsewhere a native asynchronous operation is not offered or is refused at setup by name, and is never replaced by a serialized one.
 
 *7. Service.*
 
 * The element's deadline accounting, expiry and deferred release do not depend on whether an application polls its asynchronous operations.
 * Using the asynchronous interface adds no service duty to the application.
-* Pending cleanup never runs on, holds or occupies a scheduler context or other execution resource that progress steps, notifications, deadline and expiry accounting or other owners' returns need (`+req~ssr-release-lease-drop~4+`).
-* Where a configuration's scheduler cannot keep pending cleanup off such a resource, an asynchronous composition that needs it is refused at setup by name (`+req~ssr-release-lease-drop~4+`).
-A composition needs pending cleanup where its route requires non-waiting release over a dependency that can wait, or where its binding defers a retained owner's return (`+req~ssr-binding-frame-drop~6+`).
+* Pending cleanup never runs on, holds or occupies a scheduler context or other execution resource that progress steps, notifications, deadline and expiry accounting or other owners' returns need (xref:release.adoc#req-ssr-release-lease-drop[A lease gives back its slot and nothing else]).
+* Where a configuration's scheduler cannot keep pending cleanup off such a resource, an asynchronous composition that needs it is refused at setup by name (xref:release.adoc#req-ssr-release-lease-drop[A lease gives back its slot and nothing else]).
+A composition needs pending cleanup where its route requires non-waiting release over a dependency that can wait, or where its binding defers a retained owner's return (xref:../up-l1/bindings.adoc#req-ssr-binding-frame-drop[What a received frame's destructor may do]).
 * A release that runs inline is not pending cleanup.
-On a route that does not require non-waiting release, a release runs on a path of that route as `+req~ssr-heap-slot-types~3+` states, such as the step or the abandoning path that ends its value, and can wait there under the route's declared policy.
+On a route that does not require non-waiting release, a release runs on a path of that route as xref:heap.adoc#req-ssr-heap-slot-types[Decoded values and their destructors] states, such as the step or the abandoning path that ends its value, and can wait there under the route's declared policy.
 No composition is refused because that release can wait, or because its configuration has no release service.
 
 *No scheduler or timing bound is required.*
@@ -182,6 +189,7 @@ From the API freeze, the contract is a documented part of the element's API.
 --
 
 [horizontal]
+ID:: `+req~ssr-async-seam~3+`
 ASIL:: B
 Allocated to:: the element's seam; the asynchronous layer that implements the interface
 Verification:: test, miri, review
@@ -206,17 +214,16 @@ Status:: Draft
 *Rationale.*
 An asynchronous layer can miss a notification, overwrite another operation's, keep storage alive incorrectly or accept a late result unless registration, progress, abandonment, lifetime and deadline responsibilities are explicit.
 
-_Why revision 2._
-Revision 1 named the hidden functions and the wake-storage type that one scheduler integration called.
-That tied the requirement to one integration's shape, and it said nothing about concurrent waiters, abandonment, forgotten operations or deadlines.
-
-_Why revision 3._
-Revision 2 let no step and no abandonment wait at all, an allocator's lock included, and so required a release service for every owned value an operation could hold.
-This revision keeps the element's own work in a step and in an abandonment free of waits and panics.
-It lets a route's declared allocation domain behave as its policy states, and keeps pending cleanup for a route that requires non-waiting release (`+req~ssr-heap-guarantees~1+`).
-
-This revision states the observable contract that an executor-independent layer keeps, so any scheduler can drive it.
+_An observable contract._
+The item states the observable contract that an executor-independent layer keeps, so any scheduler can drive it.
+It names no hidden function and no wake-storage type of one scheduler integration, which would tie the requirement to that integration's shape.
 The seam's names, the language's future and wake-up types, and the integrations with particular schedulers belong in the implementation's guidance and evidence.
+
+_Waits in a step and in an abandonment._
+The element's own work in a step and in an abandonment is free of waits and panics.
+A route's declared allocation domain behaves as its policy states.
+Pending cleanup is kept for a route that requires non-waiting release (xref:heap.adoc#req-ssr-heap-guarantees[A stronger resource guarantee is required by name]), and for a return that a binding defers, on whatever route.
+Requiring it everywhere would need a release service for every owned value an operation could hold.
 
 _Timeouts._
 A generic timeout wrapper may report an operation ready after its own deadline has passed.
@@ -235,9 +242,10 @@ A route that does not require non-waiting release has declared that its release 
 That wait delays the step that ends the value, and an item that cannot accept the delay requires the guarantee.
 
 _Separate guarantees._
-Non-waiting acquisition and non-waiting release are required separately (`+req~ssr-heap-guarantees~1+`).
+Non-waiting acquisition and non-waiting release are required separately (xref:heap.adoc#req-ssr-heap-guarantees[A stronger resource guarantee is required by name]).
 So a step applies each to its own operation, and a route that requires one is not refused over the other.
 
+[[req-ssr-strict-init-only]]
 == Strict mode checks in initialization only
 
 [.specitem,oft-sid="req~ssr-strict-init-only~1",oft-title="Strict mode checks in initialization only",oft-needs="impl,utest",oft-tags="SafetyUpRustCore"]
@@ -255,12 +263,13 @@ Every strict-mode policy check *MUST* run in initialization mode, before the tra
 Runtime paths do not execute the strict-policy checker, consult its policy or produce its findings.
 
 *Initialization-selected runtime behaviour.*
-Settings fixed during initialization may select runtime behavior explicitly required elsewhere, including the strict ASIL RPC older-incarnation refusal in `+req~ssr-e2e-resync~4+`.
+Settings fixed during initialization may select runtime behavior explicitly required elsewhere, including the strict ASIL RPC older-incarnation refusal in xref:e2e-wire.adoc#req-ssr-e2e-resync[A restart resynchronizes, stale frames are refused, and no arrival order locks a sender out].
 That E2E behavior retains the runtime no-heap and bounded-work requirements.
 Initialization-only policy checking does not mean identical E2E receive semantics in every configuration.
 --
 
 [horizontal]
+ID:: `+req~ssr-strict-init-only~1+`
 ASIL:: B
 Allocated to:: the element's strict mode
 Verification:: test, heap-window, review
@@ -276,6 +285,7 @@ The admitted configuration can still select a specified E2E receive rule that ex
 That clause binds only a route with the E2E wire, which is deferred and not part of this delivery.
 The initialization-only rule binds every strict-mode check now.
 
+[[req-ssr-strict-lock]]
 == The locked build allows only enforcement
 
 [.specitem,oft-sid="req~ssr-strict-lock~2",oft-title="The locked build allows only enforcement",oft-needs="impl,utest",oft-tags="SafetyUpRustCore"]
@@ -295,11 +305,12 @@ A crate or route that the configuration's declared safety dependency graph does 
 The refusal follows the actual dependency graph and each route's declared heap class, not a crate's name:
 
 * a wire that uses the heap is refused on a native route and admitted on a serialized route that declares its allocation;
-* classic routes stay outside the two-mode contract (`+req~ssr-mode-classic-excluded~1+`);
+* classic routes stay outside the two-mode contract (xref:runtime-modes.adoc#req-ssr-mode-classic-excluded[Classic routes never enter runtime mode]);
 * code that the claimed graph does not contain keeps its ordinary use.
 --
 
 [horizontal]
+ID:: `+req~ssr-strict-lock~2+`
 ASIL:: B
 Allocated to:: the element's strict mode
 Verification:: gate, test
@@ -321,6 +332,7 @@ Judging the claimed graph and each route's declared class refuses what the claim
 
 Native guarantees cannot be relaxed by a route label or by a serialized route's permission, and a previously accepted middleware deviation keeps exactly its stated scope.
 
+[[req-ssr-strict-ack-revision]]
 == An acknowledgement names a deviation by ID and revision
 
 [.specitem,oft-sid="req~ssr-strict-ack-revision~1",oft-title="An acknowledgement names a deviation by ID and revision",oft-needs="impl,utest",oft-tags="SafetyUpRustCore"]
@@ -334,6 +346,7 @@ A known failure is refused whatever is acknowledged.
 --
 
 [horizontal]
+ID:: `+req~ssr-strict-ack-revision~1+`
 ASIL:: B
 Allocated to:: the element's strict mode
 Verification:: test (an acknowledgement of an earlier revision refuses again; one that names an unknown ID is refused; a known failure refuses whatever is acknowledged)
@@ -342,6 +355,7 @@ Status:: Draft
 *Rationale.*
 Acknowledging an earlier deviation cannot establish acceptance of a later change to its scope or consequences.
 
+[[req-ssr-strict-report]]
 == Strict mode reports on every run
 
 [.specitem,oft-sid="req~ssr-strict-report~2",oft-title="Strict mode reports on every run",oft-needs="impl,utest",oft-tags="SafetyUpRustCore"]
@@ -351,7 +365,7 @@ The report holds:
 
 * every finding, with its rule, its route, the requirement IDs it serves and its fix;
 * the acknowledged deviations;
-* for each monitored route, its detection bound with J where a supported configuration establishes J, or a statement that no finite bound is established (`+req~ssr-qos-deadline~4+`), and any servicing or watchdog range that its configuration's representation needs;
+* for each monitored route, its detection bound with J where a supported configuration establishes J, or a statement that no finite bound is established (xref:qos.adoc#req-ssr-qos-deadline[Deadlines are monitored]), and any servicing or watchdog range that its configuration's representation needs;
 * the timing and assurance claims each route requested and was admitted under, with the configuration and the evidence state each rests on;
 * for a route or process with no admitted assurance scope, that its assurance is Draft and unassessed, which refuses nothing;
 * the assumptions of use that apply to the features configured;
@@ -363,6 +377,7 @@ The report *MUST* say that passing its checks is neither a safety qualification 
 --
 
 [horizontal]
+ID:: `+req~ssr-strict-report~2+`
 ASIL:: B
 Allocated to:: the element's strict mode
 Verification:: test, review

@@ -8,6 +8,7 @@ The software safety requirements and assumptions of use of one safety element ou
 
 The conventions, tags and status words are in xref:../README.adoc[the safety area's README].
 Every item is still Draft.
+How these items relate to the protocol chapters, rule by rule, is in xref:../../contract-generations.adoc[contract generations].
 
 This directory holds what is specific to the element: its scope and boundary, its claims, its modes, memory, build and platform rules, and the index of its assumptions of use.
 The items that concern a protocol layer are filed with that layer, in xref:../up-l1/README.adoc[the transport layer's part] and xref:../up-l2/README.adoc[the communication layer's part].
@@ -48,7 +49,7 @@ a|
 * The runtime platform: `now`, `unix_time_ms`, `wait`, `wake_one`, `wake_all`.
 * The initialization-only platform: `entropy`, `prefault`.
 * The shipped backends, chosen by `cfg`: Linux; macOS; QNX, source only and future work.
-A supported configuration names the backend it uses (`+aou~seooc-target-environment~4+`).
+A supported configuration names the backend it uses (xref:assumptions-of-use.adoc#aou-seooc-target-environment[The target environment is verified]).
 * The shared signal.
 | `up-rust-core`
 
@@ -64,9 +65,9 @@ a|
 `E2e<W>`, an opt-in wire that wraps any other wire.
 
 * It carries a data ID, a counter, its sender's incarnation and a CRC in the payload, and uses the route's deadline as its timeout.
-* Whether and where to use it is the integrator's choice (`+aou~seooc-e2e-protection~7+`).
+* Whether and where to use it is the integrator's choice (xref:assumptions-of-use.adoc#aou-seooc-e2e-protection[The integrator decides which routes need end-to-end protection]).
 * Deferred: the wire is not part of this delivery.
-Its items keep their IDs and revisions, two of them with an updated citation of that assumption of use, and no gate or current obligation of another item depends on it.
+Its items keep their IDs and revisions, and no gate or current obligation of another item depends on it.
 | `up-wire-e2e`, a `no_std` member of `up-rust` that depends only on `up-rust-core`
 
 | E7. Strict mode
@@ -76,7 +77,7 @@ An opt-in check, in initialization mode only, of the integrator's setup against 
 * It has four states: Off, the default; Report; Enforce; and Locked, which is Enforce alone, under `+--cfg up_rust_strict+`.
 * Its findings name the rule, the route, the requirement IDs and the fix.
 * It accepts a deviation only when it is acknowledged by ID and revision.
-* Every run produces a compliance report (`+req~ssr-strict-init-only~1+`, `+req~ssr-strict-report~2+`).
+* Every run produces a compliance report (xref:build.adoc#req-ssr-strict-init-only[Strict mode checks in initialization only]; xref:build.adoc#req-ssr-strict-report[Strict mode reports on every run]).
 | `up-rust-strict`, a `no_std` member of `up-rust` that depends only on `up-rust-core`; in core, read-only views of each route's declarations and one hook
 |===
 
@@ -92,7 +93,7 @@ They stay QM.
 
 === Async integrations
 
-* The planned executor-independent async layer (working name `up-rust-async`) keeps futures and executor hooks above core's synchronous seam, and keeps the asynchronous contract of `+req~ssr-async-seam~3+`.
+* The planned executor-independent async layer (working name `up-rust-async`) keeps futures and executor hooks above core's synchronous seam, and keeps the asynchronous contract of xref:build.adoc#req-ssr-async-seam[The asynchronous interface has a written, executor-independent contract].
 * The existing `up-rust-tokio` is the integration that layer is to replace.
 * Core, synchronous use and the async layer itself require no particular executor.
 * An executor's own resources are outside the element's claims.
@@ -114,12 +115,12 @@ The QM convenience crates are:
 * `up-wire-protobuf` and the other `std` wires;
 * `test-util`.
 
-On the ASIL path an application links only its claimed safety dependency graph (`+req~ssr-crate-core-only-binary~2+`).
+On the ASIL path an application links only its claimed safety dependency graph (xref:crate-isolation.adoc#req-ssr-crate-core-only-binary[An ASIL binary needs no crate outside its claimed graph at run time]).
 
 * The graph is judged by what each crate actually brings into the image, with its features and target-selected paths, never by its name.
 `up-rust` as published brings dependencies outside that graph, and a compatibility re-export is judged by the graph it brings.
 * Ordinary use keeps all of them.
-* An optional layer joins a claimed graph only where a configuration admits it with its own allocated requirements and evidence (`+req~ssr-crate-core-only-binary~2+`).
+* An optional layer joins a claimed graph only where a configuration admits it with its own allocated requirements and evidence (xref:crate-isolation.adoc#req-ssr-crate-core-only-binary[An ASIL binary needs no crate outside its claimed graph at run time]).
 At this revision none does.
 * `up-rust-core` itself has no dependencies, no Cargo features and no `alloc`.
 The optional `alloc`, `std` and application layers are separate crates, the `alloc` layer experimental on Rust 1.100 while the others keep the 1.88 minimum supported version.
@@ -129,7 +130,7 @@ The optional `alloc`, `std` and application layers are separate crates, the `all
 * *The classic `UStreamer`*, its dynamic routes and its cross-family adapters.
 * *Wires and bindings from elsewhere* with `unsafe` code of their own.
 Their integrator qualifies that code.
-* *A custom platform backend that an integrator supplies*, an explicit extension held to the platform's rules by `+aou~seooc-integrator-platform~4+`.
+* *A custom platform backend that an integrator supplies*, an explicit extension held to the platform's rules by xref:assumptions-of-use.adoc#aou-seooc-integrator-platform[A custom platform keeps the platform's rules].
 * *The application's own logic and the item's safety function.*
 The element carries data.
 What the data means, and how the item reacts to a failure, are the integrator's.
@@ -139,7 +140,7 @@ What the data means, and how the item reacts to a failure, are the integrator's.
 
 * *Bindings and wires* are separate elements.
 Their code runs inside the element's calls, but each is developed and verified on its own, against the contract suites in `test-util`.
-The items allocated to them are in xref:../up-l1/bindings.adoc[`bindings.adoc`] and xref:../up-l1/wires.adoc[`wires.adoc`] of the transport layer's part, and `+aou~seooc-qualified-bindings-and-wires~7+` restricts an integrator to those that pass.
+The items allocated to them are in xref:../up-l1/bindings.adoc[`bindings.adoc`] and xref:../up-l1/wires.adoc[`wires.adoc`] of the transport layer's part, and xref:../up-l1/deployment.adoc#aou-seooc-qualified-bindings-and-wires[Bindings and wires pass their contracts] restricts an integrator to those that pass.
 The end-to-end protection wire is a wire too, but it is shipped as the element's safety mechanism, so it is part E6, with its own items.
 * *Derive macros* (`up-rust-macros`: `ZeroSlot`, `StablePayload`, `StablePayloadInit`) are tools.
 The code they generate becomes part of the element and is held to its requirements.
@@ -149,7 +150,7 @@ The in-memory bindings are test doubles, not bindings, so evidence that rests on
 [[claims]]
 == Claims
 
-A deployment can ask for four independent properties, and each route's report keeps them apart (`+req~ssr-qos-no-downgrade~2+`):
+A deployment can ask for four independent properties, and each route's report keeps them apart (xref:qos.adoc#req-ssr-qos-no-downgrade[QoS is honored or refused, never weakened]):
 
 * *Functional communication and monitoring*: the protocol and ownership semantics, deadline gaps counted from true arrivals, and reports that can be read whenever execution permits.
 Every supported profile offers it, with no timing or safety package.
@@ -170,13 +171,13 @@ It is not a qualification or an assessment.
 === Ordinary ownership and stronger resource guarantees
 
 A serialized or owned route may carry values that own what they hold, heap memory included.
-Most wire formats decode into such values, and a route that declares its allocation carries them with no timing or safety package (`+req~ssr-heap-guarantees~1+`).
+Most wire formats decode into such values, and a route that declares its allocation carries them with no timing or safety package (xref:heap.adoc#req-ssr-heap-guarantees[A stronger resource guarantee is required by name]).
 
 * *What every route keeps.*
 Memory safety and the ownership rules, the functional semantics a route offers, the native rule and the duties of element code hold on every route, whatever it is labelled.
 A fault against one of them is a defect, never a missing package.
 * *What a route declares.*
-Its heap class, and the resource and failure policy of whatever allocates, as its allocator's contract states them (`+req~ssr-heap-declared~3+`).
+Its heap class, and the resource and failure policy of whatever allocates, as its allocator's contract states them (xref:heap.adoc#req-ssr-heap-declared[The heap class is declared, with no default]).
 An allocator that can wait for a lock or end the process on exhaustion is declared as one.
 * *What a route may require.*
 Panic-free cleanup, non-waiting acquisition, non-waiting release and recoverable exhaustion, each by name and each for its own operations only.
@@ -193,7 +194,7 @@ The element's maintainers provide versioned supported configuration packages: th
 
 * An application team selects a package and declares its semantic traffic, routes, payload and retention bounds and the timing and safety outcomes it requires.
 It does not invent a synchronization backend or an OS scheduling proof for supported use.
-* A custom platform is an explicit extension (`+aou~seooc-integrator-platform~4+`).
+* A custom platform is an explicit extension (xref:assumptions-of-use.adoc#aou-seooc-integrator-platform[A custom platform keeps the platform's rules]).
 * The item's hazards, its fault tolerant time interval, its actual workload, its safe state and everything outside the package stay the integrator's.
 
 === Evidence states
@@ -220,7 +221,7 @@ It is not a safety case, an assessment or a certificate.
 Runtime mode belongs to a transport.
 
 * A transport is in runtime mode from the moment its own transition returns.
-* Its transition is all or nothing for that transport alone: where several transports enter together, one that has entered stays in runtime mode if a later one is refused (`+req~ssr-mode-entry~5+`).
+* Its transition is all or nothing for that transport alone: where several transports enter together, one that has entered stays in runtime mode if a later one is refused (xref:runtime-modes.adoc#req-ssr-mode-entry[Entering runtime mode is one all-or-nothing operation]).
 * Every requirement stated for runtime mode binds that transport from then on, whatever the process's other transports are doing.
 
 A process is in runtime mode once every transport it built is, and for the Streamer when `enter_runtime_all` returns.
@@ -241,7 +242,7 @@ Allowed::
 * Waivers.
 * Forcing lazy state.
 * Cleaning up after a dead predecessor.
-* SDK startup memory from static or caller-provided regions, or, outside the ASIL path, from the optional `up-rust-std` or a declared `up-rust-alloc` provider (`+req~ssr-memory-static~2+`).
+* SDK startup memory from static or caller-provided regions, or, outside the ASIL path, from the optional `up-rust-std` or a declared `up-rust-alloc` provider (xref:startup-memory.adoc#req-ssr-memory-static[ASIL-path storage is static or caller-provided]).
 Impossible:: Traffic.
 
 === Transition
@@ -264,7 +265,7 @@ Allowed::
 * The Streamer's route gates.
 * On a serialized or owned route, only two kinds of heap use: the allocation that its declared heap class admits, after the refusals that can come first; and the release, exactly once, of what that allocation produced when its ownership ends.
 That release runs under the route's declared policy on a path of that route.
-On a route that requires non-waiting release it runs at once only where it cannot wait, and otherwise on the route's release service, where it may stay pending, charged and isolated, with no completion deadline (`+req~ssr-heap-declared~3+`, `+req~ssr-heap-guarantees~1+`, `+req~ssr-heap-slot-types~3+`, `+req~ssr-release-lease-drop~4+`).
+On a route that requires non-waiting release it runs at once only where it cannot wait, and otherwise on the route's release service, where it may stay pending, charged and isolated, with no completion deadline (xref:heap.adoc#req-ssr-heap-declared[The heap class is declared, with no default]; xref:heap.adoc#req-ssr-heap-guarantees[A stronger resource guarantee is required by name]; xref:heap.adoc#req-ssr-heap-slot-types[Decoded values and their destructors]; xref:release.adoc#req-ssr-release-lease-drop[A lease gives back its slot and nothing else]).
 Impossible::
 * Setup.
 * Heap use on a native path, in the work it causes, or beyond a route's declared class.
@@ -288,10 +289,10 @@ The Streamer's "degraded" is a reported state: its safe state is fail-silent per
 | Provided to applications | L2 handles, the transition, bounded waits, route reports, counters and waiver records | the files of this directory from `runtime-modes.adoc` to `waivers.adoc`; `../up-l1/integrity.adoc` and `../up-l1/peers.adoc`; `../up-l2/interaction.adoc`
 | Provided to the Streamer | Carrier routes, the capacity check, park, the shared signal | `bounded-work.adoc`, `qos.adoc`, `../up-l1/integrity.adoc`, `../up-l2/streamer.adoc`
 | Provided to integrators | The end-to-end protection wire; strict mode and its compliance report; the Streamer's operator interface, mode report, watchdog hook and startup report | `../up-l2/streamer.adoc`, `e2e-wire.adoc`, `build.adoc`
-| Required from bindings | The lending or handoff contract, and the bindings' duties | `../up-l1/bindings.adoc`, `../up-l1/iceoryx2.adoc`; `+aou~seooc-qualified-bindings-and-wires~7+`
+| Required from bindings | The lending or handoff contract, and the bindings' duties | `../up-l1/bindings.adoc`, `../up-l1/iceoryx2.adoc`; xref:../up-l1/deployment.adoc#aou-seooc-qualified-bindings-and-wires[Bindings and wires pass their contracts]
 | Required from wires | The wire contract, and the wires' duties | `../up-l1/wires.adoc`
-| Provided by the element's maintainers | Versioned supported configuration packages: backend, synchronization and execution model, startup checks, sizing, supported contexts, build settings, dependency scope, evidence and limitations | <<claims>>; `platform.adoc`; `+aou~seooc-target-environment~4+`
-| Required from each platform backend | The platform's rules | `platform.adoc`; `+aou~seooc-integrator-platform~4+`
+| Provided by the element's maintainers | Versioned supported configuration packages: backend, synchronization and execution model, startup checks, sizing, supported contexts, build settings, dependency scope, evidence and limitations | <<claims>>; `platform.adoc`; xref:assumptions-of-use.adoc#aou-seooc-target-environment[The target environment is verified]
+| Required from each platform backend | The platform's rules | `platform.adoc`; xref:assumptions-of-use.adoc#aou-seooc-integrator-platform[A custom platform keeps the platform's rules]
 | Required from the OS and hardware | Address-space isolation, or on an MCU the stated partition boundary, threads, wait and wake, a monotonic clock, a wall clock, 32-bit atomics with compare-and-swap, atomic and coherent on every core that shares them | `assumptions-of-use.adoc`
 | Required from the integrator | Supervisor and deployment data; waiver approval; the selection of a supported configuration and the item's timing budgets; the choice of routes that need end-to-end protection; peer rates; the build order and the build profile; operator access | `assumptions-of-use.adoc`, which indexes every assumption and links to the four that a layer part states
 |===

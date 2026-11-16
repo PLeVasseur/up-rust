@@ -6,6 +6,7 @@ The key words "*MUST*", "*MUST NOT*", "*REQUIRED*", "*SHALL*", "*SHALL NOT*", "*
 Conventions, tags and status words: xref:../README.adoc[the safety area's README].
 Scope and element boundary: xref:README.adoc[the SEooC's README].
 
+[[req-ssr-unsafe-sound]]
 == Safe code cannot cause undefined behaviour
 
 [.specitem,oft-sid="req~ssr-unsafe-sound~1",oft-title="Safe code cannot cause undefined behaviour",oft-needs="impl,utest",oft-tags="SafetyUpRustCore"]
@@ -19,6 +20,7 @@ A sequence of safe calls through the element's public API, including items hidde
 --
 
 [horizontal]
+ID:: `+req~ssr-unsafe-sound~1+`
 ASIL:: B
 Allocated to:: the element
 Verification:: miri (Stacked Borrows and Tree Borrows, over the tests and proof programs), compile-fail (each closed misuse), review (a sweep of each defect class)
@@ -36,6 +38,7 @@ The promise holds under the faulty-peer model too: a peer that writes values its
 Miri, tests and target builds are evidence at their own scope.
 None replaces the source-level argument for each obligation.
 
+[[req-ssr-unsafe-inventory]]
 == Every `+unsafe+` is inventoried and justified
 
 [.specitem,oft-sid="req~ssr-unsafe-inventory~3",oft-title="Every `unsafe` is inventoried and justified",oft-needs="impl,utest",oft-tags="SafetyUpRustCore"]
@@ -51,13 +54,14 @@ CI *MUST* refuse a new, changed or vanished site until the inventory is updated.
 * The `+unsafe+` a derive generates *MUST* be inventoried in the derive's crate.
 
 *Bindings.*
-Each binding this project ships *MUST* keep its own inventory under the same gate (`+req~ssr-binding-unsafe-inventory~1+`).
+Each binding this project ships *MUST* keep its own inventory under the same gate (xref:../up-l1/bindings.adoc#req-ssr-binding-unsafe-inventory[A binding this project ships inventories its own `+unsafe+`]).
 
 *Outside these inventories.*
 Only a wire or binding from elsewhere with `+unsafe+` code of its own, such as a wire over a C codec, falls outside these inventories, as a separate element whose integrator qualifies its `+unsafe+`.
 --
 
 [horizontal]
+ID:: `+req~ssr-unsafe-inventory~3+`
 ASIL:: B
 Allocated to:: the element
 Verification:: gate (the `+unsafe+` inventory check; the workspace lints), compile-fail (a derive under `+forbid(unsafe_code)+`)
@@ -72,6 +76,7 @@ A gate fails when the code's `+unsafe+` sites and the checked-in inventory disag
 
 Keeping wires free of hand-written `+unsafe+` lets anyone write one without taking on memory-safety obligations.
 
+[[req-ssr-unsafe-wire-untrusted]]
 == No wire can break the element's memory safety
 
 [.specitem,oft-sid="req~ssr-unsafe-wire-untrusted~1",oft-title="No wire can break the element's memory safety",oft-needs="impl,utest",oft-tags="SafetyUpRustCore,SafetyGateUpRust"]
@@ -85,6 +90,7 @@ Where memory safety depends on a byte count, a length or a claim, the element *M
 --
 
 [horizontal]
+ID:: `+req~ssr-unsafe-wire-untrusted~1+`
 ASIL:: B
 Allocated to:: the element
 Verification:: test (a replaced writer is refused), miri
@@ -97,6 +103,7 @@ So its code can be wrong without any `+unsafe+`, and the element cannot rely on 
 Encoding goes through a checked writer that keeps the count of the bytes written itself.
 So a safe wire cannot claim more initialized bytes than it wrote.
 
+[[req-ssr-unsafe-binding-untrusted]]
 == No binding written in safe code can break the element's memory safety
 
 [.specitem,oft-sid="req~ssr-unsafe-binding-untrusted~1",oft-title="No binding written in safe code can break the element's memory safety",oft-needs="impl,utest",oft-tags="SafetyUpRustCore"]
@@ -108,6 +115,7 @@ The element's memory safety *MUST NOT* depend on a binding's safe methods return
 --
 
 [horizontal]
+ID:: `+req~ssr-unsafe-binding-untrusted~1+`
 ASIL:: B
 Allocated to:: the element
 Verification:: review, miri
@@ -122,4 +130,5 @@ So `+unsafe+` code must not rely on it for memory safety, while an `+unsafe trai
 The binding contract therefore keeps its interfaces safe, with their values checked.
 It puts the one kind of claim that memory safety relies on, such as the exclusivity of lent transmit storage, behind an `+unsafe trait+`.
 
-up-spec's iceoryx2 chapter asks the same of a Rust payload's author, through iceoryx2's `+ZeroCopySend+` (xref:../../up-l1/iceoryx2.adoc[the iceoryx2 transport]), which iceoryx2 declares as an `+unsafe trait+` (https://github.com/eclipse-iceoryx/iceoryx2/blob/806442b5273d87380511bb5ffcab316d129af31c/iceoryx2-bb/elementary-traits/src/zero_copy_send.rs[`+zero_copy_send.rs+` in iceoryx2 0.9.2]).
+The same pattern exists elsewhere.
+For example, up-spec's iceoryx2 chapter asks it of a Rust payload's author, through iceoryx2's `+ZeroCopySend+` (xref:../../up-l1/iceoryx2.adoc[the iceoryx2 transport]), which iceoryx2 declares as an `+unsafe trait+` (https://github.com/eclipse-iceoryx/iceoryx2/blob/806442b5273d87380511bb5ffcab316d129af31c/iceoryx2-bb/elementary-traits/src/zero_copy_send.rs[`+zero_copy_send.rs+` in iceoryx2 0.9.2]).
