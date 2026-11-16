@@ -12,7 +12,8 @@ Each binding meets them in its own code, and covers them in its own repository, 
 
 * They carry the tag `SafetyBinding`.
 * A duty of pull-form bindings also carries `SafetyBindingPull`.
-* What only one binding must meet is stated with that binding, in an item that is allocated to it alone and carries that binding's own tag (xref:README.adoc#one-binding[what is specific to one binding]).
+* They name no middleware.
+What only one binding must meet is stated with that binding, in an item that is allocated to it alone and carries that binding's own tag (xref:README.adoc#one-binding[what is specific to one binding]).
 * A transport that is not written against the element's binding contract is not bound by them.
 
 [[req-ssr-binding-no-heap]]
@@ -78,7 +79,7 @@ A serialized route's declared allocation excuses no lazy first use on any path.
 [[req-ssr-binding-frame-drop]]
 == What a received frame's destructor may do
 
-[.specitem,oft-sid="req~ssr-binding-frame-drop~6",oft-title="What a received frame's destructor may do",oft-needs="impl,utest",oft-tags="SafetyBinding"]
+[.specitem,oft-sid="req~ssr-binding-frame-drop~7",oft-title="What a received frame's destructor may do",oft-needs="impl,utest",oft-tags="SafetyBinding"]
 --
 *No blocking.*
 Dropping a binding's received frame *MUST NOT* block, with the one exception that this item states for a declared allocation domain.
@@ -108,16 +109,18 @@ Releasing the binding's allocation is part of the route's cleanup.
 Otherwise setup refuses the route by name.
 * A route that requires neither is not refused for it, and its report shows the binding's declared policy.
 
-*No panic, with one exception.*
-The binding's own code cannot panic, on the drop or in the deferred return that completes it, with one exception.
-That exception is the iceoryx2 binding's per-port mutex, and xref:iceoryx2.adoc#req-ssr-binding-iceoryx2-panic-paths[iceoryx2's allowed panic paths are named, bounded and disclosed] states it with its bounds.
-No other binding has one.
+*No panic.*
+The binding's own code cannot panic, on the drop or in the deferred return that completes it.
 
-The exception is never a waiver, and covers no other middleware panic path, no owned value's destructor and no allocator or provider failure.
+A middleware panic path that the drop or that return can reach is allowed only as a named instance (<<req-ssr-binding-no-panic,No panic on any peer input>>).
+The item that states the instance is allocated to its binding alone, says that the instance applies to a frame's drop, and gives its bounds.
+A binding that has no such instance has no exception to this rule.
+
+A named instance is never a waiver, and covers no other middleware panic path, no owned value's destructor and no allocator or provider failure.
 --
 
 [horizontal]
-ID:: `+req~ssr-binding-frame-drop~6+`
+ID:: `+req~ssr-binding-frame-drop~7+`
 ASIL:: B
 Allocated to:: each binding
 Verification:: test, heap-window, fault-injection, review
@@ -128,14 +131,14 @@ Verification:: test, heap-window, fault-injection, review
 ** On a route that does not require non-waiting release, the release of the binding's allocation on the drop's own path under the declared policy.
 ** On a route that requires it, a release of that allocation that can wait taken off the drop through the deferred return.
 ** A route that requires panic-free cleanup, whose binding allocation's release is not established not to panic, refused at setup by name, and the same route admitted without that requirement.
-** A deferred return held behind one port's lock while the binding's calls, arrival reports and the returns of owners on other ports continue.
+** A deferred return held behind the lock it waits for, while the binding's calls, arrival reports and the returns of owners that do not need that lock continue.
 * *heap-window*
 ** No free on a native route.
 ** On a serialized route, only the declared release.
-* *fault-injection*: for the binding that has the exception, peer input, death and restart never reach the panic path.
+* *fault-injection*: for a binding with a named instance on this path, peer input, death and restart never reach it, as that binding's own item states.
 * *review*
 ** The binding's lock use, for every call sequence the element allows.
-** For the binding that has the exception, the README's known-anomaly row.
+** For a binding with a named instance on this path, the README's known-anomaly row.
 Status:: Draft
 
 *Rationale.*
@@ -155,7 +158,7 @@ The drop pushes the retained owner onto a lock-free queue whose capacity covers 
 
 _Isolation._
 A worker of its own is not by itself the isolation that pending cleanup needs.
-While it waits for the port's lock, it holds nothing that a binding call, an arrival report or the return of an owner on another port needs, and one stalled return does not stop the others.
+While a deferred return waits for a lock, it holds nothing that a binding call, an arrival report or the return of an owner that does not need that lock needs, and one stalled return does not stop the others.
 
 _Not a second queue._
 That queue holds ownership awaiting return, never unread traffic, so it is not a second receive queue.
@@ -163,14 +166,15 @@ A stalled worker shows as counted capacity pressure, never as a drop that waits.
 
 A measured lock delay is not an accepted wait.
 
-_The one exception._
-The rule has exactly one exception, a panic path of iceoryx2's per-port mutex.
-The exception is one binding's, so xref:iceoryx2.adoc#req-ssr-binding-iceoryx2-panic-paths[iceoryx2's allowed panic paths are named, bounded and disclosed] states it, with its bounds.
+_Panics._
+The binding's own code has no exception.
+A panic path inside one middleware is that binding's to state, with its bounds, in an item of its own.
+So this rule of every binding names no middleware, and a binding without such an item is allowed nothing.
 
 [[req-ssr-binding-no-panic]]
 == No panic on any peer input
 
-[.specitem,oft-sid="req~ssr-binding-no-panic~5",oft-title="No panic on any peer input",oft-needs="impl,utest",oft-tags="SafetyBinding"]
+[.specitem,oft-sid="req~ssr-binding-no-panic~6",oft-title="No panic on any peer input",oft-needs="impl,utest",oft-tags="SafetyBinding"]
 --
 *The rule.*
 Binding code *MUST NOT* panic on any frame, length or sequence a peer produces, or when a peer dies or restarts.
@@ -179,17 +183,14 @@ A panic path inside the middleware is made unreachable by a setup check or by si
 *Allowed paths.*
 A path is allowed only as a named instance, stated in an item that is allocated to its binding alone, and disclosed as a known anomaly in that binding's README.
 None is a waiver.
-The iceoryx2 binding's instances are in xref:iceoryx2.adoc#req-ssr-binding-iceoryx2-panic-paths[iceoryx2's allowed panic paths are named, bounded and disclosed], and no other binding has one.
-
-*Static data segments.*
-Every publisher on a service the binding uses has a static data segment: the binding records that on the service, its own peers require it when they open the service, and it checks the publishers present at setup.
+A binding that has no such item has no allowed path.
 
 *Any other path.*
 Any other middleware panic path, including another one that only a broken OS can reach, needs its own explicit acceptance decision.
 --
 
 [horizontal]
-ID:: `+req~ssr-binding-no-panic~5+`
+ID:: `+req~ssr-binding-no-panic~6+`
 ASIL:: B
 Allocated to:: each binding
 Verification:: fault-injection, test, gate
@@ -205,7 +206,8 @@ Each accepted middleware anomaly needs its own bounded instance, and peer-trigge
 A faulty peer's shared-memory writes that reach a middleware panic are known failures too, whatever anomaly is acknowledged.
 
 An acceptance decision is an item of this specification that names the path.
-The allowed paths of one binding, with that binding's tests and gate, are stated with that binding (xref:iceoryx2.adoc#req-ssr-binding-iceoryx2-panic-paths[iceoryx2's allowed panic paths are named, bounded and disclosed]).
+So the paths of one middleware are stated with its binding, and this rule of every binding lists none.
+How one binding makes a panic path unreachable, by which setup check or by which sizing, is that binding's to state as well.
 
 [[req-ssr-binding-peer-identity]]
 == Peer identity is stable, and incarnations rise

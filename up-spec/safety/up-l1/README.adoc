@@ -48,7 +48,7 @@ The *copy route* gives it a validated copy in storage the reader owns (xref:inte
 
 == Files
 
-29 items in 6 files.
+30 items in 6 files.
 
 [cols="3,1,3,4",options="header"]
 |===
@@ -58,21 +58,21 @@ The *copy route* gives it a validated copy in storage the reader owns (xref:inte
 | xref:wires.adoc[Allocated to each wire] | 2 | `SafetyWire` | The duties of every wire, and a list of the rules that depend on the payload a wire carries
 | xref:integrity.adoc[Integrity levels] | 5 | `SafetyUpRustCore` | One level per transport, the zero-copy rule, the copy route and in-place types
 | xref:peers.adoc[Peers of a transport] | 4 | `SafetyUpRustCore`, `SafetyBinding` | A peer's failure, staleness and admission, and the ABI of a native representation
-| xref:iceoryx2.adoc[iceoryx2] | 4 | `SafetyIceoryx2`, `SafetyManual` | What is specific to one transport, iceoryx2: two requirements of its binding, two assumptions of a deployment on it, and what the general rules meet on it
+| xref:iceoryx2.adoc[iceoryx2] | 5 | `SafetyIceoryx2`, `SafetyManual` | What is specific to one transport, iceoryx2: three requirements of its binding, two assumptions of a deployment on it, and what the general rules meet on it
 | xref:deployment.adoc[What a deployment provides for its transports] | 3 | `SafetyManual` | Access to transport resources, each transport's integrity level, and the use of bindings and wires that pass their contracts
 |===
 
 [[one-binding]]
 == What is specific to one binding
 
+The duties of every binding name no middleware (xref:bindings.adoc[allocated to each binding]), and neither do the assumptions about every transport (xref:deployment.adoc[what a deployment provides for its transports]).
 What only one binding must meet, and what only a deployment on it provides, is stated with that binding, in items that are allocated to it alone.
-Two rules of every binding still name the one binding that has an exception to them, and they point to its page.
 
 [cols="2,3,5",options="header"]
 |===
 | Binding | Items of its own | What that means
 
-| iceoryx2 | Two requirements (tag `SafetyIceoryx2`) and two assumptions of use, in xref:iceoryx2.adoc[the iceoryx2 page] | Its allowed panic paths and its service depth are stated there, with the limits, known anomalies and known failures that a deployment on it accepts or sees listed, and its separation of integrity levels
+| iceoryx2 | Three requirements (tag `SafetyIceoryx2`) and two assumptions of use, in xref:iceoryx2.adoc[the iceoryx2 page] | Its allowed panic paths, its static data segments and its service depth are stated there, with the limits, known anomalies and known failures that a deployment on it accepts or sees listed, and its separation of integrity levels
 | LoLa | None at this revision | The LoLa binding is bound by the duties of every binding, and a deployment on it by the assumptions about every transport. No item of this area names an allowed panic path, a permit or an accepted limit for it. So it has no allowed panic path (xref:bindings.adoc#req-ssr-binding-no-panic[No panic on any peer input]), and its permits, limits and known anomalies are those that its README states (xref:bindings.adoc#req-ssr-binding-readme[The README says what the middleware cannot guarantee])
 |===
 
@@ -100,7 +100,7 @@ The item governs, and this table adds no duty.
 | Encoding and decoding without a panic, and a heap-free claim that is tested | Each wire | xref:wires.adoc[`wires.adoc`]
 | One integrity level per transport; a view only from a writer at or above the reader; otherwise the copy route or a refusal at setup | The element | xref:integrity.adoc[`integrity.adoc`]
 | A peer's failure, restart, staleness and admission handled as normal input; no native representation across an ABI | The element, and each binding that carries native frames | xref:peers.adoc[`peers.adoc`]
-| What one transport adds: its binding's named panic paths and service depth | The iceoryx2 binding | xref:iceoryx2.adoc#req-ssr-binding-iceoryx2-panic-paths[iceoryx2's allowed panic paths are named, bounded and disclosed] and xref:iceoryx2.adoc#req-ssr-binding-depth-from-deployment[iceoryx2's service depth comes from deployment data] in xref:iceoryx2.adoc[`iceoryx2.adoc`]
+| What one transport adds: its binding's named panic paths, static data segments and service depth | The iceoryx2 binding | xref:iceoryx2.adoc#req-ssr-binding-iceoryx2-panic-paths[iceoryx2's allowed panic paths are named, bounded and disclosed]; xref:iceoryx2.adoc#req-ssr-binding-iceoryx2-static-segments[On iceoryx2, every publisher has a static data segment] and xref:iceoryx2.adoc#req-ssr-binding-depth-from-deployment[iceoryx2's service depth comes from deployment data] in xref:iceoryx2.adoc[`iceoryx2.adoc`]
 | What a deployment on one transport adds: levels kept apart, and that binding's limits accepted | The integrator that deploys on iceoryx2 | xref:iceoryx2.adoc#aou-seooc-iceoryx2-level-separation[On iceoryx2, each integrity level has its own processes, domain and OS user] and xref:iceoryx2.adoc#aou-seooc-iceoryx2-limits[A deployment on iceoryx2 accepts that binding's limits, and no known failure as one] in xref:iceoryx2.adoc[`iceoryx2.adoc`]
 | Access to every transport's resources restricted to the processes deployed to use them; a zero-copy writer that never writes a sample it has sent | The integrator | xref:deployment.adoc#aou-seooc-peer-access[Only authorized processes reach the transport, and peers are faulty, never malicious] in xref:deployment.adoc[`deployment.adoc`]
 | Only bindings and wires that pass their contracts on the target | The integrator | xref:deployment.adoc#aou-seooc-qualified-bindings-and-wires[Bindings and wires pass their contracts] in xref:deployment.adoc[`deployment.adoc`]

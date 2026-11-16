@@ -10,13 +10,13 @@ The duties of every binding, which the iceoryx2 binding meets too: xref:bindings
 This page is the safety counterpart of xref:../../up-l1/iceoryx2.adoc[the iceoryx2 transport chapter].
 It holds what is specific to one transport:
 
-* the two requirements allocated to the iceoryx2 binding alone (tag `SafetyIceoryx2`), which `up-transport-iceoryx2-rust` covers;
+* the three requirements allocated to the iceoryx2 binding alone (tag `SafetyIceoryx2`), which `up-transport-iceoryx2-rust` covers;
 * the two assumptions of use that bind only a deployment on iceoryx2 (tag `SafetyManual`), which that binding's safety manual states;
 * what the rules of every binding, of the element and of every deployment meet on iceoryx2 (<<index>>).
 
 == Whom this page binds
 
-* The two requirements bind the iceoryx2 binding of the up-rust SEooC, and no other transport.
+* The three requirements bind the iceoryx2 binding of the up-rust SEooC, and no other transport.
 * The two assumptions bind an integrator that deploys on that binding and claims the element's safety-assurance scope (xref:../seooc-up-rust/assumptions-of-use.adoc#who[who the assumptions bind]).
 They are the up-rust SEooC's assumptions, as `seooc` in their IDs says, and they are deployment duties: no requirement on the binding is met by them, and they replace none.
 * Nothing here binds an iceoryx2 transport written for another SDK, or changes the protocol's iceoryx2 chapter.
@@ -48,7 +48,7 @@ Status:: Draft
 [[req-ssr-binding-iceoryx2-panic-paths]]
 == iceoryx2's allowed panic paths are named, bounded and disclosed
 
-[.specitem,oft-sid="req~ssr-binding-iceoryx2-panic-paths~1",oft-title="iceoryx2's allowed panic paths are named, bounded and disclosed",oft-needs="impl,utest",oft-tags="SafetyIceoryx2"]
+[.specitem,oft-sid="req~ssr-binding-iceoryx2-panic-paths~2",oft-title="iceoryx2's allowed panic paths are named, bounded and disclosed",oft-needs="impl,utest",oft-tags="SafetyIceoryx2"]
 --
 *What this item is.*
 These are the middleware panic paths that xref:bindings.adoc#req-ssr-binding-no-panic[No panic on any peer input] and xref:bindings.adoc#req-ssr-binding-frame-drop[What a received frame's destructor may do] allow the iceoryx2 binding, each as a named instance.
@@ -60,6 +60,9 @@ iceoryx2's per-port mutex, whose failure on lock or on unlock reaches a `+fatal_
 * that failure is reachable solely through a fault of the process-private lock: corrupted process memory, a recursion-count overflow, or an OS error;
 * none of these is reachable through any peer input, sequence, death or restart, nor through any sequence of calls an application can make through the element, such as dropping a frame while the same thread holds the port;
 * it is disclosed as a known anomaly in that binding's README (`+UPD-IOX2-0001+`, revision 2).
+
+It is the one instance that applies to a frame's drop and to the deferred return that completes it (xref:bindings.adoc#req-ssr-binding-frame-drop[What a received frame's destructor may do]).
+None of the other allowed paths applies there.
 
 *The other allowed paths.*
 
@@ -79,7 +82,7 @@ Any other path needs its own explicit acceptance decision (xref:bindings.adoc#re
 --
 
 [horizontal]
-ID:: `+req~ssr-binding-iceoryx2-panic-paths~1+`
+ID:: `+req~ssr-binding-iceoryx2-panic-paths~2+`
 ASIL:: B
 Allocated to:: the iceoryx2 binding
 Verification:: fault-injection, test, gate, review
@@ -100,9 +103,29 @@ Each accepted middleware anomaly needs its own bounded instance, and peer-trigge
 The panic sites in iceoryx2's wait path stay known failures until the binding makes them unreachable, by a binding-owned `+poll(2)+` loop or a reviewed equivalent with an argument at source level.
 The named descriptor anomaly above cannot excuse them.
 
-These instances are one binding's, so they are stated with that binding.
-The two rules of every binding allow a path only as an instance that this item names.
+These instances are one binding's, so they are stated with that binding, and the two rules of every binding name none.
+Those rules allow a path only as an instance that this item names, and only where it says the instance applies.
 The binding's duties stay with the binding.
+
+[[req-ssr-binding-iceoryx2-static-segments]]
+== On iceoryx2, every publisher has a static data segment
+
+[.specitem,oft-sid="req~ssr-binding-iceoryx2-static-segments~1",oft-title="On iceoryx2, every publisher has a static data segment",oft-needs="impl,utest",oft-tags="SafetyIceoryx2"]
+--
+Every publisher on a service the iceoryx2 binding uses has a static data segment: the binding records that on the service, its own peers require it when they open the service, and it checks the publishers present at setup.
+--
+
+[horizontal]
+ID:: `+req~ssr-binding-iceoryx2-static-segments~1+`
+ASIL:: B
+Allocated to:: the iceoryx2 binding
+Verification:: test (the requirement recorded on a service the binding creates; a peer of the binding's own that requires it when it opens the service; the check of the publishers present at setup)
+Status:: Draft
+
+*Rationale.*
+A panic path inside the middleware is made unreachable by a setup check or by sizing (xref:bindings.adoc#req-ssr-binding-no-panic[No panic on any peer input]).
+This is that check for a publisher's data segment, which only iceoryx2 has in this form.
+So it is stated with this binding, and the rule of every binding does not name it.
 
 [[aou-seooc-iceoryx2-level-separation]]
 == On iceoryx2, each integrity level has its own processes, domain and OS user
@@ -202,7 +225,8 @@ A known failure is the binding's to close: listing it here accepts nothing, and 
 [[index]]
 == What the general rules meet on iceoryx2
 
-This section says what the rules of every binding, of the element and of every deployment meet on iceoryx2, so that the binding's maintainers and a deployment on iceoryx2 find it in one place.
+The rules of every binding, of the element and of every deployment name no middleware.
+This section says what each of them meets on iceoryx2, so that the binding's maintainers and a deployment on iceoryx2 find it in one place.
 
 * Each rule stays in its own item, and that item governs.
 * This section adds no duty.
@@ -230,8 +254,9 @@ This section says what the rules of every binding, of the element and of every d
 
 | <<req-ssr-binding-depth-from-deployment,iceoryx2's service depth comes from deployment data>> | The service depth is taken from deployment data, and a mismatch is refused | The binding
 | <<req-ssr-binding-iceoryx2-panic-paths,iceoryx2's allowed panic paths are named, bounded and disclosed>> | The panic paths allowed as named instances, the abort on heap exhaustion during a peer change, and the known failures that are not allowed paths | The binding
+| <<req-ssr-binding-iceoryx2-static-segments,On iceoryx2, every publisher has a static data segment>> | Every publisher has a static data segment, which the binding records, requires of its own peers and checks at setup | The binding
 | xref:bindings.adoc#req-ssr-binding-no-panic[No panic on any peer input], "Allowed paths" | The iceoryx2 binding's allowed paths are those of <<req-ssr-binding-iceoryx2-panic-paths,iceoryx2's allowed panic paths are named, bounded and disclosed>> | The binding
-| xref:bindings.adoc#req-ssr-binding-frame-drop[What a received frame's destructor may do], "No panic" | The one exception to its rule is the per-port mutex instance of <<req-ssr-binding-iceoryx2-panic-paths,iceoryx2's allowed panic paths are named, bounded and disclosed>> | The binding
+| xref:bindings.adoc#req-ssr-binding-frame-drop[What a received frame's destructor may do], "No panic" | The one named instance on a frame's drop is the per-port mutex of <<req-ssr-binding-iceoryx2-panic-paths,iceoryx2's allowed panic paths are named, bounded and disclosed>> | The binding
 | xref:bindings.adoc#req-ssr-binding-predecessor-cleanup[A binding cleans up after a dead predecessor, in initialization] | Creating an iceoryx2 node checks for dead nodes and cleans up their stale resources by default (https://github.com/eclipse-iceoryx/iceoryx2/blob/806442b5273d87380511bb5ffcab316d129af31c/iceoryx2/src/config.rs[`+config.rs+` in iceoryx2 0.9.2]). So the cleanup runs in the successor's initialization | The binding
 | xref:integrity.adoc#req-ssr-integrity-zero-copy[Zero-copy only from a writer at or above the reader], "Refusals at setup" | iceoryx2's ports write shared state both ways. So a port whose level differs from its service's recorded level is refused at setup | The element
 | xref:integrity.adoc#req-ssr-integrity-zero-copy[Zero-copy only from a writer at or above the reader], "The copy route" | iceoryx2 maps the payload memory read-only for subscribers (https://github.com/eclipse-iceoryx/iceoryx2/issues/906[iceoryx2 issue #906]; https://github.com/eclipse-iceoryx/iceoryx2/blob/806442b5273d87380511bb5ffcab316d129af31c/iceoryx2/src/port/details/data_segment.rs[`+data_segment.rs+` in iceoryx2 0.9.2]). So the copy reads it only through loads that are valid on a read-only mapping | The element

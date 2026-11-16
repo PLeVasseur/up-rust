@@ -126,6 +126,29 @@ These items are new, each with text that an earlier revision above held:
 - The rows under "Names that the specification describes instead" cite the
   current revisions.
 
+## Revisions raised by the binding panic-path allocation
+
+The specification's rules of every binding name no middleware. One binding's
+allowed panic paths, and the setup check for its data segments, are stated with
+that binding.
+
+| Earlier revision | Current revision |
+| --- | --- |
+| `req~ssr-binding-no-panic~5` | `req~ssr-binding-no-panic~6` |
+| `req~ssr-binding-frame-drop~6` | `req~ssr-binding-frame-drop~7` |
+| `req~ssr-binding-iceoryx2-panic-paths~1` | `req~ssr-binding-iceoryx2-panic-paths~2` |
+
+This item is new, with text that an earlier revision above held:
+
+| New item | Its text came from |
+| --- | --- |
+| `req~ssr-binding-iceoryx2-static-segments~1` | `req~ssr-binding-no-panic~5` |
+
+- No SDK code or test tag names one of these items, so none moves. They are
+  covered in each binding's repository, which this note does not inventory.
+- A tag there that names an earlier revision stays as it is until its code or
+  test has been reviewed against the current statement.
+
 ## Names that the specification describes instead
 
 The specification's statements describe these interfaces by what they do. The

@@ -189,7 +189,8 @@ The four items of xref:up-l1/peers.adoc[peers of a transport], which that page s
 xref:seooc-up-rust/errors.adoc#req-ssr-refuse-no-panic[No panic on runtime paths].
 * *A binding.*
 ** xref:up-l1/bindings.adoc#req-ssr-binding-no-panic[No panic on any peer input].
-** xref:up-l1/iceoryx2.adoc#req-ssr-binding-iceoryx2-panic-paths[iceoryx2's allowed panic paths are named, bounded and disclosed], whose allowed paths no peer input, sequence, death or restart may reach, and through it the one exception of xref:up-l1/bindings.adoc#req-ssr-binding-frame-drop[What a received frame's destructor may do].
+** xref:up-l1/iceoryx2.adoc#req-ssr-binding-iceoryx2-panic-paths[iceoryx2's allowed panic paths are named, bounded and disclosed], whose allowed paths no peer input, sequence, death or restart may reach, and through it the named instance that xref:up-l1/bindings.adoc#req-ssr-binding-frame-drop[What a received frame's destructor may do] allows on a frame's drop.
+** xref:up-l1/iceoryx2.adoc#req-ssr-binding-iceoryx2-static-segments[On iceoryx2, every publisher has a static data segment], a setup check under the first of these rules.
 ** xref:up-l1/bindings.adoc#req-ssr-binding-readme[The README says what the middleware cannot guarantee], for what a README discloses about shared memory.
 * *A wire.*
 xref:up-l1/wires.adoc#req-ssr-wire-no-panic[Encoding and decoding never panic].
