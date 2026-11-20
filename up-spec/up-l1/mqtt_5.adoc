@@ -21,29 +21,35 @@ SPDX-License-Identifier: Apache-2.0
 
 == Overview
 
-MQTT is an OASIS standard messaging protocol for the Internet of Things (IoT). It is designed as an extremely lightweight publish/subscribe messaging transport that is ideal for connecting remote devices with a small code footprint and minimal network bandwidth. MQTT today is used in a wide variety of industries, such as automotive, manufacturing, telecommunications, oil and gas etc.
+[NOTE]
+====
+MQTT is an OASIS standard: a protocol for publish/subscribe messaging in the Internet of Things (IoT). It is designed to need very little code on a device and very little network bandwidth, which suits it to connecting remote devices. Many industries use it, among them telecommunications, manufacturing, automotive, and oil and gas.
 
 For more information, please refer to https://mqtt.org/
+====
 
 This document defines how MQTT 5 PUBLISH packets can be used to transfer uProtocol messages (UMessages) between uEntities for the following use cases:
 
-1. *uEntity-2-uEntity* (E2E): Communication between uEntities within the same vehicle by means of an _in-vehicle_ MQTT broker.
-2. *Device-2-Device* (D2D): Communication between uEntities in vehicles and a (cloud) back end system by means of an _off-vehicle_ MQTT broker, e.g. running in the back end. MQTT brokers running on cloud infrastructure often have limitations regarding the number of topics that can be subscribed and the number of segments those topics may contain. The mapping for this use case therefore uses a coarser grained topic structure than the one for in-vehicle only communication.
+1. *uEntity-2-uEntity*: Communication between uEntities within the same vehicle by means of an _in-vehicle_ MQTT broker.
+2. *Device-2-Device* (D2D): Communication between uEntities in vehicles and a (cloud) back end system by means of an _off-vehicle_ MQTT broker, e.g. running in the back end. The mapping for this use case uses a coarser grained topic structure than the one for in-vehicle only communication.
+
+NOTE: MQTT itself limits the number of levels in a Topic Name or Topic Filter only through the maximum length of a UTF-8 Encoded String, 65,535 bytes (source: MQTT Version 5.0, edition of 7 March 2019, sections 1.5.4 UTF-8 Encoded String and 4.7.3 Topic semantic and usage). A limit that a particular broker imposes is a matter of that broker's deployment, not of this mapping.
 
 == UMessage Mapping
 
-A uProtocol message consists of _UAttributes_ and optional payload. The following sections define how these are mapped to/from an MQTT 5 PUBLISH packet.
+NOTE: A uProtocol message consists of _UAttributes_ and optional payload. The following sections define how these are mapped to/from an MQTT 5 PUBLISH packet.
 
 === UAttributes
 
 [.specitem,oft-sid="dsn~up-transport-mqtt5-attributes-mapping~3",oft-covers="req~utransport-send-preserve-data~1",oft-needs="impl,utest",oft-tags="TransportLayerImpl"]
 --
 An MQTT 5 PUBLISH packet that is used to convey a uProtocol message *MUST*
-contain properties as defined in <<uAttributes Mapping to MQTT 5 PUBLISH Properties>>.
+contain properties as defined in <<mqtt5-uattributes-mapping,uAttributes Mapping to MQTT 5 PUBLISH Properties>> (source: MQTT Version 5.0, edition of 7 March 2019, section 3.3.2.3 PUBLISH Properties).
 Unless a mapping row defines presence explicitly, a property *MUST* be present
 if and only if the corresponding UMessage attribute has a non-empty value.
 --
 
+[#mqtt5-uattributes-mapping]
 .uAttributes Mapping to MQTT 5 PUBLISH Properties
 [cols="1,2,5"]
 |===
@@ -55,31 +61,31 @@ if and only if the corresponding UMessage attribute has a non-empty value.
 | User Property [key: _uP_]
 a| The uProtocol version being used
 
-* *MUST* be set to the (major) version of the uProtocol specification that the message mapping adheres to. At the time of writing, the version is `1`.
+* *MUST* be set to the (major) version of the uProtocol specification that the message mapping adheres to (`1` for major version 1).
 * Message consumers *MAY* use this property to determine that the (PUBLISH) packet contains a uProtocol message.
 
 | _id_
 | User Property [key: _1_]
-a| The unique identifier of the message
+a| Defined in xref:../basics/uattributes.adoc[uProtocol Attributes (UAttributes)].
 
-* *MUST* be set to the https://www.rfc-editor.org/rfc/rfc4122.html#section-3[hyphenated string representation] of the UUID.
+* *MUST* be set to the lower-case https://www.rfc-editor.org/rfc/rfc9562#section-4[hyphenated string representation] of the UUID (source: RFC 9562, section 4 UUID Format).
 
 | _type_
 | User Property [key: _2_]
-a| The message type
+a| Defined in xref:../basics/uattributes.adoc[uProtocol Attributes (UAttributes)].
 
 * *MUST* be set to the value of the _uprotocol.ce_name_ option defined for the
-link:../up-core-api/uprotocol/uattributes.proto[UMessageType enum].
+link:../up-core-api/uprotocol/v1/uattributes.proto[UMessageType enum].
 
 | _source_
 | User Property [key: _3_]
-a| The origin (address) of the message
+a| Defined in xref:../basics/uattributes.adoc[uProtocol Attributes (UAttributes)].
 
 * *MUST* be set to the xref:../basics/uri.adoc#uri-definition[string serialization of the UUri]
 
 | _sink_
 | User Property [key: _4_]
-a| The destination (address) of the message
+a| Defined in xref:../basics/uattributes.adoc[uProtocol Attributes (UAttributes)].
 
 * *MUST* be set to the xref:../basics/uri.adoc#uri-definition[string serialization of the UUri]
 
@@ -88,18 +94,19 @@ a| The destination (address) of the message
 a| The message's priority class as defined in xref:../basics/upriority.adoc[Message Priority]
 
 * *MUST* be set to the value of the _uprotocol.ce_name_ option defined for the
-link:../up-core-api/uprotocol/uattributes.proto[UPriority enum].
+link:../up-core-api/uprotocol/v1/uattributes.proto[UPriority enum].
 
 | _ttl_
 | User Property [key: _6_] +
 _Message Expiry Interval_
 
-a| The amount of time after which this message must no longer be delivered/processed.
+a| Defined in xref:../basics/uattributes.adoc[uProtocol Attributes (UAttributes)].
 
 If _ttl_ is `0`, the message has no expiration. The _Message Expiry Interval_
-and TTL User Property *MUST NOT* be set in this case. An omitted message expiry
-interval does not impose an MQTT expiration, whereas a zero interval is not
-an unlimited lifetime.
+and TTL User Property *MUST NOT* be set in this case. MQTT applies no expiry to
+a message whose _Message Expiry Interval_ is absent, whereas an interval of `0`
+is a lifetime of zero seconds, not an unlimited lifetime
+(source: MQTT Version 5.0, edition of 7 March 2019, section 3.3.2.3.3 Message Expiry Interval).
 
 If _ttl_ is greater than `0`, the _Message Expiry Interval_ property *MUST* be set to
 
@@ -122,31 +129,31 @@ lifetime from a finite expiry interval.
 
 | _permissionLevel_
 | User Property [key: _7_]
-a| The service consumer's permission level as defined in xref:../up-l2/permissions.adoc#_code_based_access_permissions_caps[Code-Based uEntity Access Permissions (CAPs)]
+a| The service consumer's permission level as defined in xref:../basics/permissions.adoc#_code_based_access_permissions_caps[Code-Based Access Permissions (CAPs)]
 
-* *MUST* be set to the xref:../up-l2/permissions.adoc#_code_based_access_permissions_caps[CAP] value's decimal string representation. 
+* *MUST* be set to the xref:../basics/permissions.adoc#_code_based_access_permissions_caps[CAP] value's decimal string representation. 
 
 | _commStatus_
 | User Property [key: _8_]
-a| A UCode indicating an error that has occurred during the delivery of either an RPC Request or Response message
+a| Defined in xref:../basics/uattributes.adoc[uProtocol Attributes (UAttributes)].
 
-* *MUST* be set to the link:../up-core-api/uprotocol/v1/ustatus.proto[UCode enum] integer value's decimal string representation.
+* *MUST* be set to the link:../up-core-api/uprotocol/v1/ucode.proto[UCode enum] integer value's decimal string representation.
 
 | _reqId_
 | _Correlation Data_
-a| The identifier that a service consumer can use to correlate an RPC response message with its RPC request
+a| Defined in xref:../basics/uattributes.adoc[uProtocol Attributes (UAttributes)].
 
 * *MUST* be set to the UUID's 16 byte representation in big endian order.
 
 | _token_
 | User Property [key: _10_]
-a| The service consumer's access token
+a| Defined in xref:../basics/uattributes.adoc[uProtocol Attributes (UAttributes)].
 
 * *MUST* be set to the token value.
 
 | _traceparent_
 | User Property [key: _11_]
-a| A tracing identifier to use for correlating messages across the system
+a| Defined in xref:../basics/uattributes.adoc[uProtocol Attributes (UAttributes)].
 
 * *MUST* be set to the traceparent value.
 
@@ -168,7 +175,7 @@ xref:../basics/payload_encoding_registry.adoc[payload-encoding registry]
   interpretation rules are those of the `payloadEncodingId` attribute; this
   binding does not add or restate them.
 
-The numeric identifier minimizes the size of the PUBLISH packet.
+NOTE: The numeric identifier minimizes the size of the PUBLISH packet.
 
 |===
 
@@ -176,25 +183,23 @@ The numeric identifier minimizes the size of the PUBLISH packet.
 
 [.specitem,oft-sid="dsn~up-transport-mqtt5-payload-mapping~1",oft-covers="req~utransport-send-preserve-data~1",oft-needs="impl,utest",oft-tags="TransportLayerImpl"]
 --
-An MQTT 5 PUBLISH packet that is used to convey a uProtocol message *MUST* contain in its payload the unaltered value of the UMessage's _payload_ field.
+An MQTT 5 PUBLISH packet that is used to convey a uProtocol message *MUST* contain in its payload the unaltered value of the UMessage's _payload_ field (source: MQTT Version 5.0, edition of 7 March 2019, section 3.3.3 PUBLISH Payload).
 --
 
 
 == MQTT Topic Structure
 
-Message producers publish messages to _topics_ maintained by an MQTT broker. Other clients can then subscribe to such topics in order to receive the messages that are being published to these topics.
-
-The topic name of an MQTT 5 PUBLISH packet that is used to transfer a uProtocol message is derived from the message's `source` and `sink` attributes.
+NOTE: Message producers publish messages to _topics_ maintained by an MQTT broker. Other clients can then subscribe to such topics in order to receive the messages that are being published to these topics.
 
 === uEntity-2-uEntity Communication
 
 [.specitem,oft-sid="dsn~up-transport-mqtt5-e2e-topic-names~1",oft-needs="impl,utest",oft-tags="TransportLayerImpl"]
 --
-The topic name of an MQTT 5 PUBLISH packet containing a _Publish_ UMessage that is published to an _in-vehicle_ broker **MUST** consist of the following segments:
+The topic name of an MQTT 5 PUBLISH packet containing a _Publish_ UMessage that is published to an _in-vehicle_ broker **MUST** consist of the following segments (source: MQTT Version 5.0, edition of 7 March 2019, sections 3.3.2.1 Topic Name and 4.7.1.1 Topic level separator):
 
 `{source.authority}/{source.ue_type}/{source.ue_instance}/{source.ue_version}/{source.resource}`
 
-The topic name of an MQTT 5 PUBLISH packet containing a _Notification_, _RPC Request_ or _RPC Response_ UMessage that is published to an _in-vehicle_ broker **MUST** consist of the following segments:
+The topic name of an MQTT 5 PUBLISH packet containing a _Notification_, _RPC Request_ or _RPC Response_ UMessage that is published to an _in-vehicle_ broker **MUST** consist of the following segments (source: MQTT Version 5.0, edition of 7 March 2019, sections 3.3.2.1 Topic Name and 4.7.1.1 Topic level separator):
 
 `{source.authority}/{source.ue_type}/{source.ue_instance}/{source.ue_version}/{source.resource}/{sink.authority}/{sink.ue_type}/{sink.ue_instance}/{sink.ue_version}/{sink.resource}`
 --
@@ -203,10 +208,10 @@ Please refer to <<UUri Encoding Rules>> for details regarding the encoding of th
 
 ==== Examples
 
-The examples below show the MQTT 5 topic names to use for sending different types of UMessages via an _in-vehicle_ broker. The sending uEntity has uEntity type ID `3BA`.
+NOTE: The examples below show the MQTT 5 topic names to use for sending different types of UMessages via an _in-vehicle_ broker. The sending uEntity has uEntity type ID `3BA`.
 
 .Publishing an event on a topic
---
+====
 [cols="2,8"]
 |===
 |*Source URI*
@@ -218,10 +223,10 @@ The examples below show the MQTT 5 topic names to use for sending different type
 |*MQTT Topic Name*
 |`device1/3BA/1/3/9876`
 |===
---
+====
 
 .Sending a Notification to another uEntity
---
+====
 [cols="2,8"]
 |===
 |*Source URI*
@@ -233,10 +238,10 @@ The examples below show the MQTT 5 topic names to use for sending different type
 |*MQTT Topic Name*
 |`device1/3BA/1/3/8001/device1/AB/2/1/0`
 |===
---
+====
 
 .Sending an RPC Request to a service provider
---
+====
 [cols="2,8"]
 |===
 |*Source URI*
@@ -248,10 +253,10 @@ The examples below show the MQTT 5 topic names to use for sending different type
 |*MQTT Topic Name*
 |`device1/3BA/4/3/0/device1/AB/1/1/2`
 |===
---
+====
 
 .Sending an RPC Response to a service client
---
+====
 [cols="2,8"]
 |===
 |*Source URI*
@@ -263,12 +268,12 @@ The examples below show the MQTT 5 topic names to use for sending different type
 |*MQTT Topic Name*
 |`device1/3BA/1/3/67/device1/AB/1/1/0`
 |===
---
+====
 
-The examples below show the MQTT 5 topic filters to use for receiving different types of UMessages via an _in-vehicle_ broker. The receiving uEntity has uEntity type ID `AB`.
+NOTE: The examples below show the MQTT 5 topic filters to use for receiving different types of UMessages via an _in-vehicle_ broker. The receiving uEntity has uEntity type ID `AB`.
 
 .Subscribe to a specific topic
---
+====
 [cols="2,8"]
 |===
 |*Source Filter*
@@ -280,10 +285,10 @@ The examples below show the MQTT 5 topic filters to use for receiving different 
 |*MQTT Topic Filter*
 |`\+/3BA/+/3/9876`
 |===
---
+====
 
 .Receive Notifications from a particular instance of a specific uEntity
---
+====
 [cols="2,8"]
 |===
 |*Source Filter*
@@ -295,10 +300,10 @@ The examples below show the MQTT 5 topic filters to use for receiving different 
 |*MQTT Topic Filter*
 |`device1/3BA/5/4/+/device1/AB/1/1/0`
 |===
---
+====
 
 .Receive all RPC Requests for a specific method
---
+====
 [cols="2,8"]
 |===
 |*Source Filter*
@@ -310,10 +315,10 @@ The examples below show the MQTT 5 topic filters to use for receiving different 
 |*MQTT Topic Filter*
 |`\+/+/\+/+/+/device1/AB/1/1/12CD`
 |===
---
+====
 
 .Receive all RPC Responses
---
+====
 [cols="2,8"]
 |===
 |*Source Filter*
@@ -325,13 +330,13 @@ The examples below show the MQTT 5 topic filters to use for receiving different 
 |*MQTT Topic Filter*
 |`\+/+/\+/+/+/device1/AB/1/1/0`
 |===
---
+====
 
 === Device-2-Device Communication
 
 [.specitem,oft-sid="dsn~up-transport-mqtt5-d2d-topic-names~1",oft-needs="impl,utest",oft-tags="TransportLayerImpl"]
 --
-The topic name of an MQTT 5 PUBLISH packet containing a UMessage that is published to an _off-vehicle_ broker **MUST** consist of the following segments:
+The topic name of an MQTT 5 PUBLISH packet containing a UMessage that is published to an _off-vehicle_ broker **MUST** consist of the following segments (source: MQTT Version 5.0, edition of 7 March 2019, sections 3.3.2.1 Topic Name and 4.7.1.1 Topic level separator):
 
 `{source.authority}/{sink.authority}`
 --
@@ -340,13 +345,19 @@ Please refer to <<UUri Encoding Rules>> for details regarding the encoding of th
 
 ==== Examples
 
+.Sending any UMessage to a back end
+====
 The MQTT 5 topic name used by uEntities with authority name `vehicle1` for sending any type of UMessage to uEntities with authority name `backend` via an _off-vehicle_ broker is
 
 `vehicle1/backend`
+====
 
+.Receiving all UMessages in a back end
+====
 The MQTT 5 topic filter used by uEntities with authority name `backend` for receiving all types of UMessages from uEntities with arbitrary authority names via an _off-vehicle_ broker is
 
 `+/backend`
+====
 
 === UUri Encoding Rules
 
@@ -400,7 +411,7 @@ a| The segment *MUST* contain the (UTF8) string representation of the
 
 [.specitem,oft-sid="req~up-transport-mqtt5-session-config~1",oft-needs="impl,utest",oft-tags="TransportLayerImpl"]
 --
-Each transport implementing this specification *MUST* provide means to configure the values of the https://docs.oasis-open.org/mqtt/mqtt/v5.0/os/mqtt-v5.0-os.html#_Toc3901048[Session Expiry Interval] and https://docs.oasis-open.org/mqtt/mqtt/v5.0/os/mqtt-v5.0-os.html#_Toc3901039[Clean Start] properties of the MQTT CONNECT packet being used when establishing a connection to a broker.
+Each transport implementing this specification *MUST* provide means to configure the value of the https://docs.oasis-open.org/mqtt/mqtt/v5.0/os/mqtt-v5.0-os.html#_Toc3901048[Session Expiry Interval] property and the value of the https://docs.oasis-open.org/mqtt/mqtt/v5.0/os/mqtt-v5.0-os.html#_Toc3901039[Clean Start] flag of the MQTT CONNECT packet being used when establishing a connection to a broker (source: MQTT Version 5.0, edition of 7 March 2019, section 3.1.2.4 Clean Start and section 3.1.2.11.2 Session Expiry Interval).
 --
 
 [.specitem,oft-sid="req~up-transport-mqtt5-reconnection~1",oft-needs="impl,utest",oft-tags="TransportLayerImpl"]
@@ -408,8 +419,11 @@ Each transport implementing this specification *MUST* provide means to configure
 Each transport implementing this specification *MUST*
 
 * re-establish a lost connection to an MQTT broker using an exponential backoff strategy.
-* re-subscribe to all previously subscribed topics, if the broker indicates that https://docs.oasis-open.org/mqtt/mqtt/v5.0/os/mqtt-v5.0-os.html#_Toc3901078[no session is present] after successful reconnection.
+* re-subscribe to all previously subscribed topics, if the broker indicates that https://docs.oasis-open.org/mqtt/mqtt/v5.0/os/mqtt-v5.0-os.html#_Toc3901078[no session is present] after successful reconnection (source: MQTT Version 5.0, edition of 7 March 2019, section 3.2.2.1.1 Session Present).
+--
 
+.Backoff values for reconnecting to a broker
+====
 The following table provides some guidance for implementation:
 
 [cols="3,2,2,2,2,2"]
@@ -417,4 +431,4 @@ The following table provides some guidance for implementation:
 | Reconnect attempt | 1 | 2 | 3 | 4 | n > 4
 | Backoff (ms)      | `500` | `1000` | `2000` | `4000` | `10000`
 |===
---
+====

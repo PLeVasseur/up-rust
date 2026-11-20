@@ -3,7 +3,7 @@
 
 The key words "*MUST*", "*MUST NOT*", "*REQUIRED*", "*SHALL*", "*SHALL NOT*", "*SHOULD*", "*SHOULD NOT*", "*RECOMMENDED*", "*MAY*", and "*OPTIONAL*" in this document are to be interpreted as described in https://www.rfc-editor.org/info/bcp14[IETF BCP14 (RFC2119 & RFC8174)]
 
-Conventions, tags and status words: xref:../README.adoc[the safety area's README].
+Conventions and tags: xref:../README.adoc[the safety area's README].
 Scope and element boundary: xref:README.adoc[the SEooC's README].
 
 [[req-ssr-waiver-required]]
@@ -11,9 +11,9 @@ Scope and element boundary: xref:README.adoc[the SEooC's README].
 
 [.specitem,oft-sid="req~ssr-waiver-required~1",oft-title="Middleware heap needs a named waiver",oft-needs="impl,utest",oft-tags="SafetyUpRustCore"]
 --
-A transport with a route whose prepared heap class is allocation inside middleware *MUST* enter runtime mode only when a named waiver matches each permit its binding declares.
+The element *MUST NOT* let a transport with a route whose prepared heap class is allocation inside middleware enter runtime mode unless a named waiver matches each permit its binding declares.
 
-Otherwise the transition *MUST* be refused, naming the transport, the route and the permit.
+Otherwise the element *MUST* refuse the transition, naming the transport, the route and the permit.
 --
 
 [horizontal]
@@ -21,7 +21,6 @@ ID:: `+req~ssr-waiver-required~1+`
 ASIL:: B
 Allocated to:: the element
 Verification:: test (refused without the waiver, admitted with it)
-Status:: Draft
 
 *Rationale.*
 Allocation inside middleware is outside the element's control.
@@ -34,13 +33,15 @@ A refusal that names the transport, the route and the permit tells the deploymen
 
 [.specitem,oft-sid="req~ssr-waiver-scope~1",oft-title="A waiver covers middleware and nothing else",oft-needs="impl,utest",oft-tags="SafetyUpRustCore"]
 --
-A waiver *MUST* admit allocation inside middleware only, for the operations and the bound its permit names.
+The element *MUST NOT* let a waiver admit more than allocation inside middleware, for the operations and the bound its permit names.
 
-It *MUST NOT* admit:
+The element *MUST NOT* let a waiver admit:
 
-* allocation in SDK, binding or wire code;
+* allocation in element, binding or wire code;
 * a wire that declares allocation;
 * a panic.
+
+Allocation that a serialized route declares for its wire, its binding or its allocation provider (xref:../../sdk/owned-frame/providers.adoc#req-sdk-owned-frame-provider-selection[The selected memory provider is the only one used, and selecting it claims nothing] states what an allocation provider is) is admitted by that route's heap class (xref:heap.adoc#req-ssr-heap-declared[The heap class is declared, with no default]), and by no waiver; allocation inside middleware under a permit needs a waiver on every route, as <<req-ssr-waiver-required,Middleware heap needs a named waiver>> states.
 --
 
 [horizontal]
@@ -48,47 +49,53 @@ ID:: `+req~ssr-waiver-scope~1+`
 ASIL:: B
 Allocated to:: the element
 Verification:: test (a wire that declares allocation on a native route is refused even with a waiver), review
-Status:: Draft
 
 *Rationale.*
 The element can answer only for its own code.
 So a waiver covers only what middleware does inside itself, for the operations and the bound its permit states.
 
-A known anomaly in middleware, such as a panic it can reach, is a defect and is never filed as a waiver.
+A known anomaly or a known failure of middleware, such as a panic that it can reach, is outside what a permit names, so no waiver covers it (xref:assumptions-of-use.adoc#aou-seooc-waiver-approval[Waivers are approved with an interference argument]).
 
-Declared allocation on a serialized or owned route is admitted by that route's heap class (xref:heap.adoc#req-ssr-heap-declared[The heap class is declared, with no default]), not by a waiver.
-So a waiver cannot carry native work into allocation, and a serialized route's permission is never a waiver for anything else.
+A serialized route's heap class admits only the allocation that the route declares, and nothing that a native operation causes.
 
 [[req-ssr-waiver-record]]
 == Waivers are recorded and can be found
 
-[.specitem,oft-sid="req~ssr-waiver-record~1",oft-title="Waivers are recorded and can be found",oft-needs="impl,utest",oft-tags="SafetyUpRustCore"]
+[.specitem,oft-sid="req~ssr-waiver-record~3",oft-title="Waivers are recorded and can be found",oft-needs="impl,utest",oft-tags="SafetyUpRustCore"]
 --
-Each waiver *MUST*:
+The element *MUST* hold each waiver as a record compiled into the program, with a name and a scope, and for each waiver *MUST*:
 
-* be named and scoped;
-* be applied where it can be found in the code;
-* be recorded at the transition;
-* be readable in runtime mode without heap;
-* name an approver other than its author.
+* apply it only where it can be found in the code;
+* record it at the transition, and, where deployment data selects it and the transition admits it, report it there as active, with its name and its scope, in the element's startup report (xref:heap.adoc#req-ssr-heap-declared[The heap class is declared, with no default]);
+* keep it readable in runtime mode without heap;
+* refuse it by name at the transition, unless it names an approver other than its author.
 
-Deployment data can select a waiver compiled into the program by its id, but *MUST NOT* be able to create one.
+*The interference argument.*
+In the Enforce and Locked states, the element *MUST* refuse at the transition, by name, as a forbidden finding (xref:build.adoc#req-ssr-strict-states[Strict mode has four states]), a waiver that does not name its interference argument's kind and a reference.
+In the Report state, the element *MUST* record that as that finding and *MUST NOT* refuse the waiver for it (xref:assumptions-of-use.adoc#aou-seooc-waiver-approval[Waivers are approved with an interference argument]).
+
+*The compliance report.*
+What the compliance report lists of each active waiver is stated in xref:build.adoc#req-ssr-strict-report[Strict mode reports on every run].
+A report that lists a waiver records it; it is not the waiver's approval.
+
+*Deployment data.*
+The element *MUST NOT* let deployment data create a waiver: deployment data selects a waiver compiled into the program by its id, and nothing more.
 --
 
 [horizontal]
-ID:: `+req~ssr-waiver-record~1+`
+ID:: `+req~ssr-waiver-record~3+`
 ASIL:: B
 Allocated to:: the element
-Verification:: test (the runtime lists the waiver; a record that names its author as approver is refused), review (findable)
-Status:: Draft
+Verification:: test (the runtime lists the waiver; a record that names its author as approver is refused; in the Enforce and Locked states, a waiver that does not name its interference argument's kind and a reference is refused, and in the Report state it is admitted with a finding; the element's startup report lists each waiver that deployment data selects and the transition admits, as active, and does not report as active a selected waiver that the transition refuses, for its author named as approver and, in the Enforce and Locked states, for a missing interference argument, and a compiled-in waiver that deployment data does not select is recorded at the transition and not reported as active; deployment data that names an id that no compiled-in waiver has creates no waiver), review (findable)
 ISO 26262:: 9-7 (part-clause numbers only)
 
 *Rationale.*
 A binding ships a permit that states the use it needs, and a deployment files a waiver against it.
 So accepting the allocation is the deployment's recorded decision.
 
-The split follows MISRA Compliance:2020, which keeps a deviation permit, the accepted use case, apart from the deviation record of each use (https://misra.org.uk/app/uploads/2021/06/MISRA-Compliance-2020.pdf[MISRA Compliance:2020]).
-
-Keeping waivers compiled in and selected by id lets deployment data choose among approved waivers, but never write a new one.
+Keeping waivers compiled in and selected by id limits deployment data to a choice among approved waivers.
 
 An approver other than the author gives each waiver a second person's check.
+
+A waiver that names its interference argument's kind and a reference leads a reviewer to the argument that interference from its allocation is excluded.
+The element can check that the argument is named, but not that it holds.

@@ -15,11 +15,11 @@ SPDX-FileType: DOCUMENTATION
 SPDX-License-Identifier: Apache-2.0
 ----
 
-Core uProtocol services interfaces are defined using asyncapi, with pointers to supported message serialization formats. Core uProtocol services API request and response messages can be defined to support any desired serialization format. The current default format is protobuf.
+Core uProtocol services interfaces are defined using asyncapi, with pointers to supported message serialization formats. Core uProtocol services API request and response messages can be defined to support any desired serialization format. The default format is protobuf.
 
 ---
 
-NOTE: Not all core services are implemented using asyncapi specifications yet. Some services still use the legacy format, where protobuf is used to define the entire API surface.
+NOTE: Not all core services are implemented using asyncapi specifications. Some services use the legacy format, where protobuf is used to define the entire API surface.
 
 ---
 

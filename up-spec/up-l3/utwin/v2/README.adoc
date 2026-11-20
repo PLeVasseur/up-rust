@@ -1,5 +1,5 @@
 = Digital Twin (uTwin)
-%toc%
+:toc:
 :sectnums:
 
 The key words "*MUST*", "*MUST NOT*", "*REQUIRED*", "*SHALL*", "*SHALL NOT*", "*SHOULD*", "*SHOULD NOT*", "*RECOMMENDED*", "*MAY*", and "*OPTIONAL*" in this document are to be interpreted as described in https://www.rfc-editor.org/info/bcp14[IETF BCP14 (RFC2119 & RFC8174)]
@@ -20,13 +20,16 @@ SPDX-License-Identifier: Apache-2.0
 
 == Purpose
 
-In uProtocol, uEntities (might be abbreviated as *uE*, especially in diagrams) rely on other uEntities that expose services, named uServices. These uServices publish information, named events, on Topics, through the implementations of uProtocol. These events can be considered to represent updates to the uService _state._ The collection of last published event of each Topic of a uService therefore represents the current "public state" of the uService (public because some more internal states might exist without being exposed externally).
+NOTE: In uProtocol, uEntities (see xref:../../../terms.adoc[Definition of Terms]) rely on other uEntities that expose services, named uServices. These uServices publish information, named events, on Topics, through the implementations of uProtocol. These events can be considered to represent updates to the uService _state._ The collection of last published event of each Topic of a uService therefore represents the current "public state" of the uService (public because some more internal states might exist without being exposed externally).
 
 An event published on a uDevice is propagated to all other uDevices that have at least one uEntity subscribed to the corresponding Topic, but only to those devices, These events can therefore be stored on the received devices "for free", i.e. without requiring a dedicated transmission. Storing the last event received per-topic, on each uDevice, therefore enables access without re-transmission overhead/cost/latency for uEntities running on the same device devices that wish to retrieve the last state of a uService, i.e. the last event published on a Topic. Implementing such storage mechanism essentially implements a digital twin mechanism for uEntities in the sense that uEntity's last known states are stored in all uDevice that are subscribed to the uService, and accessible by local uEntity. <<utwin-overview>> figure below provides a visual description of the context.
 
 .uTwin
 [#utwin-overview]
 image::utwin.drawio.svg[uTwin]
+
+[NOTE]
+====
 
 A uEntity requiring information/state from a uService will therefore subscribe to Topics of interest created by that uService. Consequently, once a uEntity is _connected_ *and* _subscribed to uServices it requires_, it will receive any state update (of interest, i.e. to which it subscribed). The unresolved issue is to define a mechanism that enables a uEntity to receive the "last known state" (published while the uEntity was not connected) of the uServices it relies on. A uEntity _connects_ for the following reasons:
 
@@ -36,16 +39,22 @@ A uEntity requiring information/state from a uService will therefore subscribe t
 
 The mechanism aimed at providing "last known uService state" to uEntities requiring it is also known as digital twin. While  this mechanism is usually used for replication of a state in remote devices (e.g. IoT device state replicated in Cloud), in our context, we also need a similar mechanism to deliver such last known state to local uEntities. <<last-known-state-use-cases>> below illustrates the usefulness of the uTwin:
 
-.Example Last-Known-State Use Cases
-[width="100%",cols="30%,25%,24%,21%",options="header",]
+====
+
 [#last-known-state-use-cases]
+.Last-Known-State Use Cases
+====
+[width="100%",cols="30%,25%,24%,21%",options="header",]
 |===
 |*from \ to* |*Vehicle* |*Mobile* |*Cloud*
 |*Vehicle* |Yes |Yes |Yes
 |*Mobile* |Yes |No |Yes
 |*Cloud* |Yes |Yes |No
 |===
+====
 
+[NOTE]
+====
 Main justification for the need of digital twin are described below:
 
 * **Device-to-device Twin: **
@@ -53,10 +62,12 @@ Main justification for the need of digital twin are described below:
   ** To remain accessible even if connectivity is lost
 * **In-vehicle Twin: **
   ** To avoid re-sending (re-publishing) data when apps are launched/subscribed
+====
 
 This document suggests approaches to implement a digital twin concept for uProtocol.
 
-NOTE: The uTwin interface is link:../../../up-core-api/uprotocol/core/utwin/v2/utwin.proto[utwin.proto]
+[.specitem,oft-sid="req~utwin-interface~1",oft-needs="dsn,impl,utest",oft-tags="uTwin"]
+The uTwin interface is link:../../../up-core-api/uprotocol/core/utwin/v2/utwin.proto[utwin.proto]
 
 
 == Proposal
@@ -67,9 +78,15 @@ The solution consists in creating a software component, named uTwin, that embodi
 
 the uTwin stores the published message using a _primary key_ to enable local software components to retrieve it. This _primary key_ is the full name of the Topic, hence also including the device name. The fact that the _primary key_ represents a topics ensures that only the last event of a given Topic is stored in the uTwin. The collection of events stored in a uTwin instance of a device, whose keys include a specific device name (e.g. deviceA), represent the digital twin of that device (deviceA in our example).
 
-Examples of events for a vehicle may include tire pressure, window position, gear position but also vehicle mode (driving, parked), and in general any information that is published within the vehicle for the purpose of operating it and activating its features.
+.Events of a vehicle
+====
+Events for a vehicle may include tire pressure, window position, gear position but also vehicle mode (driving, parked), and in general any information that is published within the vehicle for the purpose of operating it and activating its features.
+====
 
-So, for example, if a cloud application MyApp subscribes to the tire pressure of a given vehicle (named vehA), then every time vehA publishes a new value for the tire pressure, the event will be delivered to the cloud and to MyApp. The uTwin instance running on the cloud will also receive this information and store it with the primary key including the vehicle name vehA and the topic name TirePressure, so that any other software subsequently wishing to access the tire pressure can simply request it from the cloud uTwin.
+.Tire pressure stored by the cloud uTwin
+====
+If a cloud application MyApp subscribes to the tire pressure of a given vehicle (named vehA), then every time vehA publishes a new value for the tire pressure, the event will be delivered to the cloud and to MyApp. The uTwin instance running on the cloud will also receive this information and store it with the primary key including the vehicle name vehA and the topic name TirePressure, so that any other software subsequently wishing to access the tire pressure can simply request it from the cloud uTwin.
+====
 
 <<utwin-sequence-diagram>> below illustrates the overall mechanism, with special focus on the following properties:
 
@@ -78,14 +95,19 @@ So, for example, if a cloud application MyApp subscribes to the tire pressure of
 * uTwin of each device received all events flowing through the device, therefore creating a local dig twin accessible by all apps local to this device
 * Only events that must be transferred due to existing subscribers are transmitted, and therefore stored in a remote device (therefore minimizing communication overhead related to utwin management)
 
-.uTwin Sequence Diagram
 [#utwin-sequence-diagram]
+.uTwin Sequence Diagram
+====
 image::utwin.png[uTwin Sequence Diagram]
+====
 
+[NOTE]
+====
 uTwin brings 2 novelties:
 
 * It fully automates the manual task of creating the data model of the digital twin
 * It dynamically adapts the content of the digital twin exactly to the data requested by the consumers, therefore optimizing data transmission and storage
+====
 
 It relies on 2 primary mechanisms (that themselves leverage properties of the communication framework):
 
@@ -143,9 +165,14 @@ NOTE: *MUST* store ingress (to the uBus) published events; egress are merge copi
 
 === Unitary Access
 
+[NOTE]
+====
 Access to a Topic is done with subscriptions. The intrinsic property of a subscription is that all events published, to said topic, will be received by the subscriber.
 
-In some cases, a uEntity might require one-time access to a Topic, that is, to receive only the last event published on a Topic, without receiving future events that will be published. uTwin can be used for this purpose. There are 4 possible cases in this scenario:
+In some cases, a uEntity might require one-time access to a Topic, that is, to receive only the last event published on a Topic, without receiving future events that will be published. uTwin can be used for this purpose.
+====
+
+There are 4 possible cases in this scenario:
 
 * *The requested Topic(s) is already subscribed by another uEntity running on the same device:*
   ** The last published message(s) has already been stored in the uTwin instance for the device, and as a result, can simply be returned when requested by `GetLastMessages()`

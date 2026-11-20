@@ -23,7 +23,7 @@ SPDX-License-Identifier: Apache-2.0
 
 == Overview
 
-uProtocol is a communication protocol that enables software applications (uEntities) to easily communicate with each other running in distributed systems. The protocol is designed to be lightweight, efficient, easy to use, and run on top of any other communication middleware (transport) such as SOME/IP, MQTT, zenoh, HTTP, etc...
+NOTE: uProtocol is a communication protocol that enables software applications (uEntities) to easily communicate with each other running in distributed systems. The protocol is designed to be lightweight, efficient, easy to use, and run on top of any other communication middleware (transport) such as SOME/IP, MQTT, zenoh, HTTP, etc...
 
 To achieve the above mentioned objectives, we have split the specifications into sections (folders) that are:
 
@@ -35,9 +35,11 @@ To achieve the above mentioned objectives, we have split the specifications into
 
 * xref:up-l3/README.adoc[*Application Layer (uP-L3):*] Service contracts for subscription management, service/device discovery, and event caching that is common across all deployments (implementations) of uProtocol.
 
-* xref:safety/README.adoc[*Proposed requirements of the redesigned up-rust stack:*] A draft proposal, published on a feature branch. It holds the proposed requirements of the redesigned up-rust SDK, its wires, its transports and its Streamer, laid out by the layers above: their ordinary functional contract, their resource and fault obligations, and their safety requirements and assumptions of use. They bind only the parts their tags name.
+* xref:safety/README.adoc[*Requirements of the up-rust SEooC:*] It holds the requirements of the up-rust SEooC and of the bindings, wires and Streamer that work with it, laid out by the layers above: their ordinary functional contract, their resource and fault obligations, and their safety requirements and assumptions of use. Whom its requirements and assumptions of use bind is stated in xref:safety/README.adoc#req-ssr-requirements-bind[A requirement binds the actors to which it gives a duty] and xref:safety/seooc-up-rust/assumptions-of-use.adoc#aou-seooc-assumptions-bind[An assumption of use binds the integrator who claims the scope, and replaces no requirement].
 
-* xref:contract-generations.adoc[*Contract generations:*] How that proposal relates to the chapters above, rule by rule: what it keeps, what it adds, where it differs on purpose, and which contract an implementation follows.
+* xref:sdk/owned-frame/README.adoc[*The owned-frame SDK contract:*] The ordinary obligations of an SDK that offers owned-frame routes, and of the parts that work with it, that no protocol chapter and no item of the safety area states, and how that contract relates to the classic APIs.
+
+* xref:contract-generations.adoc[*Which requirements an implementation follows:*] How those requirements relate to the chapters above.
 
 
 == How to get started?
@@ -50,9 +52,7 @@ If you would like to contribute to uProtocol to develop a new language library o
 
 == Tracing Requirements
 
-Implementers of the uProtocol specification are encouraged to use link:https://github.com/itsallcode/openfasttrace[OpenFastTrace] (OFT) for making sure that they actually cover all requirements from the specification that are relevant for the implemented component.
-
-The link:https://github.com/eclipse-uprotocol/ci-cd[uProtocol CI/CD repository] contains a reusable GitHub Action workflow for link:https://github.com/eclipse-uprotocol/ci-cd/.github/workflows/trace-requirements.yaml[tracing requirements] which can be used for that purpose. The link:https://github.com/eclipse-uprotocol/up-rust[uProtocol Rust Language Library] also makes use of this workflow in its link:https://github.com/eclipse-uprotocol/up-rust/.github/workflows/nightly.yaml[nightly build] and can serve as a blueprint.
+NOTE: Implementers of the uProtocol specification are encouraged to use link:https://github.com/itsallcode/openfasttrace[OpenFastTrace] (OFT) for making sure that they actually cover all requirements from the specification that are relevant for the implemented component.
 
 The uProtocol specification documents contain a lot of requirements that are defined as OFT specification items, which cover all aspects of uProtocol. In most cases, only of a subset of these requirements will be relevant/applicable for specific components. In order to make it easier for component developers to filter out these relevant requirements, the specification items that define more specific aspects of uProtocol have been _tagged_ with corresponding labels. When running OpenFastTrace to trace the requirements, these labels can be used to filter out the relevant specification items.
 
@@ -73,4 +73,4 @@ The uProtocol specification documents contain a lot of requirements that are def
 
 === Gherkin Feature Files
 
-Along with the specification itself, this repository contains Gherkin Features and Scenarios, defined in files with a `.feature` suffix, which can be used with test frameworks like https://cucumber.io/[Cucumber] to assert compliance of implementations with the uProtocol specification. Not all parts of the specification are covered (yet), but we intend to add Scenario descriptions so that more and more of the requirements defined in the specification will be covered over time.
+NOTE: Along with the specification itself, this repository contains Gherkin Features and Scenarios, defined in files with a `.feature` suffix, which can be used with test frameworks like https://cucumber.io/[Cucumber] to assert compliance of implementations with the parts of the uProtocol specification that the scenarios cover.

@@ -1,0 +1,49 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<svg xmlns="http://www.w3.org/2000/svg" version="1.1" width="990" height="122" viewBox="0 0 990 122" role="img" aria-labelledby="t d">
+<title id="t">Generic URI syntax</title>
+<desc id="d">Railroad diagram of the generic URI syntax of RFC 3986, section 3, drawn for the uProtocol specification: a scheme and a colon; optionally two slashes, then optionally user information and an at sign, a host, and optionally a colon and a port; a path; optionally a question mark and a query; optionally a number sign and a fragment.</desc>
+<style>
+.l { fill: none; stroke: #333333; stroke-width: 1.5; }
+.n { fill: #ffffff; stroke: #333333; stroke-width: 1.5; }
+.t { fill: #e8eef7; stroke: #333333; stroke-width: 1.5; }
+.nt { font-family: Helvetica, Arial, sans-serif; font-size: 14px; fill: #111111; text-anchor: middle; }
+.tt { font-family: "Courier New", Courier, monospace; font-size: 15px; font-weight: bold; fill: #111111; text-anchor: middle; }
+</style>
+<rect x="0" y="0" width="990" height="122" fill="#ffffff"/>
+<path d="M 16 40 L 974 40" class="l"/>
+<path d="M 8 30 L 8 50" class="l"/>
+<path d="M 14 30 L 14 50" class="l"/>
+<path d="M 974 30 L 974 50" class="l"/>
+<path d="M 980 30 L 980 50" class="l"/>
+<path d="M 160 40 Q 170 40 170 50 L 170 96 Q 170 106 180 106 L 564 106 Q 574 106 574 96 L 574 50 Q 574 40 584 40" class="l"/>
+<path d="M 224 40 Q 234 40 234 50 L 234 70 Q 234 80 244 80 L 354 80 Q 364 80 364 70 L 364 50 Q 364 40 374 40" class="l"/>
+<path d="M 458 40 Q 468 40 468 50 L 468 70 Q 468 80 478 80 L 552 80 Q 562 80 562 70 L 562 50 Q 562 40 572 40" class="l"/>
+<path d="M 670 40 Q 680 40 680 50 L 680 70 Q 680 80 690 80 L 776 80 Q 786 80 786 70 L 786 50 Q 786 40 796 40" class="l"/>
+<path d="M 810 40 Q 820 40 820 50 L 820 70 Q 820 80 830 80 L 940 80 Q 950 80 950 70 L 950 50 Q 950 40 960 40" class="l"/>
+<rect x="28" y="26" width="76" height="28" rx="3" class="n"/>
+<text x="66" y="45" class="nt">scheme</text>
+<rect x="118" y="26" width="28" height="28" rx="14" class="t"/>
+<text x="132" y="45" class="tt">:</text>
+<rect x="178" y="26" width="34" height="28" rx="14" class="t"/>
+<text x="195" y="45" class="tt">//</text>
+<rect x="240" y="26" width="80" height="28" rx="3" class="n"/>
+<text x="280" y="45" class="nt">userinfo</text>
+<rect x="332" y="26" width="28" height="28" rx="14" class="t"/>
+<text x="346" y="45" class="tt">@</text>
+<rect x="388" y="26" width="56" height="28" rx="3" class="n"/>
+<text x="416" y="45" class="nt">host</text>
+<rect x="472" y="26" width="28" height="28" rx="14" class="t"/>
+<text x="486" y="45" class="tt">:</text>
+<rect x="508" y="26" width="50" height="28" rx="3" class="n"/>
+<text x="533" y="45" class="nt">port</text>
+<rect x="600" y="26" width="56" height="28" rx="3" class="n"/>
+<text x="628" y="45" class="nt">path</text>
+<rect x="684" y="26" width="28" height="28" rx="14" class="t"/>
+<text x="698" y="45" class="tt">?</text>
+<rect x="724" y="26" width="58" height="28" rx="3" class="n"/>
+<text x="753" y="45" class="nt">query</text>
+<rect x="824" y="26" width="28" height="28" rx="14" class="t"/>
+<text x="838" y="45" class="tt">#</text>
+<rect x="864" y="26" width="82" height="28" rx="3" class="n"/>
+<text x="905" y="45" class="nt">fragment</text>
+</svg>

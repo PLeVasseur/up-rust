@@ -20,16 +20,15 @@ SPDX-License-Identifier: Apache-2.0
 
 == Overview 
 
-uProtocol entities communicate with each other by means of exchanging `UMessages`. A uEntity can for example publish an event to a topic or invoke a remote service provider's operations using a UMessage. Please refer to the xref:../up-l2/README.adoc[uProtocol Communication Layer API] for details.
+NOTE: uProtocol entities communicate with each other by means of exchanging `UMessages`. A uEntity can for example publish an event to a topic or invoke a remote service provider's operations using a UMessage. Please refer to the xref:../up-l2/README.adoc[uProtocol Communication Layer API] for details.
 
 [#data-model-definition]
 == Data Model
 
-A UMessage consists of xref:uattributes.adoc[UAttributes] holding the message's meta data and (optional) payload as shown in the class diagram below (using UML2 notation).
+NOTE: A UMessage consists of xref:uattributes.adoc[UAttributes] holding the message's meta data and (optional) payload as shown in the class diagram below.
 
-Payload presence is determined by whether the optional `payload` field is
-explicitly set, not by the number of bytes it contains. An explicitly set
-zero-length byte sequence is therefore a present payload.
+What makes a payload present is stated with the `payloadEncodingId` attribute in
+xref:uattributes.adoc#common-attributes[Common Message Attributes].
 
 .UMessage Data Model
 [#umessage-data-model]

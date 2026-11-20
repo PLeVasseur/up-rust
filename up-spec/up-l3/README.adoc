@@ -18,9 +18,12 @@ SPDX-FileType: DOCUMENTATION
 SPDX-License-Identifier: Apache-2.0
 ----
 
+[NOTE]
+====
 Application layer, also known as the business logic layer, is responsible for declaration interfaces between clients and servers for features and functions, the API layer that defines the methods and topics served by a service.
 
 In this specification we will also define core uProtocol business logic (APIs) such as  subscription management, discovery, and digital twin. These interfaces are _declared once, used everywhere_ so that the mental model for developers is consistent across different heterogeneous systems.
+====
 
 == Architecture Patterns
 

@@ -3,29 +3,33 @@
 
 The key words "*MUST*", "*MUST NOT*", "*REQUIRED*", "*SHALL*", "*SHALL NOT*", "*SHOULD*", "*SHOULD NOT*", "*RECOMMENDED*", "*MAY*", and "*OPTIONAL*" in this document are to be interpreted as described in https://www.rfc-editor.org/info/bcp14[IETF BCP14 (RFC2119 & RFC8174)]
 
-Conventions, tags and status words: xref:../README.adoc[the safety area's README].
+Conventions and tags: xref:../README.adoc[the safety area's README].
 Scope and element boundary: xref:README.adoc[the SEooC's README].
 
-The exact addresses that an ASIL Streamer route names are a forwarding rule, filed with the Streamer: xref:../up-l2/streamer.adoc#req-ssr-config-exact-addresses[ASIL Streamer routes name exact source addresses] in xref:../up-l2/streamer.adoc[the Streamer's page].
+The rule on the exact addresses that an ASIL Streamer route names is stated in xref:../up-l2/streamer.adoc#req-ssr-config-exact-addresses[ASIL Streamer routes name exact source addresses] in xref:../up-l2/streamer.adoc[the Streamer's page].
 
 [[req-ssr-config-validated]]
 == Deployment data is validated in full
 
-[.specitem,oft-sid="req~ssr-config-validated~1",oft-title="Deployment data is validated in full",oft-needs="impl,utest",oft-tags="SafetyUpRustCore"]
+[.specitem,oft-sid="req~ssr-config-validated~3",oft-title="Deployment data is validated in full",oft-needs="impl,utest,uman",oft-tags="SafetyUpRustCore"]
 --
-Deployment data applied at startup *MUST* be validated completely during initialization: every value against its admissible range, and every dependency between values.
+*Deployment data.*
+Deployment data is the set of values that the integrator produces for a deployment, apart from the program, and that the element, the Streamer or the Streamer binary applies at startup (xref:assumptions-of-use.adoc#aou-seooc-deployment-data[Deployment data is in range, verified and protected] lists what the integrator provides in it).
 
-Anything invalid, unknown, missing where required or inconsistent *MUST* be refused with an error naming the field.
+The element *MUST* validate completely, during initialization, the deployment data that it applies at startup: every value against its admissible range, and every dependency between values.
 
-A value *MUST NOT* be coerced, silently defaulted or skipped.
+The element *MUST* publish the admissible ranges of its deployment data.
+
+The element *MUST* refuse anything in that data that is invalid, unknown, missing where required or inconsistent, with an error naming the field.
+
+The element *MUST NOT* coerce, silently default or skip a value of that data.
 --
 
 [horizontal]
-ID:: `+req~ssr-config-validated~1+`
+ID:: `+req~ssr-config-validated~3+`
 ASIL:: B
 Allocated to:: the element
-Verification:: test (a negative configuration suite, run on both construction paths)
-Status:: Draft
+Verification:: test (a negative configuration suite of deployment data), review (the published ranges, against the ranges that validation uses)
 ISO 26262:: 6-C.4.6 (part-clause numbers only)
 
 *Rationale.*
@@ -33,20 +37,22 @@ A value that is coerced, defaulted or skipped without an error runs the deployme
 
 Refusing during initialization, by field, keeps every such mistake out of runtime mode, where setup can no longer change anything (xref:runtime-modes.adoc#req-ssr-mode-no-setup-at-runtime[Setup is impossible in runtime mode]).
 
+Publishing the ranges lets the integrator produce the deployment data within them (xref:assumptions-of-use.adoc#aou-seooc-deployment-data[Deployment data is in range, verified and protected]), instead of finding a value out of range only when setup refuses it.
+
 [[req-ssr-config-one-path]]
 == Direct construction and deployment data are one path
 
-[.specitem,oft-sid="req~ssr-config-one-path~1",oft-title="Direct construction and deployment data are one path",oft-needs="impl,utest",oft-tags="SafetyUpRustCore"]
+[.specitem,oft-sid="req~ssr-config-one-path~2",oft-title="Direct construction and deployment data are one path",oft-needs="impl,utest",oft-tags="SafetyUpRustCore"]
 --
-Building the element directly in code and building it from deployment data *MUST* give the same types and pass the same checks, because validation happens in the element's setup and not only in a loader.
+The element's setup *MUST* run every validation of a configuration, whether the element is built directly in code or from deployment data.
+Built either way, the element *MUST* give the same types and pass the same checks.
 --
 
 [horizontal]
-ID:: `+req~ssr-config-one-path~1+`
+ID:: `+req~ssr-config-one-path~2+`
 ASIL:: B
 Allocated to:: the element
-Verification:: test (the same refusals on both paths)
-Status:: Draft
+Verification:: test (the same refusals on both paths), review (every validation of a configuration run in the element's setup, on both paths)
 
 *Rationale.*
 Checks that lived only in a loader would leave a program built in code unchecked, and two sets of checks could drift apart.
@@ -56,23 +62,23 @@ Both paths build the same non-generic transport types (xref:runtime-modes.adoc#r
 [[req-ssr-config-no-code]]
 == Deployment data carries no code
 
-[.specitem,oft-sid="req~ssr-config-no-code~1",oft-title="Deployment data carries no code",oft-needs="uman",oft-tags="SafetyUpRustCore"]
+[.specitem,oft-sid="req~ssr-config-no-code~2",oft-title="Deployment data carries no code",oft-needs="uman",oft-tags="SafetyUpRustCore"]
 --
-Deployment data *MUST* hold values only.
+The element *MUST* admit values only in its own schema for deployment data, and *MUST NOT* admit there a script, an expression or anything else that is executed or interpreted.
+What the Streamer admits in its schema for its deployment data is stated in xref:../up-l2/streamer.adoc#req-ssr-streamer-config-validated[The Streamer validates its deployment data in full].
 
-It *MUST NOT* be able to carry scripts, expressions or anything else that is executed or interpreted, and it selects compiled-in waivers by id and nothing more.
+What deployment data can do with a waiver is stated in xref:waivers.adoc#req-ssr-waiver-record[Waivers are recorded and can be found].
 --
 
 [horizontal]
-ID:: `+req~ssr-config-no-code~1+`
+ID:: `+req~ssr-config-no-code~2+`
 ASIL:: B
-Allocated to:: the element
-Verification:: review (of the schema)
-Status:: Draft
+Allocated to:: the element, for its own schema
+Verification:: review (of the element's schema)
 ISO 26262:: 1-3.15 (part-clause numbers only)
 
 *Rationale.*
-Values can be checked against their ranges before start (<<req-ssr-config-validated,Deployment data is validated in full>>), while code carried in data would run outside the program that was verified.
+Values can be checked against their ranges before start (<<req-ssr-config-validated,Deployment data is validated in full>>; xref:../up-l2/streamer.adoc#req-ssr-streamer-config-validated[The Streamer validates its deployment data in full]), while code carried in data would run outside the program that was verified.
 
 Waivers stay compiled into the program, so deployment data can only choose among them by id (xref:waivers.adoc#req-ssr-waiver-record[Waivers are recorded and can be found]).
 
@@ -81,13 +87,13 @@ Waivers stay compiled into the program, so deployment data can only choose among
 
 [.specitem,oft-sid="req~ssr-config-resource-ranges~1",oft-title="Resource IDs are checked at setup",oft-needs="impl,utest",oft-tags="SafetyUpRustCore"]
 --
-Every role's resource ID *MUST* be checked against up-spec's ranges when the role is built:
+The element *MUST* check every role's resource ID against the ranges that the protocol's message attributes fix, when the role is built:
 
 * `+0x8000+` to `+0xFFFE+` for a publish topic and a notification origin;
 * `+0x0001+` to `+0x7FFF+` for a method;
 * `+0+` for a notification destination and a reply-to.
 
-An ID outside its range *MUST* be refused, naming the route and the range.
+The element *MUST* refuse an ID outside its range, naming the route and the range.
 --
 
 [horizontal]
@@ -95,9 +101,8 @@ ID:: `+req~ssr-config-resource-ranges~1+`
 ASIL:: B
 Allocated to:: the element
 Verification:: test (each boundary value, on each role)
-Status:: Draft
 
 *Rationale.*
-up-spec fixes these ranges in its message attributes (`+dsn~up-attributes-publish-source~2+`, `+dsn~up-attributes-notification-source~2+`, `+dsn~up-attributes-notification-sink~2+`, `+dsn~up-attributes-request-sink~2+`, `+dsn~up-attributes-request-source~2+`).
+The protocol fixes these ranges in its message attributes (`+dsn~up-attributes-publish-source~2+`, `+dsn~up-attributes-notification-source~2+`, `+dsn~up-attributes-notification-sink~2+`, `+dsn~up-attributes-request-sink~2+`, `+dsn~up-attributes-request-source~2+`).
 
 Checking them when the role is built finds a wrong ID in deployment data at setup, instead of in a peer's refusal of the first message.

@@ -3,7 +3,7 @@
 :sectnums:
 :source-highlighter: highlight.js
 :client-proto-ref: link:../../../up-core-api/uprotocol/core/udiscovery/v3/udiscovery.proto[udiscovery.proto]
-:replicator-proto-ref: link:../../../up-core-api/uprotocol/core/udiscovery/v3/udiscovery.proto[udiscovery_replicator.proto]
+:replicator-proto-ref: link:../../../up-core-api/uprotocol/core/udiscovery/v3/udiscovery_replicator.proto[udiscovery_replicator.proto]
 
 
 The key words "*MUST*", "*MUST NOT*", "*REQUIRED*", "*SHALL*", "*SHALL NOT*", "*SHOULD*", "*SHOULD NOT*", "*RECOMMENDED*", "*MAY*", and "*OPTIONAL*" in this document are to be interpreted as described in https://www.rfc-editor.org/info/bcp14[IETF BCP14 (RFC2119 & RFC8174)]
@@ -24,7 +24,7 @@ SPDX-License-Identifier: Apache-2.0
 
 == Overview
 
-UDiscovery provides the means for uEntities (might be abbreviated as *uE*, especially in diagrams) to discover local and remote service instances and their metadata. The uDiscovery design takes inspiration from Domain Name System (DNS) principles in that uDiscovery instances are also organized in a tree structure and information is replicated and cached along the branches of the tree. Each uDiscovery instance first tries to respond to queries from its local data but can also delegate the query to its parent node if requested by the client. In a typical deployment, the tree has (at least) three levels. Each device in a vehicle has its own uDiscovery service instance. These represent the leaf nodes of the tree. Each vehicle also has a _domain_ level uDiscovery service instance. These form the middle-level nodes of the tree. Finally, a central uDiscovery service instance, usually running in a back end, sits at the root of the tree.
+UDiscovery provides the means for uEntities (see xref:../../../terms.adoc[Definition of Terms]) to discover local and remote service instances and their metadata. The uDiscovery design takes inspiration from Domain Name System (DNS) principles in that uDiscovery instances are also organized in a tree structure and information is replicated and cached along the branches of the tree. In a typical deployment, the tree has (at least) three levels. Each device in a vehicle has its own uDiscovery service instance. These represent the leaf nodes of the tree. Each vehicle also has a _domain_ level uDiscovery service instance. These form the middle-level nodes of the tree. Finally, a central uDiscovery service instance, usually running in a back end, sits at the root of the tree.
 
 UDiscovery Service implements two sets of APIs:
 
@@ -53,7 +53,7 @@ In the following section we will elaborate on the requirements for implementing 
 
 === FindServices()
 
-A client uEntity invokes `FindServices()` to get meta data (authority, version, instance ID) of (deployed) service instances of a given type.```
+NOTE: A client uEntity invokes `FindServices()` to get meta data (authority, version, instance ID) of (deployed) service instances of a given type.
 
 [.specitem,oft-sid="dsn~discovery-findservices-error-invalid~1",oft-needs="impl,test"]
 --
@@ -74,7 +74,7 @@ A client uEntity invokes `FindServices()` to get meta data (authority, version, 
 
 === GetServiceTopics()
 
-`GetServiceTopics()` is used to fetch metadata about one or more topics based on the passed `UUri`. Clients call this API to get additional information about the topic(s) such as the message format, id, permission level, etc.
+NOTE: `GetServiceTopics()` is used to fetch metadata about one or more topics based on the passed `UUri`. Clients call this API to get additional information about the topic(s) such as the message format, id, permission level, etc.
 
 [.specitem,oft-sid="dsn~discovery-getservicetopics-error-invalid~1",oft-needs="impl,test"]
 --
@@ -101,8 +101,9 @@ Recursive lookups happen when the client sets the following information in the r
 --
 
 If the `recursive` flag of a `FindServicesRequest` or `GetServiceTopicsRequest` is set to `true`:
-[.specitem,oft-sid="dsn~discovery-recursive-central~1",oft-needs="impl,test"]
+[.specitem,oft-sid="dsn~discovery-recursive-central~2",oft-needs="impl,test"]
 --
+* *MUST* first try to respond to the query from its local data.
 * *MUST* search recursively along the branch within the uDiscovery service instance hierarchy up to and including the root node of the tree.
 --
 
@@ -119,8 +120,9 @@ UDiscovery services perform a recursive search when the local or domain instance
 --
 
 
-.Recursive Search to Central
 [#recursive-search-central]
+.Recursive Search to Central
+====
 [mermaid]
 ifdef::env-github[[source,mermaid]]
 ----
@@ -133,16 +135,19 @@ Central-UDiscovery -->> Domain-UDiscovery: FindServicesResponse
 Domain-UDiscovery -->> Local-UDiscovery: FindServicesResponse
 Local-UDiscovery -->> Client: FindServicesResponse
 ----
+====
 
 
 == Replication API
 
 
 === SetServiceTopics()
-The `SetServiceTopics()` API is used by uDiscovery service instances to add, update or remove information along branches in the uDiscovery instance tree. The `SetServiceTopicsRequest` message contains a list of `UServiceTopicInfo` and corresponding `ttl` for when the info will expire. The `SetServiceTopicsResponse` message indicates the outcome of the operation. 
+The `SetServiceTopics()` API is used by uDiscovery service instances to add, update or remove information along branches in the uDiscovery instance tree.
+
+NOTE: The `SetServiceTopicsRequest` message contains a list of `UServiceTopicInfo` and corresponding `ttl` for when the info will expire. The `SetServiceTopicsResponse` message indicates the outcome of the operation. 
 
 
-* link:../languages.adoc[uProtocol Language Libraries] *MUST NOT* implement the client-side of {replicator-proto-ref} API as these APIs are only used internally by uDiscovery business logic.
+* link:../../../languages.adoc[uProtocol Language Libraries] *MUST NOT* implement the client-side of {replicator-proto-ref} API as these APIs are only used internally by uDiscovery business logic.
 
 To replicate new or updated `UServiceTopic` metadata:
 [.specitem,oft-sid="dsn~discovery-setservicetopic-update~1",oft-needs="impl,test"]
@@ -174,6 +179,8 @@ To replicate removal of `UServiceTopic` metadata:
 * *MUST* return `UCode.NotFound` if no topic matching the URI was found when the `UServiceTopic` is being removed (i.e. `ttl=0`).
 --
 
+.Replication started by a trusted OTA uEntity
+====
 <<udiscovery-replication-design>> below illustrates how data is replicated using a trusted OTA (_over-the-air_) uEntity that is responsible for installing or removing applications for said device. 
 
 .Replication API Design
@@ -192,6 +199,7 @@ Domain-UDiscovery -->> Local-UDiscovery: SetServiceTopicsResponse
 Domain-UDiscovery ->> Central-UDiscovery: SetServiceTopics()
 Central-UDiscovery -->> Domain-UDiscovery: SetServiceTopicsResponse
 ----
+====
 
 
 == Implementation Consideration
@@ -200,7 +208,7 @@ It is possible the information in domain or central instances might become out o
 
 [.specitem,oft-sid="dsn~discovery-data-reconciliation-child~1",oft-needs="impl,test"]
 --
-* Child nodes *MUST* re-sync with their parent node when there is a change (ex. reset, add/remove of information, etc...), this ensures reconciliation only happens in one direction, from the child to the parent.
+* Child nodes *MUST* re-sync with their parent node when there is a change (reset, add/remove of information, etc...), this ensures reconciliation only happens in one direction, from the child to the parent.
 --
 
 [.specitem,oft-sid="dsn~discovery-data-reconciliation-frequency~1",oft-needs="impl,test"]
@@ -219,6 +227,8 @@ It is possible the information in domain or central instances might become out o
 If the reconciliation fails, the service *MUST* log the error and continue to use the current cached data.
 --
 
+.A domain instance reconciling with a local instance
+====
 <<udiscovery-reconciliation>> below provides an example of the domain instance reconciling with local instance and then propagating the change to the central instance. In the example the reconciliation (determining if the data is out of sync or not) happens in the `ReconcileData()` function.
 
 .Reconciliation Example
@@ -239,5 +249,6 @@ Domain-UDiscovery ->> Domain-UDiscovery: ReconcileData()
 Domain-UDiscovery ->> Central-UDiscovery: SetServiceTopics()
 Central-UDiscovery -->> Domain-UDiscovery: SetServiceTopicsResponse
 ----
+====
 
 

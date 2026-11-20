@@ -21,29 +21,38 @@ SPDX-License-Identifier: Apache-2.0
 
 == Overview 
 
-uProtocol uses https://datatracker.ietf.org/doc/html/rfc3986[Uniform Resource Identifiers] (URI) to uniquely identify (and/or address) resources such as devices,
-software components, topics, methods, etc on a computer network. https://datatracker.ietf.org/doc/html/rfc3986[RFC3986] defines the structure of a URI as follows:
+NOTE: uProtocol uses https://datatracker.ietf.org/doc/html/rfc3986[Uniform Resource Identifiers] (URI) to uniquely identify (and/or address) resources such as devices,
+software components, topics, methods, etc on a computer network.
 
-.URI
-image::rfc3986.png[RFC3986 URI]
+https://datatracker.ietf.org/doc/html/rfc3986#section-3[RFC3986, Section 3] defines the structure of a URI as follows:
+
+.Illustration of the generic URI syntax of RFC3986, Section 3
+image::uri-syntax.svg["Syntax diagram of a URI: a scheme and a colon; optionally two slashes, then optionally user information and an at sign, a host, and optionally a colon and a port; a path; optionally a question mark and a query; optionally a number sign and a fragment", align="center"]
 
 Using this terminology, a uProtocol URI (UUri) can be structured like this:
 
-.UUri Specification
+.How the properties of a UUri map to the parts of a URI
 [#uuri-specification]
-image::uri.drawio.svg["uProtocol Uri Specification", align="center"]
+====
+image::uri.drawio.svg["A UUri as a URI: the scheme up, the authority_name as the authority, and the ue_type_id, ue_instance_id, ue_version_major and resource_id as the four segments of the path", align="center"]
 
+The rules of this mapping are stated in <<uri-definition>>.
+====
+
+[NOTE]
+====
 A UUri can be represented as:
 
 * An instantiation of the <<data-model-definition>> in a supported programming language
 * A URI string as defined by <<uri-definition>>
+====
 
 In the remainder of this document, the term _UUri_ is used to refer to an instantiation of the data model, whereas the term _URI_ is used to refer to its textual representation.
 
 [#data-model-definition]
 == Data Model
 
-The diagram below shows a UUri and its properties using UML2 notation.
+The class diagram below shows a UUri and its properties.
 
 .UUri Data Model
 [#uuri-data-model]
@@ -91,7 +100,8 @@ inv: authority_name.length() <= 128
 
 === uEntity
 
-A uProtocol software entity (uEntity) is a piece of software deployed somewhere on a network host.
+NOTE: A uProtocol software entity (uEntity) is a piece of software deployed somewhere on a network host.
+
 uEntities are uniquely identified within a system by means of the type and version of the service interface that they implement and an instance identifier in case multiple instances of the same service are deployed in the system.
 
 NOTE: uEntities which produce events for consumption by other uEntities assume a _Service_ role. +
@@ -115,7 +125,7 @@ inv: ue_instance_id >= 0x0001 and ue_instance_id <= 0xFFFF
 
 === Resource
 
-A service interface consists of _resources_ and _methods_. A resource usually represents the state of a property of the service (instance) while methods are used to manage the state of a service (instance).
+NOTE: A service interface consists of _resources_ and _methods_. A resource usually represents the state of a property of the service (instance) while methods are used to manage the state of a service (instance).
 
 Resources and methods are uniquely identified within a service interface by means of their numeric identifier.
 
@@ -131,7 +141,7 @@ It is often helpful to represent UUris in a textual format, for example when ser
 
 The URIs mapped from UUris use the syntax defined in https://datatracker.ietf.org/doc/html/rfc3986#appendix-A[RFC3986, Appendix A] with a few modifications:
 
-NOTE: The ABNF fragments below only contain the rules that differ from the original definitions in RFC3986.
+NOTE: The ABNF fragments below, written in the notation of https://www.rfc-editor.org/rfc/rfc5234[RFC5234], only contain the rules that differ from the original definitions in RFC3986.
 
 [.specitem,oft-sid="dsn~uri-scheme~1",oft-needs="impl,utest"]
 --
@@ -174,11 +184,13 @@ The `ue_version_major` *MUST* be mapped to the _third_ path segment containing t
 
 The `resource_id` *MUST* be mapped to the _fourth_ path segment containing the _upper-case_ link:https://www.rfc-editor.org/rfc/rfc4648#section-8[base16 encoding] of its property value.
 
-Leading zeros (`0`) *SHOULD* be omitted in order to reduce the length of the URI. When creating a UUri from a URI, lower-case base16 encoded values *MUST* be accepted as well in order to improve interoperability. Note that this does not conflict with the rules defined in <<Pattern Matching>>.
+Leading zeros (`0`) *SHOULD* be omitted in order to reduce the length of the URI. When creating a UUri from a URI, lower-case base16 encoded values *MUST* be accepted as well in order to improve interoperability.
 --
 
 === Examples
 
+.Two UUris and the URIs they map to
+====
 The examples below can be used as test vectors for implementing client libraries.
 
 [%autowidth]
@@ -199,16 +211,19 @@ The examples below can be used as test vectors for implementing client libraries
 | `0x8000`
 | `up://192.168.1.10/B10/10A2/1A/8000`
 |===
+====
 
 
 == Serialization
 
 [.specitem,oft-sid="req~uri-serialization~1",oft-needs="impl,utest"]
 --
-Each link:../languages.adoc[uProtocol Language Library] *MUST* provide means to serialize UUris to the <<_mapping_to_uri, URI format>> and vice versa. A concrete implementation should follow common practices for the particular programming language.
+Each link:../languages.adoc[uProtocol Language Library] *MUST* provide means to serialize UUris to the <<uri-definition, URI format>> and vice versa. A concrete implementation should follow common practices for the particular programming language.
 --
 
-For example, a Java library might implement a `UriSerializer` class providing corresponding _static_ methods.
+.UUri serialization in Java and Rust libraries
+====
+A Java library might implement a `UriSerializer` class providing corresponding _static_ methods.
 
 [source,java]
 ----
@@ -285,6 +300,7 @@ impl UUri {
   }
 }
 ----
+====
 
 [#pattern-matching]
 == Pattern Matching
@@ -347,11 +363,10 @@ Each link:../languages.adoc[uProtocol Language Library] *MUST* provide means to 
 
 === Examples
 
-==== Matching on Authority
-
+.Matching on Authority
+====
 The following pattern UUri
 
-[example]
 ----
 UUri {
   authority_name: "192.168.1.100",
@@ -364,7 +379,6 @@ UUri {
 
 will match the following URIs:
 
-[example]
 ----
 //192.168.1.100/0/1/3/8000
 //192.168.1.100/1/2B/3/8
@@ -372,17 +386,17 @@ will match the following URIs:
 ----
 
 But not these:
-[example]
+
 ----
 //192.168.1.200/0/1/3/8000  // wrong authority
 /1/2B/3/8                   // no authority
 ----
+====
 
-==== Matching on Entity Type
-
+.Matching on Entity Type
+====
 The following pattern UUri
 
-[example]
 ----
 UUri {
   authority_name: "*",       // any
@@ -395,24 +409,23 @@ UUri {
 
 will match the following URIs:
 
-[example]
 ----
 //other-vcu.my-vehicle/A00/AB/3/8000
 /A00/1/3/2
 ----
 
 But not these:
-[example]
+
 ----
 //vcu.other.device/1/AB/3/8000  // wrong type ID (0x0001)
 /A10/2345/3/2                   // wrong type ID (0x0A10)
 ----
+====
 
-==== Matching on Entity Instance
-
+.Matching on Entity Instance
+====
 The following pattern UUri
 
-[example]
 ----
 UUri {
   authority_name: "*",       // any
@@ -425,24 +438,23 @@ UUri {
 
 will match the following URIs:
 
-[example]
 ----
 //other-vcu.my-vehicle/A00/10/3/8000
 /A00/10/3/2
 ----
 
 But not these:
-[example]
+
 ----
 //vcu.other.device/1/10/3/8000  // wrong type ID (0x0001)
 /A10/10/3/2                       // wrong type ID (0x0A10)
 ----
+====
 
-==== Matching on Resource
-
+.Matching on Resource
+====
 The following pattern UUri
 
-[example]
 ----
 UUri {
   authority_name: "",        // local
@@ -454,15 +466,16 @@ UUri {
 ----
 
 will match the following URIs:
-[example]
+
 ----
 /0/1/3/1
 /0/1/2/1
 ----
 
 But not these:
-[example]
+
 ----
 //vcu.other.device/0/1/3/1     // non-local authority
 /0/1/2/3                       // wrong resource
 ----
+====

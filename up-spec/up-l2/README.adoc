@@ -19,7 +19,7 @@ SPDX-License-Identifier: Apache-2.0
 
 == Overview
 
-The uProtocol Communication Layer (uP-L2) defines the message patterns (pub/sub, notification, and RPC) and APIs used by uEntities (applications & services), as well as the routing and dispatching rules for transferring messages across distributed heterogeneous systems. 
+NOTE: The uProtocol Communication Layer (uP-L2) defines the message patterns (pub/sub, notification, and RPC) and APIs used by uEntities, such as applications and services, as well as the routing and dispatching rules for transferring messages across distributed heterogeneous systems. 
 
 .uP-L2 Sections
 [cols="1,4"]
@@ -27,9 +27,9 @@ The uProtocol Communication Layer (uP-L2) defines the message patterns (pub/sub,
 |Section | Description
 
 | xref:api.adoc[*APIs*]
-|  Communication Layer API that allows uEntity developers (applications and/or services) to employ the pub/sub, notification and RPC messaging patterns.
+|  Communication Layer API that allows developers of uEntities, such as applications and services, to employ the pub/sub, notification and RPC messaging patterns.
 
 | xref:dispatchers/README.adoc[*Dispatchers*]
-| Dedicated components that are responsible for dispatching/forwarding messages between uprotocol Entities and Devices.
+| The dispatcher uEntities defined in xref:dispatchers/README.adoc#dispatcher-types[Types of Dispatchers].
 
 |===

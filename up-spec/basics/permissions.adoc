@@ -116,7 +116,10 @@ The entities enforcing the permissions (uBus, uSub and uTwin) will allow access 
 
 The client’s claimed level is equal or less than that of the uPA;
 For uPAs of levels equal or less than explicit claim threshold, URI of that uPA is present in the array referred by `uprotocol.entity.permissions` element.
-An example of a manifest fragment for an app accessing the BodyAccess service could look as follows:
+
+.An Android app that declares its permission level and claims two methods
+====
+A manifest fragment for an app accessing the BodyAccess service could look as follows:
 
 [code,xml]
 ```
@@ -143,11 +146,13 @@ In the string resources directory of the APK we may then have a file with the fo
 ```
 
 Such entries in the manifest will allow the client access to any topics of the BodyAccess service and two methods explicitly specified, as they are both level 1, thus requiring an explicit claim.
+====
 
 == Token Based Access Permissions(TAPs)
 
 Token-based access permissions (TAPs) are policies governing access to specific methods, topics, and services, based on identity of the person or vehicle (domain), typically represented by a system account and based on the information in said account.
-TAP is generally more restrictive than CAPs as the scope of TAP is larger (user/domain vs single uEntity level).
+
+NOTE: TAP is generally more restrictive than CAPs as the scope of TAP is larger (user/domain vs single uEntity level).
 
 Implementations of TAP are generally platform/vendor specific, as such the following is not specified:
 

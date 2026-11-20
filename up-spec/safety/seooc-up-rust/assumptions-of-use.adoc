@@ -3,167 +3,185 @@
 
 The key words "*MUST*", "*MUST NOT*", "*REQUIRED*", "*SHALL*", "*SHALL NOT*", "*SHOULD*", "*SHOULD NOT*", "*RECOMMENDED*", "*MAY*", and "*OPTIONAL*" in this document are to be interpreted as described in https://www.rfc-editor.org/info/bcp14[IETF BCP14 (RFC2119 & RFC8174)]
 
-Conventions, tags and status words: xref:../README.adoc[the safety area's README].
+Conventions and tags: xref:../README.adoc[the safety area's README].
 Scope and element boundary: xref:README.adoc[the SEooC's README].
 
-Each assumption of use is something the integrator must provide or guarantee.
-It stays assumed until the integrator validates it for the item.
+Each assumption of use states what the integrator provides or guarantees.
+<<aou-seooc-assumptions-bind,An assumption of use binds the integrator who claims the scope, and replaces no requirement>> states whom it binds and that the integrator validates it.
 
-This page indexes the element's twenty-three assumptions of use, and states sixteen of them.
-The other seven are stated in the layer part that their duty concerns: three with the transports, two with the one transport they bind, iceoryx2, and two with the Streamer (<<summary>>).
+NOTE: This page indexes the element's twenty-nine assumptions of use, and states nineteen of them.
+The other ten are stated in the layer part that their duty concerns: three with the transports, two with one binding and its middleware, iceoryx2, one with another binding and its middleware, LoLa, one with RPC and message identity, and three with the Streamer (<<summary>>).
 
 [[who]]
 == Who these assumptions bind
 
-These assumptions bind an integrator that claims the element's safety-assurance scope for a configuration (xref:README.adoc#claims[the SEooC's claims]).
+[[aou-seooc-assumptions-bind]]
+=== An assumption of use binds the integrator who claims the scope, and replaces no requirement
 
+[.specitem,oft-sid="aou~seooc-assumptions-bind~2",oft-title="An assumption of use binds the integrator who claims the scope, and replaces no requirement",oft-needs="uman",oft-tags="SafetyManual"]
+--
+*Whom it binds.*
+The integrator that claims the element's safety-assurance scope for a configuration (xref:README.adoc#claims[the SEooC's claims]) *SHALL* meet each assumption of use of this area, wherever it is filed, including what that integrator's application, platform and deployment owner provide.
+It is no duty of another SDK, of another transport, or of a deployment that does not use the element.
+Filing, tags, tracing or coverage runs, repository ownership and recorded status change neither whom an assumption of use binds nor the reach of its duties under their stated conditions, qualifiers and exclusions.
+
+*Validation.*
+The integrator *SHALL* validate, for the item, in ISO 26262's sense, each assumption of use that applies to its configuration, before it relies on the element's safety-assurance scope.
+Until then the assumption stays assumed.
+
+*Deployment declaration and claims.*
+An integrator that claims the element's safety-assurance scope for a deployment *SHALL* make a deployment declaration as xref:../README.adoc#req-ssr-contract-transition[What a part declares and claims, and when a replacement takes effect] defines it.
+Where the integrator claims that the deployment meets the assumptions of use, it *SHALL* make that claim as a deployment conformance claim that names the declaration, the assumptions of use and their revisions that it rests on, and the component conformance claims and their evidence that it rests on, and *SHALL NOT* present a component conformance claim, a build result or a report as a deployment conformance claim.
+
+*The item.*
+In the assumptions of use of this area, "the item" is the item in ISO 26262's sense that the integrator develops and into which it integrates the element.
+
+*Ordinary use.*
 Ordinary use, which claims no such scope, need not carry out these integration procedures.
-The element's functional semantics, its honest reports and its native resource rules hold for it all the same.
+The element's functional semantics, its honest reports and its native resource rules hold for it.
 
-An assumption binds that same integrator wherever it is filed.
-Filing one in a layer part makes it no duty of another SDK, of another transport or of a deployment that does not use the element.
+*Software safety requirements.*
+An assumption of use replaces no software safety requirement, and no software safety requirement is met by it.
+What the element, a binding, a wire, a platform backend or the Streamer does, including what it does when the condition of an assumption holds, is stated by a software safety requirement.
+An assumption that names such an act points at that requirement.
+No assumption of use is met by what the software does: not by a software safety requirement, and not by a report, a check or a refusal that the software produces.
+A report or a declaration is evidence or supplied data: it approves nothing, waives nothing and proves no conformance.
+--
+
+*Violation:*
+
+* An integrator that claims the scope and does not meet an assumption: each assumption's own "Violation" text says how that shows up, in the classes of xref:../README.adoc#req-ssr-violation-classes[How a violated assumption of use shows up].
+* An assumption of use that the integrator has not validated for the item is *undetectable* by the element.
+* A deployment declaration or a deployment conformance claim that is missing, or that does not name what it rests on, is *undetectable* by the element.
+
+[horizontal]
+ID:: `+aou~seooc-assumptions-bind~2+`
+ASIL:: B
+
+*Rationale.*
+A duty of the integrator and a software safety requirement are met by different parties, with different evidence.
+If either could stand in for the other, a duty could be left with nobody.
+"The item" is ISO 26262's term (source: ISO 26262:2018, 1-3.84, the definition of item).
 
 [[violation-classes]]
 == How a violation shows up
 
-A violation shows up in one of three classes:
+[[aou-seooc-violation-classes]]
+=== The integrator covers each violation that its observer cannot detect
 
-* *Refused at setup*: the element detects it during initialization and refuses with a named error, so runtime mode is never reached.
-A build that fails counts here too.
-* *Counted*: the element detects it in runtime mode, and returns an error or increments a route counter, without heap.
-* *Undetectable*: the element cannot see it.
-Only the integrator's own measures can cover it.
+[.specitem,oft-sid="aou~seooc-violation-classes~1",oft-title="The integrator covers each violation that its observer cannot detect",oft-needs="uman",oft-tags="SafetyManual"]
+--
+*The classes.*
+How the "Violation" text of an assumption of use classes a violation, as *refused at setup*, *counted* or *undetectable* by its observer, and what a limit of the contract is, is stated in xref:../README.adoc#req-ssr-violation-classes[How a violated assumption of use shows up].
 
-A "Violation" text can also state a limit of the contract instead of a class: that no requirement has the element, a binding or the Streamer check something.
+*What the integrator covers.*
+The integrator *SHALL NOT* rely on an observer to detect a violation that a "Violation" text classes *undetectable* by that observer, or on any part to detect a violation for which the text states a limit of the contract.
+The integrator *SHALL* cover each such violation with measures of its own.
+--
 
-* Such a sentence says what the integrator may rely on, which is no detection, so the integrator covers that violation with its own measures.
-* It asserts no class.
-In particular it does not call the violation *undetectable*, which would say what the element can see, not what the contract requires.
+*Violation:* *undetectable* by the element.
+
+[horizontal]
+ID:: `+aou~seooc-violation-classes~1+`
+ASIL:: B
+
+*Rationale.*
+Each "Violation" text is read through these classes.
+What the software does not detect, only the integrator's own measures can cover.
 
 [[coverage]]
 == Tags and coverage
 
-Every assumption needs `uman`, because the safety manual states it, and carries the tag `SafetyManual`.
+[NOTE]
+====
+Tags are trace metadata, and decide no actor, scope or status (<<aou-seooc-assumptions-bind,An assumption of use binds the integrator who claims the scope, and replaces no requirement>>; xref:../README.adoc#req-ssr-requirements-bind[A requirement binds the actors to which it gives a duty]; xref:../README.adoc#tags[the safety area's tags]).
 
-* The nineteen assumptions that the SDK's safety manual states also carry the gate tag `SafetyGateUpRust`, so the gating run of the repository that covers them keeps them.
-* The Streamer's two and the iceoryx2 binding's two carry `SafetyManual` only, so only a report-only run, which keeps `SafetyManual`, shows them.
-The repository that owns each states it in its own safety manual.
+* Every assumption needs `uman` and carries the tag `SafetyManual`.
+* Some also carry the gate tag `SafetyGateUpRust`.
 * An assumption keeps its tags wherever it is filed.
-A run keeps it when the run's patterns name the part that states it (xref:../README.adoc#tracing[how a repository starts tracing]).
+====
 
 [[summary]]
 == Summary
 
-The rows are grouped by the part that states each assumption.
-A row summarizes its whole assumption, and the item governs.
-Where an assumption holds a clause that names a rule of another part, <<by-part>> says which part that is.
-
-[cols="3,4,3,3,3",options="header"]
-|===
-| Assumption | Integrator provides | Refused at setup | Counted | Undetectable
-5+| *Every transport. Stated in xref:../up-l1/deployment.adoc[what a deployment provides for its transports].*
-| xref:../up-l1/deployment.adoc#aou-seooc-peer-access[Only authorized processes reach the transport, and peers are faulty, never malicious] | Access control to transport resources; peers faulty, never malicious; on a zero-copy route, a writer at or above the reader's level that never writes a sample it has sent; on a two-way shared-memory binding, one level per service | On a two-way binding, a port at another level than its service | Malformed or undeclared frames | A racing write on a zero-copy route; a peer at another level let onto a two-way service; a hostile process with access; a deliberate exploit
-| xref:../up-l1/deployment.adoc#aou-seooc-integrity-levels[Each transport's integrity level is assigned correctly] | One integrity level per transport; each process built to the level it declares | A writer below a zero-copy reader, where the binding records levels; on a two-way binding, a port at another level than its service | | A process that runs below its declared level
-| xref:../up-l1/deployment.adoc#aou-seooc-qualified-bindings-and-wires[Bindings and wires pass their contracts] | Only bindings and wires that pass their contracts on the target, at the exact versions and configuration their evidence records, with their limits and known anomalies accepted and their known failures listed | A wire that declares heap use on a native route, or a binding that declares it without a waiver; in strict mode, one off the qualified list, an unacknowledged deviation, a known failure | | A binding or wire that breaks its contract
-5+| *One transport, iceoryx2. Stated in xref:../up-l1/iceoryx2.adoc[the iceoryx2 page].*
-| xref:../up-l1/iceoryx2.adoc#aou-seooc-iceoryx2-level-separation[On iceoryx2, each integrity level has its own processes, domain and OS user] | On iceoryx2, a transport at its process's level, one level per service, and each level in its own domain and under its own OS user | A port at another level than its service | | A peer at another level let onto a service. Not classed: two levels that share a domain or an OS user, of which the contract requires no check
-| xref:../up-l1/iceoryx2.adoc#aou-seooc-iceoryx2-limits[A deployment on iceoryx2 accepts that binding's limits, and no known failure as one] | On iceoryx2, no 32-bit target, and that binding's limits and known anomalies accepted, with its known failures listed apart and none accepted as a limit | A route whose lifecycle events share its data ID, or whose data ID is above the service's range; in strict mode, any known failure | | A heap too small for the permit's bound, until an allocation fails
-5+| *Forwarding. Stated in xref:../up-l2/streamer.adoc[the Streamer's page].*
-| xref:../up-l2/streamer.adoc#aou-seooc-operator-access[Only authorized operators reach the Streamer's operator interface] | Access to the Streamer's operator interface | In strict mode, an ASIL route named without `+operator_may_disable+` | Every change, with its cause | Who made a change
-| xref:../up-l2/streamer.adoc#aou-seooc-monitor-thresholds[Monitor thresholds allow for peers' restarts] | Monitor thresholds above peers' worst-case restarts, or an accepted outage; in strict mode, each peer's worst-case restart time in the deployment data | In strict mode, a threshold below a declared restart time, unless `+outage_on_restart+` names the accepted outage | A trip, with its cause | Whether the outage is acceptable for the item
-5+| *The element and its deployment. Stated on this page.*
-| <<aou-seooc-supervisor-restart,A supervisor outside the process restarts it>> | A supervisor outside the process that restarts it, the whole process or partition at once; where the item relies on it within a time, the bounded reaction chain; in strict mode, the declared restart path | A retry that runs out of startup memory | Silence, on routes with a deadline; a thread terminated inside the element, as refusals or silence | Its own death; silence without a deadline; a retry in the process; a supervisor that shares the failure
-| <<aou-seooc-process-isolation,Processes or partitions are isolated>> | OS partitioning and memory protection, or on an MCU the stated partition boundary | | | Any breach
-| <<aou-seooc-capability-ceiling,Data above ASIL B relies on measures outside the element>> | For data above ASIL B, measures outside the element; for the element inside an ASIL C or D process or partition, whatever the level of its own data, freedom from interference shown at that level, or the element kept out of it | In strict mode, a level above B without its acknowledgement | | Data above ASIL B without such measures
-| <<aou-seooc-timing-budgets,Timing claims rest on a supported configuration, and the item's budgets are the integrator's>> | A supported configuration whose package states the timing claims relied on; the item's FTTI, traffic and reaction budgets; where a configuration keeps the predecessor narrowed values, a watchdog on every thread that calls the element | In strict mode, an ASIL receive route with neither a deadline nor `+event_only()+`; a required finite bound that its configuration does not establish; a bound beyond its declared budget | Missed deadlines, expired TTLs, failed calls | Slow execution with no deadline declared; priority inversion; a deployment outside its package; a stall beyond the watchdog's bounds
-| <<aou-seooc-clock,The platform provides the clocks>> | A monotonic clock and a synchronized wall clock from a declared time provider, agreeing with every peer's within a request's TTL; no uptime as wall time | Wall clock unreadable at the transition; a provider that fails its check | Wall clock unreadable at runtime; a failed monotonic read; for a 32-bit sequence, a wall clock that does not move, after 2^31^ IDs in one bucket | A wrong but readable wall clock; clocks that disagree by more than a TTL; a monotonic clock at the wrong rate
-| <<aou-seooc-waiver-approval,Waivers are approved with an interference argument>> | Review and approval of every waiver, with an interference argument; a heap sized for the permit's bound | Missing waiver; self-approval; in strict mode, a waiver without its argument | | A rubber-stamped approval; interference from the waived allocation; a heap too small for the permit's bound
-| <<aou-seooc-resource-guarantees,A resource guarantee the item relies on is required by name>> | On a serialized route, each stronger resource guarantee the item relies on, required by name | A required resource guarantee that is not established | | A resource guarantee the item relied on and no route required
-| <<aou-seooc-e2e-protection,The integrator decides which routes need end-to-end protection>> | The choice of routes that need end-to-end protection, and the protection on them, justified; on a route that selects the deferred E2E wire, its declared senders, a true start declaration, one live sender per data ID, a deadline, and one sending and one decoding thread | In strict mode, an ASIL route over a black channel with no protection named; on a route that selects the E2E wire, a route with neither a deadline nor `+event_only()+`, and ASIL RPC clients not declared increasing | On a route that selects the E2E wire, its faults, and refused responses and requests, by kind; a false declaration's lockout, until the sender restarts | A route that needs protection and has none; a residual of the integrator's own protection; on an E2E route, delay and silence without a deadline, a late run adopted in default mode, and an undetected corruption of a frame's header
-| <<aou-seooc-target-environment,The target environment is verified>> | A target that a supported configuration names, verified by its package at its exact toolchain, OS, BSP and hardware: 32-bit atomics with compare-and-swap, atomic and coherent on every core that shares them, enough stack | Missing 32-bit compare-and-swap (the build fails); a native wire across ABIs; in strict mode, an explicitly required assurance scope that the configuration's package does not establish | | A lowering that is not atomic or not coherent; an actual participant that a mask leaves unmasked; a target outside its package's verified scope; stack overflow
-| <<aou-seooc-build-configuration,The ASIL binary is built from its claimed graph, with the ASIL profile>> | The ASIL binary built from its claimed safety dependency graph, with the exact toolchain its configuration records and the ASIL profile; in strict mode, the locked build | A build of the ASIL Streamer binary with unwinding (it fails to compile); in the locked build, a crate that the declared graph does not admit | | Any other build fault; code from outside the graph linked in without the lock
-| <<aou-seooc-deployment-data,Deployment data is in range, verified and protected>> | Deployment data within the published ranges, verified, with an integrity code, and, on a route that selects the deferred E2E wire, each sender's start declaration | Out of range, unknown, missing, inconsistent; a mismatched integrity code (Streamer); in strict mode, any data without a matching integrity code | | Valid but wrong data, including, on such a route, a false start declaration
-| <<aou-seooc-capacity-sizing,Capacities are sized for the worst case>> | The item's worst-case semantic load for each route, from which the element computes its capacities | Capacity that cannot be reserved | Exhaustion at runtime | Exhaustion the item cannot tolerate
-| <<aou-seooc-application-reacts,The application reacts to what the element reports>> | An application that handles every error and the counters it relies on, reads counter differences in time, and, where a route's monitor uses the one-word tick, services each monitored route | | Every refusal and loss the element can see | Losses the element cannot see; an application that ignores what it is told; a one-word-tick route left unserviced
-| <<aou-seooc-integrator-platform,A custom platform keeps the platform's rules>> | Where no package supports the target, a custom platform that keeps the platform's rules, with entropy from a declared source | In strict mode, a platform without contract-test evidence | On a route with the deferred E2E wire, frames of equal incarnations, refused after a restart | Any breach of those rules; entropy that repeats more often than its stated contract
-| <<aou-seooc-peer-rates,Peer rates on shared routes are the integrator's>> | Bounded peer rates on shared routes; peer-specific progress checks where required | | Observable drops | A starved peer concealed by other arrivals, even with an aggregate route deadline; middleware-hidden loss
-| <<aou-seooc-build-order,Applications build every transport and role before the last transition>> | Every transport and role built before the last transition | A late setup on sealed memory; in strict mode, a setup alive and not entered at `+enter_runtime_all+` | | A setup kept alive without `+enter_runtime_all+`
-|===
-
-[[by-part]]
-== Clauses that concern another part
-
-An assumption is one item, filed in the part its duty concerns.
-A duty that binds only one transport, or only some deployments, is an assumption of its own.
-A clause that stays in an assumption while naming another part does so because it qualifies that assumption's own duty: it is a summary of a rule the duty rests on, an entry of an inventory, or an example.
-
-The table lists the clauses on this page that name a rule or a part in that way.
-For each it names who acts, and where that part states the rule the clause rests on.
-It classifies and links.
-It adds no duty and changes none, and the item governs.
-
-The clauses of the seven assumptions stated elsewhere are listed on their own pages.
-A "Strict mode" clause is the element's own, and is not listed.
-
-[cols="3,3,3,4",options="header"]
-|===
-| Assumption and clause | Part it concerns | Who acts | Where that part states it
-
-| <<aou-seooc-process-isolation,Processes or partitions are isolated>>, "Shared memory" | uP-L1: shared memory that a binding maps | The integrator | xref:../up-l1/deployment.adoc#aou-seooc-peer-access[Only authorized processes reach the transport, and peers are faulty, never malicious] in xref:../up-l1/deployment.adoc[what a deployment provides]; xref:../README.adoc#faulty-peer[the faulty-peer model]
-| <<aou-seooc-capability-ceiling,Data above ASIL B relies on measures outside the element>>, "The level itself" | uP-L1: the level a transport is given | The integrator | xref:../up-l1/deployment.adoc#aou-seooc-integrity-levels[Each transport's integrity level is assigned correctly] in xref:../up-l1/deployment.adoc[what a deployment provides]; xref:../README.adoc#integrity-level[integrity levels]
-| <<aou-seooc-timing-budgets,Timing claims rest on a supported configuration, and the item's budgets are the integrator's>>, "TTL resolution" | uP-L2: the time that a message ID records | The element stamps and checks; the integrator allows for the early refusal | xref:../up-l2/interaction.adoc#req-ssr-ids-unique[Message IDs are unique] in xref:../up-l2/interaction.adoc[RPC and message identity]; xref:qos.adoc#req-ssr-qos-ttl[Expired messages are not processed] in xref:qos.adoc[QoS, TTL and deadlines]
-| <<aou-seooc-timing-budgets,Timing claims rest on a supported configuration, and the item's budgets are the integrator's>>, "Refused RPC copies on the E2E wire" | uP-L2: an RPC call, on a route that selects the deferred E2E wire | The element gives the slot back; the integrator allows for the TTL | xref:../up-l2/interaction.adoc#req-ssr-rpc-check-at-arrival[A response completes its call only once its wire accepts it] in xref:../up-l2/interaction.adoc[RPC and message identity]
-| <<aou-seooc-timing-budgets,Timing claims rest on a supported configuration, and the item's budgets are the integrator's>>, "When an RPC failure is seen" | uP-L2: the outcome of an RPC call | The element sets the outcome; when the application observes it is a timing claim of its configuration | xref:../up-l2/interaction.adoc[RPC and message identity]; xref:../up-l2/streamer.adoc#req-ssr-streamer-rpc-error-response[An RPC request that cannot be dispatched is answered, best effort] in xref:../up-l2/streamer.adoc[the Streamer's page]
-| <<aou-seooc-timing-budgets,Timing claims rest on a supported configuration, and the item's budgets are the integrator's>>, "Fail-silent routes" | uP-L2: forwarding | The Streamer gates a route; the integrator allows for the silence | xref:../up-l2/streamer.adoc#req-ssr-streamer-rpc-error-response[An RPC request that cannot be dispatched is answered, best effort] in xref:../up-l2/streamer.adoc[the Streamer's page]
-| <<aou-seooc-timing-budgets,Timing claims rest on a supported configuration, and the item's budgets are the integrator's>>, "Priority inversion through middleware locks" | uP-L1: a lock that a binding's middleware holds | The integrator budgets for the lock; the binding keeps every frame drop from waiting for it | xref:../up-l1/bindings.adoc#req-ssr-binding-frame-drop[What a received frame's destructor may do] in xref:../up-l1/bindings.adoc[allocated to each binding]; xref:release.adoc#req-ssr-release-lease-drop[A lease gives back its slot and nothing else] in xref:release.adoc[release]; what one binding's locks are, with that binding (xref:../up-l1/README.adoc#one-binding[what is specific to one binding])
-| <<aou-seooc-timing-budgets,Timing claims rest on a supported configuration, and the item's budgets are the integrator's>>, "Deadline detection", the arrival latency | uP-L1: the arrival-report latency a binding declares | The binding declares it; the integrator budgets for it | xref:qos.adoc#req-ssr-qos-deadline[Deadlines are monitored] in xref:qos.adoc[QoS, TTL and deadlines]; xref:../up-l1/deployment.adoc#aou-seooc-qualified-bindings-and-wires[Bindings and wires pass their contracts], "Pull bindings and deadlines"
-| <<aou-seooc-clock,The platform provides the clocks>>, "RPC requests" | uP-L2: the TTL of an RPC request | The integrator: the bound holds only while the client's and the server's wall clocks agree within the TTL | xref:../up-l2/interaction.adoc#req-ssr-peer-rpc-ends[RPC calls always end] in xref:../up-l2/interaction.adoc[RPC and message identity]
-| <<aou-seooc-waiver-approval,Waivers are approved with an interference argument>>, opening paragraph | uP-L1: the permit a binding ships for middleware allocation | The binding declares the permit; the deployment's owner reviews the allocation and files the waiver | xref:../up-l1/bindings.adoc#req-ssr-binding-no-heap[Binding code allocates nothing in runtime mode] in xref:../up-l1/bindings.adoc[allocated to each binding]; xref:waivers.adoc#req-ssr-waiver-required[Middleware heap needs a named waiver] in xref:waivers.adoc[waivers]
-| <<aou-seooc-waiver-approval,Waivers are approved with an interference argument>>, "Heap sizing", second sentence | One transport, by reference | The deployment's owner | The page of that binding (xref:../up-l1/README.adoc#one-binding[what is specific to one binding])
-| <<aou-seooc-resource-guarantees,A resource guarantee the item relies on is required by name>>, every clause | uP-L1: the wires and the binding of a serialized route | The integrator requires a guarantee by name; the element admits or refuses it | xref:heap.adoc#req-ssr-heap-guarantees[A stronger resource guarantee is required by name] in xref:heap.adoc[heap]
-| <<aou-seooc-e2e-protection,The integrator decides which routes need end-to-end protection>>, the duties for a route that selects the E2E wire | uP-L1 and uP-L2, where those duties name a binding's delivery thread or the Streamer's error responses | The integrator, once that wire is delivered and selected | xref:e2e-wire.adoc[The end-to-end protection wire]; xref:../up-l2/streamer.adoc#req-ssr-streamer-rpc-error-response[An RPC request that cannot be dispatched is answered, best effort] in xref:../up-l2/streamer.adoc[the Streamer's page]
-| <<aou-seooc-target-environment,The target environment is verified>>, "Several cores" and "Different ABIs" | uP-L1: a transport that synchronises the cores, and no native wire across ABIs | The integrator chooses the transport; the element refuses a native wire across ABIs | xref:../up-l1/peers.adoc#req-ssr-native-abi-agreed[A native representation never crosses an ABI] in xref:../up-l1/peers.adoc[peers of a transport]; xref:../up-l1/deployment.adoc#aou-seooc-qualified-bindings-and-wires[Bindings and wires pass their contracts]
-| <<aou-seooc-build-configuration,The ASIL binary is built from its claimed graph, with the ASIL profile>>, opening paragraph | uP-L1 and uP-L2: the bindings and wires, and the ASIL Streamer crate, that a claimed graph may hold | The integrator | xref:../up-l1/deployment.adoc#aou-seooc-qualified-bindings-and-wires[Bindings and wires pass their contracts] in xref:../up-l1/deployment.adoc[what a deployment provides]; xref:crate-isolation.adoc#req-ssr-crate-streamer-isolated[The ASIL Streamer is its own untaintable crate] in xref:crate-isolation.adoc[crate isolation]
-| <<aou-seooc-deployment-data,Deployment data is in range, verified and protected>>, the list of what the data covers | uP-L1: each transport's integrity level, and the peers a route declares, RPC client lists among them | The integrator | xref:../up-l1/integrity.adoc#req-ssr-integrity-declared[Each transport declares one integrity level] in xref:../up-l1/integrity.adoc[integrity levels]; xref:../up-l1/peers.adoc#req-ssr-peer-admission[Undeclared peers cannot lock out declared ones] in xref:../up-l1/peers.adoc[peers of a transport]
-| <<aou-seooc-deployment-data,Deployment data is in range, verified and protected>>, the entry for what one binding adds | One transport, by reference | The integrator declares the setting; the binding checks it | The page of that binding (xref:../up-l1/README.adoc#one-binding[what is specific to one binding])
-| <<aou-seooc-deployment-data,Deployment data is in range, verified and protected>>, the Streamer's integrity code | uP-L2: forwarding | The integrator delivers the code; the Streamer checks it | xref:../up-l2/streamer.adoc#req-ssr-streamer-config-integrity[The deployment data is checked before it is applied] in xref:../up-l2/streamer.adoc[the Streamer's page]
-| <<aou-seooc-application-reacts,The application reacts to what the element reports>>, "What the element reports" | uP-L1: a loss inside middleware that a binding cannot observe | The element declares it; the application uses it within its limits | xref:errors.adoc#req-ssr-error-no-silent-loss[No silent loss, and each loss counted once] in xref:errors.adoc[refusal, errors and reporting]
-| <<aou-seooc-peer-rates,Peer rates on shared routes are the integrator's>>, "What the element does" | uP-L1: the discards a binding can observe | The element counts or discloses; the integrator bounds the rates | xref:qos.adoc#req-ssr-qos-overflow[Overflow acts as declared] in xref:qos.adoc[QoS, TTL and deadlines]; xref:errors.adoc#req-ssr-error-no-silent-loss[No silent loss, and each loss counted once] in xref:errors.adoc[refusal, errors and reporting]
-| <<aou-seooc-build-order,Applications build every transport and role before the last transition>>, the Streamer's `+enter_runtime_all+` | uP-L2: forwarding | The application; for the Streamer, its own startup | xref:../up-l2/streamer.adoc#req-ssr-streamer-startup-report[The startup report says what will run] in xref:../up-l2/streamer.adoc[the Streamer's page]; xref:startup-memory.adoc#req-ssr-memory-sealed[Startup memory is sealed] in xref:startup-memory.adoc[startup memory]
-|===
+* *Every transport. Stated in xref:../up-l1/deployment.adoc[what a deployment provides for its transports].*
+** xref:../up-l1/deployment.adoc#aou-seooc-peer-access[Only authorized processes reach the transport]
+** xref:../up-l1/deployment.adoc#aou-seooc-integrity-levels[Each transport's integrity level is assigned correctly]
+** xref:../up-l1/deployment.adoc#aou-seooc-qualified-bindings-and-wires[Bindings and wires pass their contracts]
+* *One transport, iceoryx2. Stated in xref:../up-l1/iceoryx2.adoc[the iceoryx2 page].*
+** xref:../up-l1/iceoryx2.adoc#aou-seooc-iceoryx2-level-separation[On iceoryx2, each integrity level has its own processes, domain and OS user]
+** xref:../up-l1/iceoryx2.adoc#aou-seooc-iceoryx2-limits[A deployment on iceoryx2 accepts that binding's limits, and no known failure as one]
+* *One transport, LoLa. Stated in xref:../up-l1/lola.adoc[the LoLa page].*
+** xref:../up-l1/lola.adoc#aou-seooc-lola-assumptions-kept[A deployment on LoLa keeps the assumptions of LoLa that the binding names for the integrator]
+* *RPC and message identity. Stated in xref:../up-l2/interaction.adoc[RPC and message identity].*
+** xref:../up-l2/interaction.adoc#aou-seooc-ids-never-repeat[Message IDs that never repeat across restarts come from a configuration that provides them]
+* *Forwarding. Stated in xref:../up-l2/streamer.adoc[the Streamer's page].*
+** xref:../up-l2/streamer.adoc#aou-seooc-operator-access[Only authorized operators reach the Streamer's operator interface]
+** xref:../up-l2/streamer.adoc#aou-seooc-monitor-thresholds[Monitor thresholds allow for peers' restarts]
+** xref:../up-l2/streamer.adoc#aou-seooc-streamer-reaction-bound[A reaction claimed through the Streamer's monitors or watchdog hook is bounded end to end]
+* *The element and its deployment. Stated on this page.*
+** <<aou-seooc-assumptions-bind,An assumption of use binds the integrator who claims the scope, and replaces no requirement>>
+** <<aou-seooc-violation-classes,The integrator covers each violation that its observer cannot detect>>
+** <<aou-seooc-supervisor-restart,A supervisor outside the process restarts it>>
+** <<aou-seooc-process-isolation,Processes or partitions are isolated>>
+** <<aou-seooc-capability-ceiling,Data above ASIL B relies on measures outside the element>>
+** <<aou-seooc-timing-budgets,Timing claims rest on a supported configuration, and the item's budgets are the integrator's>>
+** <<aou-seooc-clock,The platform provides the clocks>>
+** <<aou-seooc-waiver-approval,Waivers are approved with an interference argument>>
+** <<aou-seooc-resource-guarantees,A resource guarantee the item relies on is required by name>>
+** <<aou-seooc-e2e-protection,The integrator decides which routes need end-to-end protection>>
+** <<aou-seooc-target-environment,The target environment is verified>>
+** <<aou-seooc-build-configuration,The ASIL binary is built from its claimed graph, with the ASIL profile>>
+** <<aou-seooc-deployment-data,Deployment data is in range, verified and protected>>
+** <<aou-seooc-capacity-sizing,Capacities are sized for the worst case>>
+** <<aou-seooc-startup-storage,Startup storage that the integrator provides is exclusive and lives as long as the process>>
+** <<aou-seooc-application-reacts,The application reacts to what the element reports>>
+** <<aou-seooc-integrator-platform,A custom platform keeps the platform's rules>>
+** <<aou-seooc-peer-rates,Peer rates on shared routes are the integrator's>>
+** <<aou-seooc-build-order,Applications build every transport and role before the last transition>>
 
 [[aou-seooc-supervisor-restart]]
 == A supervisor outside the process restarts it
 
-[.specitem,oft-sid="aou~seooc-supervisor-restart~4",oft-title="A supervisor outside the process restarts it",oft-needs="uman",oft-tags="SafetyManual,SafetyGateUpRust"]
+[.specitem,oft-sid="aou~seooc-supervisor-restart~6",oft-title="A supervisor outside the process restarts it",oft-needs="uman",oft-tags="SafetyManual,SafetyGateUpRust"]
 --
-The integrator *SHALL* provide a supervisor outside every process that uses the element. It detects that a process has exited, crashed or been killed, and restarts it or takes the item to its safe state, under a restart policy the integrator sets (rate limit, escalation).
+The integrator *SHALL* provide a supervisor outside every process that uses the element.
+The integrator *SHALL* have the supervisor detect that a process has exited, crashed or been killed, and restart that process or take the item, in ISO 26262's sense, to its safe state, under a restart policy that the integrator sets (rate limit, escalation).
 
-* *No in-process recovery.* The element has no in-process recovery. In runtime mode a process leaves only by exit, crash or kill, and in the ASIL build a panic aborts the process (xref:build.adoc#req-ssr-build-panic-abort[The ASIL build aborts on panic and checks overflow]), which the supervisor handles as a crash.
-* *Setup errors.* The element is designed on the assumption that an application treats an initialization or transition error the same way, by exiting so that the supervisor restarts it, rather than by retrying setup in the process.
-* *Whole process or partition.* No thread or interrupt handler that calls the element is terminated on its own: the process, or on an MCU the partition or OS-Application that holds the element's memory, is restarted as a whole.
-* *Fresh initialization.* A restart is a fresh initialization: it revokes no storage that a surviving peer still retains, and needs no departure notice from the process that died.
+* *Recovery.* That the element offers no recovery, in the process, of a transport that has entered runtime mode, and how a process leaves runtime mode, is stated in xref:runtime-modes.adoc#req-ssr-mode-one-way[There is no way back] and xref:runtime-modes.adoc#req-ssr-mode-no-shutdown[No shutdown in runtime mode].
+Where a panic aborts a process that runs an ASIL binary, the integrator *SHALL* have the supervisor's restart policy treat that abort as a crash of the process (xref:build.adoc#req-ssr-build-panic-abort[The ASIL build aborts on panic and checks overflow]; <<aou-seooc-build-configuration,The ASIL binary is built from its claimed graph, with the ASIL profile>>).
+* *Setup errors.* After an initialization or transition error, the application *SHALL NOT* go on with the transport whose setup was refused.
+It *SHALL* either exit, so that the supervisor restarts the process, or make a fresh initialization.
+What a fresh initialization in the same process is, and when the element admits one, is stated in xref:runtime-modes.adoc#req-ssr-mode-one-way[There is no way back] and xref:startup-memory.adoc#req-ssr-memory-sealed[Startup memory is sealed].
+Once a transport of the process has entered runtime mode, the application *SHALL NOT* attempt in the process a rollback, re-admission, re-enable, rebuild or replacement of that transport, or of a route or role of it; a fault in runtime mode is recovered by the supervisor's restart.
+* *Startup time.* Where the item relies on a process's startup within a time, the integrator *SHALL* have the supervisor bound that startup with a timeout of its own: the bounds of setup are logical deadlines, which cannot fire in a process that the OS does not run (xref:runtime-modes.adoc#req-ssr-mode-bounded-startup[Setup never waits without a bound]).
+* *Whole process or partition.* The integrator *SHALL NOT* let a thread or interrupt handler that calls the element be terminated on its own.
+Where the supervisor restarts, the integrator *SHALL* have it restart as a whole the process, or on an MCU the partition or OS application partition, that holds the element's memory.
+* *Fresh initialization.* What a restart is and does, and what it needs from the process that died, is stated in xref:runtime-modes.adoc#req-ssr-mode-restart[A restart is an initialization] and xref:runtime-modes.adoc#req-ssr-mode-no-shutdown[No shutdown in runtime mode].
 * *Reaction time.* Where the item relies on the restart or the safe state within a time, the integrator *SHALL* bound the whole chain, from the detection of the exit through the supervisor's decision and the restart or isolation to the physical safe state, against the allocated fault tolerant time interval, and *SHALL* argue the supervisor's own clock, resources and independence from the process it supervises; a supervisor that can share the failure it detects does not establish that bound.
-* *Strict mode.* In strict mode the integrator declares the restart path, a supervisor or, on an MCU, a partition restart, and the report lists it, or warns that none is declared.
+* *Strict states.* In the Report, Enforce and Locked states, the integrator *SHALL* declare the restart path, a supervisor or, on an MCU, a partition restart.
+What the compliance report shows of the restart path, declared or not, is stated in xref:build.adoc#req-ssr-strict-report[Strict mode reports on every run].
 --
 
 *Violation:*
 
 * The death itself is *undetectable* by the process that died.
 * Survivors see silence.
-It is *counted* as missed deadlines on routes that declare a deadline, as RPC calls ending with an error, or as a reported peer loss where the binding reports peers.
-On a route with no deadline, silence is *undetectable*.
-* An application that retries setup in the process is *undetectable*, except that on the ASIL path startup memory is never given back, so a retry that runs out of it is *refused at setup*.
-* What a thread terminated inside the element leaves behind depends on its configuration's exclusion mechanism.
-** In the predecessor 32-bit-word representation it could leave a try-lock held or a peer's user count raised, and the element then refused that peer's incarnation raises, that sender's encodes, that route's deliveries or that response route's pulls for good, each refusal *counted*.
+It is *counted* as missed deadlines on routes that declare a deadline, as RPC calls ending with an error, or as a reported peer loss where the binding reports peers (xref:../up-l1/peers.adoc#req-ssr-peer-failure-normal[Peer failure is normal input]).
+On a route with no deadline, silence is *undetectable* by the element.
+* An application cannot go on with a transport whose setup was refused: the refusal leaves no runtime-mode value (xref:runtime-modes.adoc#req-ssr-mode-init-failure[Initialization failure]).
+* A fresh initialization on a startup memory that is sealed, or that finds too little startup memory left, is *refused at setup* (xref:startup-memory.adoc#req-ssr-memory-sealed[Startup memory is sealed]; xref:runtime-modes.adoc#req-ssr-mode-init-failure[Initialization failure]).
+* An application that neither makes a fresh initialization nor exits is *undetectable* by the element.
+* The element provides no operation that recovers, in the process, a transport that has entered runtime mode, or a route or role of it (xref:runtime-modes.adoc#req-ssr-mode-one-way[There is no way back]); an attempt that builds a setup on sealed startup memory is *refused at setup* (xref:startup-memory.adoc#req-ssr-memory-sealed[Startup memory is sealed]), and any other attempt by the application to recover such a transport, route or role in the process is *undetectable* by the element.
+* A startup that the OS never runs is *undetectable* by the element; only the supervisor's own timeout shows it.
+* What a thread terminated inside the element leaves behind depends on its configuration's exclusion mechanism (xref:platform.adoc#req-ssr-atomic-width[No target needs an atomic width it lacks]).
 ** Where the element changes its metadata in exclusive steps, the domain such a step holds stays held, and the work that needs it makes no further progress; survivors and the supervisor see silence, which a deadline or a call's TTL shows only where its own service can still run.
-** Recovery is the restart.
+** Only the restart recovers what the thread left behind.
 * A supervisor that shares the failure it should detect, and a reaction chain without a bound, are *undetectable* by the element.
 
 [horizontal]
-ID:: `+aou~seooc-supervisor-restart~4+`
+ID:: `+aou~seooc-supervisor-restart~6+`
 ASIL:: B
-Status:: Draft
 ISO 26262:: 10-9.2.4 (part-clause numbers only)
 
 *Rationale.*
@@ -173,52 +191,57 @@ Restarting one thread cannot provide that recovery.
 A watchdog or supervisor can support a fail-silent reaction even where delivery has no hard deadline.
 But only a chain that is bounded end to end, by a supervisor that does not fail with what it supervises, gives the item a reaction time.
 
-Use that claims no safety scope may run without such a supervisor, and then claims no restart or reaction time.
+Ordinary use, which claims no safety-assurance scope, need not have such a supervisor (<<aou-seooc-assumptions-bind,An assumption of use binds the integrator who claims the scope, and replaces no requirement>>), and then claims no restart or reaction time.
 
 [[aou-seooc-process-isolation]]
 == Processes or partitions are isolated
 
-[.specitem,oft-sid="aou~seooc-process-isolation~3",oft-title="Processes or partitions are isolated",oft-needs="uman",oft-tags="SafetyManual,SafetyGateUpRust"]
+[.specitem,oft-sid="aou~seooc-process-isolation~4",oft-title="Processes or partitions are isolated",oft-needs="uman",oft-tags="SafetyManual,SafetyGateUpRust"]
 --
-Each process using the element *SHALL* run in its own address space, under an OS that enforces memory protection, so one process cannot write another's private memory.
+The integrator *SHALL* run each process that uses the element in its own address space, under an OS that enforces memory protection, so that one process cannot write another's private memory.
 
-* *MCUs.* On an MCU without such processes, each partition or OS-Application that holds the element's memory *SHALL* be protected by a memory protection unit or an equivalent mechanism that its configuration states, or the integrator *SHALL* state the boundary that the configuration has instead and make a coexistence argument for everything that shares it.
-* *Shared memory.* Shared memory between processes or partitions *SHALL* exist only where a binding maps it, with the permissions the binding requests. A separate address space protects private memory only: a lower-assurance process that shares memory with the element through a binding is not made harmless by running apart, and the faulty-peer model applies to it (xref:../up-l1/deployment.adoc#aou-seooc-peer-access[Only authorized processes reach the transport, and peers are faulty, never malicious]).
-* *ASIL and QM together.* ASIL and QM software *SHALL NOT* share a process or partition unless the integrator makes and verifies a coexistence argument for it.
-* *Strict mode.* In strict mode, the report lists the transports that share each process, and warns of every QM transport in an ASIL process, with the coexistence duty that follows.
+* *MCUs.* On an MCU without such processes, the integrator *SHALL* protect each partition or OS application partition that holds the element's memory by a memory protection unit or an equivalent mechanism that its configuration states, or *SHALL* state the boundary that the configuration has instead and make a coexistence argument for everything that shares it.
+* *Shared memory.* The integrator *SHALL* allow shared memory between processes or partitions only where a binding maps it, with the permissions the binding requests.
+A separate address space protects private memory only.
+What holds against a lower-assurance process that shares memory with the element through a binding is stated in xref:../README.adoc#req-ssr-peer-fault-model[The requirements hold against a faulty peer].
+* *ASIL and QM together.* The integrator *SHALL NOT* let ASIL and QM software share a process or partition unless it makes and verifies a coexistence argument for it.
+* *Strict states.* What the compliance report shows of the transports that share each process is stated in xref:build.adoc#req-ssr-strict-report[Strict mode reports on every run].
 --
 
 *Violation:* *undetectable* by the element.
 
 [horizontal]
-ID:: `+aou~seooc-process-isolation~3+`
+ID:: `+aou~seooc-process-isolation~4+`
 ASIL:: B
-Status:: Draft
 ISO 26262:: 6-7.4.9, 6-7.4.8, 9-6 (part-clause numbers only)
 
 *Rationale.*
 The element's requirements assume that a faulty process cannot write another's private memory.
-Only the OS's memory protection can ensure that, and the element can neither provide nor check it.
+Only protection outside the element can ensure that: the OS's memory protection or, on an MCU, the partition boundary that its configuration states.
+The element can neither provide nor check it.
 
 Threads in one process share its memory.
 So ASIL and QM code in one process are kept apart only by an argument the integrator makes and verifies.
 
-An MCU often has no process boundary at all.
-So its boundary is whatever its configuration's memory protection provides, and the argument has to say what that is.
+An MCU often has no process boundary.
 
 [[aou-seooc-capability-ceiling]]
 == Data above ASIL B relies on measures outside the element
 
-[.specitem,oft-sid="aou~seooc-capability-ceiling~1",oft-title="Data above ASIL B relies on measures outside the element",oft-needs="uman",oft-tags="SafetyManual,SafetyGateUpRust"]
+[.specitem,oft-sid="aou~seooc-capability-ceiling~3",oft-title="Data above ASIL B relies on measures outside the element",oft-needs="uman",oft-tags="SafetyManual,SafetyGateUpRust"]
 --
 *Capability.*
-The element is developed for ASIL B capability, and no configuration claims more for it, whatever OS, middleware or compiler it runs on, so data above ASIL B that crosses the element relies on measures outside it.
+The element is developed for ASIL B capability, and no configuration claims more for it, whatever OS, middleware or compiler it runs on.
+Where data above ASIL B crosses the element, the integrator *SHALL* provide measures outside the element on which that data's safety requirements rely.
 
 *Decomposition and interference.*
-End-to-end protection, whichever mechanism the system supplies, can carry part of an ASIL C or D requirement only within a decomposition the integrator argues (9-5), with independence shown by dependent failure analysis. It covers faults in the exchange of information, not the timing and memory interference the element could cause inside an ASIL C or D process: there the integrator shows freedom from interference at the higher ASIL's rigour, or keeps the element out of that partition. The usual pattern is an ASIL B process that relays to the C or D partition over a channel the integrator protects at C or D.
+Where end-to-end protection, whichever mechanism the system supplies, carries part of an ASIL C or D requirement, the integrator *SHALL* argue the decomposition (9-5) and show independence by dependent failure analysis.
+End-to-end protection covers faults in the exchange of information, not the timing and memory interference that the element could cause inside a process or partition that holds software at ASIL C or D.
+Where the element runs inside such a process or partition, whatever the level of its own data, the integrator *SHALL* show freedom from interference at that level's rigour, or keep the element out of that process or partition.
 
-*Strict mode.*
-In strict mode, the Enforce state refuses a transport or route at C or D unless `+above_capability+` names the integrator's measures, and refuses C or D data whose only protection is an end-to-end mechanism of ASIL B capability unless `+decomposition+` names the argument; the report lists both duties.
+*Strict states.*
+In the Report, Enforce and Locked states, the integrator *SHALL* name its measures in `+above_capability+` for a transport or route at C or D, and its argument in `+decomposition+` for C or D data whose only protection is an end-to-end mechanism of ASIL B capability.
+What the Enforce and Locked states refuse without them, and what the compliance report lists of both duties, is stated in xref:build.adoc#req-ssr-strict-rules[The rules that strict mode checks] and xref:build.adoc#req-ssr-strict-report[Strict mode reports on every run].
 
 *The level itself.*
 A level is assigned, and is a label, as xref:../up-l1/deployment.adoc#aou-seooc-integrity-levels[Each transport's integrity level is assigned correctly] states.
@@ -226,252 +249,264 @@ A level is assigned, and is a label, as xref:../up-l1/deployment.adoc#aou-seooc-
 
 *Violation:*
 
-* In strict mode, a level above B without `+above_capability+`, and C or D data protected only by an ASIL B end-to-end mechanism without `+decomposition+`, are *refused at setup* in the Enforce state.
-* Data above ASIL B with no measures outside the element is *undetectable*.
+* A transport or route at C or D without `+above_capability+`, and C or D data protected only by an end-to-end mechanism of ASIL B capability without `+decomposition+`, are *refused at setup* in the Enforce and Locked states, and reported as a finding in the Report state (xref:build.adoc#req-ssr-strict-rules[The rules that strict mode checks]).
+* Data above ASIL B with no measures outside the element is *undetectable* by the element.
 
 [horizontal]
-ID:: `+aou~seooc-capability-ceiling~1+`
+ID:: `+aou~seooc-capability-ceiling~3+`
 ASIL:: B
-Status:: Draft
 ISO 26262:: 9-5, 9-6, 6-7.4.8 (part-clause numbers only)
 
 *Rationale.*
 A declared integrity level cannot raise what the element was developed for.
-The integrator therefore supplies the capability and coexistence arguments.
+So the measures that data above ASIL B relies on, and the freedom from interference of the element inside a process or partition that holds software at ASIL C or D, are the integrator's.
 
-The decomposition and coexistence duties are about the system's protection, so they hold whatever end-to-end mechanism the system uses.
-The SDK's own E2E wire is deferred and not part of this delivery.
-
-_Why these duties are an assumption of their own._
-The assignment of a level binds every transport (xref:../up-l1/deployment.adoc#aou-seooc-integrity-levels[Each transport's integrity level is assigned correctly]).
-These duties bind only where data above ASIL B crosses the element, or where the element runs inside an ASIL C or D process or partition, whatever the level of its own data.
-So they are stated apart from the assignment, with the element whose capability they bound.
-They are duties of the integrator.
+.An ASIL B process that relays to a C or D partition
+====
+The usual pattern is an ASIL B process that relays to the C or D partition over a channel the integrator protects at C or D.
+====
 
 [[aou-seooc-timing-budgets]]
 == Timing claims rest on a supported configuration, and the item's budgets are the integrator's
 
-[.specitem,oft-sid="aou~seooc-timing-budgets~7",oft-title="Timing claims rest on a supported configuration, and the item's budgets are the integrator's",oft-needs="uman",oft-tags="SafetyManual,SafetyGateUpRust"]
+[.specitem,oft-sid="aou~seooc-timing-budgets~9",oft-title="Timing claims rest on a supported configuration, and the item's budgets are the integrator's",oft-needs="uman",oft-tags="SafetyManual,SafetyGateUpRust"]
 --
-Where the item relies on the element within a time, the integrator *SHALL* select a supported configuration whose package states each timing claim it offers, with its endpoint, execution model, workload envelope and evidence, and *SHALL* keep the deployment within that package: its scheduling, priorities, CPU budgets, affinity and interrupt load.
+Where the item, in ISO 26262's sense, relies on the element within a time, the integrator *SHALL* select a supported configuration whose package states each timing claim it offers, with its endpoint, execution model, workload envelope and evidence, and *SHALL* keep the deployment within that package: its scheduling, priorities, CPU budgets, affinity and interrupt load.
 
 The integrator *SHALL* allocate the item's fault tolerant time interval, declare each route's semantic traffic, deadline, TTL and wait timeouts and the reaction budget it needs, and show that the package's bounds and the item's own reaction fit that interval.
 
-A configuration that offers no finite bound for an endpoint gives none: the element then operates and reports functionally, and the item *SHALL NOT* rely on that endpoint within a time.
+Where a configuration offers no finite bound for an endpoint, the integrator *SHALL NOT* let the item rely on that endpoint within a time.
+What the element does then is stated in xref:qos.adoc#req-ssr-qos-no-downgrade[QoS is honored or refused, never weakened].
 
-The integrator allows for the following:
+*Budgets.*
+A route's reaction budget is the time that the integrator allows, within the item's fault tolerant time interval, from a fault on that route to the item's completed reaction.
+It covers the element's detection bound for the route, the delay of the application's read and the item's own reaction.
 
-* *TTL resolution.* A frame is refused at the latest when its TTL, rounded up to a whole millisecond, plus one more millisecond has passed since the time its message ID records (xref:qos.adoc#req-ssr-qos-ttl[Expired messages are not processed]). An ID made while the sender's wall clock could not be read records the last good time, so its frame can be refused early: by up to the time the clock was unreadable, and, for a generator that keeps the last good time only to 64 ms, by up to 64 ms more (xref:../up-l2/interaction.adoc#req-ssr-ids-unique[Message IDs are unique]).
-* *When an RPC failure is seen.* Where the element can report a failure, a call's outcome is set as soon as the element's answer arrives (xref:../up-l2/interaction.adoc#req-ssr-peer-rpc-no-server[A call with no server fails at once]; xref:../up-l2/interaction.adoc#req-ssr-peer-rpc-undecodable-answered[An undecodable request is answered]; xref:../up-l2/streamer.adoc#req-ssr-streamer-rpc-error-response[An RPC request that cannot be dispatched is answered, best effort]); when the application observes that outcome is a timing claim of its configuration.
-* *Refused RPC copies on the E2E wire.* A request that the E2E wire refuses is answered, final or advisory; only a corrupt one is not. On an RPC route with the E2E wire, a response the client refuses at arrival, including the Streamer's best-effort error response with no E2E header, gives the claimed call slot back to await another response (xref:../up-l2/interaction.adoc#req-ssr-rpc-check-at-arrival[A response completes its call only once its wire accepts it]). That refusal does not complete the call. A later acceptable response or protected final refusal answer can complete it before TTL; a call with no such later response or final answer ends at its TTL, naming the refusal. The TTL remains the guarantee when no earlier completion occurs.
-* *Fail-silent routes.* The Streamer's safe state is fail-silent per route, so a receiver sees a gated route as silence. An RPC client whose request arrives on a gated route gets the best-effort `+Unavailable+` response when the reverse route can carry it (xref:../up-l2/streamer.adoc#req-ssr-streamer-rpc-error-response[An RPC request that cannot be dispatched is answered, best effort]), and otherwise its call's outcome becomes expiry once its TTL has passed. A client that uses the E2E wire refuses that response as unprotected and counts the refusal apart from corruption; it gives the slot back, and its call ends at TTL naming the refusal only if no later acceptable response or protected final answer completes it.
-* *Deadlines for detecting silence.* Every safety-related receiver whose safety reaction depends on detecting silence *SHALL* declare a deadline. An explicit `+event_only()+` declaration permits a route without a deadline, but supplies no deadline-based silence or delay detection; the integrator *SHALL NOT* rely on that route's deadline monitor for such a reaction.
-* *Priority inversion through middleware locks.* A binding's middleware can hold a lock for up to a wait's bound, and take it briefly when a frame is dropped (the binding's README). Allowing for such a lock accepts no frame drop that waits for it. Where returning a dropped frame needs the lock, the drop hands the frame to the binding's deferred return without waiting, and only that return may then wait for the lock, as pending cleanup that stays charged and isolated (xref:../up-l1/bindings.adoc#req-ssr-binding-frame-drop[What a received frame's destructor may do]; xref:release.adoc#req-ssr-release-lease-drop[A lease gives back its slot and nothing else]); a thread of its own is not by itself that isolation. "Briefly" states no bound on acquiring a lock. A drop that itself waits for the lock is a failure of its binding against xref:../up-l1/bindings.adoc#req-ssr-binding-frame-drop[What a received frame's destructor may do], never a limit that a budget accepts.
-* *Watchdog and reuse.* Where a configuration's representation keeps the narrowed generations that xref:platform.adoc#req-ssr-atomic-windows[Every narrowed value states its window] lists for the predecessor 32-bit-word representation, the integrator's watchdog supervises every thread that calls the element, and detects one that makes no progress inside the element for longer than its period `+T_wd+`. `+T_wd+` times the highest reuse rate of any one call slot stays below 2^28^, and of any one peer-table entry below 2^22^.
-* *The watchdog's reaction and coverage.* Its reaction restarts the process, or on an MCU the partition or OS-Application, that holds the element's memory, before the stalled thread can act inside the element again. It also covers the wrap windows that remain: a stalled expiry of a call, or a stalled failure of a peer's older calls, that would end a later call early, and a stalled retirement of a peer entry that would act as a spurious peer loss. A configuration whose package documents full-width values in their place needs no watchdog for these windows.
-* *A producer that stalls.* Whatever the representation, a frame queued behind a producer that stalls before linking its own frame is delivered when that producer resumes, so where the item relies on such a frame within a time, a supervisor bounds that stall.
-* *Retry loops.* Each compare-exchange loop in the element retries only after another write to the same reservation granule succeeded or, on load-linked/store-conditional cores, after an exception taken inside the loop. On a multi-core part, a write by another core anywhere in the granule counts. Its worst-case execution time under the configuration's interrupt load and contention belongs to the configuration's timing analysis; a measurement on the target can refute that analysis, but does not by itself establish a maximum.
-* *Deadline detection.* Where a configuration establishes J, a missed deadline is counted and visible at the latest D + 2L + resolution + J after the last true arrival (xref:qos.adoc#req-ssr-qos-deadline[Deadlines are monitored]). The arrival latency L is the binding's declared one, including the time a recording thread can be preempted between reading the clock and storing the arrival, which the configuration's execution model bounds. The application's later read adds its own delay, outside J, and the item's reaction budget includes it. Where no configuration establishes J, there is no finite detection bound, and the item cannot rely on one.
-* *The monitor's wait bound.* Where a route's monitor uses the one-word tick representation, a thread inside the element waits less than 2^28^ ticks of the shortest-scaled monitored route between reading the clock and storing an arrival or a check: under the watchdog above, `+T_wd+` below 0.27 s when a route uses the shortest admitted threshold (1.024 µs), and below 2.3 minutes at 1 ms. A full-width monitor has no such bound (xref:platform.adoc#req-ssr-atomic-windows[Every narrowed value states its window]).
+The integrator *SHALL* allow for the following:
 
-The element bounds its work per call in frames and iterations, not in time (xref:bounded-work.adoc#req-ssr-bound-work[Work per call is bounded by setup data]). Execution time belongs to a supported configuration's timing analysis, which its maintainers supply with the package; a measured maximum is evidence that can refute that analysis, not a bound by itself.
+* *TTL resolution.* When an expired frame is refused at the latest, how early a frame whose message ID records the last good time can be refused, and that a message whose TTL is zero never expires, is stated in xref:qos.adoc#req-ssr-qos-ttl[Expired messages are not processed] and xref:../up-l2/interaction.adoc#req-ssr-ids-unique[Message IDs are unique].
+* *When an RPC failure is seen.* When the element sets a call's outcome for a failure that it can report is stated in xref:../up-l2/interaction.adoc#req-ssr-peer-rpc-ends[RPC calls always end], xref:../up-l2/interaction.adoc#req-ssr-peer-rpc-no-server[A call with no server fails at once], xref:../up-l2/interaction.adoc#req-ssr-peer-rpc-undecodable-answered[An undecodable request is answered], xref:../up-l2/streamer.adoc#req-ssr-streamer-rpc-error-response[An RPC request that cannot be dispatched is answered, best effort] and, on a route with the E2E wire, xref:e2e-wire.adoc#req-ssr-e2e-rpc-echo[An E2E response answers exactly its call].
+When the application observes that outcome is a timing claim of its configuration.
+* *Refused RPC copies on the E2E wire.* Which answer a request that the E2E wire refuses gets, and which request gets none, is stated in xref:e2e-wire.adoc#req-ssr-e2e-refusal-answered[A refused request is answered, final or advisory] and xref:../up-l2/interaction.adoc#req-ssr-peer-rpc-undecodable-answered[An undecodable request is answered].
+What a response that the client refuses at arrival does to its call is stated in xref:../up-l2/interaction.adoc#req-ssr-rpc-check-at-arrival[A response completes its call only once its wire accepts it].
+* *Fail-silent routes.* The Streamer's safe state is fail-silent per route.
+A route that an operator disables or a monitor trips stays so until the Streamer's process ends, and is enabled again only in a new process, as xref:../up-l2/streamer.adoc#req-ssr-streamer-route-gate[Each route has a heap-free gate] states; what a receiver and an RPC client see on a gated route is stated there and in xref:../up-l2/streamer.adoc#req-ssr-streamer-rpc-error-response[An RPC request that cannot be dispatched is answered, best effort].
+What completes a call whose client uses the E2E wire and refuses the Streamer's best-effort response, and when such a call ends at its TTL, is stated in xref:../up-l2/interaction.adoc#req-ssr-rpc-check-at-arrival[A response completes its call only once its wire accepts it] and xref:../up-l2/streamer.adoc#req-ssr-streamer-rpc-error-response[An RPC request that cannot be dispatched is answered, best effort].
+* *Deadlines for detecting silence.* The integrator *SHALL* declare a deadline on every receive route whose safety reaction depends on detecting silence.
+An explicit `+event_only()+` declaration on a route supplies no deadline-based silence or delay detection; the integrator *SHALL NOT* rely on that route's deadline monitor for such a reaction.
+What setup admits and refuses for a route without a deadline is stated in xref:qos.adoc#req-ssr-qos-declared[QoS is declared per route at setup].
+* *Priority inversion through middleware locks.* A binding's middleware can hold a lock for up to a wait's bound.
+It can also take the lock when a frame is dropped, and no bound on acquiring the lock there is stated.
+The binding's qualification record states both (xref:../up-l1/bindings.adoc#req-ssr-binding-readme[A binding's qualification record states its limits and its failures]).
+What a frame drop does where returning its frame needs the lock is stated in xref:../up-l1/bindings.adoc#req-ssr-binding-frame-drop[What a received frame's destructor may do] and xref:release.adoc#req-ssr-release-lease-drop[A lease gives back its slot and nothing else].
+A drop that itself waits for the lock is a failure of its binding against xref:../up-l1/bindings.adoc#req-ssr-binding-frame-drop[What a received frame's destructor may do], never a limit that a budget accepts.
+* *Watchdog and reuse.* Where a configuration keeps the narrowed generations of the narrowed 32-bit-word representation, whose windows the example after xref:platform.adoc#req-ssr-atomic-windows[Every narrowed value states its window] lists, the integrator *SHALL* provide a watchdog that supervises every thread that calls the element, and detects one that makes no progress inside the element for longer than its period `+T_wd+`.
+The integrator *SHALL* keep `+T_wd+` times the highest reuse rate of any one call slot below 2^28^, and of any one peer-table entry below 2^22^.
+* *The watchdog's reaction and coverage.* The integrator *SHALL* have the watchdog's reaction restart the process, or on an MCU the partition or OS application partition, that holds the element's memory, before the stalled thread can act inside the element again.
+The integrator *SHALL* have the watchdog also cover the wrap windows that remain: a stalled expiry of a call, or a stalled failure of a peer's older calls, that would end a later call early, and a stalled retirement of a peer entry that would act as a spurious peer loss.
+A configuration whose package documents full-width values in their place needs no watchdog for these windows.
+* *A producer that stalls.* Where the item relies within a time on a frame queued behind a producer that stalls before linking its own frame, the integrator *SHALL* provide a supervisor that bounds that stall.
+When such a frame is delivered is stated in xref:bounded-work.adoc#req-ssr-bound-work[Work per call is bounded by setup data].
+* *Retry loops.* What a lock-free retry in the element depends on is stated in xref:bounded-work.adoc#req-ssr-bound-work[Work per call is bounded by setup data].
+Its worst-case execution time under the configuration's interrupt load and contention belongs to the configuration's timing analysis.
+* *Deadline detection.* What a route's deadline D, its binding's declared arrival latency L and the bound J are, how soon a missed deadline is counted and visible where a configuration establishes J, and that no finite detection bound is established where no configuration establishes J, is stated in xref:qos.adoc#req-ssr-qos-deadline[Deadlines are monitored]; what a binding declares and reports of arrivals is stated in xref:../up-l1/bindings.adoc#req-ssr-binding-arrival-reports[A binding reports each arrival within the latency that it declares, and each event as what it is].
+The integrator *SHALL* budget for L and for J separately, and *SHALL* include in the route's reaction budget the delay of the application's later read, which lies outside J.
+* *The monitor's wait bound.* Where a route's monitor uses the one-word tick representation, the integrator *SHALL* keep each wait of a thread inside the element, between reading the clock and storing an arrival or a check, below 2^28^ ticks of the shortest-scaled monitored route: under the watchdog above, `+T_wd+` below 0.27 s when a route uses the shortest admitted threshold (1.024 µs), and below 2.3 minutes at 1 ms. A full-width monitor has no such bound (xref:platform.adoc#req-ssr-atomic-windows[Every narrowed value states its window]).
 
-Default mode remains permissive and refuses no route solely for lacking a deadline.
+How the element bounds its work per call, in frames and iterations, is stated in xref:bounded-work.adoc#req-ssr-bound-work[Work per call is bounded by setup data].
+Execution time belongs to a supported configuration's timing analysis, which the element's supplier provides with the package; a measured maximum is evidence that can refute that analysis, not a bound by itself.
 
-In strict mode every ASIL receive route declares a deadline or an explicit `+event_only()+`, with its absence of deadline-based silence and delay detection, and a receive route on the E2E wire does at every level; the Enforce state refuses one that declares neither.
+In the Report, Enforce and Locked states, the integrator *SHALL* declare a deadline or an explicit `+event_only()+` for each ASIL receive route other than a detector route of the E2E wire and, at every integrity level, for each RPC client's response route that selects the E2E wire.
+For a detector route of the E2E wire, which xref:qos.adoc#req-ssr-qos-declared[QoS is declared per route at setup] defines, the deadline that the integrator declares in every state is stated in <<aou-seooc-e2e-protection,The integrator decides which routes need end-to-end protection>>.
+What setup admits and refuses for a route with neither, for a route with both, and for a detector route of the E2E wire without a deadline, in each strict state, is stated in xref:qos.adoc#req-ssr-qos-declared[QoS is declared per route at setup].
 
-The report lists each route's detection bound, with J where its configuration establishes J and otherwise the statement that none is established, and its TTL, against the reaction budget the integrator declares for it, and, where a configuration's representation needs them, each transport's servicing and watchdog bounds; the Enforce state refuses a route that requires a finite detection bound its configuration does not establish, a route whose bound exceeds its declared budget, and a declared servicing period longer than its transport's bound.
+What setup admits and refuses for timing, and what the compliance report lists of it, is stated in xref:qos.adoc#req-ssr-qos-declared[QoS is declared per route at setup], xref:qos.adoc#req-ssr-qos-deadline[Deadlines are monitored], xref:qos.adoc#req-ssr-qos-no-downgrade[QoS is honored or refused, never weakened] and xref:build.adoc#req-ssr-strict-report[Strict mode reports on every run].
 --
 
 *Violation:*
 
-* A route that declares a deadline *counts* each miss.
-* An expired frame is *counted* and not processed, and a failed call ends with an error.
+* A route that declares a deadline *counts* each miss (xref:qos.adoc#req-ssr-qos-deadline[Deadlines are monitored]).
+* An expired frame is *counted* and not processed (xref:qos.adoc#req-ssr-qos-ttl[Expired messages are not processed]), and a failed call ends with an error (xref:../up-l2/interaction.adoc#req-ssr-peer-rpc-ends[RPC calls always end]).
 * Silence or delay on a route with no deadline, including `+event_only()+`, supplies no deadline-based detection.
-* Slow execution and priority inversion are *undetectable* by this monitor unless they produce a qualifying gap in the route's aggregate arrivals; only such a gap shows as a counted miss.
+* Slow execution and priority inversion are *undetectable* by the route's deadline monitor unless they produce a qualifying gap in the route's aggregate arrivals, which shows as a counted miss.
 * Continued arrivals from another peer can conceal an individual peer's starvation (<<aou-seooc-peer-rates,Peer rates on shared routes are the integrator's>>).
 * A deployment outside its package's envelope, and a reaction that misses the item's interval, are *undetectable* by the element.
-* Where narrowed values remain, a thread that stalls inside the element for longer than the watchdog's bounds can end a later call early or report a spurious peer loss: *undetectable* by the element, and the watchdog's restart is the reaction.
-* In strict mode, the following are *refused at setup* in the Enforce state:
-** an ASIL receive route that declares neither a deadline nor `+event_only()+`;
-** a route that requires a finite detection bound its configuration does not establish;
-** a route whose detection bound exceeds its declared reaction budget;
-** a declared servicing period longer than its transport's bound.
+* Where narrowed values remain, a thread that stalls inside the element for longer than the watchdog's bounds can end a later call early or report a spurious peer loss (xref:platform.adoc#req-ssr-atomic-windows[Every narrowed value states its window]): *undetectable* by the element, and the watchdog's restart is the reaction.
+* A route that requires a finite detection bound its configuration does not establish is *refused at setup* (xref:qos.adoc#req-ssr-qos-no-downgrade[QoS is honored or refused, never weakened]).
+* An ASIL receive route other than a detector route of the E2E wire that declares neither a deadline nor `+event_only()+`, and an RPC client's response route that selects the E2E wire and declares neither, at any integrity level, are *refused at setup* in the Enforce and Locked states, and reported as a forbidden finding in the Report state (xref:qos.adoc#req-ssr-qos-declared[QoS is declared per route at setup]).
+* A detector route of the E2E wire that declares `+event_only()+` or no deadline, and a route that declares both a deadline and `+event_only()+`, are *refused at setup* in every state (xref:qos.adoc#req-ssr-qos-declared[QoS is declared per route at setup]).
+* A route that declares a deadline and a reaction budget, where its detection bound exceeds that budget or no finite detection bound is established for it, and a declared servicing period longer than its transport's servicing bound, are *refused at setup* in the Enforce and Locked states, and reported as a forbidden finding in the Report state (xref:qos.adoc#req-ssr-qos-no-downgrade[QoS is honored or refused, never weakened]; xref:qos.adoc#req-ssr-qos-deadline[Deadlines are monitored]).
 
 [horizontal]
-ID:: `+aou~seooc-timing-budgets~7+`
+ID:: `+aou~seooc-timing-budgets~9+`
 ASIL:: B
-Status:: Draft
 ISO 26262:: 10-4.4.1, 6-7.4.13 (part-clause numbers only)
 
 *Rationale.*
 A bounded number of operations is not a bound on elapsed time.
-Detection, scheduling, reuse windows and the reaction must fit the same system budget.
+So detection, scheduling and the reaction are fitted into one budget, the item's fault tolerant time interval.
 
-Choosing event-only traffic explicitly forgoes deadline-based silence detection.
-
-Returning a refused response's slot preserves the opportunity for a later acceptable response or final answer before TTL.
-
-The scheduling and synchronization argument for a supported configuration is made once by its maintainers, not rediscovered by each application team.
+The scheduling and synchronization argument for a supported configuration is made once, by the element's supplier, for every application team that uses it.
 The item's hazards, its fault tolerant time interval and its reaction stay the integrator's.
-
-The clauses about the E2E wire bind only a route that uses it, and that wire is deferred and not part of this delivery.
-
-_Middleware locks._
-Allowing for a middleware lock in a budget accepts no frame drop that waits for it.
-xref:../up-l1/bindings.adoc#req-ssr-binding-frame-drop[What a received frame's destructor may do] forbids such a drop: the drop hands its frame over at once, and only the return that follows may wait, as pending cleanup.
-So the clause says what allowing for the lock does not accept.
-It adds no duty for the integrator and changes none of a binding's.
 
 [[aou-seooc-clock]]
 == The platform provides the clocks
 
-[.specitem,oft-sid="aou~seooc-clock~3",oft-title="The platform provides the clocks",oft-needs="uman",oft-tags="SafetyManual,SafetyGateUpRust"]
+[.specitem,oft-sid="aou~seooc-clock~5",oft-title="The platform provides the clocks",oft-needs="uman",oft-tags="SafetyManual,SafetyGateUpRust"]
 --
-The platform *SHALL* provide a monotonic clock and a wall clock through a time provider whose supported configuration states their units, resolution, monotonicity, adjustment and failure behaviour (xref:platform.adoc#req-ssr-platform-contract[Every platform backend keeps the platform's rules]).
+The integrator *SHALL* provide a platform that supplies a monotonic clock and a wall clock through a time provider whose supported configuration states their units, resolution, monotonicity, adjustment and failure behaviour (xref:platform.adoc#req-ssr-platform-contract[Every platform backend of the element keeps the platform's rules]).
 
-* *Synchronization.* The wall clock is synchronized with every peer's time base, to within an error the integrator includes in its TTL and deadline choices, before the element's TTL decisions are relied on.
-* *Wall time, not uptime.* UUIDv7 message IDs and TTL are defined in wall time, and uptime *SHALL NOT* stand in for it: a target without a synchronized wall clock supplies one through its provider, or setup refuses (xref:runtime-modes.adoc#req-ssr-mode-entry-clock[The wall clock is read before runtime mode]).
-* *RPC requests.* The TTL bound on an RPC request holds only while the client's and the server's wall clocks agree within the TTL.
-* *Strict mode.* In strict mode, the report warns when the wall clock at setup reads earlier than the element's release date, a sign that it is not yet synchronised, and lists the time-sync source where one is declared.
+* *Synchronization.* The integrator *SHALL* keep the wall clock synchronized with every peer's time base, to within an error that it includes in its TTL and deadline choices, before the element's TTL decisions are relied on.
+* *Wall time.* UUIDv7 message IDs and TTL are defined in wall time.
+The integrator *SHALL NOT* let uptime stand in for wall time.
+On a target without a synchronized wall clock, the integrator *SHALL* supply one through the target's time provider, under the same contract.
+What setup refuses where none is supplied is stated in xref:runtime-modes.adoc#req-ssr-mode-entry-clock[The wall clock is read before runtime mode].
+* *RPC requests.* The TTL bound on an RPC request (xref:../up-l2/interaction.adoc#req-ssr-peer-rpc-ends[RPC calls always end]) holds only while the client's and the server's wall clocks agree within the TTL.
+* *Strict states.* What the compliance report shows of the wall clock at setup, and of a time-sync source where one is declared, is stated in xref:build.adoc#req-ssr-strict-report[Strict mode reports on every run].
 --
 
 *Violation:*
 
-* A wall clock that cannot be read at the transition, and a time provider that fails its setup check, are *refused at setup*.
-* A wall clock that cannot be read in runtime mode is *counted*: the frame is refused, never processed with an unknown expiry.
-* A wall clock that reads but is wrong makes frames expire early or late, and is *undetectable*.
-* A monotonic read that fails, or that reads earlier than one already held, is treated as failed: a bounded operation that depends on it ends as expired and is *counted* (xref:platform.adoc#req-ssr-platform-contract[Every platform backend keeps the platform's rules]); a monotonic clock that reads but runs at the wrong rate is *undetectable*.
-* For a generator with a 32-bit sequence, a wall clock that reads but does not move makes ID generation refuse, and count, after 2^31^ IDs within one 64 ms bucket, so it never repeats an ID; its effect on expiry is still *undetectable*.
-* For such a generator, a wall clock set more than ±4.36 years from its reading when the route was set up, as a clock that starts at zero is by its first time sync, leaves IDs from good reads unaffected, and makes an ID needed while the clock cannot be read refused and *counted*, never stamped with a time decades off.
-* A generator that keeps a 64-bit counter and the full last good time (xref:platform.adoc#req-ssr-atomic-windows[Every narrowed value states its window]) has neither figure: an ID needed while the clock cannot be read carries the last good time, and the early expiry that follows is *undetectable* by the element (xref:../up-l2/interaction.adoc#req-ssr-ids-unique[Message IDs are unique]).
+* A wall clock that cannot be read at the transition, and a time provider that fails its setup check, are *refused at setup* (xref:runtime-modes.adoc#req-ssr-mode-entry-clock[The wall clock is read before runtime mode]).
+* A wall clock that cannot be read in runtime mode is *counted*: a frame whose TTL is greater than 0 is refused (xref:qos.adoc#req-ssr-qos-ttl[Expired messages are not processed]).
+* A wall clock that reads but is wrong makes frames whose TTL is greater than 0 expire early or late.
+The element sees it only where xref:runtime-modes.adoc#req-ssr-mode-entry-clock[The wall clock is read before runtime mode] has setup fail a provider known to supply uptime or a fixed value as wall time, and where xref:build.adoc#req-ssr-strict-report[Strict mode reports on every run] warns of a wall clock that reads earlier than the element's release date; otherwise it is *undetectable* by the element.
+* A monotonic read that fails, or that reads earlier than one already held, is treated as failed: a bounded operation that depends on it ends as expired and is *counted* (xref:platform.adoc#req-ssr-platform-contract[Every platform backend of the element keeps the platform's rules]); a monotonic clock that reads but runs at the wrong rate is *undetectable* by the element.
+* For a generator with a 32-bit sequence, a wall clock that reads but does not move makes ID generation refuse, and count, after 2^31^ IDs within one 64 ms bucket (xref:../up-l2/interaction.adoc#req-ssr-ids-unique[Message IDs are unique]); its effect on expiry is still *undetectable* by the element.
+* For such a generator, a wall clock set more than ±4.36 years from its reading when the route was set up, as a clock that starts at zero is by its first time sync, leaves IDs from good reads unaffected, and makes an ID needed while the clock cannot be read refused and *counted* (xref:../up-l2/interaction.adoc#req-ssr-ids-unique[Message IDs are unique]).
+* A generator that keeps a 64-bit counter and the full last good time (xref:platform.adoc#req-ssr-atomic-windows[Every narrowed value states its window]) has neither the 2^31^-ID bound nor the ±4.36-year bound: an ID needed while the clock cannot be read carries the last good time, and the early expiry that follows is *undetectable* by the element (xref:../up-l2/interaction.adoc#req-ssr-ids-unique[Message IDs are unique]).
 * Wall clocks that disagree by more than a request's TTL make a late request look fresh, or every request look expired: *undetectable* by the element.
 
 [horizontal]
-ID:: `+aou~seooc-clock~3+`
+ID:: `+aou~seooc-clock~5+`
 ASIL:: B
-Status:: Draft
 
 *Rationale.*
-Clock reads and clock correctness are separate obligations: a readable but incorrect wall clock can make both expiration and correlation misleading.
+A readable wall clock can be incorrect, and an incorrect one can make both expiration and correlation misleading.
 
 A provider that reported uptime as wall time would pass every read while making each TTL decision wrong.
-So the substitution is refused where it is known rather than left for a reader to notice.
+So setup refuses a provider known to make that substitution (xref:runtime-modes.adoc#req-ssr-mode-entry-clock[The wall clock is read before runtime mode]).
 
 A clock call can fail after initialization succeeded.
-So its failure is handled, fail-closed, instead of assumed away.
+So its failure is handled, fail-closed.
 
 [[aou-seooc-waiver-approval]]
 == Waivers are approved with an interference argument
 
-[.specitem,oft-sid="aou~seooc-waiver-approval~3",oft-title="Waivers are approved with an interference argument",oft-needs="uman",oft-tags="SafetyManual,SafetyGateUpRust"]
+[.specitem,oft-sid="aou~seooc-waiver-approval~5",oft-title="Waivers are approved with an interference argument",oft-needs="uman",oft-tags="SafetyManual,SafetyGateUpRust"]
 --
-For each permit a binding ships, the deployment's owner *SHALL* review the allocation it covers, file a waiver record approved by someone other than its author, and argue how interference from that allocation is excluded: by partition, by qualification, or by analysis.
+For each permit a binding ships, the integrator *SHALL* have the deployment's owner review the allocation it covers, file a waiver record approved by someone other than its author, and argue how interference from that allocation is excluded: by partition, by qualification, or by analysis.
+What a binding declares as a permit, and what the element requires of a transport whose binding declares one, is stated in xref:../up-l1/bindings.adoc#req-ssr-binding-no-heap[Binding code allocates nothing in runtime mode on a native path] and xref:waivers.adoc#req-ssr-waiver-required[Middleware heap needs a named waiver].
 
-* *Review again.* The waiver *SHALL* be reviewed again when the middleware version or the deployment changes.
-* *Heap sizing.* The deployment *SHALL* size the heap the permit draws on for the bound it states. Which permit a binding ships, and what a failed allocation under it does, is stated with that binding.
-* *Strict mode.* In strict mode, the Enforce state refuses a waiver that does not name its interference argument's kind and a reference, and the report lists each waiver with its approver and its argument.
+* *Review again.* The integrator *SHALL* have the waiver reviewed again when the middleware version or the deployment changes.
+* *Heap sizing.* The integrator *SHALL* size the heap that the permit draws on for the bound that the permit states.
+Which permit a binding ships, and what a failed allocation under it does, is stated with that binding (xref:../up-l1/README.adoc#one-binding[what is specific to one binding]).
+* *What a waiver is not.* The integrator *SHALL NOT* file a waiver for a known anomaly or a known failure of a binding or of its middleware, or for anything else outside what a permit names (xref:waivers.adoc#req-ssr-waiver-scope[A waiver covers middleware and nothing else]).
+* *Strict states.* In the Report, Enforce and Locked states, the integrator *SHALL* name, in each waiver record, its interference argument's kind and a reference.
+What the element reports of each active waiver, what the Report state records and what the Enforce and Locked states refuse of a record without them, is stated in xref:waivers.adoc#req-ssr-waiver-record[Waivers are recorded and can be found].
 --
 
 *Violation:*
 
-* A missing waiver is *refused at setup*, naming the permit, and a record that names its author as approver is refused at the transition (xref:waivers.adoc#req-ssr-waiver-record[Waivers are recorded and can be found]).
-* In strict mode, a waiver without its argument's kind and reference is *refused at setup*.
-* Whether the approver really reviewed it, and whether the interference argument holds, is *undetectable*.
-* A heap too small for the permit's bound is *undetectable* until an allocation under the permit fails.
+* A missing waiver is *refused at setup*, naming the permit (xref:waivers.adoc#req-ssr-waiver-required[Middleware heap needs a named waiver]), and a record that names its author as approver is refused at the transition (xref:waivers.adoc#req-ssr-waiver-record[Waivers are recorded and can be found]).
+* A waiver without its argument's kind and reference is *refused at setup* in the Enforce and Locked states, and recorded as a finding in the Report state (xref:waivers.adoc#req-ssr-waiver-record[Waivers are recorded and can be found]).
+* Whether the approver reviewed it, and whether the interference argument holds, is *undetectable* by the element.
+* A heap too small for the permit's bound is *undetectable* by the element until an allocation under the permit fails.
 What that failure then does is stated with the binding that ships the permit.
-* A known anomaly of a binding is not a waiver and is never filed as one.
 
 [horizontal]
-ID:: `+aou~seooc-waiver-approval~3+`
+ID:: `+aou~seooc-waiver-approval~5+`
 ASIL:: B
-Status:: Draft
 ISO 26262:: 6-7.4.7, 8-12, 9-7 (part-clause numbers only)
 
 *Rationale.*
 A waiver records that the deployment accepts an allocation.
-It is not the argument that the allocation cannot interfere, which the deployment still has to make: a permit is not approval.
+It is not the argument that the allocation cannot interfere, and the permit that a binding ships is not the deployment's approval.
 
-The element checks only that a waiver exists and names an approver other than its author (xref:waivers.adoc#req-ssr-waiver-record[Waivers are recorded and can be found]).
+The element checks that a waiver exists and names an approver other than its author (xref:waivers.adoc#req-ssr-waiver-record[Waivers are recorded and can be found]).
 So judging the allocation, and arguing that it cannot interfere, stay with the deployment.
 
 _One binding's permit._
 Which permit a binding ships, and what a failed allocation under it does, are that binding's facts.
-So they are stated with that binding, and this assumption keeps the duty that every permit brings.
 
 [[aou-seooc-resource-guarantees]]
 == A resource guarantee the item relies on is required by name
 
-[.specitem,oft-sid="aou~seooc-resource-guarantees~1",oft-title="A resource guarantee the item relies on is required by name",oft-needs="uman",oft-tags="SafetyManual,SafetyGateUpRust"]
+[.specitem,oft-sid="aou~seooc-resource-guarantees~2",oft-title="A resource guarantee the item relies on is required by name",oft-needs="uman",oft-tags="SafetyManual,SafetyGateUpRust"]
 --
 *Owning wires.*
-A wire that decodes into values that own what they hold, heap memory included, is ordinary on a serialized route that declares its allocation, and its ownership needs nothing further from the integrator.
+Where a serialized route declares its allocation (xref:heap.adoc#req-ssr-heap-declared[The heap class is declared, with no default]), the integrator need supply nothing further for the ownership of a wire that decodes into values that own what they hold, heap memory included.
+What setup admits there is stated in xref:heap.adoc#req-ssr-heap-guarantees[A stronger resource guarantee is required by name, and admitted or refused], "Ordinary ownership", and xref:heap.adoc#req-ssr-heap-slot-types[A decoded value is destroyed once, as its route's class admits], "Routes that declare allocation".
+That declaration admits allocation on that route only: what holds on a native route is stated in xref:heap.adoc#req-ssr-heap-none[No heap in runtime mode on a native path].
 
 *Requiring a guarantee.*
-Where the item relies on panic-free cleanup, non-waiting acquisition, non-waiting release or recoverable exhaustion on such a route, the integrator *SHALL* require that guarantee in the route's declaration, and uses a supported configuration whose package establishes it for the exact type, wires, binding and allocation provider (xref:heap.adoc#req-ssr-heap-guarantees[A stronger resource guarantee is required by name]).
+Where the item, in ISO 26262's sense, relies on panic-free cleanup, non-waiting acquisition, non-waiting release or recoverable exhaustion on such a route, the integrator *SHALL* require that guarantee in the route's declaration, and *SHALL* use a supported configuration whose package establishes it for the exact type, wires, binding and allocation provider (xref:heap.adoc#req-ssr-heap-guarantees[A stronger resource guarantee is required by name, and admitted or refused]; what an allocation provider is, is stated in xref:../../sdk/owned-frame/providers.adoc#req-sdk-owned-frame-provider-selection[The selected memory provider is the only one used, and selecting it claims nothing]).
 
 *A guarantee that is not required.*
-A route that does not require a guarantee is promised none, whether or not evidence establishes it: its report shows that guarantee as not required and not admitted, and states separately whether it is established.
+What a route that does not require a guarantee is promised, and what its report shows of that guarantee, is stated in xref:heap.adoc#req-ssr-heap-guarantees[A stronger resource guarantee is required by name, and admitted or refused].
 --
 
 *Violation:*
 
-* A route that requires a stronger resource guarantee that is not established for it is *refused at setup*, by name (xref:heap.adoc#req-ssr-heap-guarantees[A stronger resource guarantee is required by name]).
-* A guarantee that the item relies on and no route requires is not admitted, and nothing is promised for it, even where evidence establishes it.
-That is *undetectable* by the element, whose report shows the guarantee as not required and not admitted.
+* A route that requires a stronger resource guarantee that is not established for it is *refused at setup*, by name (xref:heap.adoc#req-ssr-heap-guarantees[A stronger resource guarantee is required by name, and admitted or refused]).
+* A guarantee that the item relies on and no route requires is not admitted, even where evidence establishes it.
+That is *undetectable* by the element, whose report shows the guarantee as not required and not admitted (xref:heap.adoc#req-ssr-heap-guarantees[A stronger resource guarantee is required by name, and admitted or refused]).
 
 [horizontal]
-ID:: `+aou~seooc-resource-guarantees~1+`
+ID:: `+aou~seooc-resource-guarantees~2+`
 ASIL:: B
-Status:: Draft
 
 *Rationale.*
-The element admits ordinary owning wires and gives a stronger resource guarantee only where a route requires it (xref:heap.adoc#req-ssr-heap-guarantees[A stronger resource guarantee is required by name]).
+The element admits owning wires under ordinary ownership and gives a stronger resource guarantee only where a route requires it (xref:heap.adoc#req-ssr-heap-guarantees[A stronger resource guarantee is required by name, and admitted or refused]).
 An item that relies on such a guarantee therefore has to ask for it.
-
-_Why this duty is an assumption of its own._
-It binds only an item that relies on such a guarantee, and it rests on the element's own model of guarantees.
-So it is stated with the element, apart from the duty to use only bindings and wires that pass their contracts (xref:../up-l1/deployment.adoc#aou-seooc-qualified-bindings-and-wires[Bindings and wires pass their contracts]).
 
 [[aou-seooc-e2e-protection]]
 == The integrator decides which routes need end-to-end protection
 
-[.specitem,oft-sid="aou~seooc-e2e-protection~7",oft-title="The integrator decides which routes need end-to-end protection",oft-needs="uman",oft-tags="SafetyManual,SafetyGateUpRust"]
+[.specitem,oft-sid="aou~seooc-e2e-protection~9",oft-title="The integrator decides which routes need end-to-end protection",oft-needs="uman",oft-tags="SafetyManual,SafetyGateUpRust"]
 --
-The integrator *SHALL* decide which routes carry data that needs end-to-end protection, and *SHALL* supply protection on each of them and justify it for the item.
+The integrator *SHALL* decide which routes carry data that needs end-to-end protection, and *SHALL* supply protection on each of them and justify it for the item, in ISO 26262's sense.
 
-* *In this delivery.* In this delivery that protection is the integrator's own mechanism: the SDK's E2E wire `+E2e<W>+` is deferred and not part of it. The integrator states which faults its mechanism detects, the boundary it covers and the residuals it leaves, and its analysis of the route rests on that statement.
-* *Above ASIL B.* Data above ASIL B that relies on such protection stays within the decomposition and coexistence duties of <<aou-seooc-capability-ceiling,Data above ASIL B relies on measures outside the element>>.
-* *Adds, and replaces nothing.* End-to-end protection adds to the element's own duties and replaces none of them: RPC correlation, TTL, ownership, and the refusal and error handling of every route hold whether a route is protected or not, and message IDs are not authentication (xref:../up-l1/deployment.adoc#aou-seooc-peer-access[Only authorized processes reach the transport, and peers are faulty, never malicious]).
-* *Not required by the element.* Nothing in the element requires end-to-end protection on any route, including routes at an ASIL integrity level.
-* *Strict mode.* In strict mode, on an ASIL route over a transport the integrator classifies as a black channel, the route names the integrator's own protection or, once the E2E wire is delivered and selected for it, uses that wire; the report lists the protection named for each route, and warns of an unclassified transport.
+* *The integrator's own mechanism.* Where that protection is the integrator's own mechanism, the integrator *SHALL* state which faults its mechanism detects, the boundary it covers and the residuals it leaves, and *SHALL* rest its analysis of the route on that statement.
+* *Above ASIL B.* The decomposition and interference duties of <<aou-seooc-capability-ceiling,Data above ASIL B relies on measures outside the element>> cover data above ASIL B that relies on such protection.
+* *Other duties stay.* Selecting end-to-end protection for a route releases the element, a binding, a wire and the Streamer from no requirement that binds them on that route, and the integrator from no other assumption of use.
+A rule is replaced for such a route only where an item says so as an explicit replacement (xref:../README.adoc#req-ssr-contract-transition[What a part declares and claims, and when a replacement takes effect]).
+The RPC correlation, TTL, ownership, and refusal and error handling that hold on every route, protected or not, are stated in xref:../up-l2/interaction.adoc#req-ssr-peer-rpc-correlation[A response reaches only its own call], xref:qos.adoc#req-ssr-qos-ttl[Expired messages are not processed], xref:heap.adoc#req-ssr-heap-guarantees[A stronger resource guarantee is required by name, and admitted or refused], xref:errors.adoc#req-ssr-refuse-before-heap[Refuse before touching the heap] and xref:errors.adoc#req-ssr-error-no-silent-loss[No silent loss, and each loss counted once].
+Message IDs are not authentication (xref:../up-l1/deployment.adoc#aou-seooc-peer-access[Only authorized processes reach the transport]).
+* *What the element requires.* Whether the element requires end-to-end protection on a route is stated in xref:e2e-wire.adoc#req-ssr-e2e-not-required[The element requires end-to-end protection on no route, outside strict mode's black-channel rule].
+* *Strict states.* In the Report, Enforce and Locked states, for each ASIL route over a transport that the integrator classifies as a black channel, the integrator *SHALL* name its own protection in the route's declaration, or select the E2E wire for the route.
+What the Enforce and Locked states refuse on such a route, and what the compliance report lists of each route's protection and of a transport that is not classified, is stated in xref:build.adoc#req-ssr-strict-rules[The rules that strict mode checks] and xref:build.adoc#req-ssr-strict-report[Strict mode reports on every run].
 
-The duties that follow bind only a route that selects the SDK's E2E wire, once that wire is delivered. A route protected by the integrator's own mechanism, or not protected, is bound by none of them. Where the E2E wire is selected for a route, the integrator:
+The duties that follow bind each route that selects the E2E wire, whether or not the integrator adds a mechanism of its own on that route.
+They bind no route that does not select that wire.
+Where the E2E wire is selected for a route, the integrator *SHALL*:
 
-* declares each route's senders in deployment data, from which both sides derive the data IDs with the element's function (xref:e2e-wire.adoc#req-ssr-e2e-data-id[One data ID per sender and route]), naming no wildcard, and making each receiver's declared senders equal to its route's declared peers; keeps the derived IDs distinct wherever a misaddressed frame can travel; and sets `+resync_frames+` where the default does not fit;
-* declares a sender's starts increasing only where every start of that sender has a greater start value than every earlier start's: a wall clock kept across restarts and boots, with restarts more than a millisecond apart, or a counter it keeps across restarts and boots and supplies at construction. Otherwise, it leaves the declaration at its default;
-* runs one live sender per data ID at a time; builds each E2E value from its own role's addressing; puts at most one E2E wire on a route; and writes no wire of its own that shares one E2E value between roles;
-* declares a deadline on each such route, within the item's fault tolerant time interval, because the wire's timeout is the route's deadline, or accepts that delay and silence on that route are undetectable. In default mode the element refuses no route for lacking a deadline;
-* uses one sending thread per publish and request route, and one decoding thread per E2E route, at a time: the consuming thread on a pull binding, or one delivery thread on a push binding, as the binding's README states;
-* accepts what the wire leaves unprotected: the message header (source, sink, type, ID, TTL, priority and token), and faults that no end-to-end check can see, such as a sender that puts wrong data under a correct check. On an RPC route, a response echoes its request's data ID, counter and incarnation, with its message type, result and status inside the CRC, and the client accepts only an exact match with its own call (xref:e2e-wire.adoc#req-ssr-e2e-rpc-echo[An E2E response answers exactly its call]). The Streamer's best-effort error responses carry no E2E header, so an E2E client refuses them and gives the slot back; absent a later acceptable response or protected final answer, the call ends at its TTL, which the client observes when it next services or waits on the call;
-* accepts the residuals:
+* declare each route's senders in deployment data (xref:e2e-wire.adoc#req-ssr-e2e-data-id[One data ID per sender and route]), naming no wildcard, and making each receiver's declared senders equal to its route's declared peers; keep the senders' data IDs distinct wherever a misaddressed frame can travel; and set `+resync_frames+` where the default does not fit;
+* declare a sender's starts increasing only where every start of that sender has a greater start value than every earlier start's: a wall clock kept across restarts and boots, with restarts more than a millisecond apart, or a counter it keeps across restarts and boots and supplies at construction. Otherwise, it leaves the declaration at its default;
+* run one live sender per data ID at a time; build each E2E value from its own role's addressing; put at most one E2E wire on a route; and write no wire of its own that shares one E2E value between roles;
+* declare a positive deadline on each detector route of the E2E wire, which xref:qos.adoc#req-ssr-qos-declared[QoS is declared per route at setup] defines, within the item's fault tolerant time interval (xref:e2e-wire.adoc#req-ssr-e2e-detects[The E2E wire detects each fault]; xref:qos.adoc#req-ssr-qos-deadline[Deadlines are monitored]); a route that only sends needs no deadline under this entry;
+* use one sending thread per publish and request route, and one decoding thread per E2E route, at a time: the consuming thread on a pull binding, or one delivery thread on a push binding, as the binding's qualification record states (xref:../up-l1/bindings.adoc#req-ssr-binding-readme[A binding's qualification record states its limits and its failures]);
+* accept what the wire leaves unprotected: the message header (source, sink, type, ID, TTL, priority and token), and faults that no end-to-end check can see, such as a sender that puts wrong data under a correct check.
+What a client accepts on an RPC route, what it does with the Streamer's best-effort error response, which carries no end-to-end protection, and what then completes or ends its call, is stated in xref:e2e-wire.adoc#req-ssr-e2e-rpc-echo[An E2E response answers exactly its call], xref:../up-l2/streamer.adoc#req-ssr-streamer-rpc-error-response[An RPC request that cannot be dispatched is answered, best effort] and xref:../up-l2/interaction.adoc#req-ssr-rpc-check-at-arrival[A response completes its call only once its wire accepts it];
+* accept the residuals:
 ** two equal incarnations across a restart, at about 2^-32^ per restart, the chance that 32 bits of initialization entropy repeat where that entropy meets its stated contract (xref:platform.adoc#req-ssr-platform-entropy[Initialization entropy comes from a declared source]);
-** one undetected corruption of a frame's header, at the CRC's undetected-error rate. A counter corrupted upward makes the receiver refuse the sender's later frames, until the counter passes the corrupted value or the sender restarts. For a sender declared increasing, an incarnation corrupted upward also retires the live sender, which is then refused as stale until it restarts, and it stays the newest;
+** one undetected corruption of a frame's header, at the CRC's undetected-error rate, with what follows it (xref:e2e-wire.adoc#req-ssr-e2e-replay-window[A sliding window judges a reference's counters]; xref:e2e-wire.adoc#req-ssr-e2e-resync[A restart resynchronizes, stale frames are refused, and no arrival order locks a sender out]);
 ** a replayed run of a displaced incarnation's old frames, after two faults;
-** an RPC call whose every response copy is refused, which ends at its TTL, naming the refusal;
-** in default mode, a late run of more than `+resync_frames+` requests, all inside their TTL, which is adopted and executed: for a client not declared increasing, from any incarnation but the reference; for one declared increasing, from one older than the retired one. The live client then pays `+resync_frames+` refused calls, answered. After a re-adoption, a replay can re-execute more requests inside the window;
-** a request more than 63 counters late, refused as out of the window with an advisory answer, whose call ends at its TTL naming the refusal if no later acceptable response or protected final answer completes it;
+** an RPC call whose every response copy is refused (xref:../up-l2/interaction.adoc#req-ssr-rpc-check-at-arrival[A response completes its call only once its wire accepts it]);
+** on a route without the strict older-incarnation refusal, a late run of more than `+resync_frames+` requests, all inside their TTL, with what follows it (xref:e2e-wire.adoc#req-ssr-e2e-resync[A restart resynchronizes, stale frames are refused, and no arrival order locks a sender out]; xref:e2e-wire.adoc#req-ssr-e2e-refusal-answered[A refused request is answered, final or advisory]);
+** a request more than 63 counters late (xref:e2e-wire.adoc#req-ssr-e2e-replay-window[A sliding window judges a reference's counters]; xref:e2e-wire.adoc#req-ssr-e2e-refusal-answered[A refused request is answered, final or advisory]; xref:../up-l2/interaction.adoc#req-ssr-rpc-check-at-arrival[A response completes its call only once its wire accepts it]);
 ** a false final answer across a server restart, behind a Streamer, which takes three faults at once;
 ** the TTL and the message ID outside the CRC, so the TTL's bound on a late run needs the two wall clocks to agree within the TTL (<<aou-seooc-clock,The platform provides the clocks>>);
-** in strict mode, a client locked out by a false declaration of increasing starts: told, and counted at the server, until the server restarts;
-** a request duplicated more than once, whose extra answers can overflow the client's response queue; the route's overflow policy then drops and counts the extra frame, and if that frame is the real response and no later acceptable response or protected final answer completes the call, it ends at its TTL, naming the repeat;
-** where a client declares several servers for one method, an answer from another declared server to a misaddressed copy, which passes.
+** on a route with the strict older-incarnation refusal, a client locked out by a false declaration of increasing starts (xref:e2e-wire.adoc#req-ssr-e2e-resync[A restart resynchronizes, stale frames are refused, and no arrival order locks a sender out]; xref:e2e-wire.adoc#req-ssr-e2e-refusal-answered[A refused request is answered, final or advisory]);
+** a request duplicated more than once, whose extra answers can overflow the client's response queue (xref:qos.adoc#req-ssr-qos-overflow[Overflow acts as declared]; xref:e2e-wire.adoc#req-ssr-e2e-refusal-answered[A refused request is answered, final or advisory]; xref:../up-l2/interaction.adoc#req-ssr-rpc-check-at-arrival[A response completes its call only once its wire accepts it]);
+** where a client declares several servers for one method, an answer from another declared server to a misaddressed copy (xref:e2e-wire.adoc#req-ssr-e2e-rpc-echo[An E2E response answers exactly its call]).
 
-On a route that selects the E2E wire, strict mode adds these rules: every such receive route declares a deadline or `+event_only()+`; the clients of such an ASIL RPC route are declared increasing, from a counter kept across restarts and boots, never the wall clock, which the integrator makes durable before use and keeps per sender construction, never per boot, and after replacing a client ECU the integrator restarts its servers.
+In the Report, Enforce and Locked states, the integrator *SHALL* declare the clients of each ASIL RPC route that selects the E2E wire increasing, from a counter kept across restarts and boots, never from the wall clock; it *SHALL* make that counter durable before use and keep it per sender construction, never per boot; and after replacing a client ECU it *SHALL* restart that client's servers.
+What setup refuses on a route that selects the E2E wire, in each strict state, is stated in xref:qos.adoc#req-ssr-qos-declared[QoS is declared per route at setup] and xref:build.adoc#req-ssr-strict-rules[The rules that strict mode checks].
 
-On such a strict ASIL RPC request route, the receiver refuses every incarnation older than the newest adopted, counts the refusal and answers under the final/advisory proof in xref:e2e-wire.adoc#req-ssr-e2e-refusal-answered[A refused request is answered, final or advisory]; it never re-adopts an older incarnation through a run (xref:e2e-wire.adoc#req-ssr-e2e-resync[A restart resynchronizes, stale frames are refused, and no arrival order locks a sender out]). The persistent counter declaration alone does not provide that receive rule.
+Where the receiver applies the strict older-incarnation refusal, and what it does there, is stated in xref:e2e-wire.adoc#req-ssr-e2e-resync[A restart resynchronizes, stale frames are refused, and no arrival order locks a sender out].
 
-The report lists each E2E route's senders, data IDs, `+resync_frames+`, start declarations with their duty, thread duties and figures.
+What the compliance report lists for each E2E route is stated in xref:build.adoc#req-ssr-strict-report[Strict mode reports on every run].
 --
 
 *Violation:*
@@ -479,127 +514,181 @@ The report lists each E2E route's senders, data IDs, `+resync_frames+`, start de
 _Every route._
 
 * A route that needs protection and has none, and a residual of the integrator's own protection, are *undetectable* by the element.
-* In strict mode, an ASIL route over a transport the integrator classifies as a black channel, with no protection named, is *refused at setup* in the Enforce state, and an unclassified transport draws a warning.
+* An ASIL route over a transport that the integrator classifies as a black channel, with no protection named, is *refused at setup* in the Enforce and Locked states, and reported as a finding in the Report state (xref:build.adoc#req-ssr-strict-rules[The rules that strict mode checks]), and a transport that is not classified draws a warning in the compliance report (xref:build.adoc#req-ssr-strict-report[Strict mode reports on every run]).
 
-_A route that selects the E2E wire, once it is delivered._
+_A route that selects the E2E wire._
 
-* A corrupt frame, an undeclared data ID, a repeat, an out-of-sequence frame and a stale frame are refused and *counted* (xref:e2e-wire.adoc#req-ssr-e2e-detects[The E2E wire detects each fault]; xref:e2e-wire.adoc#req-ssr-e2e-resync[A restart resynchronizes, stale frames are refused, and no arrival order locks a sender out]), and lost frames, gaps, restarts and resyncs are *counted* per sender in the wire's storage.
-* On RPC responses, a corrupt, misaddressed, stale or unprotected response, one for another call, and one whose status does not match, are refused at arrival and *counted*, and the slot is given back to await a later acceptable response or protected final answer; if neither arrives, the call ends at its TTL naming the refusal.
-* A refused request is answered, final or advisory, and *counted* at the server by kind; only a corrupt one goes unanswered.
-* Delay and silence are *counted* by the route's deadline monitor where a deadline is declared, and are *undetectable* where none is.
-* A second decoding thread, or a second sending thread, makes in-order frames look reordered or contended: they are refused and *counted*, never corrupted, and on a client a call that receives no later acceptable response or protected final answer ends at its TTL.
-* A second live sender under one data ID, or a colliding ID, can take the slot: its frames are delivered as the declared sender's, which is *undetectable* by the wire, and the declared sender's frames are refused as stale, *counted*.
+* Each frame that the wire refuses is *counted* once, and named, as xref:e2e-wire.adoc#req-ssr-e2e-refusal-counted[End-to-end refusals are named, and counted once] states (xref:e2e-wire.adoc#req-ssr-e2e-detects[The E2E wire detects each fault]; xref:e2e-wire.adoc#req-ssr-e2e-resync[A restart resynchronizes, stale frames are refused, and no arrival order locks a sender out]), and lost frames, gaps, restarts and resyncs are *counted* per sender in the wire's storage (xref:e2e-wire.adoc#req-ssr-e2e-figures[The E2E wire's figures cover the stretch from encode to decode]).
+* A response that a client refuses is *counted*.
+Which responses a client refuses, what a refused response does to its call, and what ends a call that receives no accepted response, is stated in xref:e2e-wire.adoc#req-ssr-e2e-rpc-echo[An E2E response answers exactly its call] and xref:../up-l2/interaction.adoc#req-ssr-rpc-check-at-arrival[A response completes its call only once its wire accepts it].
+* A request that the E2E wire refuses is *counted* once at the server, under the refusal's name: corrupt, undeclared data ID or its kind; which answer it gets, and which request gets none, is stated in xref:e2e-wire.adoc#req-ssr-e2e-refusal-answered[A refused request is answered, final or advisory] and xref:../up-l2/interaction.adoc#req-ssr-peer-rpc-undecodable-answered[An undecodable request is answered].
+* Delay and silence on a detector route of the E2E wire are *counted* by its deadline monitor, which setup requires (xref:qos.adoc#req-ssr-qos-declared[QoS is declared per route at setup]; xref:qos.adoc#req-ssr-qos-deadline[Deadlines are monitored]); on an RPC client's response route, a call that receives no accepted response ends at its TTL (xref:../up-l2/interaction.adoc#req-ssr-peer-rpc-ends[RPC calls always end]).
+* A second decoding thread, or a second sending thread, breaks the one-thread duty above.
+Where two decodes of one slot overlap, the frame that finds its slot held is refused and *counted* as contended, and concurrent decoders cannot corrupt the slot's state (xref:e2e-wire.adoc#req-ssr-e2e-receiver-state[E2E receiving state is one fixed slot per declared data ID]).
+Where two encodes of one value overlap, the encode that finds the other in progress is refused by name, before the counter moves (xref:e2e-wire.adoc#req-ssr-e2e-sender-state[E2E sending state is one counter per E2E value]).
+Where the two threads' decodes or encodes do not overlap, the second thread is *undetectable* by the wire: frames can then reach the receiver out of their sending order, and are judged by their counters (xref:e2e-wire.adoc#req-ssr-e2e-detects[The E2E wire detects each fault]).
+On a client, what ends a call that receives no accepted response is stated in xref:../up-l2/interaction.adoc#req-ssr-rpc-check-at-arrival[A response completes its call only once its wire accepts it].
+* A second live sender under one data ID, or a colliding ID, can take the receiving slot: its frames are delivered as the declared sender's, which is *undetectable* by the wire, and the declared sender's frames are refused as stale, *counted* (xref:e2e-wire.adoc#req-ssr-e2e-resync[A restart resynchronizes, stale frames are refused, and no arrival order locks a sender out]).
 * A false declaration of increasing starts lets a dead incarnation's late frames retire a live incarnation that is the reference when the first of them arrives.
-Those late frames are then delivered as new data, which is *undetectable* by the wire, and the live incarnation is refused as stale, and *counted*, until it restarts; the deadline shows the silence.
-* In default mode, a live incarnation that is not the reference at that frame is not locked out: it costs `+resync_frames+` refused frames, *counted*.
-* On a strict ASIL RPC request route on the wire, every incarnation older than the newest adopted instead stays refused regardless of the run; every valid refused request is answered and counted, with finality only under the stated non-delivery proof.
+Those late frames are then delivered as new data, which is *undetectable* by the wire; subsequent frames of the live incarnation are judged under xref:e2e-wire.adoc#req-ssr-e2e-resync[A restart resynchronizes, stale frames are refused, and no arrival order locks a sender out], and each refusal is *counted*.
+* On a route without the strict older-incarnation refusal (xref:e2e-wire.adoc#req-ssr-e2e-resync[A restart resynchronizes, stale frames are refused, and no arrival order locks a sender out]), a live incarnation that is not the reference at that frame is not locked out: it costs `+resync_frames+` refused frames, *counted*.
+* On a route with the strict older-incarnation refusal (xref:e2e-wire.adoc#req-ssr-e2e-resync[A restart resynchronizes, stale frames are refused, and no arrival order locks a sender out]), every incarnation older than the newest adopted stays refused regardless of the run; every valid refused request is answered and *counted*, with finality only under the non-delivery proof of xref:e2e-wire.adoc#req-ssr-e2e-refusal-answered[A refused request is answered, final or advisory].
 * An undetected corruption of a frame's header is *undetectable* by the wire.
-The refusals that follow it are *counted*, and the deadline shows the silence.
-* An adopted late run is *counted* as a resync.
-* In strict mode, on a route that selects the E2E wire, a receive route with neither a deadline nor `+event_only()+`, and an ASIL RPC route whose clients are not declared increasing from a counter, are *refused at setup* in the Enforce state.
+The refusals that follow it are *counted* (xref:e2e-wire.adoc#req-ssr-e2e-resync[A restart resynchronizes, stale frames are refused, and no arrival order locks a sender out]; xref:e2e-wire.adoc#req-ssr-e2e-refusal-counted[End-to-end refusals are named, and counted once]).
+* An adopted late run is *counted* as a resync (xref:e2e-wire.adoc#req-ssr-e2e-resync[A restart resynchronizes, stale frames are refused, and no arrival order locks a sender out]).
+* A detector route of the E2E wire that declares `+event_only()+` or no deadline is *refused at setup* in every state (xref:qos.adoc#req-ssr-qos-declared[QoS is declared per route at setup]).
+An ASIL RPC route that selects the E2E wire and whose clients are not declared increasing from a counter is *refused at setup* in the Enforce and Locked states, and reported as a finding in the Report state (xref:build.adoc#req-ssr-strict-rules[The rules that strict mode checks]).
 
 [horizontal]
-ID:: `+aou~seooc-e2e-protection~7+`
+ID:: `+aou~seooc-e2e-protection~9+`
 ASIL:: B
-Status:: Draft
 ISO 26262:: 6-Annex D.2.4, 6-Annex E.3.2 (part-clause numbers only)
 
 *Rationale.*
 The wire protects a declared communication relationship.
 It cannot establish the truth of the deployment declarations or supply protection on a route that does not use it.
 
-The SDK's E2E wire is deferred and not part of this delivery.
-So the integrator's own mechanism is the only protection available in this delivery, and strict mode accepts the protection the integrator names under its stated boundary.
-
-_Which duties bind which route._
-Every duty that only the E2E wire needs, its declarations, residuals, start counters and receive rules, binds only a route that selects that wire.
-A strict ASIL RPC route that the wire does not protect is bound by none of them.
-
-The duty to decide which routes need protection, to supply it and to justify it, and the black-channel and decomposition rules, hold for every route.
-The deferred E2E items gain no implementation, gate or coverage credit from this assumption.
-
 [[aou-seooc-target-environment]]
 == The target environment is verified
 
-[.specitem,oft-sid="aou~seooc-target-environment~4",oft-title="The target environment is verified",oft-needs="uman",oft-tags="SafetyManual,SafetyGateUpRust"]
+[.specitem,oft-sid="aou~seooc-target-environment~6",oft-title="The target environment is verified",oft-needs="uman",oft-tags="SafetyManual,SafetyGateUpRust"]
 --
-The target *SHALL* be one that a supported configuration's package names, with the exact compiler release, target, options and library scope, OS or RTOS, BSP and hardware revision it was verified on.
+The integrator *SHALL* use a target that a supported configuration's package names, with the exact compiler release, target, options and library scope, OS or RTOS, BSP and hardware revision it was verified on, or *SHALL* treat a target or configuration that no package supports as an explicit extension with a custom platform (<<aou-seooc-integrator-platform,A custom platform keeps the platform's rules>>).
 
-* *What verification is.* Upstream support for a target, a compiler qualification for another scope and a successful build are each distinct from that verification. The package's maintainers supply that verification, and the evidence for the conditions below, for the parts, cores, execution contexts and participants the package names; for a supported configuration the integrator confirms that the deployment matches them, and supplies an argument of its own only for a context or participant the package does not cover.
-* *Profiles.* The SDK's profiles are those that the SEooC's README lists, and a supported configuration's package names the profile it covers. A backend that exists only as source, which no toolchain or device has run, is not a profile. A profile is not a claim that every binding runs on it, and no profile carries an ASIL of its own.
-* *Atomics.* The target *SHALL* have 32-bit atomics with compare-and-swap; 64-bit atomics are not needed, and a target's backend keeps the element's semantics without an atomic width the target lacks (xref:platform.adoc#req-ssr-atomic-width[No target needs an atomic width it lacks]). The RH850, AURIX TriCore, Cortex-M3, Cortex-M4, Cortex-M7 and e200 class qualifies, and so does Cortex-M23 (ARMv8-M Baseline), which has 32-bit compare-and-swap: the element selects by `+target_has_atomic+`, never by a list of targets. Cores without compare-and-swap, such as Cortex-M0 and Cortex-M0+, do not.
-* *Atomic lowering.* Each atomic read-modify-write the element uses is atomic on the target's core. On RH850G3K the toolchain lowers compare-and-swap to `+CAXI+`, never to an `+LDL.W+`/`+STC.W+` loop, which that core executes as a plain load and store. On any other core it lowers to a sequence that is atomic on that core.
-* *Several cores.* Where one instance of the element, or a route's memory, spans several cores, these operations are coherent across those cores. Where the cores' data caches are not kept coherent by hardware, the element's memory is placed where they are, or where it is not cached. Parts whose cores' exclusive accesses are not shown to be coherent, such as STM32H7-class parts that pair a Cortex-M7 with a Cortex-M4, run a separate instance on each core, and a route between those cores uses a transport that synchronises them by its own means (xref:../up-l1/deployment.adoc#aou-seooc-qualified-bindings-and-wires[Bindings and wires pass their contracts]).
-* *Different ABIs.* Cores of different ABIs, such as a 64-bit Cortex-A beside 32-bit Cortex-R or Cortex-M cores, share no native representation: data between them takes a copying route, through a transport that synchronises the cores by its own means, and the element refuses a native wire between peers of different ABIs at setup (xref:../up-l1/peers.adoc#req-ssr-native-abi-agreed[A native representation never crosses an ABI]). For cores of one ABI that share memory, each core observes the other's atomic operations coherently. The element cannot detect a violation of that.
-* *Interrupt masks.* A private interrupt mask excludes only what it masks: an unmasked interrupt, a non-maskable interrupt, a fault handler or a DMA engine that the deployment actually has and that can reach the element's memory needs an argument of its own, from the package where it names that participant.
-* *Backends and custom platforms.* A supported configuration's package names the platform backend it uses. A target or configuration that no package supports needs a custom platform, an explicit extension (<<aou-seooc-integrator-platform,A custom platform keeps the platform's rules>>).
-* *Stacks and departures.* The integrator sizes the stacks of threads that call the element using its upper estimates, and analyses where the environment the element was verified in departs from the target.
-* *Strict mode.* In strict mode, the Enforce and Locked states apply the target, dependency, ownership, known-failure and deviation checks to every configuration, and refuse, naming the claim and the missing evidence, a safety-assurance scope that a route or process explicitly requires where its configuration's package does not establish it (xref:qos.adoc#req-ssr-qos-no-downgrade[QoS is honored or refused, never weakened]). An integrity level or the Enforce state is not such a request: a configuration without an assurance package is not refused for that alone, and its report says that its assurance is Draft and unassessed. The report lists the coherence duty on multi-core parts and the stack-sizing duty.
+* *What verification is.* Upstream support for a target, a compiler qualification for another scope and a successful build are each distinct from that verification. The element's supplier supplies that verification in the package, and the evidence for the conditions below, for the parts, cores, execution contexts and participants the package names; for a supported configuration the integrator *SHALL* confirm that the deployment matches them, and supply an argument of its own for a context or participant the package does not cover; it needs no argument of its own for one that the package covers.
+* *Profiles.* A supported configuration's package names the platform profile that it covers (xref:README.adoc#req-ssr-element-configurations[The ASIL path and supported configurations]). A backend that exists only as source, which no toolchain or device has run, is not a platform profile. A platform profile is not a claim that every binding runs on it, and no platform profile carries an ASIL of its own.
+* *Atomics.* The integrator *SHALL* use a target whose core provides 32-bit atomic loads, stores and compare-and-swap for the memory that the element uses, and whose compiler target provides them as 32-bit atomics with compare-and-swap.
+The name of a core's family does not establish that: the exact core revision and its compiler target do.
+What the element needs of a target's atomics, and its selection by `+target_has_atomic+`, is stated in xref:platform.adoc#req-ssr-atomic-width[No target needs an atomic width it lacks].
+* *Atomic lowering.* The integrator *SHALL* use a toolchain and options under which each atomic read-modify-write that the element uses is atomic on the target's core. On RH850G3K the integrator *SHALL* use a toolchain that lowers compare-and-swap to `+CAXI+`, never to an `+LDL.W+`/`+STC.W+` loop, which that core executes as a plain load and store.
+* *Several cores.* Where one instance of the element, or a route's memory, spans several cores, the integrator *SHALL* ensure that every atomic operation that the element performs on memory that those cores share, loads and stores included, is atomic and coherent across those cores: each core observes the others' atomic writes to that memory, and no other core's write to it takes effect inside a read-modify-write. Where the cores' data caches are not kept coherent by hardware, the integrator *SHALL* place the element's memory where they are, or where it is not cached. On a part whose cores' exclusive accesses are not shown to be coherent, such as an STM32H7-class part that pairs a Cortex-M7 with a Cortex-M4, the integrator *SHALL* run a separate instance on each core, and *SHALL* use, for a route between those cores, a transport that synchronises them by its own means for every control word and payload that it shares between them, and whose qualification covers that cross-core configuration (xref:../up-l1/deployment.adoc#aou-seooc-qualified-bindings-and-wires[Bindings and wires pass their contracts]).
+* *Different ABIs.* Cores of different ABIs, such as a 64-bit Cortex-A beside 32-bit Cortex-R or Cortex-M cores, share no native representation: the integrator *SHALL* route data between them over a copying route, through a transport that synchronises the cores by its own means.
+What setup refuses between peers of different ABIs is stated in xref:../up-l1/peers.adoc#req-ssr-native-abi-agreed[A native representation never crosses an ABI].
+* *Interrupt masks.* A private interrupt mask excludes only what it masks. For an unmasked interrupt, a non-maskable interrupt, a fault handler or a DMA engine that the deployment actually has and that can reach the element's memory, the integrator *SHALL* supply an argument for that participant, taken from the package where the package names it.
+* *Backends and custom platforms.* A supported configuration's package names the platform backend it uses. What an integrator that supplies a platform backend of its own provides is stated in <<aou-seooc-integrator-platform,A custom platform keeps the platform's rules>>.
+* *Stacks and departures.* The integrator *SHALL* size the stacks of threads that call the element using its upper estimates, and analyse where the environment the element was verified in departs from the target.
+* *Resident startup memory.* The integrator *SHALL* keep the element's startup memory resident while the process runs (xref:platform.adoc#req-ssr-platform-contract[Every platform backend of the element keeps the platform's rules], "Prefault").
+* *A required assurance scope.* Where the item, in ISO 26262's sense, relies on a timing bound or a safety-assurance scope on a route, the integrator *SHALL* require it in that route's declaration.
+What setup does, in every state of strict mode, Off included, with a route that explicitly requires one that its configuration's package does not establish is stated in xref:qos.adoc#req-ssr-qos-no-downgrade[QoS is honored or refused, never weakened].
+An integrity level or a strict state is not such a requirement.
+What the Enforce and Locked states check for every configuration, with or without an assurance package, and what the compliance report lists of the coherence and stack-sizing duties, is stated in xref:build.adoc#req-ssr-strict-rules[The rules that strict mode checks] and xref:build.adoc#req-ssr-strict-report[Strict mode reports on every run].
 --
 
 *Violation:*
 
-* A target without 32-bit compare-and-swap fails to build, which counts as *refused at setup*.
-* A compare-and-swap lowered to a sequence that is not atomic on the core, or not coherent across the cores that share it, can corrupt the element's state words, and the element does not detect it: *undetectable*.
-* A native wire between peers of different ABIs is *refused at setup*.
-* A target with no shipped backend builds (the bare-metal core gate passes), and runtime code then runs on whatever platform the integrator supplies; whether that platform keeps its rules is *undetectable* by the element.
-* In strict mode, an explicitly required assurance scope that the configuration's package does not establish is *refused at setup* in the Enforce state, by name; a configuration without an assurance package is not refused for that alone.
-* The behaviour of an unverified backend, a participant that a private mask leaves unmasked, a toolchain or target outside its package's verified scope, and a stack overflow are *undetectable*.
+* A target without 32-bit atomics with compare-and-swap fails to build (xref:platform.adoc#req-ssr-atomic-width[No target needs an atomic width it lacks]), which counts as *refused at setup*.
+* A compare-and-swap lowered to a sequence that is not atomic on the core, or an atomic operation that is not coherent across the cores that share its memory, can corrupt the element's state words, and is *undetectable* by the element.
+* A native wire between peers of different ABIs is *refused at setup* (xref:../up-l1/peers.adoc#req-ssr-native-abi-agreed[A native representation never crosses an ABI]).
+* A target with no shipped backend builds, and runtime code then runs on whatever platform the integrator supplies; whether that platform keeps its rules is *undetectable* by the element, apart from the checks that <<aou-seooc-integrator-platform,A custom platform keeps the platform's rules>> names.
+* A route that explicitly requires an assurance scope that its configuration's package does not establish is *refused at setup*, by name, in every state of strict mode, Off included (xref:qos.adoc#req-ssr-qos-no-downgrade[QoS is honored or refused, never weakened]); a configuration without an assurance package is not refused for that alone.
+* A timing bound or a safety-assurance scope that the item relies on and that no route's declaration requires is *undetectable* by the element: setup admits no such claim for the route, and the route's report shows none (xref:qos.adoc#req-ssr-qos-no-downgrade[QoS is honored or refused, never weakened]).
+* The behaviour of an unverified backend, a participant that a private mask leaves unmasked, a toolchain or target outside its package's verified scope, and a stack overflow are *undetectable* by the element.
+* Startup memory that is paged out while the process runs is *undetectable* by the element; a write to it in runtime mode can then take a page fault.
 
 [horizontal]
-ID:: `+aou~seooc-target-environment~4+`
+ID:: `+aou~seooc-target-environment~6+`
 ASIL:: B
-Status:: Draft
 ISO 26262:: 6-9.4.5, 6-10.4.7 (part-clause numbers only)
 
 *Rationale.*
-The protocol requires atomicity and coherence on the actual hardware, not just a type that the compiler accepts.
+The element's synchronization relies on atomicity and coherence on the actual hardware, which a type that the compiler accepts does not guarantee.
 A native representation also requires matching ABIs.
 
-A profile's support and a configuration's assurance are separate.
+Locking the startup memory, or running without paging, keeps it resident.
+
+The rule for RH850G3K rests on its software manual: on that core `+LDL.W+` and `+STC.W+` are an ordinary word load and store with no link, so a loop built from them excludes nothing, while `+CAXI+` reads, compares and writes a word indivisibly (Renesas Electronics, RH850G3K User's Manual: Software, R01US0125EJ0120, Rev.1.20, section 5.3.2 and the instruction entries for `+CAXI+`, `+LDL.W+` and `+STC.W+` in section 6.2.2).
+A core's own exclusive monitor need not observe another core's accesses, so a compare-and-swap built from exclusive loads and stores is atomic across cores only where the memory system detects conflicts between them for that memory (https://documentation-service.arm.com/static/606dc36485368c4c2b1bf62f[Arm, Armv7-M Architecture Reference Manual, ARM DDI 0403E.e], sections A3.4.1 and A3.4.2).
+
 A profile without an assurance package keeps its functional support, and no OS, architecture or compiler confers an ASIL.
 
-Strict mode is usable before any assurance package exists.
-Enforce keeps checking what a configuration declares, and refuses an assurance scope only where it is requested and unsupported.
-So an ASIL-labelled development configuration proceeds as Draft and unassessed.
+The Enforce and Locked states keep checking what a configuration declares, and setup refuses an assurance scope only where a route requires it and its configuration does not establish it.
+So a configuration is not refused for lacking an assurance package alone; what its compliance report says of its assurance is stated in xref:build.adoc#req-ssr-strict-report[Strict mode reports on every run].
 
-The MCU profiles run their images on an emulator, which shows functional behaviour, not physical timing or a qualified board.
+.Cores with and without 32-bit compare-and-swap
+====
+Cortex-M3, Cortex-M4, Cortex-M7 and Cortex-M23 (Armv8-M Baseline) have exclusive word loads and stores, from which a 32-bit compare-and-swap is built.
+The RH850G3K core has the `+CAXI+` instruction, and AURIX TriCore cores of the TC1.6 architectures have `+CMPSWAP.W+`.
+Cortex-M0 and Cortex-M0+ (Armv6-M) have neither exclusive accesses nor a compare-and-swap instruction, so they do not qualify.
+====
 
 [[aou-seooc-build-configuration]]
 == The ASIL binary is built from its claimed graph, with the ASIL profile
 
-[.specitem,oft-sid="aou~seooc-build-configuration~5",oft-title="The ASIL binary is built from its claimed graph, with the ASIL profile",oft-needs="uman",oft-tags="SafetyManual,SafetyGateUpRust"]
+[.specitem,oft-sid="aou~seooc-build-configuration~8",oft-title="The ASIL binary is built from its claimed graph, with the ASIL profile",oft-needs="uman",oft-tags="SafetyManual,SafetyGateUpRust"]
 --
-The integrator *SHALL* build the ASIL binary so that, at run time, it depends only on its claimed safety dependency graph: `+up-rust-core+`, the ASIL Streamer crate where it is used, the bindings, wires and platform backends its configuration qualifies, and any optional layer its configuration admits with its own evidence (xref:crate-isolation.adoc#req-ssr-crate-core-only-binary[An ASIL binary needs no crate outside its claimed graph at run time]).
+*The complete image.*
+For each ASIL binary, the integrator *SHALL* declare, with the configuration, the complete content of the binary's final image and its build provenance: every crate and other component that the image contains, and every input of the build that produces it.
+The integrator *SHALL* build the final image from that declaration, and *SHALL NOT* link into the image a crate or component that the declaration does not account for.
 
-* *Nothing from outside the graph.* It *SHALL NOT* link code from outside that graph into the binary's image. A crate belongs to the graph by what it actually brings into the image, with its features and target-selected paths, never by its name: a compatibility re-export is judged by the dependencies it brings, and code outside the graph, such as the `+up-rust+` compatibility facade, an async integration or the classic Streamer, keeps its ordinary use, which claims no assurance scope.
-* *Toolchain.* It *SHALL* use the exact compiler release, target, library modules and options that its configuration records for the release, with the supplier's qualification evidence for that scope where the claim needs it; the minimum supported Rust version and the availability of an API are not that evidence.
-* *Profile.* It *SHALL* use the ASIL profile: `+panic = "abort"+` and `+overflow-checks = true+`.
-* *Strict mode.* In strict mode's locked build, `+--cfg up_rust_strict+` in the integrator's build configuration allows only the Enforce state, and refuses a crate or route that the declared graph does not admit, naming its replacement (xref:build.adoc#req-ssr-strict-lock[The locked build allows only enforcement]). Strict mode also refuses an ASIL process built with unwinding, and the element's ASIL build check, placed in an application's own binary, gives any ASIL binary the Streamer binary's check; its report lists overflow checks as a checklist item.
+*Member information.*
+For each ASIL binary, the integrator *SHALL* supply with the configuration the member information that the binary's build produces, naming each crate that the build links (xref:build.adoc#req-ssr-strict-lock[The locked build allows only enforcement]).
+
+*Classification.*
+In that declaration the integrator *SHALL* classify each crate and component by what it actually brings into the image, with its features and target-selected paths, and not by its name, as one of:
+
+* a member of the binary's claimed safety dependency graph;
+* a separately qualified component outside the claimed graph, under its own contract and qualification;
+* other code of the image, such as the application's own crates and their third-party dependencies, for which the integrator *SHALL* argue that it does not interfere with the members of the claimed graph (<<aou-seooc-process-isolation,Processes or partitions are isolated>>);
+* a build input that does not run in the image, such as a generator, whose output is classified with the artifact that consumes it; the code that the element's derive generates is held to the element's requirements, as the element's own code is, and is a member of the claimed graph (xref:memory-safety.adoc#req-ssr-unsafe-inventory[Every `+unsafe+` is inventoried and justified], "Generated code").
+
+Membership of the claimed graph, an integrity level and separate qualification are three separate properties: none follows from another.
+A QM label, or a place outside the claimed graph, is no argument that code does not interfere, and the element qualifies no code of the application.
+A compatibility re-export is judged by the dependencies it brings.
+
+*The claimed graph.*
+The claimed safety dependency graph holds only:
+
+* the safety crate (xref:crate-isolation.adoc#req-ssr-crate-isolated[The safety crate cannot be tainted]);
+* the element's strict-mode part, where the binary uses it (xref:README.adoc#req-ssr-element-boundary[The parts of the element, and element code]);
+* the code that the element's derive generates for the binary, with the exact derive and configuration that produced it (xref:memory-safety.adoc#req-ssr-unsafe-inventory[Every `+unsafe+` is inventoried and justified], "Generated code");
+* the ASIL Streamer crate, where the binary uses it (xref:crate-isolation.adoc#req-ssr-crate-streamer-isolated[The ASIL Streamer is its own untaintable crate]);
+* the bindings, wires and platform backends that the configuration qualifies (xref:../up-l1/deployment.adoc#aou-seooc-qualified-bindings-and-wires[Bindings and wires pass their contracts]), a custom platform backend among them only as <<aou-seooc-integrator-platform,A custom platform keeps the platform's rules>> states;
+* any optional layer that the configuration admits with that layer's own allocated requirements and evidence (xref:crate-isolation.adoc#req-ssr-crate-core-only-binary[The checked policy stays in the safety crate, and no admitted optional layer bypasses or reimplements it]).
+
+The integrator *SHALL NOT* claim the element's safety-assurance scope for anything outside that graph.
+Code outside it, such as a compatibility facade that brings dependencies from outside the graph, an async integration or the classic Streamer, keeps its ordinary use, which claims no assurance scope.
+
+*Toolchain.*
+The integrator *SHALL* use the exact compiler release, target, library modules and options that its configuration records for the release, with the supplier's qualification evidence for that scope where the claim needs it; the minimum supported Rust version and the availability of an API are not that evidence.
+
+*Profile.*
+The integrator *SHALL* use the ASIL profile: `+panic = "abort"+` and `+overflow-checks = true+`.
+The integrator *SHALL NOT* set the element's test-hook configuration, which the element's documentation names, in the build of an ASIL binary, and *SHALL* verify on the binary's final image that no test hook of the element is present (xref:build.adoc#req-ssr-no-test-hooks[The shipped element contains no test hook]).
+The ASIL build check that an application's own binary can carry is stated in xref:build.adoc#req-ssr-build-panic-abort[The ASIL build aborts on panic and checks overflow].
+
+*Strict states.*
+What the Locked state is, is stated in xref:build.adoc#req-ssr-strict-states[Strict mode has four states], and that only the integrator's build configuration sets the element's strict-build setting, in xref:build.adoc#req-ssr-strict-lock[The locked build allows only enforcement].
+What the declared-graph check takes as its inputs and observes, and what each state reports, allows and refuses, among it a crate or route that the declared graph does not admit, is stated in xref:build.adoc#req-ssr-strict-lock[The locked build allows only enforcement].
+What the Enforce and Locked states refuse of a process that runs an ASIL binary built with unwinding, and what the compliance report lists of the build, is stated in xref:build.adoc#req-ssr-strict-rules[The rules that strict mode checks] and xref:build.adoc#req-ssr-strict-report[Strict mode reports on every run].
 --
 
 *Violation:*
 
 * A build of the ASIL Streamer binary with unwinding fails to compile (xref:build.adoc#req-ssr-build-panic-abort[The ASIL build aborts on panic and checks overflow]), which counts as *refused at setup*.
-Test builds are not refused: they need unwinding, and none of them compiles that binary.
-* An application binary that links only `+up-rust-core+` can carry the same check in its own `+main+`, and the safety manual gives it.
-Without it, a build with unwinding or without overflow checks is *undetectable*, and so is code from outside the claimed graph linked into the binary without the lock.
-* In the locked build, a crate that the declared graph does not admit is refused, which counts as *refused at setup*, and strict mode refuses an ASIL process built with unwinding at setup.
+* An application's own binary can carry the element's ASIL build check (xref:build.adoc#req-ssr-build-panic-abort[The ASIL build aborts on panic and checks overflow]).
+Without it, a build with unwinding is *undetectable* by the element in the Off state; what the other states do with a process that runs such a binary is stated in a bullet below.
+A build without overflow checks is *undetectable* by the element whether or not the binary carries the check.
+* A crate or component that the declaration does not account for is *undetectable* by the element, except where the declared-graph check observes it; what that check observes, and what it reports and refuses in each state, which counts as *refused at setup*, is stated in xref:build.adoc#req-ssr-strict-lock[The locked build allows only enforcement].
+* A claimed graph that is not declared, or member information that the build does not supply, in a process that runs an ASIL binary, is reported in the Report state and *refused at setup* in the Enforce and Locked states (xref:build.adoc#req-ssr-strict-lock[The locked build allows only enforcement]).
+* An ASIL binary built with the element's test-hook configuration set is *undetectable* by the element.
+* A process that runs an ASIL binary built with unwinding is *refused at setup* in the Enforce and Locked states, and reported as a finding in the Report state (xref:build.adoc#req-ssr-strict-rules[The rules that strict mode checks]).
+* A binding or a wire of the declared graph that is not on the integrator's qualified list, and a custom platform that names no contract-test evidence, are *refused at setup* in the Enforce and Locked states, and reported as a finding in the Report state (xref:build.adoc#req-ssr-strict-rules[The rules that strict mode checks]).
+No requirement has the element check what else a declared graph holds: the refusal outside the declared graph reaches only a crate or route that the declared graph does not admit (xref:build.adoc#req-ssr-strict-lock[The locked build allows only enforcement]).
+* No requirement has the element compare the final image with the declaration: such a comparison is verification evidence of this assumption, made outside the element.
+* In the Off state, an ASIL binary whose claimed graph is not declared, or whose member information is not supplied, is *undetectable* by the element.
 * A toolchain outside its configuration's recorded scope is *undetectable* by the element.
-* The safety crate's own build cannot be changed by another crate's features (xref:crate-isolation.adoc#req-ssr-crate-isolated[The safety crate cannot be tainted]).
 
 [horizontal]
-ID:: `+aou~seooc-build-configuration~5+`
+ID:: `+aou~seooc-build-configuration~8+`
 ASIL:: B
-Status:: Draft
 ISO 26262:: 1-3.22 (part-clause numbers only)
 
 *Rationale.*
-Only the crates of the claimed graph are developed and qualified for the element's requirements.
-So other code in the binary would run code that no requirement covers.
-
-The element enforces the profile only in the ASIL Streamer binary, which refuses to compile with unwinding (xref:build.adoc#req-ssr-build-panic-abort[The ASIL build aborts on panic and checks overflow]).
-So for any other ASIL binary the build configuration is the integrator's to get right.
+Only the members of the claimed graph are developed and qualified for the element's requirements.
+Other code of the image is covered by no requirement of the element, and it can still interfere with the members of the graph.
+So the integrator accounts for it and argues that it does not interfere.
+A build input shapes the image without running in it, so its output is judged with the artifact that consumes it.
+The graph is declared with the configuration so that the build and the setup can be checked against it (xref:build.adoc#req-ssr-strict-lock[The locked build allows only enforcement]).
 
 A toolchain qualification covers an exact release, target, library modules and options.
 A build that succeeds elsewhere, or a newly available language feature, is not covered by it.
@@ -607,36 +696,50 @@ A build that succeeds elsewhere, or a newly available language feature, is not c
 [[aou-seooc-deployment-data]]
 == Deployment data is in range, verified and protected
 
-[.specitem,oft-sid="aou~seooc-deployment-data~6",oft-title="Deployment data is in range, verified and protected",oft-needs="uman",oft-tags="SafetyManual,SafetyGateUpRust"]
+[.specitem,oft-sid="aou~seooc-deployment-data~9",oft-title="Deployment data is in range, verified and protected",oft-needs="uman",oft-tags="SafetyManual,SafetyGateUpRust"]
 --
-The integrator *SHALL* produce the deployment data within the admissible ranges the element publishes, and verifies it for the item. The data covers:
+The integrator *SHALL* produce the deployment data within the admissible ranges that the element and the Streamer publish (xref:deployment-data.adoc#req-ssr-config-validated[Deployment data is validated in full]; xref:../up-l2/streamer.adoc#req-ssr-streamer-config-validated[The Streamer validates its deployment data in full]), and verify it for the item, in ISO 26262's sense.
+The data covers:
 
 * routes and their QoS;
-* each transport's integrity level;
+* each transport's integrity level (xref:../up-l1/integrity.adoc#req-ssr-integrity-declared[Each transport declares one integrity level]);
 * RPC client lists and expected peers;
 * capacities;
-* what the assumption of one binding adds for its transport;
-* for each route that uses the E2E wire, its senders, from which its data IDs are derived, its `+resync_frames+`, and, for each sender, its start value's source and whether its starts are declared increasing;
-* the selection of compiled-in waivers.
+* what the assumption of one binding adds to the deployment data for its transport (xref:../up-l1/README.adoc#one-binding[what is specific to one binding]);
+* for each route that uses the E2E wire, its senders (xref:e2e-wire.adoc#req-ssr-e2e-data-id[One data ID per sender and route]), its `+resync_frames+`, and, for each sender, its start value's source and whether its starts are declared increasing;
+* the selection of compiled-in waivers;
+* for each route whose wire states the XCDR2 little-endian appendable profile, the writer types that each receiving end admits besides its reader type (xref:../up-l1/xcdrv2.adoc#req-ssr-xcdr2-evolution[A type grows only by fields added at its end, and a receiving end reads only the types that it admits]);
+* the agreement of native types, for each native route, with the payload encoding identifier that the registry's rules for originating one allow (xref:../up-l1/native-wire.adoc#req-ssr-native-agreement[A native type is read only under its exactly agreed layout]);
+* for the Streamer:
+** the encoding filter of a route that has one (xref:../up-l2/streamer.adoc#req-ssr-streamer-qos-per-leg[Both legs are checked, at setup and per frame]);
+** its workers' number, priority and affinity, and the routes assigned to each (xref:../up-l2/streamer.adoc#req-ssr-streamer-workers[Workers are fixed at initialization]);
+** each monitor's thresholds (xref:../up-l2/streamer.adoc#req-ssr-streamer-monitors[Worker and transport monitors trip routes]), and the peers' worst-case restart times and `+outage_on_restart+` where xref:../up-l2/streamer.adoc#aou-seooc-monitor-thresholds[Monitor thresholds allow for peers' restarts] requires them;
+** its operator interface, where it has one, with `+operator_may_disable+` where xref:../up-l2/streamer.adoc#req-ssr-streamer-operator-control[Operator changes go through a declared interface] requires it;
+** the reaction bound, where the integrator claims a reaction through the Streamer's monitors or watchdog hook (xref:../up-l2/streamer.adoc#aou-seooc-streamer-reaction-bound[A reaction claimed through the Streamer's monitors or watchdog hook is bounded end to end]).
 
-The integrator protects the data against unintended change between release and use, and delivers the Streamer's deployment data with an integrity code over its content, which the Streamer checks.
+The integrator *SHALL* protect the data against unintended change between release and use, and deliver the Streamer's deployment data with an integrity code over its content (xref:../up-l2/streamer.adoc#req-ssr-streamer-config-integrity[The deployment data is checked before it is applied]).
 
-Every peer that a route *SHALL* accept is declared at startup, because setup is impossible at runtime: adding an RPC client on a lending transport means restarting the server with new deployment data.
+The integrator *SHALL* declare, in the deployment data applied at startup, every peer on whose participation the deployment relies (xref:runtime-modes.adoc#req-ssr-mode-no-setup-at-runtime[Setup is impossible in runtime mode]): adding an RPC client on a lending transport means restarting the server with new deployment data.
+What the element does with a frame from a peer that is not declared, and what the compliance report says of a route that admits such peers, is stated in xref:../up-l1/peers.adoc#req-ssr-peer-admission[Undeclared peers cannot lock out declared ones] and xref:build.adoc#req-ssr-strict-report[Strict mode reports on every run].
 
-In strict mode, the Enforce state refuses deployment data without a matching integrity code, and the report shows the data's digest, and what was declared and checked.
+The integrator *SHALL* agree a native route only between binaries that use the element, and *SHALL NOT* use a native type of size zero or an untagged union across a boundary to an ABI that is not Rust's (xref:../up-l1/native-wire.adoc#req-ssr-native-agreement[A native type is read only under its exactly agreed layout], "Only between binaries that use the element").
+What the element establishes of each agreement at setup and before a view is stated in xref:../up-l1/native-wire.adoc#req-ssr-native-agreement[A native type is read only under its exactly agreed layout].
+
+What the Streamer does with deployment data that comes without a matching integrity code, in every state of strict mode, Off included, is stated in xref:../up-l2/streamer.adoc#req-ssr-streamer-config-integrity[The deployment data is checked before it is applied].
+What its startup report shows of the data that it applied is stated in xref:../up-l2/streamer.adoc#req-ssr-streamer-startup-report[The startup report says what will run].
+What the compliance report lists of what was declared in the data, and of what was checked, is stated in xref:build.adoc#req-ssr-strict-report[Strict mode reports on every run].
 --
 
 *Violation:*
 
-* Data that is out of range, unknown, missing where required or inconsistent is *refused at setup*, naming the field.
-* Streamer deployment data whose integrity code does not match its content is *refused at setup* (xref:../up-l2/streamer.adoc#req-ssr-streamer-config-integrity[The deployment data is checked before it is applied]).
-* In strict mode, deployment data without a matching integrity code is *refused at setup* in the Enforce state.
-* Data that is valid but wrong for the item, such as a route to the wrong peer delivered with a matching code, is *undetectable*.
+* Data that is out of range, unknown, missing where required or inconsistent is *refused at setup*, naming the field (xref:deployment-data.adoc#req-ssr-config-validated[Deployment data is validated in full]; xref:../up-l2/streamer.adoc#req-ssr-streamer-config-validated[The Streamer validates its deployment data in full]).
+* Streamer deployment data that comes without a matching integrity code is *refused at setup* in every state, naming the missing code or the mismatch, before any part of it is applied (xref:../up-l2/streamer.adoc#req-ssr-streamer-config-integrity[The deployment data is checked before it is applied]).
+* Data that is valid but wrong for the item, such as a route to the wrong peer delivered with a matching code, is *undetectable* by the element and by the Streamer.
+* A native route agreed with a binary that does not use the element is *refused at setup* where the element cannot establish that binary's layout identity (xref:../up-l1/native-wire.adoc#req-ssr-native-agreement[A native type is read only under its exactly agreed layout]); where that binary presents the agreed layout identity and an equal ABI fingerprint, it is *undetectable* by the element.
 
 [horizontal]
-ID:: `+aou~seooc-deployment-data~6+`
+ID:: `+aou~seooc-deployment-data~9+`
 ASIL:: B
-Status:: Draft
 ISO 26262:: 6-Annex C, 6-C.4.6, 6-Table C.1 (part-clause numbers only)
 
 *Rationale.*
@@ -644,32 +747,32 @@ Correct runtime behavior depends on the addresses, capacities and relationships 
 A checksum cannot establish that those declarations fit the application.
 
 _One binding's settings._
-A setting that only one binding has is not listed among the data of every deployment.
-The list names what the assumption of a binding adds, and that binding's assumption states the setting.
-A deployment on that binding produces, verifies and protects it like the rest of its data, and no other deployment gains a duty.
+A setting that only one binding has is stated in that binding's assumption.
+A deployment on that binding produces, verifies and protects it like the rest of its data.
 
 [[aou-seooc-capacity-sizing]]
 == Capacities are sized for the worst case
 
-[.specitem,oft-sid="aou~seooc-capacity-sizing~3",oft-title="Capacities are sized for the worst case",oft-needs="uman",oft-tags="SafetyManual,SafetyGateUpRust"]
+[.specitem,oft-sid="aou~seooc-capacity-sizing~5",oft-title="Capacities are sized for the worst case",oft-needs="uman",oft-tags="SafetyManual,SafetyGateUpRust"]
 --
-The integrator *SHALL* declare the item's worst-case semantic load for each route: its traffic, payload and token sizes, retention, peers and calls in flight.
+The integrator *SHALL* declare the worst-case semantic load of the item, in ISO 26262's sense, for each route: its traffic, payload and token sizes, retention, peers and calls in flight.
 
-* *What the element computes.* The element computes from those declarations the implementation capacities it needs, slots, queue depth, held messages, peer and call tables, registration storage for pending asynchronous operations, the backlog of retained owners, deferred releases and deferred destructions, and startup memory, states what each figure measures, and checks them at setup (xref:startup-memory.adoc#req-ssr-memory-computable[Startup storage is computable before start]); the integrator does not derive the element's internal sizes, and the supported configuration's package states the sizes that depend on its scheduler, allocator or stacks.
-* *Exhaustion.* In runtime mode exhaustion is a refusal, not a failure of the element; capacity that a release still pending holds is exhausted the same way, and fixed capacity promises neither its recovery nor sustained throughput within a time unless the supported configuration's package establishes the release progress on which such a claim relies (xref:release.adoc#req-ssr-release-lease-drop[A lease gives back its slot and nothing else]). Whether the item tolerates that refusal is the integrator's question.
-* *Strict mode.* In strict mode, the report lists the startup memory each setup computes, and every route's capacities.
+* *What the element computes.* What the element computes from those declarations, what each figure measures, and how setup checks the figures, is stated in xref:startup-memory.adoc#req-ssr-memory-computable[Startup storage is computable before start] and xref:runtime-modes.adoc#req-ssr-mode-entry-admission[Every route is admitted before runtime mode].
+The integrator need not derive the element's internal sizes, and the supported configuration's package states the sizes that depend on its scheduler, allocator or stacks.
+* *Exhaustion.* What exhaustion is in runtime mode, and what fixed capacity promises while a release is still pending, is stated in xref:errors.adoc#req-ssr-refuse-before-heap[Refuse before touching the heap] and xref:release.adoc#req-ssr-release-lease-drop[A lease gives back its slot and nothing else].
+The integrator *SHALL* determine whether the item tolerates a refusal on exhaustion, and *SHALL* argue it for the item.
+* *Strict states.* What the compliance report lists of the startup memory that each setup computes, and of every route's capacities, is stated in xref:build.adoc#req-ssr-strict-report[Strict mode reports on every run].
 --
 
 *Violation:*
 
-* Capacity that cannot be reserved is *refused at setup*.
-* Exhaustion in runtime mode is *counted* or returned as an error.
+* Capacity that cannot be reserved is *refused at setup* (xref:runtime-modes.adoc#req-ssr-mode-entry-admission[Every route is admitted before runtime mode]).
+* Exhaustion in runtime mode is *counted* or returned as an error (xref:errors.adoc#req-ssr-refuse-before-heap[Refuse before touching the heap]).
 * Exhaustion that the item cannot tolerate is *undetectable* by the element, and so is a declared load below the item's real one.
 
 [horizontal]
-ID:: `+aou~seooc-capacity-sizing~3+`
+ID:: `+aou~seooc-capacity-sizing~5+`
 ASIL:: B
-Status:: Draft
 ISO 26262:: 6-7.4.13 (part-clause numbers only)
 
 *Rationale.*
@@ -677,108 +780,139 @@ Every capacity is fixed at setup, and in runtime mode a full one returns an erro
 So only the integrator, who knows the item's load, can say what it must carry.
 
 The element knows its own layout, so it computes the sizes that the declared load needs (xref:startup-memory.adoc#req-ssr-memory-computable[Startup storage is computable before start]).
-An application team is not asked to guess them, and a live-object count is not offered as the retained or physical footprint.
+
+[[aou-seooc-startup-storage]]
+== Startup storage that the integrator provides is exclusive and lives as long as the process
+
+[.specitem,oft-sid="aou~seooc-startup-storage~1",oft-title="Startup storage that the integrator provides is exclusive and lives as long as the process",oft-needs="uman",oft-tags="SafetyManual"]
+--
+Where the integrator provides the element with static or caller-provided memory for its startup storage, the integrator *SHALL* hand each region to the element exclusively, and *SHALL* keep the region valid, and unused by anything else, for the life of the process.
+
+What the element checks of each region, and how it places from it and owns it, is stated in xref:startup-memory.adoc#req-ssr-memory-static[ASIL-path storage is static or caller-provided].
+--
+
+*Violation:*
+
+* A region that another owner also uses, or that ends before the process does, is *undetectable* by the element.
+
+[horizontal]
+ID:: `+aou~seooc-startup-storage~1+`
+ASIL:: B
+
+*Rationale.*
+The element can check that a placement lies within its region, is aligned and sized for its object, and is held by no live object of its own (xref:startup-memory.adoc#req-ssr-memory-static[ASIL-path storage is static or caller-provided]).
+It cannot see whether another owner uses the same memory, or how long that memory lives.
 
 [[aou-seooc-application-reacts]]
 == The application reacts to what the element reports
 
-[.specitem,oft-sid="aou~seooc-application-reacts~4",oft-title="The application reacts to what the element reports",oft-needs="uman",oft-tags="SafetyManual,SafetyGateUpRust"]
+[.specitem,oft-sid="aou~seooc-application-reacts~6",oft-title="The application reacts to what the element reports",oft-needs="uman",oft-tags="SafetyManual,SafetyGateUpRust"]
 --
-The application *SHALL* handle every error the element returns, and reads the counters it relies on, within its own fault reaction time.
+The application *SHALL* handle every error the element returns, and read the counters it relies on, within its own fault reaction time.
 
-* *What the element reports.* The element reports every refusal and loss it can see. A loss it cannot see, such as a drop-oldest eviction inside the middleware, is declared in that route's report instead (xref:errors.adoc#req-ssr-error-no-silent-loss[No silent loss, and each loss counted once]). For such losses, and for silence, the application uses available deadline and end-to-end observations only within their declared detection limits; neither promises to detect every hidden loss.
+* *What the element reports.* What the element reports of the refusals and losses it can see, and what it declares of a loss it cannot see, is stated in xref:errors.adoc#req-ssr-error-no-silent-loss[No silent loss, and each loss counted once], xref:errors.adoc#req-ssr-refuse-before-heap[Refuse before touching the heap] and xref:runtime-modes.adoc#req-ssr-mode-init-failure[Initialization failure].
+For losses the element cannot see, and for silence, the application *SHALL* use available deadline and end-to-end observations only within their declared detection limits; neither promises to detect every hidden loss.
 * *Shared routes, and routes without a deadline.* Another peer can keep a shared route's aggregate deadline refreshed while one peer is starved, so required peer-specific progress detection follows <<aou-seooc-peer-rates,Peer rates on shared routes are the integrator's>>. A route without a deadline, including an explicit `+event_only()+` route, supplies no deadline-based silence or delay detection.
-* *The reaction is the application's.* The element does not decide the item's reaction. Reading a route's report is the application's own observation: its delay adds to the item's reaction, outside the element's detection bound (xref:qos.adoc#req-ssr-qos-deadline[Deadlines are monitored]), and the element places no servicing duty on the application for that bound.
-* *Reading counters.* The application takes differences of the flow counters (`+carried+`, `+busy+`, `+parked+`) between reads fewer than 2^32^ increments apart. It reads a fault counter at 2^32^ − 1 as saturated: at least that many, which the route counters' difference operation reports as saturated, not as a difference.
+* *The item's reaction.* The element does not decide the reaction of the item, in ISO 26262's sense.
+The delay of the application's read of a route's report is part of the route's reaction budget and outside the element's detection bound, as <<aou-seooc-timing-budgets,Timing claims rest on a supported configuration, and the item's budgets are the integrator's>> ("Deadline detection") and xref:qos.adoc#req-ssr-qos-deadline[Deadlines are monitored] state.
+* *Lost frames on an E2E route.* To react within the item's fault tolerant time interval to frames lost on a route that selects the E2E wire, the application *SHALL* read lost plus pending, or the gap count, of the E2E wire's figures, and not lost alone, which lags a revealed loss by up to 63 frames (xref:e2e-wire.adoc#req-ssr-e2e-figures[The E2E wire's figures cover the stretch from encode to decode]).
+* *Reading counters.* The application *SHALL* take differences of the flow counters (`+carried+`, `+busy+`, `+parked+`) between reads fewer than 2^32^ increments apart.
+It *SHALL* read a fault counter at 2^32^ − 1 as saturated: at least that many.
+What a read reports of a saturated counter is stated in xref:platform.adoc#req-ssr-atomic-windows[Every narrowed value states its window].
 * *Keeping up.* A route's deadline measures arrivals at its queue, not the application's reads. An application that needs to know whether it keeps up *SHALL* read the observable discard counters and account for the route's disclosed unobservable-loss limits; zero counts alone do not establish that no frame was lost.
-* *Bad data.* Bad data is reported by its own refusal counters, which the application acts on: a peer that sends only frames refused when read shows there, and on an E2E route in E2E's figures, not in `+deadline_missed+`.
-* *One-word tick monitors.* Where a route's monitor uses the one-word tick representation, the application services that route at least once per 2^29^ of its monitor's ticks, 2^18^ of its thresholds; a thread blocked in the transport's `+wait+` meets this, because `+wait+` runs the service between inner waits of at most 2^28^ ticks of the shortest-scaled route on the transport. A full-width monitor needs no such servicing to keep its count.
-* *Strict mode.* In strict mode, the report lists for each route the counters the application reads and what each means, the E2E figures included.
+* *Bad data.* The application *SHALL* act on the refusal counters that report bad data.
+Which counters report it is stated in xref:errors.adoc#req-ssr-error-no-silent-loss[No silent loss, and each loss counted once], and on an E2E route in xref:e2e-wire.adoc#req-ssr-e2e-figures[The E2E wire's figures cover the stretch from encode to decode].
+* *One-word tick monitors.* Where a route's monitor uses the one-word tick representation, the application *SHALL* service that route at least once per 2^29^ of its monitor's ticks, 2^18^ of its thresholds; a thread blocked in the transport's `+wait+` meets this.
+What `+wait+` services, and what a full-width monitor needs, is stated in xref:qos.adoc#req-ssr-qos-deadline[Deadlines are monitored].
+* *Strict states.* What the compliance report lists of each route's counters is stated in xref:build.adoc#req-ssr-strict-report[Strict mode reports on every run].
 --
 
 *Violation:*
 
-* Every refusal and loss the element can see is reported, as an error or a *count*.
-* Losses it cannot see are declared, not counted.
-* An application that ignores either is *undetectable*.
-* On a one-word tick monitor, a route not serviced for 2^29^ of its ticks can leave a silence uncounted, and arrivals unrecorded for up to 2^30^ ticks after it: *undetectable*.
+* Every refusal and loss the element can see is reported, as an error or a *count* (xref:errors.adoc#req-ssr-error-no-silent-loss[No silent loss, and each loss counted once]; xref:errors.adoc#req-ssr-refuse-before-heap[Refuse before touching the heap]).
+* Losses it cannot see are disclosed, not counted (xref:errors.adoc#req-ssr-error-no-silent-loss[No silent loss, and each loss counted once]).
+* An application that ignores either is *undetectable* by the element.
+* On a one-word tick monitor, a route not serviced for 2^29^ of its ticks can leave a silence uncounted, and arrivals unrecorded for up to 2^30^ ticks after it: *undetectable* by the element (xref:qos.adoc#req-ssr-qos-deadline[Deadlines are monitored]).
 Without servicing, that is 0.54 s at the shortest admitted threshold (1.024 µs), 4.3 s at 10 µs, 34 s at 100 µs, 4.6 minutes at 1 ms, 73 minutes at 10 ms and 9.8 hours at 100 ms.
 
 [horizontal]
-ID:: `+aou~seooc-application-reacts~4+`
+ID:: `+aou~seooc-application-reacts~6+`
 ASIL:: B
-Status:: Draft
 
 *Rationale.*
-Reporting a fault cannot itself restore the application function.
-The application must observe the report within the reaction budget and choose its response.
+Reporting a fault cannot restore the application function.
 
-A middleware visibility disclosure conveys a limit, not a discard measurement or a proof of peer progress.
+A route's disclosed unobservable-loss limitation is a limit only, not a count of discards or a proof that a peer makes progress.
 
 The element's detection bound ends where the count becomes visible.
-How soon the application looks is its own part of the reaction.
 
-A servicing duty belongs to the representation that needs it, so it is stated only for that representation.
-A full-width runtime monitor needs no such servicing (xref:platform.adoc#req-ssr-atomic-windows[Every narrowed value states its window]), so the duty binds no configuration that uses one.
+A servicing duty belongs to the representation that needs it.
+A full-width runtime monitor needs no such servicing (xref:platform.adoc#req-ssr-atomic-windows[Every narrowed value states its window]).
 
 [[aou-seooc-integrator-platform]]
 == A custom platform keeps the platform's rules
 
-[.specitem,oft-sid="aou~seooc-integrator-platform~4",oft-title="A custom platform keeps the platform's rules",oft-needs="uman",oft-tags="SafetyManual,SafetyGateUpRust"]
+[.specitem,oft-sid="aou~seooc-integrator-platform~6",oft-title="A custom platform keeps the platform's rules",oft-needs="uman",oft-tags="SafetyManual,SafetyGateUpRust"]
 --
-A supported configuration's platform backend is its maintainers' (<<aou-seooc-target-environment,The target environment is verified>>), and an application team that selects one supplies no backend of its own. An integrator that supplies a platform for a target or configuration that no package supports *SHALL* treat it as an explicit extension, with its own authoring contract and evidence boundary, and supply:
+A supported configuration's platform backend is the one that the element's supplier provides with its package (<<aou-seooc-target-environment,The target environment is verified>>), and an integrator that uses such a configuration unchanged need supply no backend of its own.
+An integrator that supplies a platform backend of its own, a custom platform, for a target or configuration that no package supports or in place of a supported configuration's backend, *SHALL* treat it as an explicit extension, with its own authoring contract and evidence boundary, and *SHALL* supply:
 
-* a runtime platform that keeps the rules of xref:platform.adoc#req-ssr-platform-contract[Every platform backend keeps the platform's rules]: no heap, no panic, no thread creation and no global state that needs first-use setup; clock reads that report a failure instead of panicking or substituting another time base; a wait that never loses a wake; and the contracts that a package states, written down for this platform;
+* a runtime platform that keeps every rule that xref:platform.adoc#req-ssr-platform-contract[Every platform backend of the element keeps the platform's rules] states for a platform backend of the element, with the contracts that the same requirement has a backend state for its package written down for this platform;
 * an initialization-only platform for prefault, and for entropy from a declared source with its stated contract, reported as failed rather than replaced by a fixed value (xref:platform.adoc#req-ssr-platform-entropy[Initialization entropy comes from a declared source]);
 * a source-level safety argument for its synchronization and its atomic or exclusion mechanism, covering every participant that can reach that mechanism's storage (xref:platform.adoc#req-ssr-atomic-width[No target needs an atomic width it lacks]).
 
-It passes the platform contract test in `+test-util+` on that target.
+The integrator *SHALL* show, on the target that the custom platform serves, that it passes the platform contract test that xref:platform.adoc#req-ssr-platform-contract[Every platform backend of the element keeps the platform's rules] names.
 
-In strict mode, the Enforce state refuses an integrator platform that names no contract-test evidence, and the report lists the entropy duty and the platform contract test.
+*Declaration and qualification.*
+The integrator *SHALL* declare the custom platform in the complete-image declaration of each ASIL binary that uses it (<<aou-seooc-build-configuration,The ASIL binary is built from its claimed graph, with the ASIL profile>>).
+The integrator *SHALL* qualify the custom platform for each configuration that uses it, with evidence, on each target that it serves, that it keeps the rules that xref:platform.adoc#req-ssr-platform-contract[Every platform backend of the element keeps the platform's rules], xref:platform.adoc#req-ssr-platform-entropy[Initialization entropy comes from a declared source] and xref:platform.adoc#req-ssr-atomic-width[No target needs an atomic width it lacks] give a platform backend that an integrator supplies, under every peer input, shared-memory write, stop, stall, exit, kill and restart that xref:../README.adoc#req-ssr-peer-fault-model[The requirements hold against a faulty peer] allows.
+A custom platform belongs to a claimed safety dependency graph only once it is so qualified.
+
+In the Report, Enforce and Locked states, the integrator *SHALL* name the custom platform's contract-test evidence.
+What the Enforce and Locked states refuse without it, and what the compliance report lists of the entropy duty and the platform contract test, is stated in xref:build.adoc#req-ssr-strict-rules[The rules that strict mode checks] and xref:build.adoc#req-ssr-strict-report[Strict mode reports on every run].
 --
 
 *Violation:*
 
-* A breach of the platform's rules is *undetectable* by the element.
+* A breach of the platform's rules is *undetectable* by the element, except where xref:platform.adoc#req-ssr-platform-contract[Every platform backend of the element keeps the platform's rules], xref:platform.adoc#req-ssr-platform-entropy[Initialization entropy comes from a declared source] and xref:runtime-modes.adoc#req-ssr-mode-entry-clock[The wall clock is read before runtime mode] have the element check: a clock read that reports its failure, a monotonic reading earlier than one already held, an entropy read that fails or a source that the setup check finds short of its stated contract, and the time provider's setup check.
 * Entropy that repeats across starts more often than its stated contract allows is *undetectable* by the element.
-On a route with the deferred E2E wire, once it is delivered, its incarnations can then be equal at a restart, so the new incarnation's frames are refused and *counted* as out of sequence until its counter passes the old one's.
+On a route that selects the E2E wire, two incarnations can then be equal at a restart: the wire judges the new incarnation's frames by their counters, as frames of the old one (xref:e2e-wire.adoc#req-ssr-e2e-detects[The E2E wire detects each fault]; xref:e2e-wire.adoc#req-ssr-e2e-replay-window[A sliding window judges a reference's counters]), and each refusal is *counted* by its kind (xref:e2e-wire.adoc#req-ssr-e2e-refusal-counted[End-to-end refusals are named, and counted once]).
 Message IDs can also repeat across restarts (xref:../up-l2/interaction.adoc#req-ssr-ids-unique[Message IDs are unique]).
-* In strict mode, an integrator platform without contract-test evidence is *refused at setup* in the Enforce state.
+* A custom platform without contract-test evidence is *refused at setup* in the Enforce and Locked states, and reported as a finding in the Report state (xref:build.adoc#req-ssr-strict-rules[The rules that strict mode checks]).
+* A custom platform that is not qualified is *undetectable* by the element; what the declared-graph check refuses of a platform backend that the declared graph does not admit is stated in xref:build.adoc#req-ssr-strict-lock[The locked build allows only enforcement].
 
 [horizontal]
-ID:: `+aou~seooc-integrator-platform~4+`
+ID:: `+aou~seooc-integrator-platform~6+`
 ASIL:: B
-Status:: Draft
 
 *Rationale.*
 A custom backend is responsible for the same clock, waiting and initialization contracts as a shipped backend.
 
 Routine supported use selects a package instead.
-So an application team does not have to invent a synchronization backend or an OS scheduling proof, and this assumption does not apply to a supported configuration used unchanged.
+So an application team does not have to invent a synchronization backend or an OS scheduling proof.
 
 [[aou-seooc-peer-rates]]
 == Peer rates on shared routes are the integrator's
 
-[.specitem,oft-sid="aou~seooc-peer-rates~2",oft-title="Peer rates on shared routes are the integrator's",oft-needs="uman",oft-tags="SafetyManual,SafetyGateUpRust"]
+[.specitem,oft-sid="aou~seooc-peer-rates~3",oft-title="Peer rates on shared routes are the integrator's",oft-needs="uman",oft-tags="SafetyManual,SafetyGateUpRust"]
 --
 On routes that several peers share, the integrator *SHALL* bound each peer's message rate, by deployment and scheduling, or accept that one faulty peer can fill a route's depth and so starve the others there.
+A peer's rate on a route is the number of frames that it sends on that route in a stated interval; a bound on it names both.
 
-* *What the element does.* The element applies the route's overflow policy and counts each discard it or its binding can observe; losses entirely inside middleware that the binding cannot observe are explicitly disclosed in the route's report (xref:qos.adoc#req-ssr-qos-overflow[Overflow acts as declared]; xref:errors.adoc#req-ssr-error-no-silent-loss[No silent loss, and each loss counted once]). It has no per-peer quota.
-* *Peer-specific progress.* Where the item's safety reaction requires detecting a particular peer's lack of progress, the integrator *SHALL* supply peer-specific progress expectations and application checks, or deployment and scheduling measures that meet that requirement; an aggregate route deadline does not supply that detection.
-* *Strict mode.* In strict mode, the report warns of an ASIL route with several declared senders and no declared per-peer rate, and lists each shared route with what one faulty peer can starve there.
+* *What the element does.* What the element applies, counts and discloses on such a route is stated in xref:qos.adoc#req-ssr-qos-overflow[Overflow acts as declared] and xref:errors.adoc#req-ssr-error-no-silent-loss[No silent loss, and each loss counted once].
+* *Peer-specific progress.* Where the safety reaction of the item, in ISO 26262's sense, requires detecting a particular peer's lack of progress, the integrator *SHALL* supply peer-specific progress expectations and application checks, or deployment and scheduling measures that meet that requirement; an aggregate route deadline does not supply that detection.
+* *Strict states.* What the compliance report lists of each shared route, and its warning of an ASIL route with several declared senders and no declared per-peer rate, is stated in xref:build.adoc#req-ssr-strict-report[Strict mode reports on every run].
 --
 
 *Violation:*
 
-* Observable discards are *counted*; middleware-unobservable losses are disclosed, not counted.
+* Observable discards are *counted*; losses that the element cannot see are disclosed, not counted (xref:qos.adoc#req-ssr-qos-overflow[Overflow acts as declared]; xref:errors.adoc#req-ssr-error-no-silent-loss[No silent loss, and each loss counted once]).
 * Starvation of one peer while another keeps the route arriving is *undetectable* by the aggregate route deadline, even when a deadline is declared.
 * General drop counts may reveal congestion but do not identify, or guarantee detection of, the starved peer.
-* Required detection depends on the integrator's peer-specific progress checks or deployment and scheduling measures.
 
 [horizontal]
-ID:: `+aou~seooc-peer-rates~2+`
+ID:: `+aou~seooc-peer-rates~3+`
 ASIL:: B
-Status:: Draft
 
 *Rationale.*
 The route aggregates arrivals from its peers.
@@ -786,34 +920,34 @@ A flooding peer can refresh its deadline continuously while other peers lose eve
 
 Observable discard counts reveal only the congestion they measure, and hidden middleware losses cannot be reconstructed from counter fields.
 
-Per-peer quotas remain absent.
-Rate bounds and any required peer-progress detection belong to the integrator's deployment, scheduling and application measures.
+The element applies no quota per peer, so only the integrator's bounds keep one peer from filling a shared route's depth.
 
 [[aou-seooc-build-order]]
 == Applications build every transport and role before the last transition
 
-[.specitem,oft-sid="aou~seooc-build-order~2",oft-title="Applications build every transport and role before the last transition",oft-needs="uman",oft-tags="SafetyManual,SafetyGateUpRust"]
+[.specitem,oft-sid="aou~seooc-build-order~4",oft-title="Applications build every transport and role before the last transition",oft-needs="uman",oft-tags="SafetyManual,SafetyGateUpRust"]
 --
-An application *SHALL* build every transport and every role it will use before the last of the transports that share one startup memory enters runtime mode; for the Streamer, before it calls `+enter_runtime_all+`.
+An application *SHALL* build every transport and every role it will use before the last of the transports that share one startup memory enters runtime mode.
+The Streamer's own order is stated in xref:../up-l2/streamer.adoc#req-ssr-streamer-build-order[The Streamer builds every transport and role before `enter_runtime_all`].
 
-A setup kept alive without ever entering runtime mode is a defect of the application.
+An application *SHALL NOT* keep alive a setup that never enters runtime mode: it *SHALL* enter each setup that it builds, or end it before `+enter_runtime_all+` returns, by releasing it during initialization or by exiting so that the supervisor restarts the process (<<aou-seooc-supervisor-restart,A supervisor outside the process restarts it>>).
 
-In strict mode, the Enforce state refuses a setup still alive and not entered when `+enter_runtime_all+` returns, and the report lists every such setup.
+What `+enter_runtime_all+` reports of a setup that is still alive and has not entered runtime mode is stated in xref:startup-memory.adoc#req-ssr-memory-sealed[Startup memory is sealed].
+What the Enforce and Locked states refuse for such a setup is stated in xref:build.adoc#req-ssr-strict-rules[The rules that strict mode checks], and what the Streamer's startup report names of a startup refused for it, in xref:../up-l2/streamer.adoc#req-ssr-streamer-startup-report[The startup report says what will run].
 --
 
 *Violation:*
 
 * A setup built afterwards on that memory is *refused at setup* (xref:startup-memory.adoc#req-ssr-memory-sealed[Startup memory is sealed]).
-* A setup still alive and not entered when `+enter_runtime_all+` returns is reported then, and in strict mode is *refused at setup*; without `+enter_runtime_all+` it is *undetectable*.
+* A setup still alive and not entered when `+enter_runtime_all+` returns is reported then (xref:startup-memory.adoc#req-ssr-memory-sealed[Startup memory is sealed]), and is *refused at setup* in the Enforce and Locked states, and reported as a finding in the Report state (xref:build.adoc#req-ssr-strict-rules[The rules that strict mode checks]); without `+enter_runtime_all+` it is *undetectable* by the element.
 
 [horizontal]
-ID:: `+aou~seooc-build-order~2+`
+ID:: `+aou~seooc-build-order~4+`
 ASIL:: B
-Status:: Draft
 
 *Rationale.*
-Once a transport that shares startup memory enters runtime mode, the caller's handle places nothing more.
-The memory is sealed for every handle when the last setup sharing it has entered runtime mode (xref:startup-memory.adoc#req-ssr-memory-sealed[Startup memory is sealed]).
+Once a transport is in runtime mode, nothing more can be set up through it (xref:runtime-modes.adoc#req-ssr-mode-no-setup-at-runtime[Setup is impossible in runtime mode]).
+A startup memory is sealed when the last live setup that uses it enters runtime mode, and in any case when `+enter_runtime_all+` returns (xref:startup-memory.adoc#req-ssr-memory-sealed[Startup memory is sealed]).
 
 A setup that never enters runtime mode keeps its claim.
-So the memory is never sealed for every handle, and nothing that rests on the seal holds.
+So, unless `+enter_runtime_all+` returns, the memory is never sealed, and nothing that rests on the seal holds.

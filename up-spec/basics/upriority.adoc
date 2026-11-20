@@ -19,7 +19,7 @@ SPDX-License-Identifier: Apache-2.0
 
 == Overview
 
-uProtocol allows messages to be exchanged between uEntities on the same and/or different devices. The network bandwidth and/or CPU cycles available for performing this task may be limited, though. uProtocol therefore supports priority based message processing at the xref:../up-l1/README.adoc[Transport] and xref:../up-l2/README.adoc[Communication Layer] based on https://datatracker.ietf.org/doc/html/rfc4594[RFC4594 - Configuration Guidelines for DiffServ Service Classes].
+uProtocol allows messages to be exchanged between uEntities on the same and/or different devices. The network bandwidth and/or CPU cycles available for performing this task may be limited, though. uProtocol therefore supports priority based message processing at the xref:../up-l1/README.adoc[Transport] and xref:../up-l2/README.adoc[Communication Layer].
 
 For this purpose, each xref:umessage.adoc[UMessage] is assigned exactly one of the following classes:
 
@@ -29,11 +29,11 @@ For this purpose, each xref:umessage.adoc[UMessage] is assigned exactly one of t
 |Class |Description |Typical Use Case
 
 |*CS0*
-|Low Priority. No bandwidth assurance
+|Low priority, with no assured bandwidth
 |Bulk data transfer
 
 |*CS1*
-|Default priority
+|The default class
 |Generic, non-specific application level events
 
 |*CS2*
@@ -41,7 +41,7 @@ For this purpose, each xref:umessage.adoc[UMessage] is assigned exactly one of t
 |uSubscription messages (subscribe, etc.)
 
 |*CS3*
-|Multimedia streaming
+|Streaming of multimedia content
 |Audio/Video frames
 
 |*CS4*
@@ -56,6 +56,8 @@ For this purpose, each xref:umessage.adoc[UMessage] is assigned exactly one of t
 |Safety Critical
 |Network control
 |===
+
+The names of the classes, `CS0` to `CS6`, are those of class selector code points that https://datatracker.ietf.org/doc/html/rfc4594#section-2.3[RFC 4594] lists in Figure 3 of its section 2.3. The meaning of each class in uProtocol is the one that the table above gives.
 
 [#default-priority]
 A UMessage *MAY* have a priority class assigned _explicitly_ by setting the message's xref:uattributes.adoc#common-attributes[_priority_] property to the desired value. If the property is not set, the UMessage belongs to class `CS1` by default.

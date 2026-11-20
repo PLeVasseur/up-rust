@@ -20,16 +20,19 @@ SPDX-License-Identifier: Apache-2.0
 
 == Overview
 
+[NOTE]
+====
 Like IP packets, xref:../../basics/umessage.adoc[uProtocol messages] (UMessage) have a source and a sink attribute which indicate the origin and the destination of the message respectively. These attributes are used to route UMessages from one uProtocol Entity (uEntity) to the next if the destination is not the receiving uEntity.
 
-NOTE: The terms _dispatcher_ and _router_ will be used synonymously in the remainder of the document.
+The terms _dispatcher_ and _router_ will be used synonymously in the remainder of the document.
 
 A UMessage contains data (the payload) as well as meta data describing the nature of the payload. One of the core principles of uProtocol is that the data portion of a UMessage does not need to be examined by message routers, this is very similar to how most Internet standards work today. Only the source uEntity that originally created the message and the sink uEntity(s) which will eventually consume the message need to understand/analyze the payload of the UMessage.
 
-To be able to forward/dispatch/route UMessages through the network, we must define specific purpose built uEntities to perform these tasks (ex. Ethernet switches, IP routers, etc...). Platform uEntities that are responsible for event dispatching and implementing the communication layer are described in the sections below. We will elaborate on these specific uEntities in the Platform uEntities section below.
+To be able to forward/dispatch/route UMessages through the network, we define specific purpose built uEntities to perform these tasks (ex. Ethernet switches, IP routers, etc...). Platform uEntities that are responsible for event dispatching and implementing the communication layer are described in the sections below. We will elaborate on these specific uEntities in the Platform uEntities section below.
+====
 
 .Types of Dispatchers
-[#dispatcher-types,width=100%",cols="30%,70%"]
+[#dispatcher-types,width="100%",cols="30%,70%"]
 |===
 |Dispatcher uEntities | Description
 
@@ -37,7 +40,7 @@ To be able to forward/dispatch/route UMessages through the network, we must defi
 |Message bus that dispatches UMessages between uEntities over a common transport. It provides multicast and forwarding functionality (works like a network switch)
 
 |*uStreamer*
-|Provides Device-2-Device UMessage routing either using the same or different transport protocols , i.e. when events need to move form one transport to the next it flows through the streamer (can be equated to an IP router)
+|Provides Device-2-Device UMessage routing either using the same or different transport protocols, i.e. when events need to move from one transport to the next it flows through the streamer (can be equated to an IP router)
 
 |*Cloud Gateway*
 |A uEntity that sits at the edge of the cloud to connect non-cloud devices (ex. vehicles, phones, etc...) to the cloud
@@ -53,21 +56,33 @@ image::dispatchers.drawio.svg[Dispatchers]
 
 In this section we will elaborate on the requirements of the platform Dispatchers (uBus, uStreamer, etc...) and their role in message delivery. Dispatchers build upon the transport layer delivery requirement assumptions.
 
-NOTE: These communication layer requirements are still for point-2-point uEntity communication to and from a dispatcher
+These communication layer requirements are still for point-2-point uEntity communication to and from a dispatcher
 
-* *MUST* support At-least-once delivery policy, this means that the dispatcher will make every attempt to dispatch the UMessage to the intended Receiver
+[.specitem,oft-sid="dsn~dispatcher-at-least-once~1",oft-needs="impl,utest"]
+--
+* A dispatcher *MUST* support At-least-once delivery policy, this means that the dispatcher will make every attempt to dispatch the UMessage to the intended Receiver
   ** *MUST* queue UMessages not successfully acknowledged (transport level at-least-once delivery confirmation described above)
   ** *MUST* attempt to retry transmission of the UMessage. Retry policy is specific to the dispatcher implementation
   ** Dispatcher *MUST NOT* discard UMessages unless either UMessage has expired, or the egress queue is full. UMessages that cannot be delivered are sent to a Dead Letter Office Topic
+
+This item applies to point-2-point uEntity communication to and from a dispatcher
+--
 
 * *MAY* support additional UMessage delivery policies in general or per topic in the future
 * *SHOULD* maintain the (relative) order that messages have been received in, when dispatching messages to receivers
 * *SHOULD* consider a received UMessage's xref:../../basics/upriority.adoc[priority class] in their message dispatching strategy
 * *MAY* batch UMessages when delivering to the Receiver
-* UMessages that cannot be delivered *MUST* be sent to the Dead Letter topic (DLT)
-  ** DLT *MUST* include at least the UMessage header, SHOULD contain the full UMessage
+
+[.specitem,oft-sid="dsn~dispatcher-dead-letter-topic~1",oft-needs="impl,utest"]
+--
+* A dispatcher *MUST* send UMessages that cannot be delivered to the Dead Letter topic (DLT)
+  ** DLT *MUST* include at least the UMessage header, *SHOULD* contain the full UMessage
   ** DLT *MUST* include the reason for the failed delivery attempt using  error codes defined in google.rpc.Code
   ** uEntities MUST be able to subscribe to the DLT to be notified of message deliver failures
+
+This item applies to point-2-point uEntity communication to and from a dispatcher
+--
+
 * *MUST* forward attributes from the UMessage header
 
 If the uP-L1 delivery method is push:
@@ -77,6 +92,8 @@ If the uP-L1 delivery method is push:
 
 == RPC Error Handling
 
+[.specitem,oft-sid="dsn~dispatcher-rpc-error-response~1",oft-needs="impl,utest"]
+--
 When a dispatcher is unable to dispatch an event for a given reason (queue full, etc...), the dispatcher is responsible to generate an RPC Response message and send it to the originator of the request. The status code is populated in the xref:../../basics/uattributes.adoc#response-attributes[`commstatus`] attribute of the response message using the <<commstatus-codes>> defined below.
 
 .commstatus Codes
@@ -109,9 +126,10 @@ When a dispatcher is unable to dispatch an event for a given reason (queue full,
 |`Internal`
 |A serious error has occurred that is not covered by any of the error codes mentioned above.
 !===
+--
 
 <<rpc-error-flow>> figure below illustrates the sequence of messages for RPC flows and the role dispatchers play in error handling.
 
-.RPC Error Flow
+.Example: RPC error flow
 [#rpc-error-flow]
 image::rpc_flow.png[RPC Error Handling]

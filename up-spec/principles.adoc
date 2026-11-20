@@ -70,7 +70,7 @@ The table below helps to illustrate the various use cases for uProtocol.
 * *MUST* decouple applications from services (can be independently updatable), and decouple application/services from the platform
 
 |*Event Transport Abstraction* a|
-* *MUST* support all common automotive use cases (defined in link:README.adoc#_use_cases[Use Cases])
+* *MUST* support all common automotive use cases (defined in <<uprotocol-use-cases,Use Cases>>)
 * *MUST* decouple messages from the underlining transport such that producers can be unaware of their consumers (and how the messages are transported)
 
 

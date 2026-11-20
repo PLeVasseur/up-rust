@@ -20,23 +20,26 @@ SPDX-License-Identifier: Apache-2.0
 
 == Overview
 
-Universal Unique Identifiers (UUID) are used in uProtocol to uniquely identify instances of xref:umessage.adoc[`UMessage`]. The UUID includes a timestamp which can be used to determine if the message has already expired and therefore should not be processed anymore. For more explanation of the use cases for the uProtocol UUID, please refer to xref:uattributes.adoc[UAttributes Specifications].
+NOTE: Universal Unique Identifiers (UUID) are used in uProtocol to uniquely identify instances of xref:umessage.adoc[`UMessage`]. For more explanation of the use cases for the uProtocol UUID, please refer to xref:uattributes.adoc[UAttributes Specifications].
 
 [.specitem,oft-sid="dsn~uuid-spec~1",oft-needs="impl,utest",oft-tags="LanguageLibrary"]
 --
 The UUIDs contained in xref:uattributes.adoc[UAttributes] *MUST* be of type https://www.rfc-editor.org/rfc/rfc9562#name-uuid-version-7[UUIDv7] as defined by https://www.rfc-editor.org/rfc/rfc9562[RFC 9562].
 --
 
+[NOTE]
+====
 A uProtocol UUID may be represented in one of the following formats:
 
  * An instantiation of the <<Data Model>> in a supported programming language
  * or as a _hex-and-dash_ string defined in https://www.rfc-editor.org/rfc/rfc9562#name-uuid-format[RFC 9562]
+====
 
 
 [#data-model-definition]
 == Data Model
 
-The diagram below shows a UUID and its properties using UML2 notation.
+The class diagram below shows a UUID and its properties.
 
 .UUID Data Model
 [#uuid-data-model]

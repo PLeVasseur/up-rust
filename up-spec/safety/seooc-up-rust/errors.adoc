@@ -3,17 +3,17 @@
 
 The key words "*MUST*", "*MUST NOT*", "*REQUIRED*", "*SHALL*", "*SHALL NOT*", "*SHOULD*", "*SHOULD NOT*", "*RECOMMENDED*", "*MAY*", and "*OPTIONAL*" in this document are to be interpreted as described in https://www.rfc-editor.org/info/bcp14[IETF BCP14 (RFC2119 & RFC8174)]
 
-Conventions, tags and status words: xref:../README.adoc[the safety area's README].
+Conventions and tags: xref:../README.adoc[the safety area's README].
 Scope and element boundary: xref:README.adoc[the SEooC's README].
 
 [[req-ssr-refuse-before-heap]]
 == Refuse before touching the heap
 
-[.specitem,oft-sid="req~ssr-refuse-before-heap~2",oft-title="Refuse before touching the heap",oft-needs="impl,utest",oft-tags="SafetyUpRustCore"]
+[.specitem,oft-sid="req~ssr-refuse-before-heap~4",oft-title="Refuse before touching the heap",oft-needs="impl,utest",oft-tags="SafetyUpRustCore"]
 --
-*Refusals are errors.*
-An operation that cannot proceed in runtime mode *MUST* return an error.
-All of these *MUST* be errors:
+*Errors for refusals.*
+The element *MUST* return an error from an operation that cannot proceed in runtime mode.
+The element *MUST* return each of these as an error:
 
 * exhaustion of slots, depth, held messages, the peer table or the call table;
 * a payload or token that is too long;
@@ -22,24 +22,28 @@ All of these *MUST* be errors:
 * a bounded wait that ran out.
 
 *Order.*
-Each refusal that can be decided before an operation's first heap acquisition *MUST* be decided before it.
+The element *MUST* decide each refusal that can be decided before an operation's first heap acquisition before that acquisition.
 
 *Cost of refusing.*
-Deciding a refusal, producing its error and counting it *MUST NOT* acquire or release heap memory, abort or panic.
+In deciding a refusal, producing its error and counting it, the element *MUST NOT* acquire or release heap memory, abort or panic.
 
 *Native and heap-free routes.*
-On a native route, and on any route whose heap class is none, a refusal does nothing else.
+On a native route, and on any route whose heap class is none, the element *MUST NOT* acquire or release heap memory in anything that a refusal does.
+Beyond deciding the refusal, producing its error and counting it, the element *MUST* perform for such a refusal only the accounting and the ownership cleanup that the route's items require, such as giving a refused frame's slot back (xref:heap.adoc#req-ssr-heap-slot-types[A decoded value is destroyed once, as its route's class admits]; xref:release.adoc#req-ssr-release-lease-drop[A lease gives back its slot and nothing else]).
 
-*Serialized and owned routes.*
-On a serialized or owned route, some refusals are reached only after the operation acquired heap memory under its declared heap class.
-Examples are a check after decode, a failed allocation at a declared allocation point, or a wire check whose acceptance event falls after its deadline.
-Such a refusal acquires nothing more.
-It ends the ownership already created, and what that ownership holds is released exactly once as xref:heap.adoc#req-ssr-heap-slot-types[Decoded values and their destructors] and xref:../up-l1/bindings.adoc#req-ssr-binding-frame-drop[What a received frame's destructor may do] state.
-That release is the route's declared heap use, not part of producing the refusal.
+*Serialized routes.*
+On a serialized route, some refusals are reached only after the operation acquired heap memory under its declared heap class.
+The element *MUST NOT* acquire a further resource in order to produce or report such a refusal.
+It *MUST* end the ownership already created, and what that ownership holds is released exactly once as xref:heap.adoc#req-ssr-heap-slot-types[A decoded value is destroyed once, as its route's class admits] and xref:../up-l1/bindings.adoc#req-ssr-binding-frame-drop[What a received frame's destructor may do] state.
+That release is the route's declared heap use, under its own contract, and not part of producing the refusal.
+
+*Exhaustion of a declared allocation.*
+On a serialized route, exhaustion at an allocation point that the route's declared class names does what the route's declared failure policy states (xref:heap.adoc#req-ssr-heap-declared[The heap class is declared, with no default]).
+The element *MUST* return it as an error where that policy returns one, or where the route requires recoverable exhaustion (xref:heap.adoc#req-ssr-heap-guarantees[A stronger resource guarantee is required by name, and admitted or refused]); elsewhere what exhaustion does is the declared failure policy's.
 --
 
 [horizontal]
-ID:: `+req~ssr-refuse-before-heap~2+`
+ID:: `+req~ssr-refuse-before-heap~4+`
 ASIL:: B
 Allocated to:: the element
 Verification:: heap-window, test
@@ -50,7 +54,6 @@ Verification:: heap-window, test
 * *test*
 ** Each named refusal.
 ** A check after decode, a failed declared allocation and a response first accepted after its deadline, each ending the admitted ownership exactly once.
-Status:: Draft
 ISO 26262:: 6-7.4.12 (part-clause numbers only)
 
 *Rationale.*
@@ -59,71 +62,74 @@ Runtime errors are fixed-size values with no heap data (<<req-ssr-error-fixed-si
 
 _Refusals after an admitted value._
 Not every refusal can come before the heap is touched.
-A serialized route that has already admitted an owned value must still end it on a refusal after decode, or on a response first accepted after its deadline, and ending it frees what the route's wire allocated.
+A serialized route that has already admitted an owned value still ends it on a refusal after decode, or on a response first accepted after its deadline, and ending it frees what the route's wire allocated.
 
-So the item keeps three things apart:
+A declaration does not make an allocation call that can end the process on exhaustion return an error instead.
 
-* deciding, reporting and counting a refusal is heap-free on every route;
-* every refusal that can come first comes ahead of the first allocation;
-* the release of what was already admitted belongs to the route's declared class (xref:heap.adoc#req-ssr-heap-none[No heap in runtime mode]), so it is that route's declared heap use and never the refusal's.
-
-An allocation failure follows the failure policy the route declares (xref:heap.adoc#req-ssr-heap-declared[The heap class is declared, with no default]).
-A declaration does not make an infallible library allocation fail gracefully.
-A route that needs exhaustion to be a refusal requires that guarantee by name (xref:heap.adoc#req-ssr-heap-guarantees[A stronger resource guarantee is required by name]).
+.On a serialized route, refusals reached only after heap memory is acquired
+====
+A check after decode, a failed allocation at a declared allocation point, or a wire check whose acceptance event falls after its deadline.
+====
 
 [[req-ssr-refuse-no-panic]]
 == No panic on runtime paths
 
-[.specitem,oft-sid="req~ssr-refuse-no-panic~1",oft-title="No panic on runtime paths",oft-needs="impl,utest",oft-tags="SafetyUpRustCore"]
+[.specitem,oft-sid="req~ssr-refuse-no-panic~3",oft-title="No panic on runtime paths",oft-needs="impl,utest",oft-tags="SafetyUpRustCore"]
 --
 Element code reachable in runtime mode *MUST NOT* panic or abort:
 
-* not for any bytes, length or sequence a peer sends;
-* not for any clock reading;
-* not for any sequence of calls through the public API.
+* for any bytes, length or sequence a peer sends;
+* for any clock reading;
+* for any sequence of calls through the public API.
 
-Arithmetic on runtime paths *MUST* be checked, saturating or wrapping by intent, and *MUST NOT* reach an overflow panic.
+Element code's arithmetic on runtime paths *MUST* be checked, saturating or wrapping by intent, and *MUST NOT* reach an overflow panic.
+
+*Malformed frames.*
+The element *MUST* refuse a frame whose header or envelope it cannot parse, a frame that lacks them included, and *MUST* return or count that refusal as <<req-ssr-error-no-silent-loss,No silent loss, and each loss counted once>> states.
+Where a binding parses a frame's physical envelope, the binding's own items state the refusal of a sample that does not parse (xref:../up-l1/lola-envelope.adoc#req-ssr-binding-lola-envelope-checks[On LoLa, a sample that is not a well-formed envelope is refused before any of it is used]; xref:../up-l1/iceoryx2-frame.adoc#req-ssr-binding-iceoryx2-frame-checks[On iceoryx2, a sample that is not a well-formed frame is refused before any of it is used]).
 --
 
 [horizontal]
-ID:: `+req~ssr-refuse-no-panic~1+`
+ID:: `+req~ssr-refuse-no-panic~3+`
 ASIL:: B
 Allocated to:: the element
 Verification:: gate, fault-injection, test
 * *gate*
-** The panic-link check over the runtime path on both compilers.
+** The panic-link check over the runtime path.
 The inbound metadata, payload, peer reference and TTL are fed as opaque inputs, so that no panic branch can be proven dead from constant inputs.
-** The workspace lints.
-* *fault-injection*: malformed and truncated frames.
-Status:: Draft
+** The lint check over element code on the runtime path, for constructs that can panic and for unchecked arithmetic.
+* *fault-injection*: malformed and truncated frames, each refused, and its refusal returned or counted.
 ISO 26262:: 6-Table 1 (part-clause numbers only)
 
 *Rationale.*
-In the build that ships, a panic aborts the process (xref:build.adoc#req-ssr-build-panic-abort[The ASIL build aborts on panic and checks overflow]).
+In the ASIL build, a panic aborts the process (xref:build.adoc#req-ssr-build-panic-abort[The ASIL build aborts on panic and checks overflow]).
 So a panic reachable in runtime mode is a crash that a peer's bytes or a clock reading could set off.
+
+A frame whose header or envelope cannot be parsed gives the element nothing it can act on, so it is refused, and the refusal is reported as every loss is.
 
 No waiver can cover a panic: a waiver covers allocation inside middleware only (xref:waivers.adoc#req-ssr-waiver-scope[A waiver covers middleware and nothing else]).
 
-Code that runs on a runtime path but that the element does not own is not element code.
+Code that runs on a runtime path is not always element code (xref:README.adoc#req-ssr-element-boundary[The parts of the element, and element code], "Element code").
 Examples are the destructor of an owned value, an allocator's release or a dependency they reach.
 
-* The element keeps memory safe whatever that code does (xref:heap.adoc#req-ssr-heap-slot-types[Decoded values and their destructors]).
-* It promises nothing about that code's panics on a route that does not require panic-free cleanup: the guarantee is not admitted there, and the route's report states separately whether evidence establishes it.
-* On a route that requires it, setup admits such code only where it is established that it cannot panic or abort in any context that runs it, and refuses the route by name otherwise (xref:heap.adoc#req-ssr-heap-guarantees[A stronger resource guarantee is required by name]).
+* The element keeps memory safe whatever that code does (xref:heap.adoc#req-ssr-heap-slot-types[A decoded value is destroyed once, as its route's class admits]).
+* On a route that does not require panic-free cleanup, that guarantee is not admitted, and the route's report states separately whether evidence establishes it.
+* On a route that requires it, setup admits such code only where it is established that it cannot panic or abort in any context that runs it, and refuses the route by name otherwise (xref:heap.adoc#req-ssr-heap-guarantees[A stronger resource guarantee is required by name, and admitted or refused]).
 
-Moving such work to another thread does not change this.
 A panic in element code is a defect on every route, whatever the route requires.
+
+The Streamer's own code and the Streamer binary's own code have their own rule (xref:../up-l2/streamer.adoc#req-ssr-streamer-no-panic[The Streamer does not panic in runtime mode]).
 
 [[req-ssr-error-fixed-size]]
 == Errors are fixed-size diagnoses
 
 [.specitem,oft-sid="req~ssr-error-fixed-size~1",oft-title="Errors are fixed-size diagnoses",oft-needs="impl,utest",oft-tags="SafetyUpRustCore"]
 --
-Every error and report the element returns in runtime mode *MUST* be a fixed-size value that can be copied, name its cause, and name the route and the setting where there is one.
+The element *MUST* return every error and report in runtime mode as a fixed-size value that can be copied, that names its cause, and that names the route and the setting where there is one.
 
-Producing it *MUST* format nothing, log nothing and allocate nothing.
+In producing it, the element *MUST* format nothing, log nothing and allocate nothing.
 
-Text for people *MUST* be formatted only in initialization mode.
+The element *MUST* format text for people only in initialization mode.
 --
 
 [horizontal]
@@ -131,7 +137,6 @@ ID:: `+req~ssr-error-fixed-size~1+`
 ASIL:: B
 Allocated to:: the element
 Verification:: gate (a compile-time `+Copy+` assertion for each runtime error type), heap-window (the error paths), review
-Status:: Draft
 ISO 26262:: 6-7.4.12 (part-clause numbers only)
 
 *Rationale.*
@@ -139,93 +144,105 @@ A fixed-size error that can be copied carries no heap data, so reporting a refus
 
 An error that names its cause, its route and the setting at fault tells the integrator what to change, with no log to search.
 
-Text for people is produced only from initialization errors, where formatting is allowed.
-
 [[req-ssr-error-no-silent-loss]]
 == No silent loss, and each loss counted once
 
-[.specitem,oft-sid="req~ssr-error-no-silent-loss~3",oft-title="No silent loss, and each loss counted once",oft-needs="impl,utest",oft-tags="SafetyUpRustCore"]
+[.specitem,oft-sid="req~ssr-error-no-silent-loss~5",oft-title="No silent loss, and each loss counted once",oft-needs="impl,utest",oft-tags="SafetyUpRustCore"]
 --
-*Every loss is returned or counted.*
-Every frame the element refuses, drops, evicts or expires in runtime mode *MUST* be either returned to its caller as an error, or counted exactly once in its route's fixed counters, under a counter that names the cause.
+*Each loss.*
+For every frame that it refuses, drops, evicts or expires in runtime mode, the element *MUST* either return an error to its caller, or count the frame exactly once in its route's fixed counters, under a counter that names the cause.
 
 * A retry is not a drop.
-* The counters can be read in runtime mode without heap.
+* The element *MUST* keep the counters readable in runtime mode without heap.
 
-*Losses the binding cannot observe.*
-A loss entirely inside middleware that the binding cannot observe is not a counted event.
-That route's report *MUST* explicitly disclose the unobservable-loss limitation.
+*Whose count.*
+The element counts the refusals, drops, evictions and expiries that its own code decides, those of its carrier primitives on a route of the Streamer included.
+The element *MUST NOT* count again a frame that another part refused and counted in a check of its own, such as a check of the Streamer's on a carrier route (xref:../up-l2/streamer.adoc#req-ssr-streamer-qos-per-leg[Both legs are checked, at setup and per frame]).
 
-Observable overflow discards *MUST* be counted as specified by xref:qos.adoc#req-ssr-qos-overflow[Overflow acts as declared].
-This exception does not excuse missing observable counts.
+*Losses the element cannot see.*
+A loss that the element cannot see, such as a drop-oldest eviction inside the middleware, is not a counted event.
+For a discard that a route's overflow policy makes inside the middleware, the disclosure is stated in xref:qos.adoc#req-ssr-qos-overflow[Overflow acts as declared]; for every other such loss, the element *MUST* disclose the unobservable-loss limitation explicitly in the route's report.
+
+*Overflow.*
+An observable overflow discard is counted once, under its cause, as xref:qos.adoc#req-ssr-qos-overflow[Overflow acts as declared] states.
 
 *Counter behaviour.*
 
-* A fault counter saturates at 2^32^ − 1 and stays there, and an increment below that is never dropped.
-* A flow counter (`+carried+`, `+busy+`, `+parked+`) wraps, and readers take differences (xref:assumptions-of-use.adoc#aou-seooc-application-reacts[The application reacts to what the element reports]).
+* The element *MUST* make a fault counter saturate at 2^32^ − 1 and stay there, and *MUST NOT* drop an increment below that.
+* The element *MUST* make a flow counter (`+carried+`, `+busy+`, `+parked+`) wrap, and readers take differences (xref:assumptions-of-use.adoc#aou-seooc-application-reacts[The application reacts to what the element reports]).
+* What a read reports of a saturated fault counter is stated in xref:platform.adoc#req-ssr-atomic-windows[Every narrowed value states its window].
 
 *Double release.*
-A free slot released twice with no take between the two releases is counted as a fault, never absorbed silently.
+The element *MUST* count as a fault a free slot released twice with no take between the two releases.
 One released, taken and released again is not detected.
 
 *Pull bindings.*
-A pull binding's failure to read its own queue is counted on the route (`+receive_failed+`).
-So is a data connection that its middleware drops or fails to set up without an error.
+What a pull binding reports to the element of a failure to read its own queue, and of a data connection that its middleware drops or fails to set up without an error, is stated in xref:../up-l1/bindings.adoc#req-ssr-binding-arrival-reports[A binding reports each arrival within the latency that it declares, and each event as what it is].
+The element *MUST* count each such report exactly once on the route, in `+receive_failed+`.
+The element *MUST NOT* count or report it as a missed arrival, as a sample loss or under any other cause.
 
-*E2E clients.*
-An E2E client counts a response with no E2E header in a route counter of its own, `+unprotected+`, never in the E2E counter.
+*Sending-side connection faults.*
+What a binding reports of a connection that it finds corrupted while sending, and how that report is counted, is stated for that binding (xref:../up-l1/iceoryx2.adoc#req-ssr-binding-iceoryx2-degradation-handler[On iceoryx2, each port has a degradation handler]).
+It is not counted in `+receive_failed+`.
+
+*E2E routes.*
+How the element counts a frame with no E2E header on a receive route that selects the E2E wire is stated in xref:e2e-wire.adoc#req-ssr-e2e-refusal-counted[End-to-end refusals are named, and counted once].
 --
 
 [horizontal]
-ID:: `+req~ssr-error-no-silent-loss~3+`
+ID:: `+req~ssr-error-no-silent-loss~5+`
 ASIL:: B
 Allocated to:: the element
 Verification:: test, heap-window
 * *test*
 ** One counter per cause.
-** Each observable loss counted once or returned as specified, under contention and under `+Wait+` too.
-** Unobservable middleware losses disclosed rather than represented as complete counts.
+** Each observable loss counted once or returned as specified, under contention and under a QoS wait on overflow too.
+** A frame that the Streamer refuses in a check of its own on a carrier route, counted by the Streamer and not again by the element.
+** Losses the element cannot see disclosed rather than represented as complete counts.
+** A fault counter that saturates at 2^32^ − 1 and stays there, with no increment below it dropped, under contention too.
+** A flow counter that wraps.
+** A free slot released twice with no take between, counted as a fault.
+** On a pull binding, each report of a failure to read its own queue, and of a data connection that its middleware drops or fails to set up without an error, counted once on the route in `+receive_failed+`, and under no other cause.
 * *heap-window*: counters read inside the window.
-Status:: Draft
 ISO 26262:: 6-Annex D.2.4 (part-clause numbers only)
 
 *Rationale.*
 A named count or an error gives each observable local loss an observation point.
 Saturating fault counts avoid turning an overflow into apparent recovery.
 
-A declared middleware visibility limit is not a measurement of its losses, and counter fields alone do not establish that every discard is observable.
+A disclosed unobservable-loss limitation is not a measurement of the route's losses, and counter fields alone do not establish that every discard is observable.
+
+A failure to read a queue is a failure of the receive path, and no evidence that a frame was sent or lost.
+Counted under its own cause, it stays apart from a missed arrival and from a sample loss, which other observations establish.
 
 _End-to-end protection._
 
-* The E2E wire's figures count, as lost, each frame of the reference's incarnation that left the receiver's window without arriving, or was still open when the reference changed (xref:e2e-wire.adoc#req-ssr-e2e-figures[The E2E wire's figures cover the stretch from encode to decode]).
+* The E2E wire counts lost frames in figures of its own, as xref:e2e-wire.adoc#req-ssr-e2e-figures[The E2E wire's figures cover the stretch from encode to decode] defines them.
 * An end-to-end refusal is counted in its own route counter, not in `+refused+` (xref:e2e-wire.adoc#req-ssr-e2e-refusal-counted[End-to-end refusals are named, and counted once]).
-* The `+unprotected+` clause binds only a client of the E2E wire, which is deferred and not part of this delivery.
-It takes effect when that wire is delivered, and no other clause depends on it.
 
 [[req-ssr-error-route-report]]
 == Each route reports what it got
 
-[.specitem,oft-sid="req~ssr-error-route-report~2",oft-title="Each route reports what it got",oft-needs="impl,utest",oft-tags="SafetyUpRustCore"]
+[.specitem,oft-sid="req~ssr-error-route-report~3",oft-title="Each route reports what it got",oft-needs="impl,utest",oft-tags="SafetyUpRustCore"]
 --
 For every route, the element *MUST* report in runtime mode, without heap:
 
-* the send mode it got (lent or handed off);
+* its form, as xref:../up-l1/payload-paths.adoc#req-ssr-payload-route-form[A route's form is fixed at setup, by what the route declares and never by a name] defines it: native or serialized; the send mode it got, lent or handed off; and, on a receive route of a lending binding, a read of the shared storage or the copy route's copy (xref:../up-l1/integrity.adoc#req-ssr-integrity-zero-copy[Zero-copy only from a writer at or above the reader]);
 * the QoS in force;
 * its reserved storage;
 * its heap class, naming the permit where middleware allocates.
 
-The transport's waiver list *MUST* map every such permit to the waiver that admitted it.
+The element *MUST* map, in the transport's waiver list, every such permit to the waiver that admitted it.
 
-A report *MUST NOT* state a setting the route does not have.
+The element *MUST NOT* state in a report a setting the route does not have.
 --
 
 [horizontal]
-ID:: `+req~ssr-error-route-report~2+`
+ID:: `+req~ssr-error-route-report~3+`
 ASIL:: B
 Allocated to:: the element
-Verification:: test (the send mode, QoS, reserved storage, heap class and permit, and the join to the waiver list, each asserted)
-Status:: Draft
+Verification:: test (the form: native or serialized, lent or handed off and, on a receive route of a lending binding, a read of the shared storage or the copy route's copy; the QoS, reserved storage, heap class and permit, and the join to the waiver list, each asserted, and no setting reported that the route does not have), heap-window (the report read in runtime mode)
 
 *Rationale.*
-Each report names its permit through its heap class, and the runtime keeps the waivers it recorded.
+Each report names its permit through its heap class, and the transport's waiver list holds the waivers recorded at its transition (xref:waivers.adoc#req-ssr-waiver-record[Waivers are recorded and can be found]).
 So each permit joins to the waiver that admitted it.

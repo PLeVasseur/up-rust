@@ -27,6 +27,9 @@ This specification defines formal requirements for the implementation of a uProt
 
 == Overview
 
+[NOTE]
+====
+
 The https://en.wikipedia.org/wiki/Publish%E2%80%93subscribe_pattern[Publish & Subscribe (_pubsub_) architecture pattern] allows the decoupling of senders and receivers of messages on the levels of code-dependency, sender-receiver relationship, deployment context, network topology and even temporal coincidence. There exist a large number of implementations of this pattern for all sorts of domains and requirements, both in open source and proprietary development models.
 
 The purpose of uProtocol is to be the overarching service fabric/backbone of an automotive service landscape that extends from in-vehicle mechatronics devices and in-vehicle high-compute systems all the way up to cloud-based backend services and mobile-device companion applications. As such, uProtocol needs to be integrative towards any specific pubsub implementation that might be used in such a broad scenario (ex. MQTT, Eclipse Zenoh, DDS, SOME/IP, etc): uProtocol requires the facilities to implement a distributed publish-subscribe architecture.
@@ -38,12 +41,13 @@ A distributed publish-subscribe network requires the following capabilities to b
 - xref:../../udiscovery/v3/README.adoc[discoverability] of available publishers/topics
 - tracking of subscriptions, especially to/from remote systems (this specification)
 - option for xref:../../utwin/v2/README.adoc[local caching and temporally decoupled access] to published data
+====
 
 The remainder of this document defines the use cases, interfaces, state machines and application flows to support tracking of subscriptions, including between remote/distributed systems.
 
 ---
 
-The uSubscription service API is defined using UML2 notation.
+The class diagram below is an illustrative summary of the uSubscription service API that the following sections define.
 
 .uSubscription API
 [#usubscription-api]
@@ -65,7 +69,7 @@ class SubscriptionStatus {
     <<enumeration>>
     UNSUBSCRIBED
     SUBSCRIBE_PENDING
-    UNSUBSCRIBED
+    SUBSCRIBED
     UNSUBSCRIBE_PENDING
 }
 
@@ -96,22 +100,38 @@ NOTE: The data types used in the following sections are defined in {basic_types_
 
 In a distributed pubsub network, there exist two subscription scenarios: local subscriptions and remote subscriptions. 
 
-In the local case a client subscribes to messages published by a _uEntity_ (might be abbreviated as _uE_, especially in diagrams) on the same transport network, with both parties using the same pubsub implementation. For instance, imagine an MQTT broker used by publishers and subscribers, all deployed within the same system context.
+[.specitem,oft-sid="req~usubscription-local-and-remote~1",oft-needs="impl,utest",oft-tags="uSubscription"]
+In the local case a client subscribes to messages published by a _uEntity_ on the same transport network, with both parties using the same pubsub implementation.
+In contrast, a remote subscription scenario involves publishers and subscribers using different pubsub implementations and/or being located on different systems.
 
-In contrast, a remote subscription scenario involves publishers and subscribers using different pubsub implementations and/or being located on different systems. For instance, a client interacting with a co-located MQTT broker to subscribe to messages that originate from a low-level mechatronics device, being published via SOME/IP.
+.A local subscription
+====
+Imagine an MQTT broker used by publishers and subscribers, all deployed within the same system context.
+====
 
+.A remote subscription
+====
+A client interacting with a co-located MQTT broker to subscribe to messages that originate from a low-level mechatronics device, being published via SOME/IP.
+====
+
+[NOTE]
+====
 To be workable, the remote subscription scenario requires a dispatcher (`uStreamer`) which is able to forward published messages from one pubsub network to another. To do so intelligently, i.e. only forward traffic that actually is requested by a remote entity, some form of bookkeeping is needed to keep track of local and remote subscriptions, synchronize remote subscription requests with their bookkeeping counterpart on the remote system, and serve as information source for subscription states for the dispatcher entity. 
 
 The `uSubscription` service component provides this bookkeeping capability.
+====
 
 For an illustration of remote subscribe/unsubscribe scenarios, refer to section xref:remote-subscription-sequences[Remote subscription sequences].
 
 [#usubscription-publisher]
 == Publisher
 
+[NOTE]
+====
 A _Publisher_ is a uEntity that sends messages to a _topic_, thus making the information available to other uEntities interested in the topic. Publishers typically use the {communication_layer_api_ref} for this purpose. 
 
 A Publisher in a uProtocol network usually does not perform any additional actions beyond what is necessary to publish messages to the transport it is connected to.
+====
 
 [#usubscription-subscriber]
 == Subscriber
@@ -129,10 +149,9 @@ In addition to performing the actions necessary to subscribe to and receive mess
 subscribe(topic: UUri, expiration: Instant[0..1], samplePeriod: UInt32[0..1]) : (UUri, SubscriptionStatus)
 ----
 
-Clients use this operation to subscribe to a topic. 
+NOTE: Clients use this operation to subscribe to a topic. 
 
 * Returns the current status of the requested subscription. 
-* Calling this endpoint also registers the subscribing client to receive subscription change notifications when the subscription status changes.
 
 [.specitem,oft-sid="req~usubscription-subscribe-method_id~1",oft-needs="dsn,impl,utest",oft-tags="uSubscription"]
 The uSubscription `Subscribe()` operation *MUST* use the method ID `1`.
@@ -180,7 +199,7 @@ The uSubscription `Subscribe()` operation *MUST* implement the following respons
 | {uuri_ref}
 | Subscribed topic, as passed to SubscriptionRequest
 
-| xref:SubscriptionStatus[SubscriptionStatus]
+| xref:subscription-status[SubscriptionStatus]
 | Current status of the subscription.
 |===
 
@@ -193,7 +212,12 @@ When a client calls the `Subscribe()` operation, uSubscription service *MUST* st
 When a client calls the `Subscribe()` operation, uSubscription service *MUST* persistenly (across service restarts) store the client as a subscriber of the indicated topic.
 
 [.specitem,oft-sid="req~usubscription-subscribe-multiple~1",oft-needs="impl,utest",oft-tags="uSubscription"]
-When a client calls the `Subscribe()` operation for a topic that it is already subscribed to, uSubscription service *MUST* return a response message containing the current xref:subscription-status[SubscriptionStatus] of this client/topic combination (e.g. `SUBSCRIBED` or `SUBSCRIBE_PENDING`).
+When a client calls the `Subscribe()` operation for a topic that it is already subscribed to, uSubscription service *MUST* return a response message containing the current xref:subscription-status[SubscriptionStatus] of this client/topic combination.
+
+.Status returned for a repeated subscription
+====
+`SUBSCRIBED` or `SUBSCRIBE_PENDING`
+====
 
 [.specitem,oft-sid="req~usubscription-subscribe-no-expiration~1",oft-needs="impl,utest",oft-tags="uSubscription"]
 When a subscription request does not specify an `expiration` time, uSubscription service *MUST* track the associated client-topic subscription until the subscription is canceled by the client.
@@ -217,7 +241,12 @@ When a client makes the first call to `Subscribe()` to a xref:local-remote-subsc
 When a local uSubscription service sends a `Subscribe()` request to a remote uSubscription service, the local uSubscription service *MUST* set the xref:subscription-status[SubscriptionStatus] for any client/topic combination involving the subscribed remote topic to `SUBSCRIBE_PENDING`.
 
 [.specitem,oft-sid="req~usubscription-subscribe-remote-response~1",oft-needs="impl,utest",oft-tags="uSubscription"]
-When a local uSubscription service receives a reply to a remote `Subscribe()` request, the local uSubscription service *MUST* set the xref:subscription-status[SubscriptionStatus] for any client/topic combination involving the subscribed remote topic to the status returned by the remote uSubscription service (e.g. `SUBSCRIBED` or `UNSUBSCRIBED`).
+When a local uSubscription service receives a reply to a remote `Subscribe()` request, the local uSubscription service *MUST* set the xref:subscription-status[SubscriptionStatus] for any client/topic combination involving the subscribed remote topic to the status returned by the remote uSubscription service.
+
+.Status returned by a remote uSubscription service
+====
+`SUBSCRIBED` or `UNSUBSCRIBED`
+====
 
 [.specitem,oft-sid="req~usubscription-subscribe-unsubscribe-pending~1",oft-needs="impl,utest",oft-tags="uSubscription"]
 When a client calls the `Subscribe()` operation for a remote topic with xref:subscription-status[SubscriptionStatus] `UNSUBSCRIBE_PENDING`, uSubscription service *MUST* initiate the regular remote subscription process, i.e. send a subscription request to the remote uSubscription service and set xref:subscription-status[SubscriptionStatus] to `SUBSCRIBE_PENDING`.
@@ -227,8 +256,8 @@ After a client calls the `Subscribe()` operation, uSubscription service *MUST* s
 
 ---
 
-[discrete]
-==== Subscribe operation
+.Subscribe operation
+====
 [mermaid]
 ifdef::env-github[[source,mermaid]]
 ----
@@ -242,11 +271,12 @@ activate T
     T--)C : ("//vehicle/A1B/1/9A10", SubscriptionStatus.SUBSCRIBED)
 deactivate T
 ----
+====
 
 ---
 
-[discrete]
-==== Subscribe operation with expiration time
+.Subscribe operation with expiration time
+====
 [mermaid]
 ifdef::env-github[[source,mermaid]]
 ----
@@ -264,6 +294,7 @@ deactivate T
 T-->T : await expiration
 T-)C : ("//vehicle/A1B/1/9A10", "/80/2", SubscriptionStatus.UNSUBSCRIBED)
 ----
+====
 
 ---
 
@@ -275,10 +306,9 @@ T-)C : ("//vehicle/A1B/1/9A10", "/80/2", SubscriptionStatus.UNSUBSCRIBED)
 unsubscribe(topic: UUri)
 ----
 
-Clients use this operation to unsubscribe from a topic. 
+NOTE: Clients use this operation to unsubscribe from a topic. 
 
 * Unsubscribing from a topic always succeeds from the client's point of view.
-* Calling this endpoint also unregisters the client from receiving any future change notifications regarding the subscription.
 
 [.specitem,oft-sid="req~usubscription-unsubscribe-method_id~1",oft-needs="dsn,impl,utest",oft-tags="uSubscription"]
 The uSubscription `Unsubscribe()` operation *MUST* use the method ID `2`.
@@ -330,6 +360,8 @@ When the last client subscribed to a remote topic calls the `Unsubscribe()` oper
 
 ---
 
+.Unsubscribe operation
+====
 [mermaid]
 ifdef::env-github[[source,mermaid]]
 ----
@@ -343,6 +375,7 @@ activate T
     T--)C :
 deactivate T
 ----
+====
 
 ---
 
@@ -354,8 +387,7 @@ deactivate T
 fetchSubscriptions(topicFilter: UUri[0..1], subscriberFilter: UUri[0..1]) : Subscription[*]
 ----
 
-Clients use this operation to get details about subscriptions that are currently tracked by uSubscription service.
-Clients can provide {uuri_ref}s to filter subscriptions by topic and/or subscriber. Filter UURIs may contain wildcards. 
+NOTE: Clients use this operation to get details about subscriptions that are currently tracked by uSubscription service.
 
 [.specitem,oft-sid="req~usubscription-fetch-subscriptions-method_id~1",oft-needs="dsn,impl,utest",oft-tags="uSubscription"]
 The uSubscription `FetchSubscriptions()` operation *MUST* use the method ID `3`.
@@ -418,8 +450,8 @@ When a client calls the `FetchSubscribers()` operation, uSubscription service *M
 
 ---
 
-[discrete]
-==== FetchSubscription operation
+.FetchSubscription operation
+====
 [mermaid]
 ifdef::env-github[[source,mermaid]]
 ----
@@ -435,11 +467,12 @@ activate T
     T--)C : Subscription[2]
 deactivate T
 ----
+====
 
 ---
 
-[discrete]
-==== FetchSubscription operation with subscriber filter
+.FetchSubscription operation with subscriber filter
+====
 [mermaid]
 ifdef::env-github[[source,mermaid]]
 ----
@@ -455,11 +488,12 @@ activate T
     T--)C : Subscription[1]
 deactivate T
 ----
+====
 
 ---
 
-[discrete]
-==== FetchSubscription operation with wildcard topic filter
+.FetchSubscription operation with wildcard topic filter
+====
 [mermaid]
 ifdef::env-github[[source,mermaid]]
 ----
@@ -475,6 +509,7 @@ activate T
     T--)C : Subscription[2]
 deactivate T
 ----
+====
 
 ---
 
@@ -483,6 +518,8 @@ deactivate T
 
 A topic identifies the message resource that a <<usubscription-subscriber>> wants to subscribe to. Topic are expressed in {uuri_ref} format.
 
+[.specitem,oft-sid="req~usubscription-topic-uuris~1",oft-needs="impl,utest",oft-tags="uSubscription"]
+--
 Topic UURIs passed to uSubscription operations must
 
 * be a valid {uuri_ref} and
@@ -491,12 +528,18 @@ Topic UURIs passed to uSubscription operations must
 * not contain a _wildcard_ _service ID_ (_least_ significant 16 bits of `ue_id`) and
 * not contain a _wildcard_ `resource_id`.
 
-It is permissible for topic UURIs to contain wildcard _service instance ID_ (_most_ significant 16 bits of `ue_id`). For example, imagine the case where a client wants to "subscribe to the _door open_ event, from any instance of _door_ in the vehicle".
+It is permissible for topic UURIs to contain wildcard _service instance ID_ (_most_ significant 16 bits of `ue_id`).
+--
+
+.A topic with a wildcard service instance ID
+====
+Imagine the case where a client wants to "subscribe to the _door open_ event, from any instance of _door_ in the vehicle".
+====
 
 [#usubscription-states]
 == Subscription States
 
-A _Subscription State_ defines the relationship between exactly one subscriber and one topic. The following diagram illustrates the possible states a subscription can be in and the transitions between the states, triggered by calls to the uSubscription service API.
+NOTE: A _Subscription State_ defines the relationship between exactly one subscriber and one topic. The following diagram illustrates the possible states a subscription can be in and the transitions between the states, triggered by calls to the uSubscription service API.
 
 ---
 
@@ -536,9 +579,7 @@ stateDiagram-v2
 
 [.specitem,oft-sid="dsn~usubscription-state-machine~1",oft-needs="impl,utest",oft-tags="uSubscription"]
 uSubscription service *MUST* implement subscription state transisitions of client-topic subscription relationships according to the <<usubscription-state-machine>>.
-
-
-NOTE: `SUBSCRIBE_PENDING` and `UNSUBSCRIBE_PENDING` xref:subscription-status[SubscriptionStatus] only applies to xref:local-remote-subscriptions[remote subscriptions].
+`SUBSCRIBE_PENDING` and `UNSUBSCRIBE_PENDING` xref:subscription-status[SubscriptionStatus] only applies to xref:local-remote-subscriptions[remote subscriptions].
 
 .Subscription State Details
 [%autowidth,options="header",]
@@ -570,7 +611,7 @@ NOTE: `SUBSCRIBE_PENDING` and `UNSUBSCRIBE_PENDING` xref:subscription-status[Sub
 | Received a (positive) response from the destination device uSubscription service
 |===
 
-NOTE: The _Action_ column in the above table describes the action to be taken by a uSubscription service instance when a specific state transition occurs. 
+NOTE: The items under <<subscribe-operation,Subscribe()>> and <<unsubscribe-operation,Unsubscribe()>> state the requests in the _Action_ column of the table above.
 
 == Subscription Change Notifications
 
@@ -592,14 +633,19 @@ Subscription change notifications *MUST* have a payload of type xref:subscriptio
 [#subscription-change-message-topic]
 === Subscription change message topic
 
-When the `status`, `expiration` time or `samplePeriod` of a subscription changes, uSubscription service publishes messages to a topic dedicated to such change information messages. For instance, a `uStreamer` application might subscribe to that topic to stay informed about any changes to remote subscriptions. Other use cases for such change messages might be subscription tracking for logging or billing purposes, etc.
+When the `status`, `expiration` time or `samplePeriod` of a subscription changes, uSubscription service publishes messages to a topic dedicated to such change information messages.
 
 [.specitem,oft-sid="req~usubscription-change-topic~1",oft-needs="impl,utest",oft-tags="uSubscription"]
 uSubscription service *MUST* send a UMessage of type `Publish` for each change to a tracked subscription's `status`, `expiration` time or `samplePeriod` to a dedicated topic.
 
+.Uses of the subscription change topic
+====
+A `uStreamer` application might subscribe to that topic to stay informed about any changes to remote subscriptions. Other use cases for such change messages might be subscription tracking for logging or billing purposes, etc.
+====
+
 === Registering for subscription change notifications
 
-Any uEntity may register with uSubscription service to explicitly be sent subscription change Notifications when the `status`, `expiration` time or `samplePeriod` of subscriptions tracked by uSubscription service changes. For instance, a `uStreamer` application might be interested in all subscription events that the `uStreamer` is bridging to, but using a transport to it's co-located uSubscription service that does not support pub/sub style communication. As the xref:subscription-change-message-topic[Subscription change message topic] is not available in this scenario, `uStreamer` can use `RegisterForNotifications` to be sent Notification messages on each subscription change event.
+Any uEntity may register with uSubscription service to explicitly be sent subscription change Notifications when the `status`, `expiration` time or `samplePeriod` of subscriptions tracked by uSubscription service changes.
 
 [#register-for-notifications-operation]
 ==== RegisterForNotifications()
@@ -609,7 +655,7 @@ Any uEntity may register with uSubscription service to explicitly be sent subscr
 registerForNotifications()
 ----
 
-uEntities use this operation to register for being sent subscription change Notification messages for any 
+NOTE: uEntities use this operation to register for being sent subscription change Notification messages for any 
 subscription tracked by uSubscription service.
 
 [.specitem,oft-sid="req~usubscription-register-notifications-method_id~1",oft-needs="dsn,impl,utest",oft-tags="uSubscription"]
@@ -624,10 +670,15 @@ The uSubscription `RegisterForNotifications()` operation *MUST* implement an emp
 [.specitem,oft-sid="req~usubscription-register-notifications~1",oft-needs="impl,utest",oft-tags="uSubscription"]
 After a client has called `RegisterForNotifications()`, uSubscription service *MUST* send subscription change Notification messages to that client whenever subscription `status`, `expiration` time or `samplePeriod` of any subscription tracked by uSubscription service changes.
 
+.Registration by a uStreamer whose transport has no pub/sub
+====
+A `uStreamer` application might be interested in all subscription events that the `uStreamer` is bridging to, but using a transport to it's co-located uSubscription service that does not support pub/sub style communication. As the xref:subscription-change-message-topic[Subscription change message topic] is not available in this scenario, `uStreamer` can use `RegisterForNotifications` to be sent Notification messages on each subscription change event.
+====
+
 ---
 
-[discrete]
-==== RegisterForNotifications operation
+.RegisterForNotifications operation
+====
 [mermaid]
 ifdef::env-github[[source,mermaid]]
 ----
@@ -646,6 +697,7 @@ T-->T : "//vehicle/A1B/1/9A10" becomes UNSUBSCRIBED
 T-)C : ("//vehicle/A1B/1/9A10", "/90/1", SubscriptionStatus.UNSUBSCRIBED)
 T-)N : ("//vehicle/A1B/1/9A10", "/90/1", SubscriptionStatus.UNSUBSCRIBED)
 ----
+====
 
 ---
 
@@ -657,7 +709,7 @@ T-)N : ("//vehicle/A1B/1/9A10", "/90/1", SubscriptionStatus.UNSUBSCRIBED)
 unregisterForNotifications()
 ----
 
-Clients use this operation to unregister from being sent subscription change Notification messages.
+NOTE: Clients use this operation to unregister from being sent subscription change Notification messages.
 
 [.specitem,oft-sid="req~usubscription-unregister-notifications-method_id~1",oft-needs="dsn,impl,utest",oft-tags="uSubscription"]
 The uSubscription `UnregisterForNotifications()` operation *MUST* use the method ID `5`.
@@ -673,8 +725,8 @@ uSubscription service *MUST* stop sending subscription change Notification messa
 
 ---
 
-[discrete]
-==== UnregisterForNotifications operation
+.UnregisterForNotifications operation
+====
 [mermaid]
 ifdef::env-github[[source,mermaid]]
 ----
@@ -696,6 +748,7 @@ deactivate T
 T-->T : "//vehicle/A1B/1/9A10" becomes SUBSCRIBED
 T-)N : ("//vehicle/A1B/1/9A10", "/90/1", SubscriptionStatus.SUBSCRIBED)
 ----
+====
 
 ---
 
@@ -727,12 +780,12 @@ When a client invokes the uSubscription service's `Reset()` operation, uSubscrip
 3. send `Subscription` messages to each client subscribed to a topic or that has registered for notifications about a topic, with xref:subscription-status[SubscriptionStatus] `UNSUBSCRIBED`
 
 [.specitem,oft-sid="req~usubscription-reset-only-usubscription~1",oft-needs="impl,utest",oft-tags="uSubscription"]
-When receiving a `Reset()` call from a source that is not another uSubscription services (i.e. from source URIs where uEntity type does not equal `0x0`), uSubscription service *MUST* return a failure status message with {ucode_link} `PermissionDenied`.
+When receiving a `Reset()` call from a source that is not another uSubscription services (i.e. from source URIs where uEntity type does not equal `0x0`), uSubscription service *MUST* return a failure status message with {ucode_proto_ref} `PermissionDenied`.
 
 ---
 
-[discrete]
-==== Reset operation
+.Reset operation
+====
 [mermaid]
 ifdef::env-github[[source,mermaid]]
 ----
@@ -763,6 +816,7 @@ sequenceDiagram
         deactivate L
     end
 ----
+====
 
 ---
 
@@ -774,7 +828,12 @@ Subscribe (and unsubscribe) to xref:local-remote-subscriptions[remote topics] ar
 Remote Subscribe/Unsubscribe requests *MUST* use a timeout of 5 minutes.
 
 [.specitem,oft-sid="req~usubscription-remote-retry-indefinitely~1",oft-needs="impl",oft-tags="uSubscription"]
-Timed-out remote commands *MUST* be retried indefinitely until the business logic behind it no longer requires the command to be sent (e.g. because the last client entity unsubscribed from the remote topic).
+Timed-out remote commands *MUST* be retried indefinitely until the business logic behind it no longer requires the command to be sent.
+
+.A remote command that is no longer required
+====
+Because the last client entity unsubscribed from the remote topic
+====
 
 [#common-objects]
 == Common Objects
@@ -784,8 +843,10 @@ Objects commonly used throughought this document are defined in this section.
 [#subscription-status]
 === SubscriptionStatus
 
-SubscriptionStatus is an enum-style object, describing the status of a subscriber-topic relationship.
+NOTE: SubscriptionStatus is an enum-style object, describing the status of a subscriber-topic relationship.
 
+[.specitem,oft-sid="req~usubscription-subscription-status~1",oft-needs="impl,utest",oft-tags="uSubscription"]
+--
 .SubscriptionStatus
 [cols="1,3"]
 |===
@@ -803,17 +864,19 @@ SubscriptionStatus is an enum-style object, describing the status of a subscribe
 | `UNSUBSCRIBE_PENDING`
 | Unsubscribe is pending confirmation from remote uSubscription service instance
 |=== 
+--
 
 [#expiration-time]
 === Expiration time
 
-Expiration time is used to define when a subscription should automatically expire. Expiration time should be set in the future: uSubscription service will ignore subscription requests with a timestamp that has already expired at the time of request processing. 
+Expiration time is used to define when a subscription should automatically expire. Expiration time should be set in the future. What uSubscription service does with a subscription request whose expiration time has already passed is stated in <<subscribe-operation,Subscribe()>>.
 
 [.specitem,oft-sid="dsn~usubscription-subscription-expiration-datatype~1",oft-needs="impl,utest",oft-tags="uSubscription"]
 Expiration time parameters passed to the uSubscription API *MUST* follow the link:https://www.iso8601.com[ISO8601] definition for an instant in time, in millisecond granularity.
 
 ---
 NOTE: The actual data type to best represent an expiration timestamp is specific to the serialization technology that is being used. For instance, using protobuf, Expiration time would be best represented by the link:https://protobuf.dev/reference/protobuf/google.protobuf/#timestamp[well-known Timestamp type].
+
 ---
 
 [#sample-period]
@@ -832,7 +895,7 @@ Sample period *MUST* be represented as a 32-bit unsigned integer in uSubscriptio
 [#subscription]
 === Subscription
 
-Subscription is an information object containing all available information about a subscriber-topic relationship.
+NOTE: Subscription is an information object containing all available information about a subscriber-topic relationship.
 
 .Subscription
 [%autowidth]
@@ -850,7 +913,7 @@ Subscription is an information object containing all available information about
 | Subscriber URI of the subscription relationship.
 
 | `status`
-| xref:SubscriptionStatus[SubscriptionStatus]
+| xref:subscription-status[SubscriptionStatus]
 | yes
 | Current status of the subscription.
 
@@ -868,12 +931,19 @@ Subscription is an information object containing all available information about
 [#remote-subscription-sequences]
 == Remote subscription sequences
 
+[NOTE]
+====
+
 As has been introduced in section xref:local-remote-subscriptions[Local and Remote Subscriptions], uProtocol provides the facility to stream messages between different transport network sections, and with publishers and subscribers located on different hosts. This involves an interplay between uSubscription and uStreamer services, in order to coordinate subscriptions and forwarding of messages between different transport network segments.
 
 The following sequence diagrams show a detailed flow of how remote subscriptions are set up beween different transport network segements, with MQTT5 and Zenoh chosen to serve as example transport implementations. The diagrams aim to provide maximum clarity of the control and message flows involved, therefore they include `UTransport` endpoints for each relevant uEntity-transport combination. To improve readability, RPC-style interactions (eg. `subscribe()` calls to uSubscription entities) are not detailed out on UTransport level, but are reduced to request-response flows between involved uEntities. All shown MQTT5 UTransports are connected via the same MQTT transport network, all Zenoh UTransports are part of the same Zenoh transport network.
 
+====
+
 === Local publisher, remote subscriber
 
+.Message flow for a local publisher and a remote subscriber
+====
 This is a detailed illustration of how remote subscriptions are set up in deployment scenarios where the message publisher is located in a local __Authority A__ transport network segment, whereas the subscriber resides on a remote transport network  (dubbed __Authority B__).
 
 [mermaid]
@@ -947,10 +1017,13 @@ deactivate STA
     MSUB-)SUB: onReceive(MESSAGE)
 end %% rect
 ----
+====
 
 === Remote publisher, local subscriber
 
-This is an illustration of how remote subscriptions are set up in deployment scenarios where the message publisher is located in a local __Authority A__ transport network segment, whereas the publisher resides on a remote transport network (dubbed __Authority B__).
+.Message flow for a remote publisher and a local subscriber
+====
+This is an illustration of how remote subscriptions are set up in deployment scenarios where the message subscriber is located in a local __Authority A__ transport network segment, whereas the publisher resides on a remote transport network (dubbed __Authority B__).
 
 [mermaid]
 ifdef::env-github[[source,mermaid]]
@@ -1027,5 +1100,6 @@ deactivate STA
     ZSUB-)SUB: onReceive(MESSAGE)
 end %% rect
 ----
+====
 
 ---

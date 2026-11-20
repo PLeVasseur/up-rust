@@ -21,12 +21,12 @@ SPDX-License-Identifier: Apache-2.0
 
 == Overview 
 
-UAttributes contain meta data describing a particular message's purpose, content and processing requirements.
+NOTE: UAttributes contain meta data describing a particular message's purpose, content and processing requirements.
 
 [#data-model-definition]
 == Data Model
 
-The diagram below shows the UAttributes class and its properties using UML2 notation.
+The class diagram below shows the UAttributes class and its properties.
 
 NOTE: The UCode, UUri and UUID classes are defined in detail in xref:error_model.adoc[Error Model Specification], xref:uri.adoc[UUri Specification] and xref:uuid.adoc[UUID Specification] respectively.
 
@@ -139,7 +139,7 @@ Every message *MUST* have a unique message identifier. The timestamp contained i
 |yes
 |xref:upriority.adoc#default-priority[default priority]
 a|
-The level of priority that this message should be processed/delivered with.
+The message's priority class, as xref:upriority.adoc[Message Priority (UPriority)] defines it.
 
 |`ttl`
 |`UInt32`
@@ -164,12 +164,13 @@ A consumer *MUST NOT* consider a message expired if it has a TTL value of `0`.
 |none
 
 a|
-A tracing identifier to use for correlating messages across the system, intended to be compatible with https://github.com/cloudevents/spec/blob/main/cloudevents/extensions/distributed-tracing.md[CloudEvents distributed tracing extension].
+A tracing identifier to use for correlating messages across the system, intended to be compatible with https://github.com/cloudevents/spec/blob/v1.0.2/cloudevents/extensions/distributed-tracing.md[CloudEvents distributed tracing extension].
 
 [.specitem,oft-sid="dsn~up-attributes-traceparent~1",oft-needs="impl,utest",oft-tags="LanguageLibrary"]
 --
 The traceparent *MUST* either be empty or contain a value as defined by https://w3c.github.io/trace-context/#traceparent-header[W3C Trace Context Level 3].
 --
+Source:: W3C Trace Context Level 3, Editor's Draft of 29 June 2026, https://github.com/w3c/trace-context/blob/acab820be9db7b3433668baa5cdd43f57f4c4be0/spec/20-http_request_header_format.md#traceparent-header[section 3.2, Traceparent Header] (w3c/trace-context commit `acab820be9db7b3433668baa5cdd43f57f4c4be0`).
 
 
 |`payloadEncodingId`
@@ -180,10 +181,11 @@ a|The encoding of the message payload, represented by an identifier whose
 meaning is defined in the
 xref:payload_encoding_registry.adoc[payload-encoding registry].
 
-[.specitem,oft-sid="dsn~up-attributes-payload-encoding-id~1",oft-needs="impl,utest",oft-tags="LanguageLibrary"]
+[.specitem,oft-sid="dsn~up-attributes-payload-encoding-id~2",oft-needs="impl,utest",oft-tags="LanguageLibrary"]
 --
 *Presence:* This property and the UMessage's `payload` field *MUST* either both be present or
-both be absent. A present zero-length `payload` field is a present payload.
+both be absent. Payload presence is determined by whether the optional `payload` field is
+explicitly set. An explicitly set zero-length byte sequence is therefore a present payload.
 
 *Range:* If present, the value *MUST* be between `0x0000` and `0xFFFF`.
 Message validation *MUST NOT* reject it because the identifier is reserved,
@@ -337,7 +339,7 @@ The invoked method UUri *MUST NOT* contain any wildcard values in any of its fie
 |xref:upriority.adoc[UPriority]
 |yes
 a|`CS4`
-a|The xref:upriority.adoc[level of priority] that this message should be processed/delivered with.
+a|The message's priority class, as xref:upriority.adoc[Message Priority (UPriority)] defines it.
 
 [.specitem,oft-sid="dsn~up-attributes-request-priority~1",oft-needs="impl,utest",oft-tags="LanguageLibrary"]
 --
@@ -349,7 +351,7 @@ The priority of an RPC Request message *MUST* be set to `CS4` or higher.
 |`UInt32`
 |yes
 |none
-a|The amount of time (in milliseconds) after which this request message should no longer be delivered to or processed by a service provider.
+a|The message's `ttl`, as <<common-attributes,Common Message Attributes>> defines it.
 
 [.specitem,oft-sid="dsn~up-attributes-request-ttl~1",oft-needs="impl,utest",oft-tags="LanguageLibrary"]
 --
@@ -441,7 +443,7 @@ a|
 --
 *MUST* be the same value as that of the corresponding request message's `priority` attribute.
 --
-|The xref:upriority.adoc[level of priority] that this message should be processed/delivered with. 
+|The message's priority class, as xref:upriority.adoc[Message Priority (UPriority)] defines it.
 
 
 |`ttl`
@@ -452,12 +454,12 @@ a|
 --
 *MUST* be the same value as that of the corresponding request message's `ttl` attribute.
 --
-|The amount of time (in milliseconds) after which this response message should no longer be delivered to or processed by the service consumer.
+|The message's `ttl`, as <<common-attributes,Common Message Attributes>> defines it.
 
 |`commstatus`
 |xref:error_model.adoc#data-model-definition[UCode]
 |yes
 a|`UCode.Ok`
-a|The outcome of the RPC. `UCode.Ok` indicates successful invocation of the operation. All other values indicate that invocation was unsuccessful. The concrete value indicates the type of error that has occurred. The message's payload may contain additional information about the error.
+a|The outcome of the RPC. What each value means is stated in xref:error_model.adoc[uProtocol Error Model (UStatus)].
 
 |===

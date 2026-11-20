@@ -20,17 +20,20 @@ SPDX-License-Identifier: Apache-2.0
 
 == Overview
 
+[NOTE]
+====
 uProtocol supports invoking operations on (remote) service providers by means of _Remote Procedure Calls_ (RPC).
 In order to do so, a client uEntity (service consumer) sends an xref:uattributes.adoc#request-attributes[RPC Request message] to the service provider and waits for a corresponding xref:uattributes.adoc#response-attributes[RPC Response message] which conveys the outcome of the invocation of the operation.
 
-In general, an RPC can succeed or fail from the service consumer's point of view. In the former case, the response message contains the data/information that is the result of successfully processing the input data conveyed in the request message. In the latter case, the response message contains details regarding the reason why processing of the request message has failed.
+In general, an RPC can succeed or fail from the service consumer's point of view.
+====
 
-uProtocol follows Google's https://cloud.google.com/apis/design/errors[protocol-agnostic API error model]. The following sections describe how this model is applied to uProtocol service definitions and implementations.
+uProtocol's error model has a set of error codes and a status type. The codes are the `UCode` values: link:../up-core-api/uprotocol/v1/ucode.proto[ucode.proto] declares them, each with a comment on its meaning. The status type is `UStatus` (<<ustatus-data-model>>), which carries one code, an optional message and any number of details. The following sections describe how this model is applied to uProtocol service definitions and implementations.
 
 [#data-model-definition]
 == Data Model
 
-A UStatus contains detail information about an error that has occurred while a service provider has processed an RPC Request message. The diagram below shows the UStatus class and its properties using UML2 notation.
+NOTE: A UStatus contains detail information about an error that has occurred while a service provider has processed an RPC Request message. The class diagram below shows the UStatus class and its properties.
 
 .UStatus Data Model
 [#ustatus-data-model]
@@ -86,6 +89,8 @@ uProtocol uses https://protobuf.dev/programming-guides/proto3/#services[Protobuf
 
 If an operation does not return any data/information on successful execution, the operation *SHOULD* use a dedicated empty response message:
 
+.An operation with a dedicated empty response message
+====
 [source,proto3]
 ----
 service HvacService {
@@ -100,6 +105,7 @@ message SetTemperatureResponse {}
 ----
 
 A service consumer invoking this operation will then receive a `UMessage` with an empty payload if the operation has succeeded.
+====
 
 == Service Provider Implementation
 

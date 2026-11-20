@@ -20,7 +20,9 @@ SPDX-License-Identifier: Apache-2.0
 
 == Overview
 
-https://cloudevents.io/[CloudEvents] is a specification hosted by the https://cncf.io/[Cloud Native Computing Foundation] (CNCF) for describing events in a common way.
+[NOTE]
+====
+https://cloudevents.io/[CloudEvents] is a specification, hosted by the https://cncf.io/[Cloud Native Computing Foundation] (CNCF), that gives events from different systems a shared structure and a shared set of attributes.
 
 The CloudEvents specification defines an envelope for carrying information about the occurrence of a noteworthy event in a system.
 
@@ -45,7 +47,8 @@ Support for using CloudEvents is available for many programming languages by mea
 
 The https://cloudevents.io/[CloudEvents] project has defined a set of *Formats* which describe how events can be expressed using https://github.com/cloudevents/spec/blob/v1.0.2/cloudevents/formats/json-format.md[JSON], https://github.com/cloudevents/spec/blob/v1.0.2/cloudevents/formats/protobuf-format.md[Protobuf] or https://github.com/cloudevents/spec/blob/v1.0.2/cloudevents/formats/avro-format.md[Apache Avro].
 
-The accompanying *Bindings* describe how events can be sent via well-known transport protocols like https://github.com/cloudevents/spec/blob/v1.0.2/cloudevents/bindings/http-protocol-binding.md[HTTP], https://github.com/cloudevents/spec/blob/v1.0.2/cloudevents/bindings/mqtt-protocol-binding.md[MQTT] etc.
+The accompanying CloudEvents *protocol bindings* describe how events can be sent via well-known transport protocols like https://github.com/cloudevents/spec/blob/v1.0.2/cloudevents/bindings/http-protocol-binding.md[HTTP], https://github.com/cloudevents/spec/blob/v1.0.2/cloudevents/bindings/mqtt-protocol-binding.md[MQTT] etc.
+====
 
 [.specitem,oft-sid="dsn~cloudevents-umessage-mapping~3",oft-needs="impl,utest",oft-title="Mapping of UMessages to CloudEvents"]
 == uMessage Mapping
@@ -69,7 +72,7 @@ The table below defines the mapping of uAttributes to CloudEvent attributes. Thi
 | N/A
 |https://github.com/cloudevents/spec/blob/v1.0.2/cloudevents/spec.md#specversion[`specversion`]
 |String
-a|CloudEvent specification version. This is *NOT* the uProtocol version
+a|CloudEvents specification version. This is *NOT* the uProtocol version
 
 * *MUST* be set to `1.0`
 
@@ -77,24 +80,24 @@ a|CloudEvent specification version. This is *NOT* the uProtocol version
 |`type`
 |https://github.com/cloudevents/spec/blob/v1.0.2/cloudevents/spec.md#type[`type`]
 |String
-a|The type of the message
+a|Defined in xref:../basics/uattributes.adoc[uProtocol Attributes (UAttributes)].
 
 * *MUST* be set to the value of the `uprotocol.ce_name` option defined for the
-link:../up-core-api/uprotocol/uattributes.proto[UMessageType enum].
+link:../up-core-api/uprotocol/v1/uattributes.proto[UMessageType enum].
 
 
 |`id`
 |https://github.com/cloudevents/spec/blob/v1.0.2/cloudevents/spec.md#id[`id`]
 |String
-a|Unique identifier for the message
+a|Defined in xref:../basics/uattributes.adoc[uProtocol Attributes (UAttributes)].
 
-* *MUST* be set to the https://www.rfc-editor.org/rfc/rfc4122.html#section-3[hyphenated string representation] of the UUID.
+* *MUST* be set to the lower-case https://www.rfc-editor.org/rfc/rfc9562#section-4[hyphenated string representation] of the UUID (source: RFC 9562, section 4 UUID Format).
 
 
 |`source`
 |https://github.com/cloudevents/spec/blob/v1.0.2/cloudevents/spec.md#source-1[source]
 |Uri-Reference
-a|The origin (address) of the message
+a|Defined in xref:../basics/uattributes.adoc[uProtocol Attributes (UAttributes)].
 
 * *MUST* be set to either the long or short form xref:../basics/uri.adoc[serialization of the URI]
 
@@ -102,7 +105,7 @@ a|The origin (address) of the message
 |`sink`
 |`sink`
 |Uri-Reference
-a|The destination (address) of the message
+a|Defined in xref:../basics/uattributes.adoc[uProtocol Attributes (UAttributes)].
 
 * *MUST* be set to either the long or short form xref:../basics/uri.adoc[serialization of the URI]
 
@@ -113,7 +116,7 @@ a|The destination (address) of the message
 a| The message's priority as defined by xref:../basics/upriority.adoc[Message Priority].
 
 * *MUST* be set to the value of the `uprotocol.ce_name` option defined for the
-link:../up-core-api/uprotocol/uattributes.proto[UPriority enum].
+link:../up-core-api/uprotocol/v1/uattributes.proto[UPriority enum].
 
 
 |`ttl`
@@ -125,7 +128,7 @@ a|The amount of time (in milliseconds) after which this message MUST no longer b
 |`token`
 |`token`
 |String
-a|The service consumer's access token.
+a|Defined in xref:../basics/uattributes.adoc[uProtocol Attributes (UAttributes)].
 
 |`permission_level`
 |`plevel`
@@ -136,21 +139,21 @@ a|The service consumer's access token.
 |`reqid`
 |`reqid`
 |String 
-a|The identifier that a service consumer can use to correlate an RPC Repsonse message with its RPC Request.
+a|Defined in xref:../basics/uattributes.adoc[uProtocol Attributes (UAttributes)].
 
-* MUST be set to the https://www.rfc-editor.org/rfc/rfc4122.html#section-3[hyphenated string representation] of the UUID.
+* MUST be set to the lower-case https://www.rfc-editor.org/rfc/rfc9562#section-4[hyphenated string representation] of the UUID (source: RFC 9562, section 4 UUID Format).
 
 |`commstatus`
 |`commstatus`
 |Integer
-a|A code indicating an error that has occurred during the delivery of either an RPC Request or Response message.
+a|Defined in xref:../basics/uattributes.adoc[uProtocol Attributes (UAttributes)].
 
-* MUST be set to the link:../up-core-api/uprotocol/ustatus.proto[UCode]'s integer value
+* MUST be set to the link:../up-core-api/uprotocol/v1/ucode.proto[UCode]'s integer value
 
 |`traceparent`
 |https://github.com/cloudevents/spec/blob/v1.0.2/cloudevents/extensions/distributed-tracing.md#traceparent[traceparent]
 |String
-|A tracing identifier to use for correlating messages across the system.
+|Defined in xref:../basics/uattributes.adoc[uProtocol Attributes (UAttributes)].
 
 |`payload_encoding_id`
 |`pformat`
@@ -174,20 +177,13 @@ xref:../basics/payload_encoding_registry.adoc[payload-encoding registry].
 [#ce-formats]
 === uPayload Mapping
 
-This binding supports opaque carriage only. It preserves a UMessage payload's
-serialized octets, encoding identifier, and presence without requiring the
-binding to interpret the payload.
-
 [#ce-opaque-carriage]
 ==== Opaque Carriage
 
-A CloudEvent carries the original payload bytes and the original identifier in
-`pformat`. When sending an opaque payload, `datacontenttype` is
-`application/octet-stream`: it describes the carriage form, while `pformat`
-identifies the encoding. The carriage form does not change with the encoding.
-
-The following tables preserve payload presence, bytes, and identity without
-requiring the binding to read the payload.
+NOTE: When sending an opaque payload, `datacontenttype` is
+`application/octet-stream`: it describes the original payload as an opaque
+byte sequence, while `pformat` carries the payload's uProtocol encoding
+identity. The value does not change with the encoding.
 
 [.specitem,oft-sid="dsn~ce-payload-opaque-carriage~1",oft-needs="impl,utest",oft-tags="TransportLayerImpl"]
 --
@@ -207,7 +203,7 @@ in `pformat`, and set `datacontenttype` to `application/octet-stream`.
 |===
 
 For a present payload, `dataschema` *MAY* name its schema with a non-empty
-absolute URI as defined by CloudEvents. It *MUST NOT* determine the encoding;
+absolute URI as defined by CloudEvents (source: the CloudEvents specification, version 1.0.2, section OPTIONAL Attributes, attribute `dataschema`, and section Type System, type `URI`). It *MUST NOT* determine the encoding;
 carriage requires no schema lookup.
 
 The binding *MUST NOT* change `pformat`, relabel the payload, wrap or unwrap
@@ -225,7 +221,7 @@ bytes to choose a data property.
 |Binary payload (`binary_data` or `data_base64`)
 |`payload` *MUST* contain exactly those octets and `payload_encoding_id` *MUST*
 equal `pformat`, even when `datacontenttype` is absent or is not
-`application/octet-stream`.
+`application/octet-stream` (source: Protobuf Event Format for CloudEvents, Version 1.0.2, section 3 Data; JSON Event Format for CloudEvents, Version 1.0.2, section 3.1.2 Payload Deserialization).
 
 |Payload data property present and `pformat` absent
 |The binding *MUST* reject the event, regardless of the data property's type.
@@ -239,7 +235,7 @@ or `data` in the JSON Event Format)
 Recognizing the identifier *MUST NOT* cause the binding to decode the payload.
 --
 
-An encoding's registered media type describes its application representation;
+NOTE: An encoding's registered media type describes its application representation;
 it is not the media type used to carry its opaque bytes in this mapping.
 
 This preservation guarantee applies to the defined UMessage data and attributes,
@@ -304,18 +300,20 @@ CloudEvents *SHOULD* only be serialized when they are about to be sent via the x
 
 == Examples
 
-The following examples use the CloudEvent JSON Format with the opaque carriage
+NOTE: The following examples use the CloudEvent JSON Format with the opaque carriage
 baseline. The notification's `data_base64` value decodes to the JSON text
 `{"subject":"door.front_left","status":"open"}`; the publish example's decodes
 to the UTF-8 text `open`.
 
-=== Publish
+[#_publish]
+.A Publish message
+====
 [source, json]
 ----
 {
     "specversion": "1.0",
     "id": "cf8b1bcd-30bd-43be-a8d3-ad1cde652e10",
-    "source": "//VCU.VIN/body.access/1/door.front_left#Door",
+    "source": "//vcu.vin/1AB/1/1/8001",
     "type": "up-pub.v1",
     "priority": "CS1",
     "ttl": 10000,
@@ -324,30 +322,36 @@ to the UTF-8 text `open`.
     "data_base64": "b3Blbg=="
 }
 ----
+====
 
-=== Notification
+[#_notification]
+.A Notification message
+====
 [source, json]
 ----
 {
     "specversion": "1.0",
     "id": "cf8b1bcd-30bd-43be-a8d3-ad1cde652e10",
-    "source": "//VCU.VIN/body.access/1/door.front_left#Door",
-    "sink": "//VCU.VIN/companion.app/1/status.update",
+    "source": "//vcu.vin/1AB/1/1/8001",
+    "sink": "//vcu.vin/2CD/1/1/0",
     "type": "up-not.v1",
     "pformat": 3,
     "datacontenttype": "application/octet-stream",
     "data_base64": "eyJzdWJqZWN0IjoiZG9vci5mcm9udF9sZWZ0Iiwic3RhdHVzIjoib3BlbiJ9"
 }
 ----
+====
 
-=== Request
+[#_request]
+.A Request message
+====
 [source, json]
 ----
 {
     "specversion": "1.0",
     "id": "cf8b1bcd-30bd-43be-a8d3-ad1cde652e10",
-    "source": "//VCU.VIN/MyApp/1/rpc.response",
-    "sink": "//VCU.VIN/body.access/1/rpc.UpdateDoor",
+    "source": "//vcu.vin/3EF/1/1/0",
+    "sink": "//vcu.vin/1AB/1/1/2",
     "type": "up-req.v1",
     "priority": "CS4",
     "ttl": 50000,
@@ -357,15 +361,18 @@ to the UTF-8 text `open`.
                         in google.protobuf.Any ..."
 }
 ----
+====
 
-=== Response
+[#_response]
+.A Response message
+====
 [source, json]
 ----
 {
     "specversion": "1.0",
     "id": "5b9fe861-8c1c-4899-9b07-ad1cde652e10",
-    "source": "//VCU.VIN/body.access/1/rpc.UpdateDoor",
-    "sink": "//VCU.VIN/MyApp/1/rpc.response",
+    "source": "//vcu.vin/1AB/1/1/2",
+    "sink": "//vcu.vin/3EF/1/1/0",
     "type": "up-res.v1",
     "priority": "CS4",
     "reqid": "cf8b1bcd-30bd-43be-a8d3-ad1cde652e10",
@@ -375,3 +382,4 @@ to the UTF-8 text `open`.
     "data_base64": "... base64 encoded serialization of google.rpc.Status ..."
 }
 ----
+====

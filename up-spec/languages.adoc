@@ -22,13 +22,15 @@ SPDX-License-Identifier: Apache-2.0
 
 == Overview 
 
-uProtocol _Language Libraries_ are written for specific programming languages like Java, C++ or Rust to provide the basic data types and functionality that is needed by uEntities like Applications and Services to interact with each other. The libraries declare the API for the uProtocol Transport and Communication Layers and provide a generic implementation of the Communication Layer API.
+uProtocol _Language Libraries_ are written for specific programming languages like Java, C++ or Rust to provide the basic data types and functionality that is needed by uEntities like Applications and Services to interact with each other.
 
-.Class Diagram
+.A language library with its transport and communication layers, and two transport libraries
 [#up-libraries]
-image:up_libraries.drawio.svg[width=100%]
+====
+image::up_libraries.drawio.svg[width=100%]
+====
 
-uProtocol _Transport Libraries_ are written for specific programming languages to provide the binding of uProtocol to concrete transport protocols like MQTT, Eclipse Zenoh or SOME/IP.
+uProtocol _Transport Libraries_ are written for specific programming languages to provide the xref:up-l1/README.adoc#communication-protocol-binding[communication protocol bindings] of uProtocol to concrete transport protocols like MQTT, Eclipse Zenoh or SOME/IP.
 
 == Requirements
 
@@ -38,7 +40,7 @@ A language library
 
 [.specitem,oft-sid="dsn~up-language-naming~1",oft-title="Library follows naming pattern",oft-tags="LanguageLibrary"]
 --
-* *MUST* be named according to pattern `up-[LANGUAGE]`, e.g. `up-rust` or `up-python`.
+* *MUST* be named according to pattern `up-[LANGUAGE]`.
 --
 
 [.specitem,oft-sid="dsn~up-language-structure~1",oft-title="Library uses uProtocol namespace",oft-tags="LanguageLibrary"]
@@ -50,6 +52,11 @@ A language library
 --
 * *MUST* contain a `README` file that explains how to build and use the library.
 --
+
+.Names that follow the naming pattern
+====
+The libraries `up-rust` and `up-python` are named according to the pattern `up-[LANGUAGE]`.
+====
 
 === Build
 

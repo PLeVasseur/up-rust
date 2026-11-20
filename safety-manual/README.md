@@ -1,5 +1,14 @@
 # SDK safety manual — draft integrator guidance
 
+> **Specification pairing — November 20, 2026.** The vendored specification now
+> matches up-spec `f18913c6ed062dc6d6c3d7a73dec7a33433b39e4` (tree
+> `29c6019918c7527a6fa8f4ed3a82d6690bea3dfa`). The entries, quotations, counts
+> and mappings below retain the prior documentary baseline paired with up-spec
+> `69affbaa4796b5b5bb16e63e9b12212ae13fda46` at SDK `8e386c12f2d7a3441fb0ff7216df5ef7ea331161`.
+> They have not yet been reconciled with the new specification. Read the adopted
+> specification for current duties; these historical entries do not establish
+> current conformance. See [the pairing record](../docs/component-guidance/spec-pairing-20261120.md).
+
 This manual describes the 19 assumptions of use of the up-rust SEooC
 specification in this repository (`up-spec/safety`) that the SDK owns, one entry
 each.

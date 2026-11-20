@@ -60,36 +60,31 @@ a| Register & unregister notification Listeners.
 
 |===
 
-Implementations of the <<messaging-apis>>
-
 [.specitem,oft-sid="dsn~communication-layer-impl-async~1",oft-needs="impl,utest",oft-tags="CommunicationLayerImpl"]
 --
-* *MUST* be non-blocking and *SHOULD* be asynchronous.
+Implementations of the <<messaging-apis>> *MUST* be non-blocking and *SHOULD* be asynchronous.
 --
 
 [.specitem,oft-sid="dsn~communication-layer-impl-error-handling~1",oft-needs="impl,utest",oft-tags="CommunicationLayerImpl"]
 --
-* *MUST* adhere to the xref:../basics/error_model.adoc[uProtocol Error Model] for error handling for the respective APIs.
+Implementations of the <<messaging-apis>> *MUST* adhere to the xref:../basics/error_model.adoc[uProtocol Error Model] for error handling for the respective APIs.
 --
 
-* *MAY* use _Exceptions_ or other language-specific error handling mechanisms to indicate an erroneous outcome of a method invocation.
-
-
-Each xref:../languages.adoc[language-specific uProtocol library (Language Library)]
+Implementations of the <<messaging-apis>> *MAY* use _Exceptions_ or other language-specific error handling mechanisms to indicate an erroneous outcome of a method invocation.
 
 [.specitem,oft-sid="dsn~communication-layer-api-declaration~1",oft-needs="impl",oft-tags="LanguageLibrary"]
 --
-* *MUST* declare the <<messaging-apis>> using corresponding programming language specific means.
+Each xref:../languages.adoc[language-specific uProtocol library (Language Library)] *MUST* declare the <<messaging-apis>> using corresponding programming language specific means.
 --
 
 [.specitem,oft-sid="dsn~communication-layer-api-namespace~1",oft-needs="impl",oft-tags="LanguageLibrary"]
 --
-* *MUST* package (group) the <<messaging-apis>> into a folder (package/namespace) called `communication`.
+Each Language Library *MUST* package (group) the <<messaging-apis>> into a folder (package/namespace) called `communication`.
 --
 
 [.specitem,oft-sid="dsn~communication-layer-impl-default~1",oft-needs="impl,utest",oft-tags="LanguageLibrary"]
 --
-* *MUST* provide a _default_ implementation of the <<messaging-apis>> based on the (abstract) xref:../up-l1/README.adoc[Transport Level API].
+Each Language Library *MUST* provide a _default_ implementation of the <<messaging-apis>> based on the (abstract) xref:../up-l1/README.adoc[Transport Level API].
 --
 
 NOTE: Additional information regarding implementation can be found in the respective language-specific uProtocol library documentation.

@@ -21,7 +21,7 @@ SPDX-License-Identifier: Apache-2.0
 
 == Overview
 
-The purpose of uDiscovery Service is for uEntities to be able to find services (their location, version, instances, etc...), and lookup a service's topic metadata (ex. message format, id, name, permission level, etc...). 
+NOTE: The purpose of uDiscovery Service is for uEntities to be able to find services (their location, version, instances, etc...), and lookup a service's topic metadata (ex. message format, id, name, permission level, etc...). 
 
 The specification shall be split up into two parts:
 

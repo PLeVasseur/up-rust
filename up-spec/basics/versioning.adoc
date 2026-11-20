@@ -18,7 +18,7 @@ SPDX-FileType: DOCUMENTATION
 SPDX-License-Identifier: Apache-2.0
 ----
 
-Built into the protocol will be a mechanism to version different parts of the protocol and system. Since different components need to be versioned by different mechanisms and at different frequency, we will discuss the types in this section.
+NOTE: Built into the protocol will be a mechanism to version different parts of the protocol and system. Since different components need to be versioned by different mechanisms and at different frequency, we will discuss the types in this section.
 
 == Format
 
@@ -52,8 +52,3 @@ Interfaces for uEntities are declared in proto files. Protobuf builds in backwar
 
 If the uEntity declares an interface in proto:
 * *MUST* have their `MAJOR.MINOR` version values specified (declared) inside their proto file per xref:../up-l3/README.adoc[uP-L3 Specifications]
-
-
-=== Distribution
-
-_Section removed as this is implementation specific and not part of the protocol_
