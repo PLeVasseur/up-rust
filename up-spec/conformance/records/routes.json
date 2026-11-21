@@ -1,0 +1,4371 @@
+{
+  "schema": "rx03-coordination-routing-index-v1",
+  "target_spec": "f18913c6ed062dc6d6c3d7a73dec7a33433b39e4",
+  "original_rows_ref": "../conformance/FOLLOWUP-INTAKE.json#/rows",
+  "row_count": 271,
+  "source_disposition_scope": "retained package observations only; not current conformance",
+  "rows": [
+    {
+      "id": "RX03-FU-001",
+      "source_ref": "../conformance/FOLLOWUP-INTAKE.json#/rows/0",
+      "source_disposition": "unchecked",
+      "assessment_status": "not_reassessed",
+      "existing_portfolios": [
+        "sdk-core",
+        "iceoryx2",
+        "lola",
+        "native-protobuf"
+      ],
+      "remaining_scope_portfolios": [
+        "streamer-deferred",
+        "selected-part-roster",
+        "additional-wires-deferred"
+      ],
+      "obligation_row_ids": [
+        "RX03-OB-068"
+      ],
+      "join_exception": null,
+      "routing_basis": "unchanged source candidate routes; per-actor portfolio allocation, not conformance or expanded custody"
+    },
+    {
+      "id": "RX03-FU-002",
+      "source_ref": "../conformance/FOLLOWUP-INTAKE.json#/rows/1",
+      "source_disposition": "unchecked",
+      "assessment_status": "not_reassessed",
+      "existing_portfolios": [
+        "sdk-core",
+        "iceoryx2",
+        "lola",
+        "native-protobuf"
+      ],
+      "remaining_scope_portfolios": [
+        "streamer-deferred",
+        "selected-part-roster"
+      ],
+      "obligation_row_ids": [
+        "RX03-OB-074"
+      ],
+      "join_exception": null,
+      "routing_basis": "unchanged source candidate routes; per-actor portfolio allocation, not conformance or expanded custody"
+    },
+    {
+      "id": "RX03-FU-003",
+      "source_ref": "../conformance/FOLLOWUP-INTAKE.json#/rows/2",
+      "source_disposition": "evidence_gap",
+      "assessment_status": "not_reassessed",
+      "existing_portfolios": [
+        "sdk-core",
+        "iceoryx2",
+        "lola",
+        "native-protobuf"
+      ],
+      "remaining_scope_portfolios": [
+        "streamer-deferred",
+        "selected-part-roster"
+      ],
+      "obligation_row_ids": [
+        "RX03-OB-069"
+      ],
+      "join_exception": null,
+      "routing_basis": "unchanged source candidate routes; per-actor portfolio allocation, not conformance or expanded custody"
+    },
+    {
+      "id": "RX03-FU-004",
+      "source_ref": "../conformance/FOLLOWUP-INTAKE.json#/rows/3",
+      "source_disposition": "unchecked",
+      "assessment_status": "not_reassessed",
+      "existing_portfolios": [
+        "sdk-core"
+      ],
+      "remaining_scope_portfolios": [],
+      "obligation_row_ids": [
+        "RX03-OB-072"
+      ],
+      "join_exception": null,
+      "routing_basis": "unchanged source candidate routes; per-actor portfolio allocation, not conformance or expanded custody"
+    },
+    {
+      "id": "RX03-FU-005",
+      "source_ref": "../conformance/FOLLOWUP-INTAKE.json#/rows/4",
+      "source_disposition": "annotation_only",
+      "assessment_status": "not_reassessed",
+      "existing_portfolios": [
+        "sdk-core",
+        "iceoryx2",
+        "lola",
+        "native-protobuf"
+      ],
+      "remaining_scope_portfolios": [
+        "streamer-deferred",
+        "selected-part-roster"
+      ],
+      "obligation_row_ids": [
+        "RX03-OB-070",
+        "RX03-OB-071"
+      ],
+      "join_exception": null,
+      "routing_basis": "unchanged source candidate routes; per-actor portfolio allocation, not conformance or expanded custody"
+    },
+    {
+      "id": "RX03-FU-006",
+      "source_ref": "../conformance/FOLLOWUP-INTAKE.json#/rows/5",
+      "source_disposition": "annotation_only",
+      "assessment_status": "not_reassessed",
+      "existing_portfolios": [
+        "sdk-core",
+        "iceoryx2",
+        "lola",
+        "native-protobuf"
+      ],
+      "remaining_scope_portfolios": [
+        "streamer-deferred",
+        "selected-part-roster"
+      ],
+      "obligation_row_ids": [
+        "RX03-OB-067",
+        "RX03-OB-068",
+        "RX03-OB-069",
+        "RX03-OB-072",
+        "RX03-OB-073",
+        "RX03-OB-074"
+      ],
+      "join_exception": null,
+      "routing_basis": "unchanged source candidate routes; per-actor portfolio allocation, not conformance or expanded custody"
+    },
+    {
+      "id": "RX03-FU-007",
+      "source_ref": "../conformance/FOLLOWUP-INTAKE.json#/rows/6",
+      "source_disposition": "unchecked",
+      "assessment_status": "not_reassessed",
+      "existing_portfolios": [
+        "sdk-core"
+      ],
+      "remaining_scope_portfolios": [],
+      "obligation_row_ids": [
+        "RX03-OB-073"
+      ],
+      "join_exception": null,
+      "routing_basis": "unchanged source candidate routes; per-actor portfolio allocation, not conformance or expanded custody"
+    },
+    {
+      "id": "RX03-FU-008",
+      "source_ref": "../conformance/FOLLOWUP-INTAKE.json#/rows/7",
+      "source_disposition": "unchecked",
+      "assessment_status": "not_reassessed",
+      "existing_portfolios": [
+        "sdk-core"
+      ],
+      "remaining_scope_portfolios": [],
+      "obligation_row_ids": [
+        "RX03-OB-101"
+      ],
+      "join_exception": null,
+      "routing_basis": "unchanged source candidate routes; per-actor portfolio allocation, not conformance or expanded custody"
+    },
+    {
+      "id": "RX03-FU-009",
+      "source_ref": "../conformance/FOLLOWUP-INTAKE.json#/rows/8",
+      "source_disposition": "unchecked",
+      "assessment_status": "not_reassessed",
+      "existing_portfolios": [
+        "sdk-core"
+      ],
+      "remaining_scope_portfolios": [],
+      "obligation_row_ids": [
+        "RX03-OB-103"
+      ],
+      "join_exception": null,
+      "routing_basis": "unchanged source candidate routes; per-actor portfolio allocation, not conformance or expanded custody"
+    },
+    {
+      "id": "RX03-FU-010",
+      "source_ref": "../conformance/FOLLOWUP-INTAKE.json#/rows/9",
+      "source_disposition": "evidence_gap",
+      "assessment_status": "not_reassessed",
+      "existing_portfolios": [
+        "sdk-core"
+      ],
+      "remaining_scope_portfolios": [],
+      "obligation_row_ids": [
+        "RX03-OB-106"
+      ],
+      "join_exception": null,
+      "routing_basis": "unchanged source candidate routes; per-actor portfolio allocation, not conformance or expanded custody"
+    },
+    {
+      "id": "RX03-FU-011",
+      "source_ref": "../conformance/FOLLOWUP-INTAKE.json#/rows/10",
+      "source_disposition": "unchecked",
+      "assessment_status": "not_reassessed",
+      "existing_portfolios": [
+        "sdk-core"
+      ],
+      "remaining_scope_portfolios": [],
+      "obligation_row_ids": [
+        "RX03-OB-105"
+      ],
+      "join_exception": null,
+      "routing_basis": "unchanged source candidate routes; per-actor portfolio allocation, not conformance or expanded custody"
+    },
+    {
+      "id": "RX03-FU-012",
+      "source_ref": "../conformance/FOLLOWUP-INTAKE.json#/rows/11",
+      "source_disposition": "implementation_gap",
+      "assessment_status": "not_reassessed",
+      "existing_portfolios": [],
+      "remaining_scope_portfolios": [
+        "api-async"
+      ],
+      "obligation_row_ids": [
+        "RX03-OB-100"
+      ],
+      "join_exception": null,
+      "routing_basis": "unchanged source candidate routes; per-actor portfolio allocation, not conformance or expanded custody"
+    },
+    {
+      "id": "RX03-FU-013",
+      "source_ref": "../conformance/FOLLOWUP-INTAKE.json#/rows/12",
+      "source_disposition": "evidence_gap",
+      "assessment_status": "not_reassessed",
+      "existing_portfolios": [
+        "sdk-core",
+        "rtos-platform"
+      ],
+      "remaining_scope_portfolios": [
+        "other-platform-backends"
+      ],
+      "obligation_row_ids": [
+        "RX03-OB-144"
+      ],
+      "join_exception": null,
+      "routing_basis": "unchanged source candidate routes; per-actor portfolio allocation, not conformance or expanded custody"
+    },
+    {
+      "id": "RX03-FU-014",
+      "source_ref": "../conformance/FOLLOWUP-INTAKE.json#/rows/13",
+      "source_disposition": "unchecked",
+      "assessment_status": "not_reassessed",
+      "existing_portfolios": [
+        "sdk-core"
+      ],
+      "remaining_scope_portfolios": [],
+      "obligation_row_ids": [
+        "RX03-OB-141"
+      ],
+      "join_exception": null,
+      "routing_basis": "unchanged source candidate routes; per-actor portfolio allocation, not conformance or expanded custody"
+    },
+    {
+      "id": "RX03-FU-015",
+      "source_ref": "../conformance/FOLLOWUP-INTAKE.json#/rows/14",
+      "source_disposition": "evidence_gap",
+      "assessment_status": "not_reassessed",
+      "existing_portfolios": [
+        "sdk-core",
+        "iceoryx2",
+        "lola"
+      ],
+      "remaining_scope_portfolios": [
+        "other-bindings"
+      ],
+      "obligation_row_ids": [
+        "RX03-OB-159"
+      ],
+      "join_exception": null,
+      "routing_basis": "unchanged source candidate routes; per-actor portfolio allocation, not conformance or expanded custody"
+    },
+    {
+      "id": "RX03-FU-016",
+      "source_ref": "../conformance/FOLLOWUP-INTAKE.json#/rows/15",
+      "source_disposition": "unchecked",
+      "assessment_status": "not_reassessed",
+      "existing_portfolios": [
+        "sdk-core",
+        "rtos-platform"
+      ],
+      "remaining_scope_portfolios": [
+        "other-platform-backends"
+      ],
+      "obligation_row_ids": [
+        "RX03-OB-148"
+      ],
+      "join_exception": null,
+      "routing_basis": "unchanged source candidate routes; per-actor portfolio allocation, not conformance or expanded custody"
+    },
+    {
+      "id": "RX03-FU-017",
+      "source_ref": "../conformance/FOLLOWUP-INTAKE.json#/rows/16",
+      "source_disposition": "unchecked",
+      "assessment_status": "not_reassessed",
+      "existing_portfolios": [
+        "sdk-core"
+      ],
+      "remaining_scope_portfolios": [],
+      "obligation_row_ids": [
+        "RX03-OB-109"
+      ],
+      "join_exception": null,
+      "routing_basis": "unchanged source candidate routes; per-actor portfolio allocation, not conformance or expanded custody"
+    },
+    {
+      "id": "RX03-FU-018",
+      "source_ref": "../conformance/FOLLOWUP-INTAKE.json#/rows/17",
+      "source_disposition": "unchecked",
+      "assessment_status": "not_reassessed",
+      "existing_portfolios": [],
+      "remaining_scope_portfolios": [
+        "streamer-deferred"
+      ],
+      "obligation_row_ids": [
+        "RX03-OB-110"
+      ],
+      "join_exception": null,
+      "routing_basis": "unchanged source candidate routes; per-actor portfolio allocation, not conformance or expanded custody"
+    },
+    {
+      "id": "RX03-FU-019",
+      "source_ref": "../conformance/FOLLOWUP-INTAKE.json#/rows/18",
+      "source_disposition": "unchecked",
+      "assessment_status": "not_reassessed",
+      "existing_portfolios": [
+        "sdk-core"
+      ],
+      "remaining_scope_portfolios": [],
+      "obligation_row_ids": [
+        "RX03-OB-142"
+      ],
+      "join_exception": null,
+      "routing_basis": "unchanged source candidate routes; per-actor portfolio allocation, not conformance or expanded custody"
+    },
+    {
+      "id": "RX03-FU-020",
+      "source_ref": "../conformance/FOLLOWUP-INTAKE.json#/rows/19",
+      "source_disposition": "unchecked",
+      "assessment_status": "not_reassessed",
+      "existing_portfolios": [
+        "sdk-core"
+      ],
+      "remaining_scope_portfolios": [],
+      "obligation_row_ids": [
+        "RX03-OB-109"
+      ],
+      "join_exception": null,
+      "routing_basis": "unchanged source candidate routes; per-actor portfolio allocation, not conformance or expanded custody"
+    },
+    {
+      "id": "RX03-FU-021",
+      "source_ref": "../conformance/FOLLOWUP-INTAKE.json#/rows/20",
+      "source_disposition": "unchecked",
+      "assessment_status": "not_reassessed",
+      "existing_portfolios": [
+        "sdk-core"
+      ],
+      "remaining_scope_portfolios": [
+        "api-async"
+      ],
+      "obligation_row_ids": [
+        "RX03-OB-100"
+      ],
+      "join_exception": null,
+      "routing_basis": "unchanged source candidate routes; per-actor portfolio allocation, not conformance or expanded custody"
+    },
+    {
+      "id": "RX03-FU-022",
+      "source_ref": "../conformance/FOLLOWUP-INTAKE.json#/rows/21",
+      "source_disposition": "evidence_gap",
+      "assessment_status": "not_reassessed",
+      "existing_portfolios": [
+        "sdk-core"
+      ],
+      "remaining_scope_portfolios": [],
+      "obligation_row_ids": [
+        "RX03-OB-094"
+      ],
+      "join_exception": null,
+      "routing_basis": "unchanged source candidate routes; per-actor portfolio allocation, not conformance or expanded custody"
+    },
+    {
+      "id": "RX03-FU-023",
+      "source_ref": "../conformance/FOLLOWUP-INTAKE.json#/rows/22",
+      "source_disposition": "evidence_gap",
+      "assessment_status": "not_reassessed",
+      "existing_portfolios": [
+        "sdk-core",
+        "iceoryx2",
+        "lola"
+      ],
+      "remaining_scope_portfolios": [],
+      "obligation_row_ids": [
+        "RX03-OB-153"
+      ],
+      "join_exception": null,
+      "routing_basis": "unchanged source candidate routes; per-actor portfolio allocation, not conformance or expanded custody"
+    },
+    {
+      "id": "RX03-FU-024",
+      "source_ref": "../conformance/FOLLOWUP-INTAKE.json#/rows/23",
+      "source_disposition": "unchecked",
+      "assessment_status": "not_reassessed",
+      "existing_portfolios": [
+        "sdk-core"
+      ],
+      "remaining_scope_portfolios": [],
+      "obligation_row_ids": [
+        "RX03-OB-168",
+        "RX03-OB-175"
+      ],
+      "join_exception": null,
+      "routing_basis": "unchanged source candidate routes; per-actor portfolio allocation, not conformance or expanded custody"
+    },
+    {
+      "id": "RX03-FU-025",
+      "source_ref": "../conformance/FOLLOWUP-INTAKE.json#/rows/24",
+      "source_disposition": "implementation_gap",
+      "assessment_status": "not_reassessed",
+      "existing_portfolios": [
+        "sdk-core"
+      ],
+      "remaining_scope_portfolios": [
+        "e2e-deferred"
+      ],
+      "obligation_row_ids": [
+        "RX03-OB-115",
+        "RX03-OB-116",
+        "RX03-OB-117",
+        "RX03-OB-118",
+        "RX03-OB-119",
+        "RX03-OB-120",
+        "RX03-OB-121",
+        "RX03-OB-122",
+        "RX03-OB-123",
+        "RX03-OB-124",
+        "RX03-OB-125",
+        "RX03-OB-126",
+        "RX03-OB-127",
+        "RX03-OB-128",
+        "RX03-OB-129"
+      ],
+      "join_exception": null,
+      "routing_basis": "unchanged source candidate routes; per-actor portfolio allocation, not conformance or expanded custody"
+    },
+    {
+      "id": "RX03-FU-026",
+      "source_ref": "../conformance/FOLLOWUP-INTAKE.json#/rows/25",
+      "source_disposition": "unchecked",
+      "assessment_status": "not_reassessed",
+      "existing_portfolios": [
+        "sdk-core"
+      ],
+      "remaining_scope_portfolios": [],
+      "obligation_row_ids": [
+        "RX03-OB-179"
+      ],
+      "join_exception": null,
+      "routing_basis": "unchanged source candidate routes; per-actor portfolio allocation, not conformance or expanded custody"
+    },
+    {
+      "id": "RX03-FU-027",
+      "source_ref": "../conformance/FOLLOWUP-INTAKE.json#/rows/26",
+      "source_disposition": "unchecked",
+      "assessment_status": "not_reassessed",
+      "existing_portfolios": [
+        "sdk-core"
+      ],
+      "remaining_scope_portfolios": [],
+      "obligation_row_ids": [
+        "RX03-OB-112"
+      ],
+      "join_exception": null,
+      "routing_basis": "unchanged source candidate routes; per-actor portfolio allocation, not conformance or expanded custody"
+    },
+    {
+      "id": "RX03-FU-028",
+      "source_ref": "../conformance/FOLLOWUP-INTAKE.json#/rows/27",
+      "source_disposition": "unchecked",
+      "assessment_status": "not_reassessed",
+      "existing_portfolios": [],
+      "remaining_scope_portfolios": [
+        "streamer-deferred"
+      ],
+      "obligation_row_ids": [
+        "RX03-OB-279"
+      ],
+      "join_exception": null,
+      "routing_basis": "unchanged source candidate routes; per-actor portfolio allocation, not conformance or expanded custody"
+    },
+    {
+      "id": "RX03-FU-029",
+      "source_ref": "../conformance/FOLLOWUP-INTAKE.json#/rows/28",
+      "source_disposition": "evidence_gap",
+      "assessment_status": "not_reassessed",
+      "existing_portfolios": [
+        "sdk-core",
+        "rtos-platform"
+      ],
+      "remaining_scope_portfolios": [
+        "other-platform-backends"
+      ],
+      "obligation_row_ids": [
+        "RX03-OB-148"
+      ],
+      "join_exception": null,
+      "routing_basis": "unchanged source candidate routes; per-actor portfolio allocation, not conformance or expanded custody"
+    },
+    {
+      "id": "RX03-FU-030",
+      "source_ref": "../conformance/FOLLOWUP-INTAKE.json#/rows/29",
+      "source_disposition": "unchecked",
+      "assessment_status": "not_reassessed",
+      "existing_portfolios": [
+        "sdk-core"
+      ],
+      "remaining_scope_portfolios": [],
+      "obligation_row_ids": [
+        "RX03-OB-150"
+      ],
+      "join_exception": null,
+      "routing_basis": "unchanged source candidate routes; per-actor portfolio allocation, not conformance or expanded custody"
+    },
+    {
+      "id": "RX03-FU-031",
+      "source_ref": "../conformance/FOLLOWUP-INTAKE.json#/rows/30",
+      "source_disposition": "unchecked",
+      "assessment_status": "not_reassessed",
+      "existing_portfolios": [
+        "sdk-core"
+      ],
+      "remaining_scope_portfolios": [],
+      "obligation_row_ids": [
+        "RX03-OB-094"
+      ],
+      "join_exception": null,
+      "routing_basis": "unchanged source candidate routes; per-actor portfolio allocation, not conformance or expanded custody"
+    },
+    {
+      "id": "RX03-FU-032",
+      "source_ref": "../conformance/FOLLOWUP-INTAKE.json#/rows/31",
+      "source_disposition": "unchecked",
+      "assessment_status": "not_reassessed",
+      "existing_portfolios": [
+        "sdk-core",
+        "iceoryx2",
+        "lola"
+      ],
+      "remaining_scope_portfolios": [],
+      "obligation_row_ids": [
+        "RX03-OB-133"
+      ],
+      "join_exception": null,
+      "routing_basis": "unchanged source candidate routes; per-actor portfolio allocation, not conformance or expanded custody"
+    },
+    {
+      "id": "RX03-FU-033",
+      "source_ref": "../conformance/FOLLOWUP-INTAKE.json#/rows/32",
+      "source_disposition": "evidence_gap",
+      "assessment_status": "not_reassessed",
+      "existing_portfolios": [
+        "iceoryx2"
+      ],
+      "remaining_scope_portfolios": [],
+      "obligation_row_ids": [
+        "RX03-OB-133"
+      ],
+      "join_exception": null,
+      "routing_basis": "unchanged source candidate routes; per-actor portfolio allocation, not conformance or expanded custody"
+    },
+    {
+      "id": "RX03-FU-034",
+      "source_ref": "../conformance/FOLLOWUP-INTAKE.json#/rows/33",
+      "source_disposition": "unchecked",
+      "assessment_status": "not_reassessed",
+      "existing_portfolios": [
+        "sdk-core",
+        "iceoryx2",
+        "lola",
+        "native-protobuf"
+      ],
+      "remaining_scope_portfolios": [
+        "other-bindings",
+        "additional-wires-deferred"
+      ],
+      "obligation_row_ids": [
+        "RX03-OB-135"
+      ],
+      "join_exception": null,
+      "routing_basis": "unchanged source candidate routes; per-actor portfolio allocation, not conformance or expanded custody"
+    },
+    {
+      "id": "RX03-FU-035",
+      "source_ref": "../conformance/FOLLOWUP-INTAKE.json#/rows/34",
+      "source_disposition": "unchecked",
+      "assessment_status": "not_reassessed",
+      "existing_portfolios": [
+        "sdk-core",
+        "native-protobuf"
+      ],
+      "remaining_scope_portfolios": [
+        "allocation-providers",
+        "additional-wires-deferred"
+      ],
+      "obligation_row_ids": [
+        "RX03-OB-137"
+      ],
+      "join_exception": null,
+      "routing_basis": "unchanged source candidate routes; per-actor portfolio allocation, not conformance or expanded custody"
+    },
+    {
+      "id": "RX03-FU-036",
+      "source_ref": "../conformance/FOLLOWUP-INTAKE.json#/rows/35",
+      "source_disposition": "unchecked",
+      "assessment_status": "not_reassessed",
+      "existing_portfolios": [
+        "sdk-core"
+      ],
+      "remaining_scope_portfolios": [],
+      "obligation_row_ids": [
+        "RX03-OB-138"
+      ],
+      "join_exception": null,
+      "routing_basis": "unchanged source candidate routes; per-actor portfolio allocation, not conformance or expanded custody"
+    },
+    {
+      "id": "RX03-FU-037",
+      "source_ref": "../conformance/FOLLOWUP-INTAKE.json#/rows/36",
+      "source_disposition": "unchecked",
+      "assessment_status": "not_reassessed",
+      "existing_portfolios": [
+        "sdk-core"
+      ],
+      "remaining_scope_portfolios": [],
+      "obligation_row_ids": [
+        "RX03-OB-139"
+      ],
+      "join_exception": null,
+      "routing_basis": "unchanged source candidate routes; per-actor portfolio allocation, not conformance or expanded custody"
+    },
+    {
+      "id": "RX03-FU-038",
+      "source_ref": "../conformance/FOLLOWUP-INTAKE.json#/rows/37",
+      "source_disposition": "evidence_gap",
+      "assessment_status": "not_reassessed",
+      "existing_portfolios": [
+        "sdk-core",
+        "rtos-platform"
+      ],
+      "remaining_scope_portfolios": [],
+      "obligation_row_ids": [
+        "RX03-OB-136"
+      ],
+      "join_exception": null,
+      "routing_basis": "unchanged source candidate routes; per-actor portfolio allocation, not conformance or expanded custody"
+    },
+    {
+      "id": "RX03-FU-039",
+      "source_ref": "../conformance/FOLLOWUP-INTAKE.json#/rows/38",
+      "source_disposition": "unchecked",
+      "assessment_status": "not_reassessed",
+      "existing_portfolios": [
+        "sdk-core"
+      ],
+      "remaining_scope_portfolios": [],
+      "obligation_row_ids": [
+        "RX03-OB-168"
+      ],
+      "join_exception": null,
+      "routing_basis": "unchanged source candidate routes; per-actor portfolio allocation, not conformance or expanded custody"
+    },
+    {
+      "id": "RX03-FU-040",
+      "source_ref": "../conformance/FOLLOWUP-INTAKE.json#/rows/39",
+      "source_disposition": "unchecked",
+      "assessment_status": "not_reassessed",
+      "existing_portfolios": [
+        "sdk-core",
+        "iceoryx2",
+        "lola"
+      ],
+      "remaining_scope_portfolios": [
+        "other-bindings"
+      ],
+      "obligation_row_ids": [
+        "RX03-OB-170"
+      ],
+      "join_exception": null,
+      "routing_basis": "unchanged source candidate routes; per-actor portfolio allocation, not conformance or expanded custody"
+    },
+    {
+      "id": "RX03-FU-041",
+      "source_ref": "../conformance/FOLLOWUP-INTAKE.json#/rows/40",
+      "source_disposition": "unchecked",
+      "assessment_status": "not_reassessed",
+      "existing_portfolios": [
+        "sdk-core"
+      ],
+      "remaining_scope_portfolios": [
+        "streamer-deferred"
+      ],
+      "obligation_row_ids": [
+        "RX03-OB-174"
+      ],
+      "join_exception": null,
+      "routing_basis": "unchanged source candidate routes; per-actor portfolio allocation, not conformance or expanded custody"
+    },
+    {
+      "id": "RX03-FU-042",
+      "source_ref": "../conformance/FOLLOWUP-INTAKE.json#/rows/41",
+      "source_disposition": "unchecked",
+      "assessment_status": "not_reassessed",
+      "existing_portfolios": [],
+      "remaining_scope_portfolios": [
+        "streamer-deferred"
+      ],
+      "obligation_row_ids": [
+        "RX03-OB-172"
+      ],
+      "join_exception": null,
+      "routing_basis": "unchanged source candidate routes; per-actor portfolio allocation, not conformance or expanded custody"
+    },
+    {
+      "id": "RX03-FU-043",
+      "source_ref": "../conformance/FOLLOWUP-INTAKE.json#/rows/42",
+      "source_disposition": "unchecked",
+      "assessment_status": "not_reassessed",
+      "existing_portfolios": [
+        "sdk-core"
+      ],
+      "remaining_scope_portfolios": [],
+      "obligation_row_ids": [
+        "RX03-OB-176"
+      ],
+      "join_exception": null,
+      "routing_basis": "unchanged source candidate routes; per-actor portfolio allocation, not conformance or expanded custody"
+    },
+    {
+      "id": "RX03-FU-044",
+      "source_ref": "../conformance/FOLLOWUP-INTAKE.json#/rows/43",
+      "source_disposition": "annotation_only",
+      "assessment_status": "not_reassessed",
+      "existing_portfolios": [
+        "sdk-core"
+      ],
+      "remaining_scope_portfolios": [],
+      "obligation_row_ids": [
+        "RX03-OB-131"
+      ],
+      "join_exception": null,
+      "routing_basis": "unchanged source candidate routes; per-actor portfolio allocation, not conformance or expanded custody"
+    },
+    {
+      "id": "RX03-FU-045",
+      "source_ref": "../conformance/FOLLOWUP-INTAKE.json#/rows/44",
+      "source_disposition": "unchecked",
+      "assessment_status": "not_reassessed",
+      "existing_portfolios": [
+        "sdk-core"
+      ],
+      "remaining_scope_portfolios": [],
+      "obligation_row_ids": [
+        "RX03-OB-171"
+      ],
+      "join_exception": null,
+      "routing_basis": "unchanged source candidate routes; per-actor portfolio allocation, not conformance or expanded custody"
+    },
+    {
+      "id": "RX03-FU-046",
+      "source_ref": "../conformance/FOLLOWUP-INTAKE.json#/rows/45",
+      "source_disposition": "unchecked",
+      "assessment_status": "not_reassessed",
+      "existing_portfolios": [
+        "sdk-core"
+      ],
+      "remaining_scope_portfolios": [],
+      "obligation_row_ids": [
+        "RX03-OB-134"
+      ],
+      "join_exception": null,
+      "routing_basis": "unchanged source candidate routes; per-actor portfolio allocation, not conformance or expanded custody"
+    },
+    {
+      "id": "RX03-FU-047",
+      "source_ref": "../conformance/FOLLOWUP-INTAKE.json#/rows/46",
+      "source_disposition": "unchecked",
+      "assessment_status": "not_reassessed",
+      "existing_portfolios": [
+        "sdk-core"
+      ],
+      "remaining_scope_portfolios": [],
+      "obligation_row_ids": [
+        "RX03-OB-137"
+      ],
+      "join_exception": null,
+      "routing_basis": "unchanged source candidate routes; per-actor portfolio allocation, not conformance or expanded custody"
+    },
+    {
+      "id": "RX03-FU-048",
+      "source_ref": "../conformance/FOLLOWUP-INTAKE.json#/rows/47",
+      "source_disposition": "unchecked",
+      "assessment_status": "not_reassessed",
+      "existing_portfolios": [
+        "sdk-core"
+      ],
+      "remaining_scope_portfolios": [
+        "streamer-deferred"
+      ],
+      "obligation_row_ids": [
+        "RX03-OB-164"
+      ],
+      "join_exception": null,
+      "routing_basis": "unchanged source candidate routes; per-actor portfolio allocation, not conformance or expanded custody"
+    },
+    {
+      "id": "RX03-FU-049",
+      "source_ref": "../conformance/FOLLOWUP-INTAKE.json#/rows/48",
+      "source_disposition": "implementation_gap",
+      "assessment_status": "not_reassessed",
+      "existing_portfolios": [],
+      "remaining_scope_portfolios": [
+        "e2e-deferred"
+      ],
+      "obligation_row_ids": [
+        "RX03-OB-116"
+      ],
+      "join_exception": null,
+      "routing_basis": "unchanged source candidate routes; per-actor portfolio allocation, not conformance or expanded custody"
+    },
+    {
+      "id": "RX03-FU-050",
+      "source_ref": "../conformance/FOLLOWUP-INTAKE.json#/rows/49",
+      "source_disposition": "implementation_gap",
+      "assessment_status": "not_reassessed",
+      "existing_portfolios": [],
+      "remaining_scope_portfolios": [
+        "e2e-deferred"
+      ],
+      "obligation_row_ids": [
+        "RX03-OB-117"
+      ],
+      "join_exception": null,
+      "routing_basis": "unchanged source candidate routes; per-actor portfolio allocation, not conformance or expanded custody"
+    },
+    {
+      "id": "RX03-FU-051",
+      "source_ref": "../conformance/FOLLOWUP-INTAKE.json#/rows/50",
+      "source_disposition": "implementation_gap",
+      "assessment_status": "not_reassessed",
+      "existing_portfolios": [],
+      "remaining_scope_portfolios": [
+        "e2e-deferred"
+      ],
+      "obligation_row_ids": [
+        "RX03-OB-118"
+      ],
+      "join_exception": null,
+      "routing_basis": "unchanged source candidate routes; per-actor portfolio allocation, not conformance or expanded custody"
+    },
+    {
+      "id": "RX03-FU-052",
+      "source_ref": "../conformance/FOLLOWUP-INTAKE.json#/rows/51",
+      "source_disposition": "implementation_gap",
+      "assessment_status": "not_reassessed",
+      "existing_portfolios": [],
+      "remaining_scope_portfolios": [
+        "e2e-deferred"
+      ],
+      "obligation_row_ids": [
+        "RX03-OB-119"
+      ],
+      "join_exception": null,
+      "routing_basis": "unchanged source candidate routes; per-actor portfolio allocation, not conformance or expanded custody"
+    },
+    {
+      "id": "RX03-FU-053",
+      "source_ref": "../conformance/FOLLOWUP-INTAKE.json#/rows/52",
+      "source_disposition": "implementation_gap",
+      "assessment_status": "not_reassessed",
+      "existing_portfolios": [],
+      "remaining_scope_portfolios": [
+        "e2e-deferred"
+      ],
+      "obligation_row_ids": [
+        "RX03-OB-120"
+      ],
+      "join_exception": null,
+      "routing_basis": "unchanged source candidate routes; per-actor portfolio allocation, not conformance or expanded custody"
+    },
+    {
+      "id": "RX03-FU-054",
+      "source_ref": "../conformance/FOLLOWUP-INTAKE.json#/rows/53",
+      "source_disposition": "implementation_gap",
+      "assessment_status": "not_reassessed",
+      "existing_portfolios": [],
+      "remaining_scope_portfolios": [
+        "e2e-deferred"
+      ],
+      "obligation_row_ids": [
+        "RX03-OB-121"
+      ],
+      "join_exception": null,
+      "routing_basis": "unchanged source candidate routes; per-actor portfolio allocation, not conformance or expanded custody"
+    },
+    {
+      "id": "RX03-FU-055",
+      "source_ref": "../conformance/FOLLOWUP-INTAKE.json#/rows/54",
+      "source_disposition": "implementation_gap",
+      "assessment_status": "not_reassessed",
+      "existing_portfolios": [
+        "sdk-core"
+      ],
+      "remaining_scope_portfolios": [
+        "e2e-deferred"
+      ],
+      "obligation_row_ids": [
+        "RX03-OB-122"
+      ],
+      "join_exception": null,
+      "routing_basis": "unchanged source candidate routes; per-actor portfolio allocation, not conformance or expanded custody"
+    },
+    {
+      "id": "RX03-FU-056",
+      "source_ref": "../conformance/FOLLOWUP-INTAKE.json#/rows/55",
+      "source_disposition": "implementation_gap",
+      "assessment_status": "not_reassessed",
+      "existing_portfolios": [
+        "sdk-core"
+      ],
+      "remaining_scope_portfolios": [
+        "e2e-deferred"
+      ],
+      "obligation_row_ids": [
+        "RX03-OB-123"
+      ],
+      "join_exception": null,
+      "routing_basis": "unchanged source candidate routes; per-actor portfolio allocation, not conformance or expanded custody"
+    },
+    {
+      "id": "RX03-FU-057",
+      "source_ref": "../conformance/FOLLOWUP-INTAKE.json#/rows/56",
+      "source_disposition": "implementation_gap",
+      "assessment_status": "not_reassessed",
+      "existing_portfolios": [
+        "sdk-core"
+      ],
+      "remaining_scope_portfolios": [
+        "e2e-deferred"
+      ],
+      "obligation_row_ids": [
+        "RX03-OB-124"
+      ],
+      "join_exception": null,
+      "routing_basis": "unchanged source candidate routes; per-actor portfolio allocation, not conformance or expanded custody"
+    },
+    {
+      "id": "RX03-FU-058",
+      "source_ref": "../conformance/FOLLOWUP-INTAKE.json#/rows/57",
+      "source_disposition": "implementation_gap",
+      "assessment_status": "not_reassessed",
+      "existing_portfolios": [],
+      "remaining_scope_portfolios": [
+        "e2e-deferred"
+      ],
+      "obligation_row_ids": [
+        "RX03-OB-125"
+      ],
+      "join_exception": null,
+      "routing_basis": "unchanged source candidate routes; per-actor portfolio allocation, not conformance or expanded custody"
+    },
+    {
+      "id": "RX03-FU-059",
+      "source_ref": "../conformance/FOLLOWUP-INTAKE.json#/rows/58",
+      "source_disposition": "implementation_gap",
+      "assessment_status": "not_reassessed",
+      "existing_portfolios": [],
+      "remaining_scope_portfolios": [
+        "e2e-deferred"
+      ],
+      "obligation_row_ids": [
+        "RX03-OB-128"
+      ],
+      "join_exception": null,
+      "routing_basis": "unchanged source candidate routes; per-actor portfolio allocation, not conformance or expanded custody"
+    },
+    {
+      "id": "RX03-FU-060",
+      "source_ref": "../conformance/FOLLOWUP-INTAKE.json#/rows/59",
+      "source_disposition": "implementation_gap",
+      "assessment_status": "not_reassessed",
+      "existing_portfolios": [
+        "sdk-core"
+      ],
+      "remaining_scope_portfolios": [
+        "e2e-deferred"
+      ],
+      "obligation_row_ids": [
+        "RX03-OB-127"
+      ],
+      "join_exception": null,
+      "routing_basis": "unchanged source candidate routes; per-actor portfolio allocation, not conformance or expanded custody"
+    },
+    {
+      "id": "RX03-FU-061",
+      "source_ref": "../conformance/FOLLOWUP-INTAKE.json#/rows/60",
+      "source_disposition": "unchecked",
+      "assessment_status": "not_reassessed",
+      "existing_portfolios": [
+        "sdk-core"
+      ],
+      "remaining_scope_portfolios": [],
+      "obligation_row_ids": [
+        "RX03-OB-126"
+      ],
+      "join_exception": null,
+      "routing_basis": "unchanged source candidate routes; per-actor portfolio allocation, not conformance or expanded custody"
+    },
+    {
+      "id": "RX03-FU-062",
+      "source_ref": "../conformance/FOLLOWUP-INTAKE.json#/rows/61",
+      "source_disposition": "unchecked",
+      "assessment_status": "not_reassessed",
+      "existing_portfolios": [
+        "sdk-core"
+      ],
+      "remaining_scope_portfolios": [],
+      "obligation_row_ids": [
+        "RX03-OB-115"
+      ],
+      "join_exception": null,
+      "routing_basis": "unchanged source candidate routes; per-actor portfolio allocation, not conformance or expanded custody"
+    },
+    {
+      "id": "RX03-FU-063",
+      "source_ref": "../conformance/FOLLOWUP-INTAKE.json#/rows/62",
+      "source_disposition": "implementation_gap",
+      "assessment_status": "not_reassessed",
+      "existing_portfolios": [],
+      "remaining_scope_portfolios": [
+        "streamer-deferred"
+      ],
+      "obligation_row_ids": [
+        "RX03-OB-129"
+      ],
+      "join_exception": null,
+      "routing_basis": "unchanged source candidate routes; per-actor portfolio allocation, not conformance or expanded custody"
+    },
+    {
+      "id": "RX03-FU-064",
+      "source_ref": "../conformance/FOLLOWUP-INTAKE.json#/rows/63",
+      "source_disposition": "unchecked",
+      "assessment_status": "not_reassessed",
+      "existing_portfolios": [
+        "sdk-core"
+      ],
+      "remaining_scope_portfolios": [],
+      "obligation_row_ids": [
+        "RX03-OB-150"
+      ],
+      "join_exception": null,
+      "routing_basis": "unchanged source candidate routes; per-actor portfolio allocation, not conformance or expanded custody"
+    },
+    {
+      "id": "RX03-FU-065",
+      "source_ref": "../conformance/FOLLOWUP-INTAKE.json#/rows/64",
+      "source_disposition": "unchecked",
+      "assessment_status": "not_reassessed",
+      "existing_portfolios": [
+        "sdk-core"
+      ],
+      "remaining_scope_portfolios": [],
+      "obligation_row_ids": [
+        "RX03-OB-153"
+      ],
+      "join_exception": null,
+      "routing_basis": "unchanged source candidate routes; per-actor portfolio allocation, not conformance or expanded custody"
+    },
+    {
+      "id": "RX03-FU-066",
+      "source_ref": "../conformance/FOLLOWUP-INTAKE.json#/rows/65",
+      "source_disposition": "implementation_gap",
+      "assessment_status": "not_reassessed",
+      "existing_portfolios": [
+        "iceoryx2"
+      ],
+      "remaining_scope_portfolios": [],
+      "obligation_row_ids": [
+        "RX03-OB-153"
+      ],
+      "join_exception": null,
+      "routing_basis": "unchanged source candidate routes; per-actor portfolio allocation, not conformance or expanded custody"
+    },
+    {
+      "id": "RX03-FU-067",
+      "source_ref": "../conformance/FOLLOWUP-INTAKE.json#/rows/66",
+      "source_disposition": "evidence_gap",
+      "assessment_status": "not_reassessed",
+      "existing_portfolios": [
+        "iceoryx2",
+        "lola"
+      ],
+      "remaining_scope_portfolios": [],
+      "obligation_row_ids": [
+        "RX03-OB-153"
+      ],
+      "join_exception": null,
+      "routing_basis": "unchanged source candidate routes; per-actor portfolio allocation, not conformance or expanded custody"
+    },
+    {
+      "id": "RX03-FU-068",
+      "source_ref": "../conformance/FOLLOWUP-INTAKE.json#/rows/67",
+      "source_disposition": "unchecked",
+      "assessment_status": "not_reassessed",
+      "existing_portfolios": [
+        "iceoryx2"
+      ],
+      "remaining_scope_portfolios": [],
+      "obligation_row_ids": [
+        "RX03-OB-153"
+      ],
+      "join_exception": null,
+      "routing_basis": "unchanged source candidate routes; per-actor portfolio allocation, not conformance or expanded custody"
+    },
+    {
+      "id": "RX03-FU-069",
+      "source_ref": "../conformance/FOLLOWUP-INTAKE.json#/rows/68",
+      "source_disposition": "unchecked",
+      "assessment_status": "not_reassessed",
+      "existing_portfolios": [
+        "sdk-core"
+      ],
+      "remaining_scope_portfolios": [],
+      "obligation_row_ids": [
+        "RX03-OB-154"
+      ],
+      "join_exception": null,
+      "routing_basis": "unchanged source candidate routes; per-actor portfolio allocation, not conformance or expanded custody"
+    },
+    {
+      "id": "RX03-FU-070",
+      "source_ref": "../conformance/FOLLOWUP-INTAKE.json#/rows/69",
+      "source_disposition": "unchecked",
+      "assessment_status": "not_reassessed",
+      "existing_portfolios": [
+        "iceoryx2",
+        "lola"
+      ],
+      "remaining_scope_portfolios": [
+        "other-bindings"
+      ],
+      "obligation_row_ids": [
+        "RX03-OB-154"
+      ],
+      "join_exception": null,
+      "routing_basis": "unchanged source candidate routes; per-actor portfolio allocation, not conformance or expanded custody"
+    },
+    {
+      "id": "RX03-FU-071",
+      "source_ref": "../conformance/FOLLOWUP-INTAKE.json#/rows/70",
+      "source_disposition": "unchecked",
+      "assessment_status": "not_reassessed",
+      "existing_portfolios": [
+        "sdk-core"
+      ],
+      "remaining_scope_portfolios": [],
+      "obligation_row_ids": [
+        "RX03-OB-151"
+      ],
+      "join_exception": null,
+      "routing_basis": "unchanged source candidate routes; per-actor portfolio allocation, not conformance or expanded custody"
+    },
+    {
+      "id": "RX03-FU-072",
+      "source_ref": "../conformance/FOLLOWUP-INTAKE.json#/rows/71",
+      "source_disposition": "evidence_gap",
+      "assessment_status": "not_reassessed",
+      "existing_portfolios": [
+        "iceoryx2"
+      ],
+      "remaining_scope_portfolios": [],
+      "obligation_row_ids": [
+        "RX03-OB-152"
+      ],
+      "join_exception": null,
+      "routing_basis": "unchanged source candidate routes; per-actor portfolio allocation, not conformance or expanded custody"
+    },
+    {
+      "id": "RX03-FU-073",
+      "source_ref": "../conformance/FOLLOWUP-INTAKE.json#/rows/72",
+      "source_disposition": "unchecked",
+      "assessment_status": "not_reassessed",
+      "existing_portfolios": [
+        "sdk-core"
+      ],
+      "remaining_scope_portfolios": [],
+      "obligation_row_ids": [
+        "RX03-OB-156"
+      ],
+      "join_exception": null,
+      "routing_basis": "unchanged source candidate routes; per-actor portfolio allocation, not conformance or expanded custody"
+    },
+    {
+      "id": "RX03-FU-074",
+      "source_ref": "../conformance/FOLLOWUP-INTAKE.json#/rows/73",
+      "source_disposition": "unchecked",
+      "assessment_status": "not_reassessed",
+      "existing_portfolios": [
+        "sdk-core"
+      ],
+      "remaining_scope_portfolios": [],
+      "obligation_row_ids": [
+        "RX03-OB-155"
+      ],
+      "join_exception": null,
+      "routing_basis": "unchanged source candidate routes; per-actor portfolio allocation, not conformance or expanded custody"
+    },
+    {
+      "id": "RX03-FU-075",
+      "source_ref": "../conformance/FOLLOWUP-INTAKE.json#/rows/74",
+      "source_disposition": "unchecked",
+      "assessment_status": "not_reassessed",
+      "existing_portfolios": [],
+      "remaining_scope_portfolios": [
+        "streamer-deferred"
+      ],
+      "obligation_row_ids": [
+        "RX03-OB-283"
+      ],
+      "join_exception": null,
+      "routing_basis": "unchanged source candidate routes; per-actor portfolio allocation, not conformance or expanded custody"
+    },
+    {
+      "id": "RX03-FU-076",
+      "source_ref": "../conformance/FOLLOWUP-INTAKE.json#/rows/75",
+      "source_disposition": "unchecked",
+      "assessment_status": "not_reassessed",
+      "existing_portfolios": [],
+      "remaining_scope_portfolios": [
+        "streamer-deferred"
+      ],
+      "obligation_row_ids": [
+        "RX03-OB-284"
+      ],
+      "join_exception": null,
+      "routing_basis": "unchanged source candidate routes; per-actor portfolio allocation, not conformance or expanded custody"
+    },
+    {
+      "id": "RX03-FU-077",
+      "source_ref": "../conformance/FOLLOWUP-INTAKE.json#/rows/76",
+      "source_disposition": "unchecked",
+      "assessment_status": "not_reassessed",
+      "existing_portfolios": [],
+      "remaining_scope_portfolios": [
+        "streamer-deferred"
+      ],
+      "obligation_row_ids": [
+        "RX03-OB-285"
+      ],
+      "join_exception": null,
+      "routing_basis": "unchanged source candidate routes; per-actor portfolio allocation, not conformance or expanded custody"
+    },
+    {
+      "id": "RX03-FU-078",
+      "source_ref": "../conformance/FOLLOWUP-INTAKE.json#/rows/77",
+      "source_disposition": "unchecked",
+      "assessment_status": "not_reassessed",
+      "existing_portfolios": [],
+      "remaining_scope_portfolios": [
+        "streamer-deferred"
+      ],
+      "obligation_row_ids": [
+        "RX03-OB-288"
+      ],
+      "join_exception": null,
+      "routing_basis": "unchanged source candidate routes; per-actor portfolio allocation, not conformance or expanded custody"
+    },
+    {
+      "id": "RX03-FU-079",
+      "source_ref": "../conformance/FOLLOWUP-INTAKE.json#/rows/78",
+      "source_disposition": "unchecked",
+      "assessment_status": "not_reassessed",
+      "existing_portfolios": [],
+      "remaining_scope_portfolios": [
+        "streamer-deferred"
+      ],
+      "obligation_row_ids": [
+        "RX03-OB-289"
+      ],
+      "join_exception": null,
+      "routing_basis": "unchanged source candidate routes; per-actor portfolio allocation, not conformance or expanded custody"
+    },
+    {
+      "id": "RX03-FU-080",
+      "source_ref": "../conformance/FOLLOWUP-INTAKE.json#/rows/79",
+      "source_disposition": "implementation_gap",
+      "assessment_status": "not_reassessed",
+      "existing_portfolios": [],
+      "remaining_scope_portfolios": [
+        "streamer-deferred"
+      ],
+      "obligation_row_ids": [
+        "RX03-OB-364",
+        "RX03-OB-365",
+        "RX03-OB-366"
+      ],
+      "join_exception": null,
+      "routing_basis": "unchanged source candidate routes; per-actor portfolio allocation, not conformance or expanded custody"
+    },
+    {
+      "id": "RX03-FU-081",
+      "source_ref": "../conformance/FOLLOWUP-INTAKE.json#/rows/80",
+      "source_disposition": "unchecked",
+      "assessment_status": "not_reassessed",
+      "existing_portfolios": [],
+      "remaining_scope_portfolios": [
+        "streamer-deferred"
+      ],
+      "obligation_row_ids": [
+        "RX03-OB-276"
+      ],
+      "join_exception": null,
+      "routing_basis": "unchanged source candidate routes; per-actor portfolio allocation, not conformance or expanded custody"
+    },
+    {
+      "id": "RX03-FU-082",
+      "source_ref": "../conformance/FOLLOWUP-INTAKE.json#/rows/81",
+      "source_disposition": "unchecked",
+      "assessment_status": "not_reassessed",
+      "existing_portfolios": [],
+      "remaining_scope_portfolios": [
+        "streamer-deferred"
+      ],
+      "obligation_row_ids": [
+        "RX03-OB-278"
+      ],
+      "join_exception": null,
+      "routing_basis": "unchanged source candidate routes; per-actor portfolio allocation, not conformance or expanded custody"
+    },
+    {
+      "id": "RX03-FU-083",
+      "source_ref": "../conformance/FOLLOWUP-INTAKE.json#/rows/82",
+      "source_disposition": "unchecked",
+      "assessment_status": "not_reassessed",
+      "existing_portfolios": [],
+      "remaining_scope_portfolios": [
+        "streamer-deferred"
+      ],
+      "obligation_row_ids": [
+        "RX03-OB-279"
+      ],
+      "join_exception": null,
+      "routing_basis": "unchanged source candidate routes; per-actor portfolio allocation, not conformance or expanded custody"
+    },
+    {
+      "id": "RX03-FU-084",
+      "source_ref": "../conformance/FOLLOWUP-INTAKE.json#/rows/83",
+      "source_disposition": "unchecked",
+      "assessment_status": "not_reassessed",
+      "existing_portfolios": [],
+      "remaining_scope_portfolios": [
+        "streamer-deferred"
+      ],
+      "obligation_row_ids": [
+        "RX03-OB-277"
+      ],
+      "join_exception": null,
+      "routing_basis": "unchanged source candidate routes; per-actor portfolio allocation, not conformance or expanded custody"
+    },
+    {
+      "id": "RX03-FU-085",
+      "source_ref": "../conformance/FOLLOWUP-INTAKE.json#/rows/84",
+      "source_disposition": "unchecked",
+      "assessment_status": "not_reassessed",
+      "existing_portfolios": [],
+      "remaining_scope_portfolios": [
+        "streamer-deferred"
+      ],
+      "obligation_row_ids": [
+        "RX03-OB-282"
+      ],
+      "join_exception": null,
+      "routing_basis": "unchanged source candidate routes; per-actor portfolio allocation, not conformance or expanded custody"
+    },
+    {
+      "id": "RX03-FU-086",
+      "source_ref": "../conformance/FOLLOWUP-INTAKE.json#/rows/85",
+      "source_disposition": "unchecked",
+      "assessment_status": "not_reassessed",
+      "existing_portfolios": [],
+      "remaining_scope_portfolios": [
+        "streamer-deferred"
+      ],
+      "obligation_row_ids": [
+        "RX03-OB-274",
+        "RX03-OB-275"
+      ],
+      "join_exception": null,
+      "routing_basis": "unchanged source candidate routes; per-actor portfolio allocation, not conformance or expanded custody"
+    },
+    {
+      "id": "RX03-FU-087",
+      "source_ref": "../conformance/FOLLOWUP-INTAKE.json#/rows/86",
+      "source_disposition": "unchecked",
+      "assessment_status": "not_reassessed",
+      "existing_portfolios": [
+        "sdk-core"
+      ],
+      "remaining_scope_portfolios": [],
+      "obligation_row_ids": [
+        "RX03-OB-273"
+      ],
+      "join_exception": null,
+      "routing_basis": "unchanged source candidate routes; per-actor portfolio allocation, not conformance or expanded custody"
+    },
+    {
+      "id": "RX03-FU-088",
+      "source_ref": "../conformance/FOLLOWUP-INTAKE.json#/rows/87",
+      "source_disposition": "unchecked",
+      "assessment_status": "not_reassessed",
+      "existing_portfolios": [
+        "sdk-core"
+      ],
+      "remaining_scope_portfolios": [],
+      "obligation_row_ids": [
+        "RX03-OB-272"
+      ],
+      "join_exception": null,
+      "routing_basis": "unchanged source candidate routes; per-actor portfolio allocation, not conformance or expanded custody"
+    },
+    {
+      "id": "RX03-FU-089",
+      "source_ref": "../conformance/FOLLOWUP-INTAKE.json#/rows/88",
+      "source_disposition": "evidence_gap",
+      "assessment_status": "not_reassessed",
+      "existing_portfolios": [
+        "sdk-core",
+        "iceoryx2",
+        "lola"
+      ],
+      "remaining_scope_portfolios": [
+        "other-bindings"
+      ],
+      "obligation_row_ids": [
+        "RX03-OB-262"
+      ],
+      "join_exception": null,
+      "routing_basis": "unchanged source candidate routes; per-actor portfolio allocation, not conformance or expanded custody"
+    },
+    {
+      "id": "RX03-FU-090",
+      "source_ref": "../conformance/FOLLOWUP-INTAKE.json#/rows/89",
+      "source_disposition": "unchecked",
+      "assessment_status": "not_reassessed",
+      "existing_portfolios": [
+        "sdk-core"
+      ],
+      "remaining_scope_portfolios": [],
+      "obligation_row_ids": [
+        "RX03-OB-258"
+      ],
+      "join_exception": null,
+      "routing_basis": "unchanged source candidate routes; per-actor portfolio allocation, not conformance or expanded custody"
+    },
+    {
+      "id": "RX03-FU-091",
+      "source_ref": "../conformance/FOLLOWUP-INTAKE.json#/rows/90",
+      "source_disposition": "unchecked",
+      "assessment_status": "not_reassessed",
+      "existing_portfolios": [
+        "sdk-core"
+      ],
+      "remaining_scope_portfolios": [],
+      "obligation_row_ids": [
+        "RX03-OB-259"
+      ],
+      "join_exception": null,
+      "routing_basis": "unchanged source candidate routes; per-actor portfolio allocation, not conformance or expanded custody"
+    },
+    {
+      "id": "RX03-FU-092",
+      "source_ref": "../conformance/FOLLOWUP-INTAKE.json#/rows/91",
+      "source_disposition": "unchecked",
+      "assessment_status": "not_reassessed",
+      "existing_portfolios": [
+        "sdk-core"
+      ],
+      "remaining_scope_portfolios": [],
+      "obligation_row_ids": [
+        "RX03-OB-263"
+      ],
+      "join_exception": null,
+      "routing_basis": "unchanged source candidate routes; per-actor portfolio allocation, not conformance or expanded custody"
+    },
+    {
+      "id": "RX03-FU-093",
+      "source_ref": "../conformance/FOLLOWUP-INTAKE.json#/rows/92",
+      "source_disposition": "unchecked",
+      "assessment_status": "not_reassessed",
+      "existing_portfolios": [
+        "sdk-core"
+      ],
+      "remaining_scope_portfolios": [],
+      "obligation_row_ids": [
+        "RX03-OB-261"
+      ],
+      "join_exception": null,
+      "routing_basis": "unchanged source candidate routes; per-actor portfolio allocation, not conformance or expanded custody"
+    },
+    {
+      "id": "RX03-FU-094",
+      "source_ref": "../conformance/FOLLOWUP-INTAKE.json#/rows/93",
+      "source_disposition": "unchecked",
+      "assessment_status": "not_reassessed",
+      "existing_portfolios": [
+        "sdk-core"
+      ],
+      "remaining_scope_portfolios": [],
+      "obligation_row_ids": [
+        "RX03-OB-260"
+      ],
+      "join_exception": null,
+      "routing_basis": "unchanged source candidate routes; per-actor portfolio allocation, not conformance or expanded custody"
+    },
+    {
+      "id": "RX03-FU-095",
+      "source_ref": "../conformance/FOLLOWUP-INTAKE.json#/rows/94",
+      "source_disposition": "unchecked",
+      "assessment_status": "not_reassessed",
+      "existing_portfolios": [
+        "sdk-core"
+      ],
+      "remaining_scope_portfolios": [
+        "streamer-deferred",
+        "deployment-records"
+      ],
+      "obligation_row_ids": [
+        "RX03-OB-264",
+        "RX03-OB-292"
+      ],
+      "join_exception": null,
+      "routing_basis": "unchanged source candidate routes; per-actor portfolio allocation, not conformance or expanded custody"
+    },
+    {
+      "id": "RX03-FU-096",
+      "source_ref": "../conformance/FOLLOWUP-INTAKE.json#/rows/95",
+      "source_disposition": "unchecked",
+      "assessment_status": "not_reassessed",
+      "existing_portfolios": [],
+      "remaining_scope_portfolios": [
+        "streamer-deferred"
+      ],
+      "obligation_row_ids": [
+        "RX03-OB-269"
+      ],
+      "join_exception": null,
+      "routing_basis": "unchanged source candidate routes; per-actor portfolio allocation, not conformance or expanded custody"
+    },
+    {
+      "id": "RX03-FU-097",
+      "source_ref": "../conformance/FOLLOWUP-INTAKE.json#/rows/96",
+      "source_disposition": "unchecked",
+      "assessment_status": "not_reassessed",
+      "existing_portfolios": [],
+      "remaining_scope_portfolios": [
+        "streamer-deferred"
+      ],
+      "obligation_row_ids": [
+        "RX03-OB-280"
+      ],
+      "join_exception": null,
+      "routing_basis": "unchanged source candidate routes; per-actor portfolio allocation, not conformance or expanded custody"
+    },
+    {
+      "id": "RX03-FU-098",
+      "source_ref": "../conformance/FOLLOWUP-INTAKE.json#/rows/97",
+      "source_disposition": "evidence_gap",
+      "assessment_status": "not_reassessed",
+      "existing_portfolios": [
+        "iceoryx2"
+      ],
+      "remaining_scope_portfolios": [],
+      "obligation_row_ids": [
+        "RX03-OB-187"
+      ],
+      "join_exception": null,
+      "routing_basis": "unchanged source candidate routes; per-actor portfolio allocation, not conformance or expanded custody"
+    },
+    {
+      "id": "RX03-FU-099",
+      "source_ref": "../conformance/FOLLOWUP-INTAKE.json#/rows/98",
+      "source_disposition": "evidence_gap",
+      "assessment_status": "not_reassessed",
+      "existing_portfolios": [
+        "iceoryx2"
+      ],
+      "remaining_scope_portfolios": [],
+      "obligation_row_ids": [
+        "RX03-OB-187"
+      ],
+      "join_exception": null,
+      "routing_basis": "unchanged source candidate routes; per-actor portfolio allocation, not conformance or expanded custody"
+    },
+    {
+      "id": "RX03-FU-100",
+      "source_ref": "../conformance/FOLLOWUP-INTAKE.json#/rows/99",
+      "source_disposition": "evidence_gap",
+      "assessment_status": "not_reassessed",
+      "existing_portfolios": [
+        "iceoryx2"
+      ],
+      "remaining_scope_portfolios": [],
+      "obligation_row_ids": [
+        "RX03-OB-187"
+      ],
+      "join_exception": null,
+      "routing_basis": "unchanged source candidate routes; per-actor portfolio allocation, not conformance or expanded custody"
+    },
+    {
+      "id": "RX03-FU-101",
+      "source_ref": "../conformance/FOLLOWUP-INTAKE.json#/rows/100",
+      "source_disposition": "unchecked",
+      "assessment_status": "not_reassessed",
+      "existing_portfolios": [
+        "lola"
+      ],
+      "remaining_scope_portfolios": [],
+      "obligation_row_ids": [
+        "RX03-OB-187"
+      ],
+      "join_exception": null,
+      "routing_basis": "unchanged source candidate routes; per-actor portfolio allocation, not conformance or expanded custody"
+    },
+    {
+      "id": "RX03-FU-102",
+      "source_ref": "../conformance/FOLLOWUP-INTAKE.json#/rows/101",
+      "source_disposition": "unchecked",
+      "assessment_status": "not_reassessed",
+      "existing_portfolios": [
+        "iceoryx2",
+        "lola"
+      ],
+      "remaining_scope_portfolios": [
+        "other-bindings"
+      ],
+      "obligation_row_ids": [
+        "RX03-OB-187"
+      ],
+      "join_exception": null,
+      "routing_basis": "unchanged source candidate routes; per-actor portfolio allocation, not conformance or expanded custody"
+    },
+    {
+      "id": "RX03-FU-103",
+      "source_ref": "../conformance/FOLLOWUP-INTAKE.json#/rows/102",
+      "source_disposition": "unchecked",
+      "assessment_status": "not_reassessed",
+      "existing_portfolios": [
+        "iceoryx2",
+        "lola"
+      ],
+      "remaining_scope_portfolios": [
+        "other-bindings"
+      ],
+      "obligation_row_ids": [
+        "RX03-OB-188"
+      ],
+      "join_exception": null,
+      "routing_basis": "unchanged source candidate routes; per-actor portfolio allocation, not conformance or expanded custody"
+    },
+    {
+      "id": "RX03-FU-104",
+      "source_ref": "../conformance/FOLLOWUP-INTAKE.json#/rows/103",
+      "source_disposition": "evidence_gap",
+      "assessment_status": "not_reassessed",
+      "existing_portfolios": [
+        "iceoryx2",
+        "lola"
+      ],
+      "remaining_scope_portfolios": [
+        "other-bindings"
+      ],
+      "obligation_row_ids": [
+        "RX03-OB-181"
+      ],
+      "join_exception": null,
+      "routing_basis": "unchanged source candidate routes; per-actor portfolio allocation, not conformance or expanded custody"
+    },
+    {
+      "id": "RX03-FU-105",
+      "source_ref": "../conformance/FOLLOWUP-INTAKE.json#/rows/104",
+      "source_disposition": "evidence_gap",
+      "assessment_status": "not_reassessed",
+      "existing_portfolios": [
+        "iceoryx2",
+        "lola"
+      ],
+      "remaining_scope_portfolios": [
+        "other-bindings"
+      ],
+      "obligation_row_ids": [
+        "RX03-OB-183"
+      ],
+      "join_exception": null,
+      "routing_basis": "unchanged source candidate routes; per-actor portfolio allocation, not conformance or expanded custody"
+    },
+    {
+      "id": "RX03-FU-106",
+      "source_ref": "../conformance/FOLLOWUP-INTAKE.json#/rows/105",
+      "source_disposition": "unchecked",
+      "assessment_status": "not_reassessed",
+      "existing_portfolios": [
+        "iceoryx2"
+      ],
+      "remaining_scope_portfolios": [],
+      "obligation_row_ids": [
+        "RX03-OB-184"
+      ],
+      "join_exception": null,
+      "routing_basis": "unchanged source candidate routes; per-actor portfolio allocation, not conformance or expanded custody"
+    },
+    {
+      "id": "RX03-FU-107",
+      "source_ref": "../conformance/FOLLOWUP-INTAKE.json#/rows/106",
+      "source_disposition": "unchecked",
+      "assessment_status": "not_reassessed",
+      "existing_portfolios": [
+        "lola"
+      ],
+      "remaining_scope_portfolios": [],
+      "obligation_row_ids": [
+        "RX03-OB-184"
+      ],
+      "join_exception": null,
+      "routing_basis": "unchanged source candidate routes; per-actor portfolio allocation, not conformance or expanded custody"
+    },
+    {
+      "id": "RX03-FU-108",
+      "source_ref": "../conformance/FOLLOWUP-INTAKE.json#/rows/107",
+      "source_disposition": "implementation_gap",
+      "assessment_status": "not_reassessed",
+      "existing_portfolios": [
+        "iceoryx2",
+        "lola"
+      ],
+      "remaining_scope_portfolios": [
+        "other-bindings"
+      ],
+      "obligation_row_ids": [
+        "RX03-OB-192"
+      ],
+      "join_exception": null,
+      "routing_basis": "unchanged source candidate routes; per-actor portfolio allocation, not conformance or expanded custody"
+    },
+    {
+      "id": "RX03-FU-109",
+      "source_ref": "../conformance/FOLLOWUP-INTAKE.json#/rows/108",
+      "source_disposition": "unchecked",
+      "assessment_status": "not_reassessed",
+      "existing_portfolios": [
+        "iceoryx2",
+        "lola"
+      ],
+      "remaining_scope_portfolios": [
+        "other-bindings"
+      ],
+      "obligation_row_ids": [
+        "RX03-OB-192"
+      ],
+      "join_exception": null,
+      "routing_basis": "unchanged source candidate routes; per-actor portfolio allocation, not conformance or expanded custody"
+    },
+    {
+      "id": "RX03-FU-110",
+      "source_ref": "../conformance/FOLLOWUP-INTAKE.json#/rows/109",
+      "source_disposition": "unchecked",
+      "assessment_status": "not_reassessed",
+      "existing_portfolios": [
+        "lola"
+      ],
+      "remaining_scope_portfolios": [],
+      "obligation_row_ids": [
+        "RX03-OB-186"
+      ],
+      "join_exception": null,
+      "routing_basis": "unchanged source candidate routes; per-actor portfolio allocation, not conformance or expanded custody"
+    },
+    {
+      "id": "RX03-FU-111",
+      "source_ref": "../conformance/FOLLOWUP-INTAKE.json#/rows/110",
+      "source_disposition": "unchecked",
+      "assessment_status": "not_reassessed",
+      "existing_portfolios": [
+        "iceoryx2",
+        "lola"
+      ],
+      "remaining_scope_portfolios": [
+        "other-bindings"
+      ],
+      "obligation_row_ids": [
+        "RX03-OB-194"
+      ],
+      "join_exception": null,
+      "routing_basis": "unchanged source candidate routes; per-actor portfolio allocation, not conformance or expanded custody"
+    },
+    {
+      "id": "RX03-FU-112",
+      "source_ref": "../conformance/FOLLOWUP-INTAKE.json#/rows/111",
+      "source_disposition": "unchecked",
+      "assessment_status": "not_reassessed",
+      "existing_portfolios": [
+        "iceoryx2",
+        "lola"
+      ],
+      "remaining_scope_portfolios": [
+        "other-bindings"
+      ],
+      "obligation_row_ids": [
+        "RX03-OB-191"
+      ],
+      "join_exception": null,
+      "routing_basis": "unchanged source candidate routes; per-actor portfolio allocation, not conformance or expanded custody"
+    },
+    {
+      "id": "RX03-FU-113",
+      "source_ref": "../conformance/FOLLOWUP-INTAKE.json#/rows/112",
+      "source_disposition": "annotation_only",
+      "assessment_status": "not_reassessed",
+      "existing_portfolios": [
+        "sdk-core"
+      ],
+      "remaining_scope_portfolios": [],
+      "obligation_row_ids": [
+        "RX03-OB-199"
+      ],
+      "join_exception": null,
+      "routing_basis": "unchanged source candidate routes; per-actor portfolio allocation, not conformance or expanded custody"
+    },
+    {
+      "id": "RX03-FU-114",
+      "source_ref": "../conformance/FOLLOWUP-INTAKE.json#/rows/113",
+      "source_disposition": "unchecked",
+      "assessment_status": "not_reassessed",
+      "existing_portfolios": [
+        "iceoryx2",
+        "lola"
+      ],
+      "remaining_scope_portfolios": [
+        "other-bindings"
+      ],
+      "obligation_row_ids": [
+        "RX03-OB-189"
+      ],
+      "join_exception": null,
+      "routing_basis": "unchanged source candidate routes; per-actor portfolio allocation, not conformance or expanded custody"
+    },
+    {
+      "id": "RX03-FU-115",
+      "source_ref": "../conformance/FOLLOWUP-INTAKE.json#/rows/114",
+      "source_disposition": "evidence_gap",
+      "assessment_status": "not_reassessed",
+      "existing_portfolios": [
+        "iceoryx2",
+        "lola"
+      ],
+      "remaining_scope_portfolios": [
+        "other-bindings"
+      ],
+      "obligation_row_ids": [
+        "RX03-OB-182"
+      ],
+      "join_exception": null,
+      "routing_basis": "unchanged source candidate routes; per-actor portfolio allocation, not conformance or expanded custody"
+    },
+    {
+      "id": "RX03-FU-116",
+      "source_ref": "../conformance/FOLLOWUP-INTAKE.json#/rows/115",
+      "source_disposition": "unchecked",
+      "assessment_status": "not_reassessed",
+      "existing_portfolios": [
+        "iceoryx2",
+        "lola"
+      ],
+      "remaining_scope_portfolios": [
+        "other-bindings"
+      ],
+      "obligation_row_ids": [
+        "RX03-OB-191"
+      ],
+      "join_exception": null,
+      "routing_basis": "unchanged source candidate routes; per-actor portfolio allocation, not conformance or expanded custody"
+    },
+    {
+      "id": "RX03-FU-117",
+      "source_ref": "../conformance/FOLLOWUP-INTAKE.json#/rows/116",
+      "source_disposition": "unchecked",
+      "assessment_status": "not_reassessed",
+      "existing_portfolios": [
+        "sdk-core"
+      ],
+      "remaining_scope_portfolios": [],
+      "obligation_row_ids": [
+        "RX03-OB-217"
+      ],
+      "join_exception": null,
+      "routing_basis": "unchanged source candidate routes; per-actor portfolio allocation, not conformance or expanded custody"
+    },
+    {
+      "id": "RX03-FU-118",
+      "source_ref": "../conformance/FOLLOWUP-INTAKE.json#/rows/117",
+      "source_disposition": "unchecked",
+      "assessment_status": "not_reassessed",
+      "existing_portfolios": [
+        "sdk-core"
+      ],
+      "remaining_scope_portfolios": [],
+      "obligation_row_ids": [
+        "RX03-OB-217"
+      ],
+      "join_exception": null,
+      "routing_basis": "unchanged source candidate routes; per-actor portfolio allocation, not conformance or expanded custody"
+    },
+    {
+      "id": "RX03-FU-119",
+      "source_ref": "../conformance/FOLLOWUP-INTAKE.json#/rows/118",
+      "source_disposition": "unchecked",
+      "assessment_status": "not_reassessed",
+      "existing_portfolios": [
+        "sdk-core",
+        "iceoryx2",
+        "lola"
+      ],
+      "remaining_scope_portfolios": [],
+      "obligation_row_ids": [
+        "RX03-OB-217"
+      ],
+      "join_exception": null,
+      "routing_basis": "unchanged source candidate routes; per-actor portfolio allocation, not conformance or expanded custody"
+    },
+    {
+      "id": "RX03-FU-120",
+      "source_ref": "../conformance/FOLLOWUP-INTAKE.json#/rows/119",
+      "source_disposition": "evidence_gap",
+      "assessment_status": "not_reassessed",
+      "existing_portfolios": [
+        "sdk-core"
+      ],
+      "remaining_scope_portfolios": [],
+      "obligation_row_ids": [
+        "RX03-OB-217"
+      ],
+      "join_exception": null,
+      "routing_basis": "unchanged source candidate routes; per-actor portfolio allocation, not conformance or expanded custody"
+    },
+    {
+      "id": "RX03-FU-121",
+      "source_ref": "../conformance/FOLLOWUP-INTAKE.json#/rows/120",
+      "source_disposition": "unchecked",
+      "assessment_status": "not_reassessed",
+      "existing_portfolios": [
+        "sdk-core"
+      ],
+      "remaining_scope_portfolios": [],
+      "obligation_row_ids": [
+        "RX03-OB-216"
+      ],
+      "join_exception": null,
+      "routing_basis": "unchanged source candidate routes; per-actor portfolio allocation, not conformance or expanded custody"
+    },
+    {
+      "id": "RX03-FU-122",
+      "source_ref": "../conformance/FOLLOWUP-INTAKE.json#/rows/121",
+      "source_disposition": "unchecked",
+      "assessment_status": "not_reassessed",
+      "existing_portfolios": [
+        "sdk-core"
+      ],
+      "remaining_scope_portfolios": [],
+      "obligation_row_ids": [
+        "RX03-OB-218"
+      ],
+      "join_exception": null,
+      "routing_basis": "unchanged source candidate routes; per-actor portfolio allocation, not conformance or expanded custody"
+    },
+    {
+      "id": "RX03-FU-123",
+      "source_ref": "../conformance/FOLLOWUP-INTAKE.json#/rows/122",
+      "source_disposition": "unchecked",
+      "assessment_status": "not_reassessed",
+      "existing_portfolios": [
+        "sdk-core"
+      ],
+      "remaining_scope_portfolios": [],
+      "obligation_row_ids": [
+        "RX03-OB-220"
+      ],
+      "join_exception": null,
+      "routing_basis": "unchanged source candidate routes; per-actor portfolio allocation, not conformance or expanded custody"
+    },
+    {
+      "id": "RX03-FU-124",
+      "source_ref": "../conformance/FOLLOWUP-INTAKE.json#/rows/123",
+      "source_disposition": "unchecked",
+      "assessment_status": "not_reassessed",
+      "existing_portfolios": [
+        "sdk-core"
+      ],
+      "remaining_scope_portfolios": [],
+      "obligation_row_ids": [
+        "RX03-OB-241"
+      ],
+      "join_exception": null,
+      "routing_basis": "unchanged source candidate routes; per-actor portfolio allocation, not conformance or expanded custody"
+    },
+    {
+      "id": "RX03-FU-125",
+      "source_ref": "../conformance/FOLLOWUP-INTAKE.json#/rows/124",
+      "source_disposition": "unchecked",
+      "assessment_status": "not_reassessed",
+      "existing_portfolios": [
+        "iceoryx2",
+        "lola"
+      ],
+      "remaining_scope_portfolios": [],
+      "obligation_row_ids": [
+        "RX03-OB-242"
+      ],
+      "join_exception": null,
+      "routing_basis": "unchanged source candidate routes; per-actor portfolio allocation, not conformance or expanded custody"
+    },
+    {
+      "id": "RX03-FU-126",
+      "source_ref": "../conformance/FOLLOWUP-INTAKE.json#/rows/125",
+      "source_disposition": "unchecked",
+      "assessment_status": "not_reassessed",
+      "existing_portfolios": [
+        "sdk-core"
+      ],
+      "remaining_scope_portfolios": [],
+      "obligation_row_ids": [
+        "RX03-OB-242"
+      ],
+      "join_exception": null,
+      "routing_basis": "unchanged source candidate routes; per-actor portfolio allocation, not conformance or expanded custody"
+    },
+    {
+      "id": "RX03-FU-127",
+      "source_ref": "../conformance/FOLLOWUP-INTAKE.json#/rows/126",
+      "source_disposition": "unchecked",
+      "assessment_status": "not_reassessed",
+      "existing_portfolios": [
+        "iceoryx2",
+        "lola"
+      ],
+      "remaining_scope_portfolios": [
+        "other-bindings"
+      ],
+      "obligation_row_ids": [
+        "RX03-OB-238"
+      ],
+      "join_exception": null,
+      "routing_basis": "unchanged source candidate routes; per-actor portfolio allocation, not conformance or expanded custody"
+    },
+    {
+      "id": "RX03-FU-128",
+      "source_ref": "../conformance/FOLLOWUP-INTAKE.json#/rows/127",
+      "source_disposition": "unchecked",
+      "assessment_status": "not_reassessed",
+      "existing_portfolios": [
+        "sdk-core"
+      ],
+      "remaining_scope_portfolios": [],
+      "obligation_row_ids": [
+        "RX03-OB-238"
+      ],
+      "join_exception": null,
+      "routing_basis": "unchanged source candidate routes; per-actor portfolio allocation, not conformance or expanded custody"
+    },
+    {
+      "id": "RX03-FU-129",
+      "source_ref": "../conformance/FOLLOWUP-INTAKE.json#/rows/128",
+      "source_disposition": "unchecked",
+      "assessment_status": "not_reassessed",
+      "existing_portfolios": [
+        "sdk-core",
+        "iceoryx2",
+        "lola"
+      ],
+      "remaining_scope_portfolios": [
+        "other-bindings"
+      ],
+      "obligation_row_ids": [
+        "RX03-OB-239"
+      ],
+      "join_exception": null,
+      "routing_basis": "unchanged source candidate routes; per-actor portfolio allocation, not conformance or expanded custody"
+    },
+    {
+      "id": "RX03-FU-130",
+      "source_ref": "../conformance/FOLLOWUP-INTAKE.json#/rows/129",
+      "source_disposition": "unchecked",
+      "assessment_status": "not_reassessed",
+      "existing_portfolios": [
+        "sdk-core"
+      ],
+      "remaining_scope_portfolios": [],
+      "obligation_row_ids": [
+        "RX03-OB-240"
+      ],
+      "join_exception": null,
+      "routing_basis": "unchanged source candidate routes; per-actor portfolio allocation, not conformance or expanded custody"
+    },
+    {
+      "id": "RX03-FU-131",
+      "source_ref": "../conformance/FOLLOWUP-INTAKE.json#/rows/130",
+      "source_disposition": "unchecked",
+      "assessment_status": "not_reassessed",
+      "existing_portfolios": [
+        "sdk-core"
+      ],
+      "remaining_scope_portfolios": [],
+      "obligation_row_ids": [
+        "RX03-OB-240"
+      ],
+      "join_exception": null,
+      "routing_basis": "unchanged source candidate routes; per-actor portfolio allocation, not conformance or expanded custody"
+    },
+    {
+      "id": "RX03-FU-132",
+      "source_ref": "../conformance/FOLLOWUP-INTAKE.json#/rows/131",
+      "source_disposition": "unchecked",
+      "assessment_status": "not_reassessed",
+      "existing_portfolios": [
+        "sdk-core"
+      ],
+      "remaining_scope_portfolios": [],
+      "obligation_row_ids": [
+        "RX03-OB-240"
+      ],
+      "join_exception": null,
+      "routing_basis": "unchanged source candidate routes; per-actor portfolio allocation, not conformance or expanded custody"
+    },
+    {
+      "id": "RX03-FU-133",
+      "source_ref": "../conformance/FOLLOWUP-INTAKE.json#/rows/132",
+      "source_disposition": "unchecked",
+      "assessment_status": "not_reassessed",
+      "existing_portfolios": [
+        "sdk-core"
+      ],
+      "remaining_scope_portfolios": [],
+      "obligation_row_ids": [
+        "RX03-OB-219"
+      ],
+      "join_exception": null,
+      "routing_basis": "unchanged source candidate routes; per-actor portfolio allocation, not conformance or expanded custody"
+    },
+    {
+      "id": "RX03-FU-134",
+      "source_ref": "../conformance/FOLLOWUP-INTAKE.json#/rows/133",
+      "source_disposition": "implementation_gap",
+      "assessment_status": "not_reassessed",
+      "existing_portfolios": [
+        "sdk-core",
+        "iceoryx2"
+      ],
+      "remaining_scope_portfolios": [],
+      "obligation_row_ids": [
+        "RX03-OB-212"
+      ],
+      "join_exception": null,
+      "routing_basis": "unchanged source candidate routes; per-actor portfolio allocation, not conformance or expanded custody"
+    },
+    {
+      "id": "RX03-FU-135",
+      "source_ref": "../conformance/FOLLOWUP-INTAKE.json#/rows/134",
+      "source_disposition": "implementation_gap",
+      "assessment_status": "not_reassessed",
+      "existing_portfolios": [
+        "sdk-core",
+        "iceoryx2"
+      ],
+      "remaining_scope_portfolios": [],
+      "obligation_row_ids": [
+        "RX03-OB-212"
+      ],
+      "join_exception": null,
+      "routing_basis": "unchanged source candidate routes; per-actor portfolio allocation, not conformance or expanded custody"
+    },
+    {
+      "id": "RX03-FU-136",
+      "source_ref": "../conformance/FOLLOWUP-INTAKE.json#/rows/135",
+      "source_disposition": "implementation_gap",
+      "assessment_status": "not_reassessed",
+      "existing_portfolios": [
+        "sdk-core",
+        "iceoryx2"
+      ],
+      "remaining_scope_portfolios": [],
+      "obligation_row_ids": [
+        "RX03-OB-212"
+      ],
+      "join_exception": null,
+      "routing_basis": "unchanged source candidate routes; per-actor portfolio allocation, not conformance or expanded custody"
+    },
+    {
+      "id": "RX03-FU-137",
+      "source_ref": "../conformance/FOLLOWUP-INTAKE.json#/rows/136",
+      "source_disposition": "implementation_gap",
+      "assessment_status": "not_reassessed",
+      "existing_portfolios": [
+        "sdk-core",
+        "iceoryx2"
+      ],
+      "remaining_scope_portfolios": [],
+      "obligation_row_ids": [
+        "RX03-OB-213"
+      ],
+      "join_exception": null,
+      "routing_basis": "unchanged source candidate routes; per-actor portfolio allocation, not conformance or expanded custody"
+    },
+    {
+      "id": "RX03-FU-138",
+      "source_ref": "../conformance/FOLLOWUP-INTAKE.json#/rows/137",
+      "source_disposition": "implementation_gap",
+      "assessment_status": "not_reassessed",
+      "existing_portfolios": [
+        "iceoryx2"
+      ],
+      "remaining_scope_portfolios": [],
+      "obligation_row_ids": [
+        "RX03-OB-213"
+      ],
+      "join_exception": null,
+      "routing_basis": "unchanged source candidate routes; per-actor portfolio allocation, not conformance or expanded custody"
+    },
+    {
+      "id": "RX03-FU-139",
+      "source_ref": "../conformance/FOLLOWUP-INTAKE.json#/rows/138",
+      "source_disposition": "implementation_gap",
+      "assessment_status": "not_reassessed",
+      "existing_portfolios": [
+        "iceoryx2"
+      ],
+      "remaining_scope_portfolios": [],
+      "obligation_row_ids": [
+        "RX03-OB-210"
+      ],
+      "join_exception": null,
+      "routing_basis": "unchanged source candidate routes; per-actor portfolio allocation, not conformance or expanded custody"
+    },
+    {
+      "id": "RX03-FU-140",
+      "source_ref": "../conformance/FOLLOWUP-INTAKE.json#/rows/139",
+      "source_disposition": "unchecked",
+      "assessment_status": "not_reassessed",
+      "existing_portfolios": [
+        "sdk-core",
+        "iceoryx2"
+      ],
+      "remaining_scope_portfolios": [],
+      "obligation_row_ids": [
+        "RX03-OB-209"
+      ],
+      "join_exception": null,
+      "routing_basis": "unchanged source candidate routes; per-actor portfolio allocation, not conformance or expanded custody"
+    },
+    {
+      "id": "RX03-FU-141",
+      "source_ref": "../conformance/FOLLOWUP-INTAKE.json#/rows/140",
+      "source_disposition": "evidence_gap",
+      "assessment_status": "not_reassessed",
+      "existing_portfolios": [
+        "iceoryx2"
+      ],
+      "remaining_scope_portfolios": [],
+      "obligation_row_ids": [
+        "RX03-OB-209"
+      ],
+      "join_exception": null,
+      "routing_basis": "unchanged source candidate routes; per-actor portfolio allocation, not conformance or expanded custody"
+    },
+    {
+      "id": "RX03-FU-142",
+      "source_ref": "../conformance/FOLLOWUP-INTAKE.json#/rows/141",
+      "source_disposition": "implementation_gap",
+      "assessment_status": "not_reassessed",
+      "existing_portfolios": [
+        "iceoryx2"
+      ],
+      "remaining_scope_portfolios": [],
+      "obligation_row_ids": [
+        "RX03-OB-206"
+      ],
+      "join_exception": null,
+      "routing_basis": "unchanged source candidate routes; per-actor portfolio allocation, not conformance or expanded custody"
+    },
+    {
+      "id": "RX03-FU-143",
+      "source_ref": "../conformance/FOLLOWUP-INTAKE.json#/rows/142",
+      "source_disposition": "implementation_gap",
+      "assessment_status": "not_reassessed",
+      "existing_portfolios": [
+        "iceoryx2"
+      ],
+      "remaining_scope_portfolios": [],
+      "obligation_row_ids": [
+        "RX03-OB-207"
+      ],
+      "join_exception": null,
+      "routing_basis": "unchanged source candidate routes; per-actor portfolio allocation, not conformance or expanded custody"
+    },
+    {
+      "id": "RX03-FU-144",
+      "source_ref": "../conformance/FOLLOWUP-INTAKE.json#/rows/143",
+      "source_disposition": "implementation_gap",
+      "assessment_status": "not_reassessed",
+      "existing_portfolios": [
+        "iceoryx2"
+      ],
+      "remaining_scope_portfolios": [],
+      "obligation_row_ids": [
+        "RX03-OB-208"
+      ],
+      "join_exception": null,
+      "routing_basis": "unchanged source candidate routes; per-actor portfolio allocation, not conformance or expanded custody"
+    },
+    {
+      "id": "RX03-FU-145",
+      "source_ref": "../conformance/FOLLOWUP-INTAKE.json#/rows/144",
+      "source_disposition": "evidence_gap",
+      "assessment_status": "not_reassessed",
+      "existing_portfolios": [
+        "sdk-core",
+        "iceoryx2"
+      ],
+      "remaining_scope_portfolios": [],
+      "obligation_row_ids": [
+        "RX03-OB-211"
+      ],
+      "join_exception": null,
+      "routing_basis": "unchanged source candidate routes; per-actor portfolio allocation, not conformance or expanded custody"
+    },
+    {
+      "id": "RX03-FU-146",
+      "source_ref": "../conformance/FOLLOWUP-INTAKE.json#/rows/145",
+      "source_disposition": "evidence_gap",
+      "assessment_status": "not_reassessed",
+      "existing_portfolios": [
+        "sdk-core",
+        "iceoryx2"
+      ],
+      "remaining_scope_portfolios": [],
+      "obligation_row_ids": [
+        "RX03-OB-152"
+      ],
+      "join_exception": null,
+      "routing_basis": "unchanged source candidate routes; per-actor portfolio allocation, not conformance or expanded custody"
+    },
+    {
+      "id": "RX03-FU-147",
+      "source_ref": "../conformance/FOLLOWUP-INTAKE.json#/rows/146",
+      "source_disposition": "evidence_gap",
+      "assessment_status": "not_reassessed",
+      "existing_portfolios": [
+        "sdk-core",
+        "iceoryx2"
+      ],
+      "remaining_scope_portfolios": [],
+      "obligation_row_ids": [
+        "RX03-OB-201"
+      ],
+      "join_exception": null,
+      "routing_basis": "unchanged source candidate routes; per-actor portfolio allocation, not conformance or expanded custody"
+    },
+    {
+      "id": "RX03-FU-148",
+      "source_ref": "../conformance/FOLLOWUP-INTAKE.json#/rows/147",
+      "source_disposition": "evidence_gap",
+      "assessment_status": "not_reassessed",
+      "existing_portfolios": [
+        "sdk-core",
+        "iceoryx2"
+      ],
+      "remaining_scope_portfolios": [],
+      "obligation_row_ids": [
+        "RX03-OB-204"
+      ],
+      "join_exception": null,
+      "routing_basis": "unchanged source candidate routes; per-actor portfolio allocation, not conformance or expanded custody"
+    },
+    {
+      "id": "RX03-FU-149",
+      "source_ref": "../conformance/FOLLOWUP-INTAKE.json#/rows/148",
+      "source_disposition": "unchecked",
+      "assessment_status": "not_reassessed",
+      "existing_portfolios": [
+        "sdk-core",
+        "iceoryx2"
+      ],
+      "remaining_scope_portfolios": [],
+      "obligation_row_ids": [
+        "RX03-OB-200"
+      ],
+      "join_exception": null,
+      "routing_basis": "unchanged source candidate routes; per-actor portfolio allocation, not conformance or expanded custody"
+    },
+    {
+      "id": "RX03-FU-150",
+      "source_ref": "../conformance/FOLLOWUP-INTAKE.json#/rows/149",
+      "source_disposition": "evidence_gap",
+      "assessment_status": "not_reassessed",
+      "existing_portfolios": [
+        "iceoryx2"
+      ],
+      "remaining_scope_portfolios": [],
+      "obligation_row_ids": [
+        "RX03-OB-192"
+      ],
+      "join_exception": null,
+      "routing_basis": "unchanged source candidate routes; per-actor portfolio allocation, not conformance or expanded custody"
+    },
+    {
+      "id": "RX03-FU-151",
+      "source_ref": "../conformance/FOLLOWUP-INTAKE.json#/rows/150",
+      "source_disposition": "implementation_gap",
+      "assessment_status": "not_reassessed",
+      "existing_portfolios": [
+        "sdk-core",
+        "iceoryx2"
+      ],
+      "remaining_scope_portfolios": [],
+      "obligation_row_ids": [
+        "RX03-OB-213"
+      ],
+      "join_exception": null,
+      "routing_basis": "unchanged source candidate routes; per-actor portfolio allocation, not conformance or expanded custody"
+    },
+    {
+      "id": "RX03-FU-152",
+      "source_ref": "../conformance/FOLLOWUP-INTAKE.json#/rows/151",
+      "source_disposition": "unchecked",
+      "assessment_status": "not_reassessed",
+      "existing_portfolios": [],
+      "remaining_scope_portfolios": [
+        "deployment-records"
+      ],
+      "obligation_row_ids": [
+        "RX03-OB-215"
+      ],
+      "join_exception": null,
+      "routing_basis": "unchanged source candidate routes; per-actor portfolio allocation, not conformance or expanded custody"
+    },
+    {
+      "id": "RX03-FU-153",
+      "source_ref": "../conformance/FOLLOWUP-INTAKE.json#/rows/152",
+      "source_disposition": "unchecked",
+      "assessment_status": "not_reassessed",
+      "existing_portfolios": [
+        "sdk-core",
+        "iceoryx2"
+      ],
+      "remaining_scope_portfolios": [],
+      "obligation_row_ids": [
+        "RX03-OB-210"
+      ],
+      "join_exception": null,
+      "routing_basis": "unchanged source candidate routes; per-actor portfolio allocation, not conformance or expanded custody"
+    },
+    {
+      "id": "RX03-FU-154",
+      "source_ref": "../conformance/FOLLOWUP-INTAKE.json#/rows/153",
+      "source_disposition": "evidence_gap",
+      "assessment_status": "not_reassessed",
+      "existing_portfolios": [
+        "lola"
+      ],
+      "remaining_scope_portfolios": [],
+      "obligation_row_ids": [
+        "RX03-OB-221"
+      ],
+      "join_exception": null,
+      "routing_basis": "unchanged source candidate routes; per-actor portfolio allocation, not conformance or expanded custody"
+    },
+    {
+      "id": "RX03-FU-155",
+      "source_ref": "../conformance/FOLLOWUP-INTAKE.json#/rows/154",
+      "source_disposition": "implementation_gap",
+      "assessment_status": "not_reassessed",
+      "existing_portfolios": [
+        "lola"
+      ],
+      "remaining_scope_portfolios": [],
+      "obligation_row_ids": [
+        "RX03-OB-222"
+      ],
+      "join_exception": null,
+      "routing_basis": "unchanged source candidate routes; per-actor portfolio allocation, not conformance or expanded custody"
+    },
+    {
+      "id": "RX03-FU-156",
+      "source_ref": "../conformance/FOLLOWUP-INTAKE.json#/rows/155",
+      "source_disposition": "implementation_gap",
+      "assessment_status": "not_reassessed",
+      "existing_portfolios": [
+        "lola"
+      ],
+      "remaining_scope_portfolios": [],
+      "obligation_row_ids": [
+        "RX03-OB-224"
+      ],
+      "join_exception": null,
+      "routing_basis": "unchanged source candidate routes; per-actor portfolio allocation, not conformance or expanded custody"
+    },
+    {
+      "id": "RX03-FU-157",
+      "source_ref": "../conformance/FOLLOWUP-INTAKE.json#/rows/156",
+      "source_disposition": "evidence_gap",
+      "assessment_status": "not_reassessed",
+      "existing_portfolios": [
+        "sdk-core",
+        "lola"
+      ],
+      "remaining_scope_portfolios": [],
+      "obligation_row_ids": [
+        "RX03-OB-225"
+      ],
+      "join_exception": null,
+      "routing_basis": "unchanged source candidate routes; per-actor portfolio allocation, not conformance or expanded custody"
+    },
+    {
+      "id": "RX03-FU-158",
+      "source_ref": "../conformance/FOLLOWUP-INTAKE.json#/rows/157",
+      "source_disposition": "unchecked",
+      "assessment_status": "not_reassessed",
+      "existing_portfolios": [
+        "lola"
+      ],
+      "remaining_scope_portfolios": [],
+      "obligation_row_ids": [
+        "RX03-OB-226"
+      ],
+      "join_exception": null,
+      "routing_basis": "unchanged source candidate routes; per-actor portfolio allocation, not conformance or expanded custody"
+    },
+    {
+      "id": "RX03-FU-159",
+      "source_ref": "../conformance/FOLLOWUP-INTAKE.json#/rows/158",
+      "source_disposition": "evidence_gap",
+      "assessment_status": "not_reassessed",
+      "existing_portfolios": [
+        "lola"
+      ],
+      "remaining_scope_portfolios": [],
+      "obligation_row_ids": [
+        "RX03-OB-228"
+      ],
+      "join_exception": null,
+      "routing_basis": "unchanged source candidate routes; per-actor portfolio allocation, not conformance or expanded custody"
+    },
+    {
+      "id": "RX03-FU-160",
+      "source_ref": "../conformance/FOLLOWUP-INTAKE.json#/rows/159",
+      "source_disposition": "evidence_gap",
+      "assessment_status": "not_reassessed",
+      "existing_portfolios": [
+        "lola"
+      ],
+      "remaining_scope_portfolios": [],
+      "obligation_row_ids": [
+        "RX03-OB-182"
+      ],
+      "join_exception": null,
+      "routing_basis": "unchanged source candidate routes; per-actor portfolio allocation, not conformance or expanded custody"
+    },
+    {
+      "id": "RX03-FU-161",
+      "source_ref": "../conformance/FOLLOWUP-INTAKE.json#/rows/160",
+      "source_disposition": "evidence_gap",
+      "assessment_status": "not_reassessed",
+      "existing_portfolios": [
+        "lola"
+      ],
+      "remaining_scope_portfolios": [],
+      "obligation_row_ids": [
+        "RX03-OB-229"
+      ],
+      "join_exception": null,
+      "routing_basis": "unchanged source candidate routes; per-actor portfolio allocation, not conformance or expanded custody"
+    },
+    {
+      "id": "RX03-FU-162",
+      "source_ref": "../conformance/FOLLOWUP-INTAKE.json#/rows/161",
+      "source_disposition": "evidence_gap",
+      "assessment_status": "not_reassessed",
+      "existing_portfolios": [
+        "lola"
+      ],
+      "remaining_scope_portfolios": [],
+      "obligation_row_ids": [
+        "RX03-OB-230"
+      ],
+      "join_exception": null,
+      "routing_basis": "unchanged source candidate routes; per-actor portfolio allocation, not conformance or expanded custody"
+    },
+    {
+      "id": "RX03-FU-163",
+      "source_ref": "../conformance/FOLLOWUP-INTAKE.json#/rows/162",
+      "source_disposition": "evidence_gap",
+      "assessment_status": "not_reassessed",
+      "existing_portfolios": [
+        "lola"
+      ],
+      "remaining_scope_portfolios": [],
+      "obligation_row_ids": [
+        "RX03-OB-232"
+      ],
+      "join_exception": null,
+      "routing_basis": "unchanged source candidate routes; per-actor portfolio allocation, not conformance or expanded custody"
+    },
+    {
+      "id": "RX03-FU-164",
+      "source_ref": "../conformance/FOLLOWUP-INTAKE.json#/rows/163",
+      "source_disposition": "unchecked",
+      "assessment_status": "not_reassessed",
+      "existing_portfolios": [],
+      "remaining_scope_portfolios": [
+        "deployment-records"
+      ],
+      "obligation_row_ids": [
+        "RX03-OB-234"
+      ],
+      "join_exception": null,
+      "routing_basis": "unchanged source candidate routes; per-actor portfolio allocation, not conformance or expanded custody"
+    },
+    {
+      "id": "RX03-FU-165",
+      "source_ref": "../conformance/FOLLOWUP-INTAKE.json#/rows/164",
+      "source_disposition": "unchecked",
+      "assessment_status": "not_reassessed",
+      "existing_portfolios": [
+        "lola"
+      ],
+      "remaining_scope_portfolios": [],
+      "obligation_row_ids": [
+        "RX03-OB-233"
+      ],
+      "join_exception": null,
+      "routing_basis": "unchanged source candidate routes; per-actor portfolio allocation, not conformance or expanded custody"
+    },
+    {
+      "id": "RX03-FU-166",
+      "source_ref": "../conformance/FOLLOWUP-INTAKE.json#/rows/165",
+      "source_disposition": "unchecked",
+      "assessment_status": "not_reassessed",
+      "existing_portfolios": [
+        "lola"
+      ],
+      "remaining_scope_portfolios": [],
+      "obligation_row_ids": [
+        "RX03-OB-231"
+      ],
+      "join_exception": null,
+      "routing_basis": "unchanged source candidate routes; per-actor portfolio allocation, not conformance or expanded custody"
+    },
+    {
+      "id": "RX03-FU-167",
+      "source_ref": "../conformance/FOLLOWUP-INTAKE.json#/rows/166",
+      "source_disposition": "annotation_only",
+      "assessment_status": "not_reassessed",
+      "existing_portfolios": [
+        "lola"
+      ],
+      "remaining_scope_portfolios": [],
+      "obligation_row_ids": [
+        "RX03-OB-227"
+      ],
+      "join_exception": null,
+      "routing_basis": "unchanged source candidate routes; per-actor portfolio allocation, not conformance or expanded custody"
+    },
+    {
+      "id": "RX03-FU-168",
+      "source_ref": "../conformance/FOLLOWUP-INTAKE.json#/rows/167",
+      "source_disposition": "annotation_only",
+      "assessment_status": "not_reassessed",
+      "existing_portfolios": [
+        "sdk-core"
+      ],
+      "remaining_scope_portfolios": [
+        "deployment-records"
+      ],
+      "obligation_row_ids": [
+        "RX03-OB-234"
+      ],
+      "join_exception": null,
+      "routing_basis": "unchanged source candidate routes; per-actor portfolio allocation, not conformance or expanded custody"
+    },
+    {
+      "id": "RX03-FU-169",
+      "source_ref": "../conformance/FOLLOWUP-INTAKE.json#/rows/168",
+      "source_disposition": "evidence_gap",
+      "assessment_status": "not_reassessed",
+      "existing_portfolios": [
+        "lola"
+      ],
+      "remaining_scope_portfolios": [],
+      "obligation_row_ids": [
+        "RX03-OB-196"
+      ],
+      "join_exception": null,
+      "routing_basis": "unchanged source candidate routes; per-actor portfolio allocation, not conformance or expanded custody"
+    },
+    {
+      "id": "RX03-FU-170",
+      "source_ref": "../conformance/FOLLOWUP-INTAKE.json#/rows/169",
+      "source_disposition": "evidence_gap",
+      "assessment_status": "not_reassessed",
+      "existing_portfolios": [
+        "lola"
+      ],
+      "remaining_scope_portfolios": [],
+      "obligation_row_ids": [
+        "RX03-OB-193"
+      ],
+      "join_exception": null,
+      "routing_basis": "unchanged source candidate routes; per-actor portfolio allocation, not conformance or expanded custody"
+    },
+    {
+      "id": "RX03-FU-171",
+      "source_ref": "../conformance/FOLLOWUP-INTAKE.json#/rows/170",
+      "source_disposition": "evidence_gap",
+      "assessment_status": "not_reassessed",
+      "existing_portfolios": [
+        "lola"
+      ],
+      "remaining_scope_portfolios": [],
+      "obligation_row_ids": [
+        "RX03-OB-185"
+      ],
+      "join_exception": null,
+      "routing_basis": "unchanged source candidate routes; per-actor portfolio allocation, not conformance or expanded custody"
+    },
+    {
+      "id": "RX03-FU-172",
+      "source_ref": "../conformance/FOLLOWUP-INTAKE.json#/rows/171",
+      "source_disposition": "evidence_gap",
+      "assessment_status": "not_reassessed",
+      "existing_portfolios": [
+        "lola"
+      ],
+      "remaining_scope_portfolios": [],
+      "obligation_row_ids": [
+        "RX03-OB-195"
+      ],
+      "join_exception": null,
+      "routing_basis": "unchanged source candidate routes; per-actor portfolio allocation, not conformance or expanded custody"
+    },
+    {
+      "id": "RX03-FU-173",
+      "source_ref": "../conformance/FOLLOWUP-INTAKE.json#/rows/172",
+      "source_disposition": "unchecked",
+      "assessment_status": "not_reassessed",
+      "existing_portfolios": [
+        "lola"
+      ],
+      "remaining_scope_portfolios": [],
+      "obligation_row_ids": [
+        "RX03-OB-199"
+      ],
+      "join_exception": null,
+      "routing_basis": "unchanged source candidate routes; per-actor portfolio allocation, not conformance or expanded custody"
+    },
+    {
+      "id": "RX03-FU-174",
+      "source_ref": "../conformance/FOLLOWUP-INTAKE.json#/rows/173",
+      "source_disposition": "unchecked",
+      "assessment_status": "not_reassessed",
+      "existing_portfolios": [
+        "sdk-core"
+      ],
+      "remaining_scope_portfolios": [],
+      "obligation_row_ids": [
+        "RX03-OB-235"
+      ],
+      "join_exception": null,
+      "routing_basis": "unchanged source candidate routes; per-actor portfolio allocation, not conformance or expanded custody"
+    },
+    {
+      "id": "RX03-FU-175",
+      "source_ref": "../conformance/FOLLOWUP-INTAKE.json#/rows/174",
+      "source_disposition": "unchecked",
+      "assessment_status": "not_reassessed",
+      "existing_portfolios": [
+        "sdk-core"
+      ],
+      "remaining_scope_portfolios": [],
+      "obligation_row_ids": [
+        "RX03-OB-236"
+      ],
+      "join_exception": null,
+      "routing_basis": "unchanged source candidate routes; per-actor portfolio allocation, not conformance or expanded custody"
+    },
+    {
+      "id": "RX03-FU-176",
+      "source_ref": "../conformance/FOLLOWUP-INTAKE.json#/rows/175",
+      "source_disposition": "unchecked",
+      "assessment_status": "not_reassessed",
+      "existing_portfolios": [
+        "sdk-core"
+      ],
+      "remaining_scope_portfolios": [],
+      "obligation_row_ids": [
+        "RX03-OB-237"
+      ],
+      "join_exception": null,
+      "routing_basis": "unchanged source candidate routes; per-actor portfolio allocation, not conformance or expanded custody"
+    },
+    {
+      "id": "RX03-FU-177",
+      "source_ref": "../conformance/FOLLOWUP-INTAKE.json#/rows/176",
+      "source_disposition": "unchecked",
+      "assessment_status": "not_reassessed",
+      "existing_portfolios": [
+        "native-protobuf"
+      ],
+      "remaining_scope_portfolios": [
+        "xcdr2-deferred",
+        "additional-wires-deferred"
+      ],
+      "obligation_row_ids": [
+        "RX03-OB-250"
+      ],
+      "join_exception": null,
+      "routing_basis": "unchanged source candidate routes; per-actor portfolio allocation, not conformance or expanded custody"
+    },
+    {
+      "id": "RX03-FU-178",
+      "source_ref": "../conformance/FOLLOWUP-INTAKE.json#/rows/177",
+      "source_disposition": "unchecked",
+      "assessment_status": "not_reassessed",
+      "existing_portfolios": [
+        "iceoryx2",
+        "lola",
+        "native-protobuf"
+      ],
+      "remaining_scope_portfolios": [
+        "additional-wires-deferred"
+      ],
+      "obligation_row_ids": [
+        "RX03-OB-249"
+      ],
+      "join_exception": null,
+      "routing_basis": "unchanged source candidate routes; per-actor portfolio allocation, not conformance or expanded custody"
+    },
+    {
+      "id": "RX03-FU-179",
+      "source_ref": "../conformance/FOLLOWUP-INTAKE.json#/rows/178",
+      "source_disposition": "evidence_gap",
+      "assessment_status": "not_reassessed",
+      "existing_portfolios": [
+        "native-protobuf"
+      ],
+      "remaining_scope_portfolios": [
+        "additional-wires-deferred"
+      ],
+      "obligation_row_ids": [
+        "RX03-OB-248"
+      ],
+      "join_exception": null,
+      "routing_basis": "unchanged source candidate routes; per-actor portfolio allocation, not conformance or expanded custody"
+    },
+    {
+      "id": "RX03-FU-180",
+      "source_ref": "../conformance/FOLLOWUP-INTAKE.json#/rows/179",
+      "source_disposition": "unchecked",
+      "assessment_status": "not_reassessed",
+      "existing_portfolios": [
+        "native-protobuf"
+      ],
+      "remaining_scope_portfolios": [
+        "additional-wires-deferred"
+      ],
+      "obligation_row_ids": [
+        "RX03-OB-246"
+      ],
+      "join_exception": null,
+      "routing_basis": "unchanged source candidate routes; per-actor portfolio allocation, not conformance or expanded custody"
+    },
+    {
+      "id": "RX03-FU-181",
+      "source_ref": "../conformance/FOLLOWUP-INTAKE.json#/rows/180",
+      "source_disposition": "unchecked",
+      "assessment_status": "not_reassessed",
+      "existing_portfolios": [
+        "native-protobuf"
+      ],
+      "remaining_scope_portfolios": [
+        "additional-wires-deferred"
+      ],
+      "obligation_row_ids": [
+        "RX03-OB-245"
+      ],
+      "join_exception": null,
+      "routing_basis": "unchanged source candidate routes; per-actor portfolio allocation, not conformance or expanded custody"
+    },
+    {
+      "id": "RX03-FU-182",
+      "source_ref": "../conformance/FOLLOWUP-INTAKE.json#/rows/181",
+      "source_disposition": "unchecked",
+      "assessment_status": "not_reassessed",
+      "existing_portfolios": [
+        "native-protobuf"
+      ],
+      "remaining_scope_portfolios": [
+        "additional-wires-deferred"
+      ],
+      "obligation_row_ids": [
+        "RX03-OB-251"
+      ],
+      "join_exception": null,
+      "routing_basis": "unchanged source candidate routes; per-actor portfolio allocation, not conformance or expanded custody"
+    },
+    {
+      "id": "RX03-FU-183",
+      "source_ref": "../conformance/FOLLOWUP-INTAKE.json#/rows/182",
+      "source_disposition": "implementation_gap",
+      "assessment_status": "not_reassessed",
+      "existing_portfolios": [
+        "sdk-core"
+      ],
+      "remaining_scope_portfolios": [
+        "xcdr2-deferred"
+      ],
+      "obligation_row_ids": [
+        "RX03-OB-253"
+      ],
+      "join_exception": null,
+      "routing_basis": "unchanged source candidate routes; per-actor portfolio allocation, not conformance or expanded custody"
+    },
+    {
+      "id": "RX03-FU-184",
+      "source_ref": "../conformance/FOLLOWUP-INTAKE.json#/rows/183",
+      "source_disposition": "implementation_gap",
+      "assessment_status": "not_reassessed",
+      "existing_portfolios": [
+        "sdk-core"
+      ],
+      "remaining_scope_portfolios": [
+        "xcdr2-deferred"
+      ],
+      "obligation_row_ids": [
+        "RX03-OB-255"
+      ],
+      "join_exception": null,
+      "routing_basis": "unchanged source candidate routes; per-actor portfolio allocation, not conformance or expanded custody"
+    },
+    {
+      "id": "RX03-FU-185",
+      "source_ref": "../conformance/FOLLOWUP-INTAKE.json#/rows/184",
+      "source_disposition": "implementation_gap",
+      "assessment_status": "not_reassessed",
+      "existing_portfolios": [
+        "sdk-core"
+      ],
+      "remaining_scope_portfolios": [
+        "xcdr2-deferred"
+      ],
+      "obligation_row_ids": [
+        "RX03-OB-252"
+      ],
+      "join_exception": null,
+      "routing_basis": "unchanged source candidate routes; per-actor portfolio allocation, not conformance or expanded custody"
+    },
+    {
+      "id": "RX03-FU-186",
+      "source_ref": "../conformance/FOLLOWUP-INTAKE.json#/rows/185",
+      "source_disposition": "implementation_gap",
+      "assessment_status": "not_reassessed",
+      "existing_portfolios": [
+        "sdk-core"
+      ],
+      "remaining_scope_portfolios": [
+        "xcdr2-deferred"
+      ],
+      "obligation_row_ids": [
+        "RX03-OB-254"
+      ],
+      "join_exception": null,
+      "routing_basis": "unchanged source candidate routes; per-actor portfolio allocation, not conformance or expanded custody"
+    },
+    {
+      "id": "RX03-FU-187",
+      "source_ref": "../conformance/FOLLOWUP-INTAKE.json#/rows/186",
+      "source_disposition": "implementation_gap",
+      "assessment_status": "not_reassessed",
+      "existing_portfolios": [
+        "sdk-core"
+      ],
+      "remaining_scope_portfolios": [
+        "xcdr2-deferred"
+      ],
+      "obligation_row_ids": [
+        "RX03-OB-256"
+      ],
+      "join_exception": null,
+      "routing_basis": "unchanged source candidate routes; per-actor portfolio allocation, not conformance or expanded custody"
+    },
+    {
+      "id": "RX03-FU-188",
+      "source_ref": "../conformance/FOLLOWUP-INTAKE.json#/rows/187",
+      "source_disposition": "implementation_gap",
+      "assessment_status": "not_reassessed",
+      "existing_portfolios": [
+        "sdk-core"
+      ],
+      "remaining_scope_portfolios": [
+        "xcdr2-deferred"
+      ],
+      "obligation_row_ids": [
+        "RX03-OB-257"
+      ],
+      "join_exception": null,
+      "routing_basis": "unchanged source candidate routes; per-actor portfolio allocation, not conformance or expanded custody"
+    },
+    {
+      "id": "RX03-FU-189",
+      "source_ref": "../conformance/FOLLOWUP-INTAKE.json#/rows/188",
+      "source_disposition": "evidence_gap",
+      "assessment_status": "not_reassessed",
+      "existing_portfolios": [
+        "sdk-core"
+      ],
+      "remaining_scope_portfolios": [
+        "xcdr2-deferred"
+      ],
+      "obligation_row_ids": [
+        "RX03-OB-252",
+        "RX03-OB-253",
+        "RX03-OB-254",
+        "RX03-OB-255",
+        "RX03-OB-256"
+      ],
+      "join_exception": null,
+      "routing_basis": "unchanged source candidate routes; per-actor portfolio allocation, not conformance or expanded custody"
+    },
+    {
+      "id": "RX03-FU-190",
+      "source_ref": "../conformance/FOLLOWUP-INTAKE.json#/rows/189",
+      "source_disposition": "evidence_gap",
+      "assessment_status": "not_reassessed",
+      "existing_portfolios": [
+        "sdk-core"
+      ],
+      "remaining_scope_portfolios": [
+        "xcdr2-deferred"
+      ],
+      "obligation_row_ids": [
+        "RX03-OB-257"
+      ],
+      "join_exception": null,
+      "routing_basis": "unchanged source candidate routes; per-actor portfolio allocation, not conformance or expanded custody"
+    },
+    {
+      "id": "RX03-FU-191",
+      "source_ref": "../conformance/FOLLOWUP-INTAKE.json#/rows/190",
+      "source_disposition": "unchecked",
+      "assessment_status": "not_reassessed",
+      "existing_portfolios": [],
+      "remaining_scope_portfolios": [
+        "deployment-records"
+      ],
+      "obligation_row_ids": [
+        "RX03-OB-257"
+      ],
+      "join_exception": null,
+      "routing_basis": "unchanged source candidate routes; per-actor portfolio allocation, not conformance or expanded custody"
+    },
+    {
+      "id": "RX03-FU-192",
+      "source_ref": "../conformance/FOLLOWUP-INTAKE.json#/rows/191",
+      "source_disposition": "unchecked",
+      "assessment_status": "not_reassessed",
+      "existing_portfolios": [],
+      "remaining_scope_portfolios": [
+        "other-bindings"
+      ],
+      "obligation_row_ids": [
+        "RX03-OB-315"
+      ],
+      "join_exception": null,
+      "routing_basis": "unchanged source candidate routes; per-actor portfolio allocation, not conformance or expanded custody"
+    },
+    {
+      "id": "RX03-FU-193",
+      "source_ref": "../conformance/FOLLOWUP-INTAKE.json#/rows/192",
+      "source_disposition": "unchecked",
+      "assessment_status": "not_reassessed",
+      "existing_portfolios": [],
+      "remaining_scope_portfolios": [
+        "other-bindings"
+      ],
+      "obligation_row_ids": [
+        "RX03-OB-318"
+      ],
+      "join_exception": null,
+      "routing_basis": "unchanged source candidate routes; per-actor portfolio allocation, not conformance or expanded custody"
+    },
+    {
+      "id": "RX03-FU-194",
+      "source_ref": "../conformance/FOLLOWUP-INTAKE.json#/rows/193",
+      "source_disposition": "unchecked",
+      "assessment_status": "not_reassessed",
+      "existing_portfolios": [],
+      "remaining_scope_portfolios": [
+        "other-bindings"
+      ],
+      "obligation_row_ids": [
+        "RX03-OB-329"
+      ],
+      "join_exception": null,
+      "routing_basis": "unchanged source candidate routes; per-actor portfolio allocation, not conformance or expanded custody"
+    },
+    {
+      "id": "RX03-FU-195",
+      "source_ref": "../conformance/FOLLOWUP-INTAKE.json#/rows/194",
+      "source_disposition": "implementation_gap",
+      "assessment_status": "not_reassessed",
+      "existing_portfolios": [
+        "sdk-core"
+      ],
+      "remaining_scope_portfolios": [
+        "api-async",
+        "allocation-providers"
+      ],
+      "obligation_row_ids": [
+        "RX03-OB-293"
+      ],
+      "join_exception": null,
+      "routing_basis": "unchanged source candidate routes; per-actor portfolio allocation, not conformance or expanded custody"
+    },
+    {
+      "id": "RX03-FU-196",
+      "source_ref": "../conformance/FOLLOWUP-INTAKE.json#/rows/195",
+      "source_disposition": "evidence_gap",
+      "assessment_status": "not_reassessed",
+      "existing_portfolios": [
+        "sdk-core"
+      ],
+      "remaining_scope_portfolios": [],
+      "obligation_row_ids": [
+        "RX03-OB-295"
+      ],
+      "join_exception": null,
+      "routing_basis": "unchanged source candidate routes; per-actor portfolio allocation, not conformance or expanded custody"
+    },
+    {
+      "id": "RX03-FU-197",
+      "source_ref": "../conformance/FOLLOWUP-INTAKE.json#/rows/196",
+      "source_disposition": "unchecked",
+      "assessment_status": "not_reassessed",
+      "existing_portfolios": [
+        "sdk-core"
+      ],
+      "remaining_scope_portfolios": [
+        "streamer-deferred"
+      ],
+      "obligation_row_ids": [
+        "RX03-OB-296"
+      ],
+      "join_exception": null,
+      "routing_basis": "unchanged source candidate routes; per-actor portfolio allocation, not conformance or expanded custody"
+    },
+    {
+      "id": "RX03-FU-198",
+      "source_ref": "../conformance/FOLLOWUP-INTAKE.json#/rows/197",
+      "source_disposition": "implementation_gap",
+      "assessment_status": "not_reassessed",
+      "existing_portfolios": [
+        "sdk-core"
+      ],
+      "remaining_scope_portfolios": [
+        "api-async"
+      ],
+      "obligation_row_ids": [
+        "RX03-OB-304"
+      ],
+      "join_exception": null,
+      "routing_basis": "unchanged source candidate routes; per-actor portfolio allocation, not conformance or expanded custody"
+    },
+    {
+      "id": "RX03-FU-199",
+      "source_ref": "../conformance/FOLLOWUP-INTAKE.json#/rows/198",
+      "source_disposition": "evidence_gap",
+      "assessment_status": "not_reassessed",
+      "existing_portfolios": [
+        "sdk-core",
+        "rtos-platform"
+      ],
+      "remaining_scope_portfolios": [
+        "other-platform-backends",
+        "allocation-providers"
+      ],
+      "obligation_row_ids": [
+        "RX03-OB-304"
+      ],
+      "join_exception": null,
+      "routing_basis": "unchanged source candidate routes; per-actor portfolio allocation, not conformance or expanded custody"
+    },
+    {
+      "id": "RX03-FU-200",
+      "source_ref": "../conformance/FOLLOWUP-INTAKE.json#/rows/199",
+      "source_disposition": "evidence_gap",
+      "assessment_status": "not_reassessed",
+      "existing_portfolios": [
+        "sdk-core"
+      ],
+      "remaining_scope_portfolios": [],
+      "obligation_row_ids": [
+        "RX03-OB-305"
+      ],
+      "join_exception": null,
+      "routing_basis": "unchanged source candidate routes; per-actor portfolio allocation, not conformance or expanded custody"
+    },
+    {
+      "id": "RX03-FU-201",
+      "source_ref": "../conformance/FOLLOWUP-INTAKE.json#/rows/200",
+      "source_disposition": "implementation_gap",
+      "assessment_status": "not_reassessed",
+      "existing_portfolios": [
+        "sdk-core"
+      ],
+      "remaining_scope_portfolios": [
+        "allocation-providers"
+      ],
+      "obligation_row_ids": [
+        "RX03-OB-306"
+      ],
+      "join_exception": null,
+      "routing_basis": "unchanged source candidate routes; per-actor portfolio allocation, not conformance or expanded custody"
+    },
+    {
+      "id": "RX03-FU-202",
+      "source_ref": "../conformance/FOLLOWUP-INTAKE.json#/rows/201",
+      "source_disposition": "evidence_gap",
+      "assessment_status": "not_reassessed",
+      "existing_portfolios": [
+        "sdk-core"
+      ],
+      "remaining_scope_portfolios": [
+        "allocation-providers"
+      ],
+      "obligation_row_ids": [
+        "RX03-OB-307"
+      ],
+      "join_exception": null,
+      "routing_basis": "unchanged source candidate routes; per-actor portfolio allocation, not conformance or expanded custody"
+    },
+    {
+      "id": "RX03-FU-203",
+      "source_ref": "../conformance/FOLLOWUP-INTAKE.json#/rows/202",
+      "source_disposition": "unchecked",
+      "assessment_status": "not_reassessed",
+      "existing_portfolios": [
+        "sdk-core"
+      ],
+      "remaining_scope_portfolios": [],
+      "obligation_row_ids": [
+        "RX03-OB-308"
+      ],
+      "join_exception": null,
+      "routing_basis": "unchanged source candidate routes; per-actor portfolio allocation, not conformance or expanded custody"
+    },
+    {
+      "id": "RX03-FU-204",
+      "source_ref": "../conformance/FOLLOWUP-INTAKE.json#/rows/203",
+      "source_disposition": "implementation_gap",
+      "assessment_status": "not_reassessed",
+      "existing_portfolios": [
+        "sdk-core"
+      ],
+      "remaining_scope_portfolios": [],
+      "obligation_row_ids": [
+        "RX03-OB-297"
+      ],
+      "join_exception": null,
+      "routing_basis": "unchanged source candidate routes; per-actor portfolio allocation, not conformance or expanded custody"
+    },
+    {
+      "id": "RX03-FU-205",
+      "source_ref": "../conformance/FOLLOWUP-INTAKE.json#/rows/204",
+      "source_disposition": "unchecked",
+      "assessment_status": "not_reassessed",
+      "existing_portfolios": [
+        "sdk-core"
+      ],
+      "remaining_scope_portfolios": [],
+      "obligation_row_ids": [
+        "RX03-OB-298"
+      ],
+      "join_exception": null,
+      "routing_basis": "unchanged source candidate routes; per-actor portfolio allocation, not conformance or expanded custody"
+    },
+    {
+      "id": "RX03-FU-206",
+      "source_ref": "../conformance/FOLLOWUP-INTAKE.json#/rows/205",
+      "source_disposition": "unchecked",
+      "assessment_status": "not_reassessed",
+      "existing_portfolios": [
+        "sdk-core"
+      ],
+      "remaining_scope_portfolios": [],
+      "obligation_row_ids": [
+        "RX03-OB-299"
+      ],
+      "join_exception": null,
+      "routing_basis": "unchanged source candidate routes; per-actor portfolio allocation, not conformance or expanded custody"
+    },
+    {
+      "id": "RX03-FU-207",
+      "source_ref": "../conformance/FOLLOWUP-INTAKE.json#/rows/206",
+      "source_disposition": "evidence_gap",
+      "assessment_status": "not_reassessed",
+      "existing_portfolios": [
+        "sdk-core"
+      ],
+      "remaining_scope_portfolios": [
+        "api-async"
+      ],
+      "obligation_row_ids": [
+        "RX03-OB-300"
+      ],
+      "join_exception": null,
+      "routing_basis": "unchanged source candidate routes; per-actor portfolio allocation, not conformance or expanded custody"
+    },
+    {
+      "id": "RX03-FU-208",
+      "source_ref": "../conformance/FOLLOWUP-INTAKE.json#/rows/207",
+      "source_disposition": "implementation_gap",
+      "assessment_status": "not_reassessed",
+      "existing_portfolios": [
+        "sdk-core"
+      ],
+      "remaining_scope_portfolios": [],
+      "obligation_row_ids": [
+        "RX03-OB-301"
+      ],
+      "join_exception": null,
+      "routing_basis": "unchanged source candidate routes; per-actor portfolio allocation, not conformance or expanded custody"
+    },
+    {
+      "id": "RX03-FU-209",
+      "source_ref": "../conformance/FOLLOWUP-INTAKE.json#/rows/208",
+      "source_disposition": "implementation_gap",
+      "assessment_status": "not_reassessed",
+      "existing_portfolios": [
+        "sdk-core"
+      ],
+      "remaining_scope_portfolios": [],
+      "obligation_row_ids": [
+        "RX03-OB-302"
+      ],
+      "join_exception": null,
+      "routing_basis": "unchanged source candidate routes; per-actor portfolio allocation, not conformance or expanded custody"
+    },
+    {
+      "id": "RX03-FU-210",
+      "source_ref": "../conformance/FOLLOWUP-INTAKE.json#/rows/209",
+      "source_disposition": "implementation_gap",
+      "assessment_status": "not_reassessed",
+      "existing_portfolios": [
+        "sdk-core"
+      ],
+      "remaining_scope_portfolios": [
+        "api-async"
+      ],
+      "obligation_row_ids": [
+        "RX03-OB-303"
+      ],
+      "join_exception": null,
+      "routing_basis": "unchanged source candidate routes; per-actor portfolio allocation, not conformance or expanded custody"
+    },
+    {
+      "id": "RX03-FU-211",
+      "source_ref": "../conformance/FOLLOWUP-INTAKE.json#/rows/210",
+      "source_disposition": "unchecked",
+      "assessment_status": "not_reassessed",
+      "existing_portfolios": [
+        "sdk-core"
+      ],
+      "remaining_scope_portfolios": [],
+      "obligation_row_ids": [
+        "RX03-OB-127"
+      ],
+      "join_exception": null,
+      "routing_basis": "unchanged source candidate routes; per-actor portfolio allocation, not conformance or expanded custody"
+    },
+    {
+      "id": "RX03-FU-212",
+      "source_ref": "../conformance/FOLLOWUP-INTAKE.json#/rows/211",
+      "source_disposition": "unchecked",
+      "assessment_status": "not_reassessed",
+      "existing_portfolios": [],
+      "remaining_scope_portfolios": [
+        "streamer-deferred"
+      ],
+      "obligation_row_ids": [
+        "RX03-OB-280"
+      ],
+      "join_exception": null,
+      "routing_basis": "unchanged source candidate routes; per-actor portfolio allocation, not conformance or expanded custody"
+    },
+    {
+      "id": "RX03-FU-213",
+      "source_ref": "../conformance/FOLLOWUP-INTAKE.json#/rows/212",
+      "source_disposition": "unchecked",
+      "assessment_status": "not_reassessed",
+      "existing_portfolios": [
+        "iceoryx2",
+        "lola"
+      ],
+      "remaining_scope_portfolios": [
+        "other-bindings"
+      ],
+      "obligation_row_ids": [
+        "RX03-OB-194"
+      ],
+      "join_exception": null,
+      "routing_basis": "unchanged source candidate routes; per-actor portfolio allocation, not conformance or expanded custody"
+    },
+    {
+      "id": "RX03-FU-214",
+      "source_ref": "../conformance/FOLLOWUP-INTAKE.json#/rows/213",
+      "source_disposition": "unchecked",
+      "assessment_status": "not_reassessed",
+      "existing_portfolios": [
+        "iceoryx2",
+        "lola"
+      ],
+      "remaining_scope_portfolios": [
+        "other-bindings"
+      ],
+      "obligation_row_ids": [
+        "RX03-OB-192"
+      ],
+      "join_exception": null,
+      "routing_basis": "unchanged source candidate routes; per-actor portfolio allocation, not conformance or expanded custody"
+    },
+    {
+      "id": "RX03-FU-215",
+      "source_ref": "../conformance/FOLLOWUP-INTAKE.json#/rows/214",
+      "source_disposition": "unchecked",
+      "assessment_status": "not_reassessed",
+      "existing_portfolios": [
+        "sdk-core",
+        "iceoryx2"
+      ],
+      "remaining_scope_portfolios": [],
+      "obligation_row_ids": [
+        "RX03-OB-210"
+      ],
+      "join_exception": null,
+      "routing_basis": "unchanged source candidate routes; per-actor portfolio allocation, not conformance or expanded custody"
+    },
+    {
+      "id": "RX03-FU-216",
+      "source_ref": "../conformance/FOLLOWUP-INTAKE.json#/rows/215",
+      "source_disposition": "unchecked",
+      "assessment_status": "not_reassessed",
+      "existing_portfolios": [
+        "iceoryx2",
+        "lola",
+        "native-protobuf"
+      ],
+      "remaining_scope_portfolios": [
+        "additional-wires-deferred"
+      ],
+      "obligation_row_ids": [
+        "RX03-OB-249"
+      ],
+      "join_exception": null,
+      "routing_basis": "unchanged source candidate routes; per-actor portfolio allocation, not conformance or expanded custody"
+    },
+    {
+      "id": "RX03-FU-217",
+      "source_ref": "../conformance/FOLLOWUP-INTAKE.json#/rows/216",
+      "source_disposition": "unchecked",
+      "assessment_status": "not_reassessed",
+      "existing_portfolios": [],
+      "remaining_scope_portfolios": [
+        "streamer-deferred"
+      ],
+      "obligation_row_ids": [
+        "RX03-OB-270"
+      ],
+      "join_exception": null,
+      "routing_basis": "unchanged source candidate routes; per-actor portfolio allocation, not conformance or expanded custody"
+    },
+    {
+      "id": "RX03-FU-218",
+      "source_ref": "../conformance/FOLLOWUP-INTAKE.json#/rows/217",
+      "source_disposition": "implementation_gap",
+      "assessment_status": "not_reassessed",
+      "existing_portfolios": [],
+      "remaining_scope_portfolios": [
+        "streamer-deferred"
+      ],
+      "obligation_row_ids": [],
+      "join_exception": {
+        "source_ref": "../conformance/INTAKE-INTEGRITY.json#/unresolved_inventory_references",
+        "ids": [
+          "dsn~dispatcher-push-flow-control~1"
+        ]
+      },
+      "routing_basis": "unchanged source candidate routes; per-actor portfolio allocation, not conformance or expanded custody"
+    },
+    {
+      "id": "RX03-FU-219",
+      "source_ref": "../conformance/FOLLOWUP-INTAKE.json#/rows/218",
+      "source_disposition": "unchecked",
+      "assessment_status": "not_reassessed",
+      "existing_portfolios": [
+        "sdk-core"
+      ],
+      "remaining_scope_portfolios": [
+        "e2e-deferred"
+      ],
+      "obligation_row_ids": [
+        "RX03-OB-126"
+      ],
+      "join_exception": null,
+      "routing_basis": "unchanged source candidate routes; per-actor portfolio allocation, not conformance or expanded custody"
+    },
+    {
+      "id": "RX03-FU-220",
+      "source_ref": "../conformance/FOLLOWUP-INTAKE.json#/rows/219",
+      "source_disposition": "unchecked",
+      "assessment_status": "not_reassessed",
+      "existing_portfolios": [
+        "sdk-core"
+      ],
+      "remaining_scope_portfolios": [
+        "e2e-deferred"
+      ],
+      "obligation_row_ids": [
+        "RX03-OB-126"
+      ],
+      "join_exception": null,
+      "routing_basis": "unchanged source candidate routes; per-actor portfolio allocation, not conformance or expanded custody"
+    },
+    {
+      "id": "RX03-FU-221",
+      "source_ref": "../conformance/FOLLOWUP-INTAKE.json#/rows/220",
+      "source_disposition": "unchecked",
+      "assessment_status": "not_reassessed",
+      "existing_portfolios": [
+        "sdk-core"
+      ],
+      "remaining_scope_portfolios": [
+        "e2e-deferred"
+      ],
+      "obligation_row_ids": [
+        "RX03-OB-126"
+      ],
+      "join_exception": null,
+      "routing_basis": "unchanged source candidate routes; per-actor portfolio allocation, not conformance or expanded custody"
+    },
+    {
+      "id": "RX03-FU-222",
+      "source_ref": "../conformance/FOLLOWUP-INTAKE.json#/rows/221",
+      "source_disposition": "unchecked",
+      "assessment_status": "not_reassessed",
+      "existing_portfolios": [
+        "sdk-core"
+      ],
+      "remaining_scope_portfolios": [
+        "e2e-deferred"
+      ],
+      "obligation_row_ids": [
+        "RX03-OB-126"
+      ],
+      "join_exception": null,
+      "routing_basis": "unchanged source candidate routes; per-actor portfolio allocation, not conformance or expanded custody"
+    },
+    {
+      "id": "RX03-FU-223",
+      "source_ref": "../conformance/FOLLOWUP-INTAKE.json#/rows/222",
+      "source_disposition": "unchecked",
+      "assessment_status": "not_reassessed",
+      "existing_portfolios": [
+        "sdk-core"
+      ],
+      "remaining_scope_portfolios": [
+        "e2e-deferred"
+      ],
+      "obligation_row_ids": [
+        "RX03-OB-126"
+      ],
+      "join_exception": null,
+      "routing_basis": "unchanged source candidate routes; per-actor portfolio allocation, not conformance or expanded custody"
+    },
+    {
+      "id": "RX03-FU-224",
+      "source_ref": "../conformance/FOLLOWUP-INTAKE.json#/rows/223",
+      "source_disposition": "unchecked",
+      "assessment_status": "not_reassessed",
+      "existing_portfolios": [
+        "sdk-core"
+      ],
+      "remaining_scope_portfolios": [
+        "e2e-deferred"
+      ],
+      "obligation_row_ids": [
+        "RX03-OB-240"
+      ],
+      "join_exception": null,
+      "routing_basis": "unchanged source candidate routes; per-actor portfolio allocation, not conformance or expanded custody"
+    },
+    {
+      "id": "RX03-FU-225",
+      "source_ref": "../conformance/FOLLOWUP-INTAKE.json#/rows/224",
+      "source_disposition": "unchecked",
+      "assessment_status": "not_reassessed",
+      "existing_portfolios": [
+        "sdk-core"
+      ],
+      "remaining_scope_portfolios": [
+        "e2e-deferred"
+      ],
+      "obligation_row_ids": [
+        "RX03-OB-126"
+      ],
+      "join_exception": null,
+      "routing_basis": "unchanged source candidate routes; per-actor portfolio allocation, not conformance or expanded custody"
+    },
+    {
+      "id": "RX03-FU-226",
+      "source_ref": "../conformance/FOLLOWUP-INTAKE.json#/rows/225",
+      "source_disposition": "unchecked",
+      "assessment_status": "not_reassessed",
+      "existing_portfolios": [
+        "sdk-core"
+      ],
+      "remaining_scope_portfolios": [
+        "e2e-deferred"
+      ],
+      "obligation_row_ids": [
+        "RX03-OB-153"
+      ],
+      "join_exception": null,
+      "routing_basis": "unchanged source candidate routes; per-actor portfolio allocation, not conformance or expanded custody"
+    },
+    {
+      "id": "RX03-FU-227",
+      "source_ref": "../conformance/FOLLOWUP-INTAKE.json#/rows/226",
+      "source_disposition": "unchecked",
+      "assessment_status": "not_reassessed",
+      "existing_portfolios": [
+        "sdk-core",
+        "native-protobuf"
+      ],
+      "remaining_scope_portfolios": [
+        "additional-wires-deferred"
+      ],
+      "obligation_row_ids": [
+        "RX03-OB-135"
+      ],
+      "join_exception": null,
+      "routing_basis": "unchanged source candidate routes; per-actor portfolio allocation, not conformance or expanded custody"
+    },
+    {
+      "id": "RX03-FU-228",
+      "source_ref": "../conformance/FOLLOWUP-INTAKE.json#/rows/227",
+      "source_disposition": "unchecked",
+      "assessment_status": "not_reassessed",
+      "existing_portfolios": [
+        "sdk-core"
+      ],
+      "remaining_scope_portfolios": [],
+      "obligation_row_ids": [
+        "RX03-OB-135"
+      ],
+      "join_exception": null,
+      "routing_basis": "unchanged source candidate routes; per-actor portfolio allocation, not conformance or expanded custody"
+    },
+    {
+      "id": "RX03-FU-229",
+      "source_ref": "../conformance/FOLLOWUP-INTAKE.json#/rows/228",
+      "source_disposition": "unchecked",
+      "assessment_status": "not_reassessed",
+      "existing_portfolios": [
+        "sdk-core"
+      ],
+      "remaining_scope_portfolios": [],
+      "obligation_row_ids": [
+        "RX03-OB-137"
+      ],
+      "join_exception": null,
+      "routing_basis": "unchanged source candidate routes; per-actor portfolio allocation, not conformance or expanded custody"
+    },
+    {
+      "id": "RX03-FU-230",
+      "source_ref": "../conformance/FOLLOWUP-INTAKE.json#/rows/229",
+      "source_disposition": "unchecked",
+      "assessment_status": "not_reassessed",
+      "existing_portfolios": [
+        "sdk-core"
+      ],
+      "remaining_scope_portfolios": [],
+      "obligation_row_ids": [
+        "RX03-OB-137"
+      ],
+      "join_exception": null,
+      "routing_basis": "unchanged source candidate routes; per-actor portfolio allocation, not conformance or expanded custody"
+    },
+    {
+      "id": "RX03-FU-231",
+      "source_ref": "../conformance/FOLLOWUP-INTAKE.json#/rows/230",
+      "source_disposition": "unchecked",
+      "assessment_status": "not_reassessed",
+      "existing_portfolios": [
+        "sdk-core"
+      ],
+      "remaining_scope_portfolios": [],
+      "obligation_row_ids": [
+        "RX03-OB-177"
+      ],
+      "join_exception": null,
+      "routing_basis": "unchanged source candidate routes; per-actor portfolio allocation, not conformance or expanded custody"
+    },
+    {
+      "id": "RX03-FU-232",
+      "source_ref": "../conformance/FOLLOWUP-INTAKE.json#/rows/231",
+      "source_disposition": "unchecked",
+      "assessment_status": "not_reassessed",
+      "existing_portfolios": [
+        "sdk-core"
+      ],
+      "remaining_scope_portfolios": [],
+      "obligation_row_ids": [
+        "RX03-OB-178"
+      ],
+      "join_exception": null,
+      "routing_basis": "unchanged source candidate routes; per-actor portfolio allocation, not conformance or expanded custody"
+    },
+    {
+      "id": "RX03-FU-233",
+      "source_ref": "../conformance/FOLLOWUP-INTAKE.json#/rows/232",
+      "source_disposition": "unchecked",
+      "assessment_status": "not_reassessed",
+      "existing_portfolios": [
+        "sdk-core"
+      ],
+      "remaining_scope_portfolios": [],
+      "obligation_row_ids": [
+        "RX03-OB-137"
+      ],
+      "join_exception": null,
+      "routing_basis": "unchanged source candidate routes; per-actor portfolio allocation, not conformance or expanded custody"
+    },
+    {
+      "id": "RX03-FU-234",
+      "source_ref": "../conformance/FOLLOWUP-INTAKE.json#/rows/233",
+      "source_disposition": "unchecked",
+      "assessment_status": "not_reassessed",
+      "existing_portfolios": [
+        "sdk-core"
+      ],
+      "remaining_scope_portfolios": [],
+      "obligation_row_ids": [
+        "RX03-OB-137"
+      ],
+      "join_exception": null,
+      "routing_basis": "unchanged source candidate routes; per-actor portfolio allocation, not conformance or expanded custody"
+    },
+    {
+      "id": "RX03-FU-235",
+      "source_ref": "../conformance/FOLLOWUP-INTAKE.json#/rows/234",
+      "source_disposition": "unchecked",
+      "assessment_status": "not_reassessed",
+      "existing_portfolios": [
+        "lola"
+      ],
+      "remaining_scope_portfolios": [],
+      "obligation_row_ids": [
+        "RX03-OB-181"
+      ],
+      "join_exception": null,
+      "routing_basis": "unchanged source candidate routes; per-actor portfolio allocation, not conformance or expanded custody"
+    },
+    {
+      "id": "RX03-FU-236",
+      "source_ref": "../conformance/FOLLOWUP-INTAKE.json#/rows/235",
+      "source_disposition": "unchecked",
+      "assessment_status": "not_reassessed",
+      "existing_portfolios": [
+        "lola"
+      ],
+      "remaining_scope_portfolios": [],
+      "obligation_row_ids": [
+        "RX03-OB-183"
+      ],
+      "join_exception": null,
+      "routing_basis": "unchanged source candidate routes; per-actor portfolio allocation, not conformance or expanded custody"
+    },
+    {
+      "id": "RX03-FU-237",
+      "source_ref": "../conformance/FOLLOWUP-INTAKE.json#/rows/236",
+      "source_disposition": "unchecked",
+      "assessment_status": "not_reassessed",
+      "existing_portfolios": [
+        "iceoryx2"
+      ],
+      "remaining_scope_portfolios": [],
+      "obligation_row_ids": [
+        "RX03-OB-181"
+      ],
+      "join_exception": null,
+      "routing_basis": "unchanged source candidate routes; per-actor portfolio allocation, not conformance or expanded custody"
+    },
+    {
+      "id": "RX03-FU-238",
+      "source_ref": "../conformance/FOLLOWUP-INTAKE.json#/rows/237",
+      "source_disposition": "unchecked",
+      "assessment_status": "not_reassessed",
+      "existing_portfolios": [
+        "iceoryx2"
+      ],
+      "remaining_scope_portfolios": [],
+      "obligation_row_ids": [
+        "RX03-OB-183"
+      ],
+      "join_exception": null,
+      "routing_basis": "unchanged source candidate routes; per-actor portfolio allocation, not conformance or expanded custody"
+    },
+    {
+      "id": "RX03-FU-239",
+      "source_ref": "../conformance/FOLLOWUP-INTAKE.json#/rows/238",
+      "source_disposition": "unchecked",
+      "assessment_status": "not_reassessed",
+      "existing_portfolios": [
+        "native-protobuf"
+      ],
+      "remaining_scope_portfolios": [
+        "additional-wires-deferred"
+      ],
+      "obligation_row_ids": [
+        "RX03-OB-137"
+      ],
+      "join_exception": null,
+      "routing_basis": "unchanged source candidate routes; per-actor portfolio allocation, not conformance or expanded custody"
+    },
+    {
+      "id": "RX03-FU-240",
+      "source_ref": "../conformance/FOLLOWUP-INTAKE.json#/rows/239",
+      "source_disposition": "unchecked",
+      "assessment_status": "not_reassessed",
+      "existing_portfolios": [],
+      "remaining_scope_portfolios": [
+        "allocation-providers"
+      ],
+      "obligation_row_ids": [
+        "RX03-OB-137"
+      ],
+      "join_exception": null,
+      "routing_basis": "unchanged source candidate routes; per-actor portfolio allocation, not conformance or expanded custody"
+    },
+    {
+      "id": "RX03-FU-241",
+      "source_ref": "../conformance/FOLLOWUP-INTAKE.json#/rows/240",
+      "source_disposition": "unchecked",
+      "assessment_status": "not_reassessed",
+      "existing_portfolios": [],
+      "remaining_scope_portfolios": [
+        "api-async"
+      ],
+      "obligation_row_ids": [
+        "RX03-OB-303"
+      ],
+      "join_exception": null,
+      "routing_basis": "unchanged source candidate routes; per-actor portfolio allocation, not conformance or expanded custody"
+    },
+    {
+      "id": "RX03-FU-242",
+      "source_ref": "../conformance/FOLLOWUP-INTAKE.json#/rows/241",
+      "source_disposition": "unchecked",
+      "assessment_status": "not_reassessed",
+      "existing_portfolios": [
+        "sdk-core"
+      ],
+      "remaining_scope_portfolios": [],
+      "obligation_row_ids": [
+        "RX03-OB-105"
+      ],
+      "join_exception": null,
+      "routing_basis": "unchanged source candidate routes; per-actor portfolio allocation, not conformance or expanded custody"
+    },
+    {
+      "id": "RX03-FU-243",
+      "source_ref": "../conformance/FOLLOWUP-INTAKE.json#/rows/242",
+      "source_disposition": "unchecked",
+      "assessment_status": "not_reassessed",
+      "existing_portfolios": [
+        "sdk-core"
+      ],
+      "remaining_scope_portfolios": [],
+      "obligation_row_ids": [
+        "RX03-OB-105"
+      ],
+      "join_exception": null,
+      "routing_basis": "unchanged source candidate routes; per-actor portfolio allocation, not conformance or expanded custody"
+    },
+    {
+      "id": "RX03-FU-244",
+      "source_ref": "../conformance/FOLLOWUP-INTAKE.json#/rows/243",
+      "source_disposition": "unchecked",
+      "assessment_status": "not_reassessed",
+      "existing_portfolios": [
+        "sdk-core"
+      ],
+      "remaining_scope_portfolios": [],
+      "obligation_row_ids": [
+        "RX03-OB-105"
+      ],
+      "join_exception": null,
+      "routing_basis": "unchanged source candidate routes; per-actor portfolio allocation, not conformance or expanded custody"
+    },
+    {
+      "id": "RX03-FU-245",
+      "source_ref": "../conformance/FOLLOWUP-INTAKE.json#/rows/244",
+      "source_disposition": "unchecked",
+      "assessment_status": "not_reassessed",
+      "existing_portfolios": [
+        "sdk-core"
+      ],
+      "remaining_scope_portfolios": [],
+      "obligation_row_ids": [
+        "RX03-OB-106"
+      ],
+      "join_exception": null,
+      "routing_basis": "unchanged source candidate routes; per-actor portfolio allocation, not conformance or expanded custody"
+    },
+    {
+      "id": "RX03-FU-246",
+      "source_ref": "../conformance/FOLLOWUP-INTAKE.json#/rows/245",
+      "source_disposition": "unchecked",
+      "assessment_status": "not_reassessed",
+      "existing_portfolios": [
+        "iceoryx2",
+        "lola"
+      ],
+      "remaining_scope_portfolios": [
+        "other-bindings"
+      ],
+      "obligation_row_ids": [
+        "RX03-OB-192"
+      ],
+      "join_exception": null,
+      "routing_basis": "unchanged source candidate routes; per-actor portfolio allocation, not conformance or expanded custody"
+    },
+    {
+      "id": "RX03-FU-247",
+      "source_ref": "../conformance/FOLLOWUP-INTAKE.json#/rows/246",
+      "source_disposition": "unchecked",
+      "assessment_status": "not_reassessed",
+      "existing_portfolios": [
+        "native-protobuf"
+      ],
+      "remaining_scope_portfolios": [
+        "additional-wires-deferred"
+      ],
+      "obligation_row_ids": [
+        "RX03-OB-192"
+      ],
+      "join_exception": null,
+      "routing_basis": "unchanged source candidate routes; per-actor portfolio allocation, not conformance or expanded custody"
+    },
+    {
+      "id": "RX03-FU-248",
+      "source_ref": "../conformance/FOLLOWUP-INTAKE.json#/rows/247",
+      "source_disposition": "unchecked",
+      "assessment_status": "not_reassessed",
+      "existing_portfolios": [
+        "sdk-core"
+      ],
+      "remaining_scope_portfolios": [],
+      "obligation_row_ids": [
+        "RX03-OB-192"
+      ],
+      "join_exception": null,
+      "routing_basis": "unchanged source candidate routes; per-actor portfolio allocation, not conformance or expanded custody"
+    },
+    {
+      "id": "RX03-FU-249",
+      "source_ref": "../conformance/FOLLOWUP-INTAKE.json#/rows/248",
+      "source_disposition": "unchecked",
+      "assessment_status": "not_reassessed",
+      "existing_portfolios": [
+        "sdk-core",
+        "iceoryx2",
+        "lola",
+        "native-protobuf"
+      ],
+      "remaining_scope_portfolios": [
+        "streamer-deferred",
+        "selected-part-roster"
+      ],
+      "obligation_row_ids": [
+        "RX03-OB-192"
+      ],
+      "join_exception": null,
+      "routing_basis": "unchanged source candidate routes; per-actor portfolio allocation, not conformance or expanded custody"
+    },
+    {
+      "id": "RX03-FU-250",
+      "source_ref": "../conformance/FOLLOWUP-INTAKE.json#/rows/249",
+      "source_disposition": "unchecked",
+      "assessment_status": "not_reassessed",
+      "existing_portfolios": [
+        "native-protobuf"
+      ],
+      "remaining_scope_portfolios": [
+        "additional-wires-deferred"
+      ],
+      "obligation_row_ids": [
+        "RX03-OB-247"
+      ],
+      "join_exception": null,
+      "routing_basis": "unchanged source candidate routes; per-actor portfolio allocation, not conformance or expanded custody"
+    },
+    {
+      "id": "RX03-FU-251",
+      "source_ref": "../conformance/FOLLOWUP-INTAKE.json#/rows/250",
+      "source_disposition": "unchecked",
+      "assessment_status": "not_reassessed",
+      "existing_portfolios": [
+        "native-protobuf"
+      ],
+      "remaining_scope_portfolios": [
+        "additional-wires-deferred"
+      ],
+      "obligation_row_ids": [
+        "RX03-OB-249"
+      ],
+      "join_exception": null,
+      "routing_basis": "unchanged source candidate routes; per-actor portfolio allocation, not conformance or expanded custody"
+    },
+    {
+      "id": "RX03-FU-252",
+      "source_ref": "../conformance/FOLLOWUP-INTAKE.json#/rows/251",
+      "source_disposition": "unchecked",
+      "assessment_status": "not_reassessed",
+      "existing_portfolios": [
+        "iceoryx2",
+        "lola"
+      ],
+      "remaining_scope_portfolios": [
+        "other-bindings"
+      ],
+      "obligation_row_ids": [
+        "RX03-OB-194"
+      ],
+      "join_exception": null,
+      "routing_basis": "unchanged source candidate routes; per-actor portfolio allocation, not conformance or expanded custody"
+    },
+    {
+      "id": "RX03-FU-253",
+      "source_ref": "../conformance/FOLLOWUP-INTAKE.json#/rows/252",
+      "source_disposition": "unchecked",
+      "assessment_status": "not_reassessed",
+      "existing_portfolios": [
+        "iceoryx2",
+        "lola"
+      ],
+      "remaining_scope_portfolios": [
+        "other-bindings"
+      ],
+      "obligation_row_ids": [
+        "RX03-OB-194"
+      ],
+      "join_exception": null,
+      "routing_basis": "unchanged source candidate routes; per-actor portfolio allocation, not conformance or expanded custody"
+    },
+    {
+      "id": "RX03-FU-254",
+      "source_ref": "../conformance/FOLLOWUP-INTAKE.json#/rows/253",
+      "source_disposition": "unchecked",
+      "assessment_status": "not_reassessed",
+      "existing_portfolios": [
+        "iceoryx2",
+        "lola"
+      ],
+      "remaining_scope_portfolios": [
+        "other-bindings"
+      ],
+      "obligation_row_ids": [
+        "RX03-OB-194"
+      ],
+      "join_exception": null,
+      "routing_basis": "unchanged source candidate routes; per-actor portfolio allocation, not conformance or expanded custody"
+    },
+    {
+      "id": "RX03-FU-255",
+      "source_ref": "../conformance/FOLLOWUP-INTAKE.json#/rows/254",
+      "source_disposition": "unchecked",
+      "assessment_status": "not_reassessed",
+      "existing_portfolios": [],
+      "remaining_scope_portfolios": [
+        "streamer-deferred"
+      ],
+      "obligation_row_ids": [
+        "RX03-OB-270"
+      ],
+      "join_exception": null,
+      "routing_basis": "unchanged source candidate routes; per-actor portfolio allocation, not conformance or expanded custody"
+    },
+    {
+      "id": "RX03-FU-256",
+      "source_ref": "../conformance/FOLLOWUP-INTAKE.json#/rows/255",
+      "source_disposition": "unchecked",
+      "assessment_status": "not_reassessed",
+      "existing_portfolios": [],
+      "remaining_scope_portfolios": [
+        "streamer-deferred"
+      ],
+      "obligation_row_ids": [
+        "RX03-OB-270"
+      ],
+      "join_exception": null,
+      "routing_basis": "unchanged source candidate routes; per-actor portfolio allocation, not conformance or expanded custody"
+    },
+    {
+      "id": "RX03-FU-257",
+      "source_ref": "../conformance/FOLLOWUP-INTAKE.json#/rows/256",
+      "source_disposition": "unchecked",
+      "assessment_status": "not_reassessed",
+      "existing_portfolios": [],
+      "remaining_scope_portfolios": [
+        "streamer-deferred"
+      ],
+      "obligation_row_ids": [
+        "RX03-OB-270"
+      ],
+      "join_exception": null,
+      "routing_basis": "unchanged source candidate routes; per-actor portfolio allocation, not conformance or expanded custody"
+    },
+    {
+      "id": "RX03-FU-258",
+      "source_ref": "../conformance/FOLLOWUP-INTAKE.json#/rows/257",
+      "source_disposition": "unchecked",
+      "assessment_status": "not_reassessed",
+      "existing_portfolios": [],
+      "remaining_scope_portfolios": [
+        "streamer-deferred"
+      ],
+      "obligation_row_ids": [
+        "RX03-OB-270"
+      ],
+      "join_exception": null,
+      "routing_basis": "unchanged source candidate routes; per-actor portfolio allocation, not conformance or expanded custody"
+    },
+    {
+      "id": "RX03-FU-259",
+      "source_ref": "../conformance/FOLLOWUP-INTAKE.json#/rows/258",
+      "source_disposition": "unchecked",
+      "assessment_status": "not_reassessed",
+      "existing_portfolios": [],
+      "remaining_scope_portfolios": [
+        "streamer-deferred"
+      ],
+      "obligation_row_ids": [
+        "RX03-OB-270"
+      ],
+      "join_exception": null,
+      "routing_basis": "unchanged source candidate routes; per-actor portfolio allocation, not conformance or expanded custody"
+    },
+    {
+      "id": "RX03-FU-260",
+      "source_ref": "../conformance/FOLLOWUP-INTAKE.json#/rows/259",
+      "source_disposition": "unchecked",
+      "assessment_status": "not_reassessed",
+      "existing_portfolios": [],
+      "remaining_scope_portfolios": [
+        "streamer-deferred"
+      ],
+      "obligation_row_ids": [
+        "RX03-OB-270"
+      ],
+      "join_exception": null,
+      "routing_basis": "unchanged source candidate routes; per-actor portfolio allocation, not conformance or expanded custody"
+    },
+    {
+      "id": "RX03-FU-261",
+      "source_ref": "../conformance/FOLLOWUP-INTAKE.json#/rows/260",
+      "source_disposition": "unchecked",
+      "assessment_status": "not_reassessed",
+      "existing_portfolios": [],
+      "remaining_scope_portfolios": [
+        "streamer-deferred"
+      ],
+      "obligation_row_ids": [
+        "RX03-OB-270"
+      ],
+      "join_exception": null,
+      "routing_basis": "unchanged source candidate routes; per-actor portfolio allocation, not conformance or expanded custody"
+    },
+    {
+      "id": "RX03-FU-262",
+      "source_ref": "../conformance/FOLLOWUP-INTAKE.json#/rows/261",
+      "source_disposition": "unchecked",
+      "assessment_status": "not_reassessed",
+      "existing_portfolios": [],
+      "remaining_scope_portfolios": [
+        "streamer-deferred"
+      ],
+      "obligation_row_ids": [
+        "RX03-OB-270"
+      ],
+      "join_exception": null,
+      "routing_basis": "unchanged source candidate routes; per-actor portfolio allocation, not conformance or expanded custody"
+    },
+    {
+      "id": "RX03-FU-263",
+      "source_ref": "../conformance/FOLLOWUP-INTAKE.json#/rows/262",
+      "source_disposition": "unchecked",
+      "assessment_status": "not_reassessed",
+      "existing_portfolios": [
+        "sdk-core"
+      ],
+      "remaining_scope_portfolios": [],
+      "obligation_row_ids": [
+        "RX03-OB-249"
+      ],
+      "join_exception": null,
+      "routing_basis": "unchanged source candidate routes; per-actor portfolio allocation, not conformance or expanded custody"
+    },
+    {
+      "id": "RX03-FU-264",
+      "source_ref": "../conformance/FOLLOWUP-INTAKE.json#/rows/263",
+      "source_disposition": "unchecked",
+      "assessment_status": "not_reassessed",
+      "existing_portfolios": [
+        "sdk-core"
+      ],
+      "remaining_scope_portfolios": [],
+      "obligation_row_ids": [
+        "RX03-OB-273"
+      ],
+      "join_exception": null,
+      "routing_basis": "unchanged source candidate routes; per-actor portfolio allocation, not conformance or expanded custody"
+    },
+    {
+      "id": "RX03-FU-265",
+      "source_ref": "../conformance/FOLLOWUP-INTAKE.json#/rows/264",
+      "source_disposition": "unchecked",
+      "assessment_status": "not_reassessed",
+      "existing_portfolios": [],
+      "remaining_scope_portfolios": [
+        "streamer-deferred"
+      ],
+      "obligation_row_ids": [
+        "RX03-OB-273"
+      ],
+      "join_exception": null,
+      "routing_basis": "unchanged source candidate routes; per-actor portfolio allocation, not conformance or expanded custody"
+    },
+    {
+      "id": "RX03-FU-266",
+      "source_ref": "../conformance/FOLLOWUP-INTAKE.json#/rows/265",
+      "source_disposition": "unchecked",
+      "assessment_status": "not_reassessed",
+      "existing_portfolios": [
+        "sdk-core"
+      ],
+      "remaining_scope_portfolios": [],
+      "obligation_row_ids": [
+        "RX03-OB-154"
+      ],
+      "join_exception": null,
+      "routing_basis": "unchanged source candidate routes; per-actor portfolio allocation, not conformance or expanded custody"
+    },
+    {
+      "id": "RX03-FU-267",
+      "source_ref": "../conformance/FOLLOWUP-INTAKE.json#/rows/266",
+      "source_disposition": "unchecked",
+      "assessment_status": "not_reassessed",
+      "existing_portfolios": [
+        "sdk-core"
+      ],
+      "remaining_scope_portfolios": [],
+      "obligation_row_ids": [
+        "RX03-OB-126"
+      ],
+      "join_exception": null,
+      "routing_basis": "unchanged source candidate routes; per-actor portfolio allocation, not conformance or expanded custody"
+    },
+    {
+      "id": "RX03-FU-268",
+      "source_ref": "../conformance/FOLLOWUP-INTAKE.json#/rows/267",
+      "source_disposition": "unchecked",
+      "assessment_status": "not_reassessed",
+      "existing_portfolios": [
+        "sdk-core",
+        "iceoryx2",
+        "lola",
+        "native-protobuf"
+      ],
+      "remaining_scope_portfolios": [
+        "streamer-deferred",
+        "selected-part-roster"
+      ],
+      "obligation_row_ids": [
+        "RX03-OB-068"
+      ],
+      "join_exception": null,
+      "routing_basis": "unchanged source candidate routes; per-actor portfolio allocation, not conformance or expanded custody"
+    },
+    {
+      "id": "RX03-FU-269",
+      "source_ref": "../conformance/FOLLOWUP-INTAKE.json#/rows/268",
+      "source_disposition": "unchecked",
+      "assessment_status": "not_reassessed",
+      "existing_portfolios": [
+        "sdk-core",
+        "iceoryx2"
+      ],
+      "remaining_scope_portfolios": [],
+      "obligation_row_ids": [
+        "RX03-OB-204"
+      ],
+      "join_exception": null,
+      "routing_basis": "unchanged source candidate routes; per-actor portfolio allocation, not conformance or expanded custody"
+    },
+    {
+      "id": "RX03-FU-270",
+      "source_ref": "../conformance/FOLLOWUP-INTAKE.json#/rows/269",
+      "source_disposition": "implementation_gap",
+      "assessment_status": "not_reassessed",
+      "existing_portfolios": [
+        "sdk-core"
+      ],
+      "remaining_scope_portfolios": [
+        "api-async"
+      ],
+      "obligation_row_ids": [
+        "RX03-OB-100"
+      ],
+      "join_exception": null,
+      "routing_basis": "unchanged source candidate routes; per-actor portfolio allocation, not conformance or expanded custody"
+    },
+    {
+      "id": "RX03-FU-271",
+      "source_ref": "../conformance/FOLLOWUP-INTAKE.json#/rows/270",
+      "source_disposition": "implementation_gap",
+      "assessment_status": "not_reassessed",
+      "existing_portfolios": [
+        "sdk-core"
+      ],
+      "remaining_scope_portfolios": [
+        "api-async"
+      ],
+      "obligation_row_ids": [
+        "RX03-OB-303"
+      ],
+      "join_exception": null,
+      "routing_basis": "unchanged source candidate routes; per-actor portfolio allocation, not conformance or expanded custody"
+    }
+  ]
+}

@@ -18,6 +18,7 @@ SPDX-FileType: DOCUMENTATION
 SPDX-License-Identifier: Apache-2.0
 ----
 
+[[uuid-overview]]
 == Overview
 
 NOTE: Universal Unique Identifiers (UUID) are used in uProtocol to uniquely identify instances of xref:umessage.adoc[`UMessage`]. For more explanation of the use cases for the uProtocol UUID, please refer to xref:uattributes.adoc[UAttributes Specifications].
@@ -71,3 +72,89 @@ Each xref:../languages.adoc[uProtocol Language Library]
 * *MUST* support writing and reading of an instance of the <<uuid-data-model>> to/from its _hex-and-dash_ string representation as defined in https://www.rfc-editor.org/rfc/rfc9562#name-uuid-format[RFC 9562].
 --
 
+== up-rust SEooC: Message ID Uniqueness
+
+[NOTE]
+====
+* *Contract-family membership.*
+The sections above state the classic protocol-chapter UUID rules (`LanguageLibrary`).
+The item below (`+req~ssr-ids-unique~5+`, `ASIL:: B`, `SafetyUpRustCore` tag) belongs to the up-rust SEooC requirement family: filing on this page neither merges the two contract families nor binds classic implementations (xref:../contract-generations.adoc[Which requirements an implementation follows]).
+It binds only the actors to which its statement gives a duty (xref:../contract-generations.adoc#req-ssr-requirements-bind[A requirement binds the actors to which it gives a duty]; xref:../contract-generations.adoc#req-ssr-item-reading[How an item is read]).
+* *Related assumption of use.*
+Message IDs that never repeat across restarts are governed for claiming integrators by xref:../safety/elements/up-rust/assumptions-of-use.adoc#aou-seooc-ids-never-repeat[Message IDs that never repeat across restarts come from a configuration that provides them].
+====
+
+[[req-ssr-ids-unique]]
+=== Message IDs are unique
+
+[.specitem,oft-sid="req~ssr-ids-unique~5",oft-title="Message IDs are unique",oft-needs="impl,utest,uman",oft-tags="SafetyUpRustCore"]
+--
+*Format and source.*
+Every message ID the element generates *MUST* be a UUIDv7, as up-spec's rules require.
+Its 74 bits beyond the millisecond *MUST* come from one generator per route, seeded once from initialization-only entropy (xref:platform.adoc#req-ssr-platform-entropy[Initialization entropy comes from a declared source]).
+
+*The stated residual.*
+Two IDs of one source can therefore collide by chance.
+The element *MUST* state that residual, with its derivation: the probability that two IDs collide,
+
+* per pair within one millisecond;
+* within one route;
+* across a source's routes;
+* across the source process's restarts, including while the wall clock cannot be read and the last good time is reused.
+
+*No repetition across restarts.*
+The element *MUST NOT* rest a statement that its message IDs never repeat across restarts on the entropy alone, as xref:platform.adoc#req-ssr-platform-entropy[Initialization entropy comes from a declared source] states for every value.
+Where a supported configuration offers message IDs that never repeat across restarts, the element *MUST* provide them through a checked persistent construction, and *MUST* state that construction's conditions in the configuration's package.
+Who relies on such IDs, and how, is stated in xref:../safety/elements/up-rust/assumptions-of-use.adoc#aou-seooc-ids-never-repeat[Message IDs that never repeat across restarts come from a configuration that provides them].
+
+*Cost of generating.*
+The element *MUST* generate an ID without heap and without panicking, on every route, a serialized route that declares allocation included, and also when the wall clock cannot be read.
+The element *MUST* generate the first ID on a thread without first-use setup.
+
+*Refusal to generate.*
+The element's generator *MUST* refuse to generate, and count the refusal, where generating would repeat an ID's input within its stated period.
+The element *MUST* state each generator's period and refusal bounds in its supported configuration's package.
+
+*Bounds for a generator with a 32-bit sequence.*
+For a generator with a 32-bit sequence they *MUST* be these:
+
+* Within one route, an ID's input repeats only when the same millisecond recurs and a multiple of 2^32^ IDs separates the two IDs.
+* Generation is refused, and counted, after 2^31^ IDs within one 64 ms bucket of the time the IDs carry, whether the wall clock cannot be read or reads but does not move.
+A refused call does not advance the sequence.
+* The bucket's changes are detected on a value of their own.
+* The last good time is kept to 64 ms from the clock's reading at the route's setup, and saturates at a ±4.36-year offset of the wall clock from that reading.
+While it is saturated, an ID needed while the clock cannot be read is refused, and counted.
+--
+
+[horizontal]
+ID:: `+req~ssr-ids-unique~5+`
+ASIL:: B
+Allocated to:: the element
+Verification:: review, test, heap-window
+* *review*
+** The stated residual and its derivation.
+** Each generator's stated period and refusal bounds against its code.
+** Where a supported configuration offers message IDs that never repeat across restarts: the checked persistent construction and its stated conditions, and no statement that rests on the entropy alone.
+* *test*
+** Each generated ID a UUIDv7, as up-spec's rules require.
+** No repeat in a large sample, across a restart, and while the clock is unreadable.
+** For a 32-bit sequence, an outage of 2^31^ IDs and then 2^31^ refused calls through a hook, with no repeated input.
+** A stuck clock, a clock read only now and then, and a saturated last good time.
+** A clock step back.
+** A route seeded at 0 whose clock is then set to the present.
+** Each refusal to generate counted; for a 32-bit sequence, the refusals after 2^31^ IDs within one 64 ms bucket and those while the last good time is saturated among them.
+** No panic in any of these cases, an unreadable wall clock included.
+* *heap-window*: the first ID on a cold thread, IDs generated while the wall clock cannot be read, and an ID generated on a serialized route that declares allocation.
+
+*Rationale.*
+up-spec requires the UUIDs in UAttributes to be UUIDv7 (<<uuid-overview,UUID>>, `+dsn~uuid-spec~1+`).
+
+Correlation depends on distinguishing requests across time and reuse.
+A finite generator needs explicit refusal bounds when its clock cannot advance.
+
+The period and the bucket limits are properties of a generator's sequence width.
+A wider sequence moves them.
+
+Random seeding gives a quantified collision probability, not a guarantee that two starts differ.
+
+A generator that keeps a 64-bit counter and the full last good time has a period of 2^64^ IDs of one route (xref:platform.adoc#req-ssr-atomic-windows[Every narrowed value states its window]).

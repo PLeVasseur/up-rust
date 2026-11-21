@@ -1,0 +1,51 @@
+{
+  "schema": "wire-s9-wi1-repair-handoff/v1",
+  "status": "PRIVATE_SUCCESSOR_FROZEN_PENDING_NEW_INDEPENDENT_REVIEW",
+  "owner": "sole successor native/Protobuf wire reconciliation owner",
+  "root": "wire-spec-reconciliation-1/s9-wi1-repair-1",
+  "review_consumed": {
+    "root": "review-independent-1",
+    "status": "REQUEST_CHANGES_FROZEN",
+    "handoff_sha256": "ed78b01ab667f5c8e50569b1d3ca7ebc319adddf8c85708142f45b55d8a304d1",
+    "verdict_sha256": "bda73cb496ad8d5f981e2827d088c9307e694b5cd24f9e08d0c2f1df940197c7",
+    "seal_sha256": "48a2fccd1eb425db6ae6a78b78511b90768bfb55a88bfb6f23bec2687d5de637",
+    "review_sha256": "5bff8b1ce320307e4c08219f495d9e20f2c85a821279a8d3051f3a5c59b71f29",
+    "source_pins_sha256": "566308a0f5da24ade8b26505b7e6ad0770a03a1f8b343bb6f38e33d381e2c9d4"
+  },
+  "source9": {
+    "interface": "S9-WI-1",
+    "handoff": "requirements-source-reconciliation-9/SDK-WIRE-INTERFACE.json",
+    "handoff_sha256": "d20d24a1a778566ae46729486ab0bfebb4a22d640a5657e9ea08843f259cfbcb",
+    "sdk_git_revision": "8e386c12f2d7a3441fb0ff7216df5ef7ea331161",
+    "changed_interfaces": [],
+    "changed_call_sites": [],
+    "acceptance": "author source reading only; no Source9 review or acceptance"
+  },
+  "repair": {
+    "source_pins": "SOURCE-PINS.json",
+    "source_pins_sha256": "911dd09078ccf4f3e78f83bd40c86fca7338d64cfe1471941d1067f21e919979",
+    "proof": "PROOF.md",
+    "obligations": "OBLIGATION-DISPOSITIONS.json",
+    "affected_check_plan": "AFFECTED-CHECK-PLAN.json",
+    "accounting": "ACCOUNTING.json",
+    "native_patch": "native-successor.patch",
+    "protobuf_patch": "protobuf-successor.patch",
+    "native_source": "native/",
+    "protobuf_source": "protobuf/"
+  },
+  "closed_review_findings": {
+    "WIRE-REV-001": "new source set and patches are hashed together in SOURCE-PINS.json; prior conflicting observations are preserved as history",
+    "WIRE-COMP-002": "restored tests/common/mod.rs, examples/telemetry.rs, and referenced C/C++ fixture files; native Cargo.lock is present",
+    "WIRE-CORE-007": "native and Protobuf manifests/lockfiles name Source9 revision 8e386c12; handoff per-file hashes are recorded without treating mutable checkout as immutable"
+  },
+  "preserved_open_items": [
+    "D-NA-1 full writer descriptor/ABI agreement and lifecycle predicates",
+    "P-EC-1, G-EC-1 and G-EC-2 SDK encoding-cause/counter behavior",
+    "Q-WO-1 original Fable text question",
+    "generic Protobuf Message runtime/resource qualification",
+    "fresh independent review and affected stable/Rust 1.88 checks"
+  ],
+  "execution": {"compiler": false, "tests": false, "Miri": false, "native": false, "network": false, "SDK_transport_edits": false, "publication": false},
+  "credit": {"native_lanes": 0, "audits": 0, "ergonomics": 0, "A4_changed": false},
+  "next": "Coordinator commissions a new independent review only after this exact freeze; root admission then controls named affected checks."
+}

@@ -1,0 +1,189 @@
+= Configurations and Application-Selectable Parts
+:toc: preamble
+
+The key words "*MUST*", "*MUST NOT*", "*REQUIRED*", "*SHALL*", "*SHALL NOT*", "*SHOULD*", "*SHOULD NOT*", "*RECOMMENDED*", "*MAY*", and "*OPTIONAL*" in this document are to be interpreted as described in https://www.rfc-editor.org/info/bcp14[IETF BCP14 (RFC2119 & RFC8174)]
+
+[NOTE]
+====
+* *Contract-family membership and claim vs. selection grammar.*
+Filing on this page does not decide whom an item binds, and neither merges the repository's requirement families nor binds classic protocol implementations (xref:../contract-generations.adoc[Which requirements an implementation follows]).
+This page holds items from two distinct contract families:
+** *The owned-frame SDK contract (`+req~sdk-owned-frame-*+`, ordinary obligations, no ASIL, `OwnedFrame*` tags)*: <<sec-selectable-parts,Application-selectable parts>>.
+It binds a part only where its declaration names the owned-frame SDK contract (xref:../contract-generations.adoc#req-sdk-owned-frame-contract[The owned-frame SDK contract binds the parts that declare it]; xref:../contract-generations.adoc#owned-frame-conventions[Owned-frame SDK conventions and tags]).
+** *The up-rust SEooC requirement family (`+req~ssr-*+`, `ASIL:: B`, `Safety*` tags)*: <<sec-deployment-data,Deployment data>>.
+Each item binds only the actors to which its statement gives a duty (xref:../contract-generations.adoc#req-ssr-requirements-bind[A requirement binds the actors to which it gives a duty]; xref:../contract-generations.adoc#req-ssr-item-reading[How an item is read]).
+Configuration selection of parts by an application is distinct from making a component or deployment conformance claim or declaring a specification-named profile under xref:../contract-generations.adoc#req-ssr-contract-transition[What a part declares and claims, and when a replacement takes effect].
+====
+
+[[sec-selectable-parts]]
+== Application-selectable parts
+
+Non-exhaustive public selection of owned-frame SDK parts through documented interfaces:
+
+[[req-sdk-owned-frame-extension-public]]
+=== A part that an application selects is selected through public interfaces alone
+
+[.specitem,oft-sid="req~sdk-owned-frame-extension-public~1",oft-title="A part that an application selects is selected through public interfaces alone",oft-needs="impl,utest,uman",oft-tags="OwnedFrameSdk"]
+--
+*The parts.*
+An application selects, for the owned-frame routes of an SDK, parts that the SDK did not have to ship: a memory provider, a binding, a wire, a platform backend, a scheduler integration or an adapter.
+
+*Public.*
+For each kind of such part that it lets an application select, the SDK *MUST* offer the selection through public, documented interfaces, so that a part that any party writes against those interfaces and their documentation alone can be selected.
+
+*What selection needs none of.*
+For that selection, the SDK *MUST NOT* require any of these:
+
+* a change to the SDK's source;
+* an interface that is not public;
+* a registration that only the SDK's own parts, or parts that its supplier approves, can make;
+* presence in a list of parts that the SDK's supplier keeps.
+
+Building, linking or registering a part through a documented mechanism that is open to every party is none of these.
+
+*Not by name.*
+The SDK *MUST NOT* admit or refuse a selected part because of its name, its origin or its packaging.
+It admits a part by what the part declares and by the setup checks that items state.
+Selecting a part waives neither the part's own contract nor any setup check that an item states.
+For a route, xref:../up-l1/payload-paths.adoc#req-ssr-payload-route-form[A route's form is fixed at setup, by what the route declares and never by a name] states this of the names of its wire, its payload encoding and its middleware.
+
+*Each part's own contract.*
+What a selected part does is stated by its own contract.
+Where the SDK's core is the element, the contracts of a binding, a wire and a platform backend are these:
+
+* a binding: xref:../up-l1/bindings.adoc#req-ssr-binding-scope[What a binding is, and the binding contract];
+* a wire: xref:../up-l1/wires/README.adoc#req-ssr-wire-scope[What a wire is, and the wire contract];
+* a platform backend of the element, or one that an integrator supplies for the element: xref:platform.adoc#req-ssr-platform-contract[Every platform backend of the element keeps the platform's rules], which states the duties of both and says where the integrator's own are stated.
+
+For every SDK, the contracts of the other kinds are these:
+
+* a memory provider: xref:resources.adoc#req-sdk-owned-frame-provider-contract[A memory provider states the contract that the SDK relies on]; xref:resources.adoc#req-sdk-owned-frame-provider-ownership[Memory from a provider stays valid while it is held, and is disposed of once under its provider's contract]; xref:resources.adoc#req-sdk-owned-frame-provider-failure[A provider's refusal reaches the caller with its cause, and leaves held memory valid];
+* a scheduler integration: xref:../up-l2/execution.adoc#req-sdk-owned-frame-scheduler-integration[A scheduler integration supplies wake-ups, timers and contexts through public interfaces];
+* an adapter: xref:../up-l1/payload-paths.adoc#req-sdk-owned-frame-adapter[An adapter keeps a message whole across a crossing, or refuses it by name].
+
+This item gives a selected part no duty.
+--
+
+[horizontal]
+ID:: `+req~sdk-owned-frame-extension-public~1+`
+Allocated to:: the SDK, for each kind of part that it lets an application select for its owned-frame routes
+Verification:: test, review
+* *test*
+** For each kind of part that the SDK lets an application select: a part built outside the SDK's source, against its public interfaces and their documentation alone, selected and used.
+** The same part renamed, packaged differently, and supplied by another party with the same declaration: no change in what setup admits or refuses.
+* *review*
+** The selection path of each kind: no change of the SDK's source, no interface that is not public, no registration that only the SDK's own parts or parts that its supplier approves can make, and no list of parts that the SDK's supplier keeps.
+** The documented build, link and registration mechanisms of each kind, open to every party.
+** The public documentation of each kind, which suffices to write a part of that kind.
+** No admission or refusal of a selected part on its name, its origin or its packaging, and no selection that waives the part's own contract or a setup check that an item states.
+
+*Rationale.*
+Applications run on targets and middleware that the supplier of an SDK cannot all foresee, so the part that fits a target is often written by another party.
+A selection that needed the SDK's source, a private interface or a privileged list would make every such part wait on the SDK's supplier, or fork the SDK.
+A name, an origin or a packaging says nothing about what a part does, while its declaration and the setup checks do.
+Each kind of part keeps its own contract, so selecting a part neither adds to its duties nor lifts them.
+
+[[sec-deployment-data]]
+== Deployment data
+
+NOTE: The items in this section belong to the up-rust SEooC requirement family (`+req~ssr-*+`): conventions and tags are stated in xref:../safety/README.adoc[the safety overview], and scope and element boundary in xref:../safety/elements/up-rust/README.adoc[the up-rust SEooC element].
+The rule on the exact addresses that an ASIL Streamer route names is stated in xref:../up-l2/streamer.adoc#req-ssr-config-exact-addresses[ASIL Streamer routes name exact source addresses] in xref:../up-l2/streamer.adoc[the Streamer's page].
+
+[[req-ssr-config-validated]]
+=== Deployment data is validated in full
+
+[.specitem,oft-sid="req~ssr-config-validated~3",oft-title="Deployment data is validated in full",oft-needs="impl,utest,uman",oft-tags="SafetyUpRustCore"]
+--
+*Deployment data.*
+Deployment data is the set of values that the integrator produces for a deployment, apart from the program, and that the element, the Streamer or the Streamer binary applies at startup (xref:../safety/elements/up-rust/assumptions-of-use.adoc#aou-seooc-deployment-data[Deployment data is in range, verified and protected] lists what the integrator provides in it).
+
+The element *MUST* validate completely, during initialization, the deployment data that it applies at startup: every value against its admissible range, and every dependency between values.
+
+The element *MUST* publish the admissible ranges of its deployment data.
+
+The element *MUST* refuse anything in that data that is invalid, unknown, missing where required or inconsistent, with an error naming the field.
+
+The element *MUST NOT* coerce, silently default or skip a value of that data.
+--
+
+[horizontal]
+ID:: `+req~ssr-config-validated~3+`
+ASIL:: B
+Allocated to:: the element
+Verification:: test (a negative configuration suite of deployment data), review (the published ranges, against the ranges that validation uses)
+ISO 26262:: 6-C.4.6 (part-clause numbers only)
+
+*Rationale.*
+A value that is coerced, defaulted or skipped without an error runs the deployment on a configuration nobody wrote, and the integrator learns of it only from its effects.
+
+Refusing during initialization, by field, keeps every such mistake out of runtime mode, where setup can no longer change anything (xref:resources.adoc#req-ssr-mode-no-setup-at-runtime[Setup is impossible in runtime mode]).
+
+Publishing the ranges lets the integrator produce the deployment data within them (xref:../safety/elements/up-rust/assumptions-of-use.adoc#aou-seooc-deployment-data[Deployment data is in range, verified and protected]), instead of finding a value out of range only when setup refuses it.
+
+[[req-ssr-config-one-path]]
+=== Direct construction and deployment data are one path
+
+[.specitem,oft-sid="req~ssr-config-one-path~2",oft-title="Direct construction and deployment data are one path",oft-needs="impl,utest",oft-tags="SafetyUpRustCore"]
+--
+The element's setup *MUST* run every validation of a configuration, whether the element is built directly in code or from deployment data.
+Built either way, the element *MUST* give the same types and pass the same checks.
+--
+
+[horizontal]
+ID:: `+req~ssr-config-one-path~2+`
+ASIL:: B
+Allocated to:: the element
+Verification:: test (the same refusals on both paths), review (every validation of a configuration run in the element's setup, on both paths)
+
+*Rationale.*
+Checks that lived only in a loader would leave a program built in code unchecked, and two sets of checks could drift apart.
+
+Both paths build the same non-generic transport types (xref:resources.adoc#req-ssr-mode-two-types[Two modes, as two types]), so one setup runs the same checks for both.
+
+[[req-ssr-config-no-code]]
+=== Deployment data carries no code
+
+[.specitem,oft-sid="req~ssr-config-no-code~2",oft-title="Deployment data carries no code",oft-needs="uman",oft-tags="SafetyUpRustCore"]
+--
+The element *MUST* admit values only in its own schema for deployment data, and *MUST NOT* admit there a script, an expression or anything else that is executed or interpreted.
+What the Streamer admits in its schema for its deployment data is stated in xref:../up-l2/streamer.adoc#req-ssr-streamer-config-validated[The Streamer validates its deployment data in full].
+
+What deployment data can do with a waiver is stated in xref:../safety/assurance.adoc#req-ssr-waiver-record[Waivers are recorded and can be found].
+--
+
+[horizontal]
+ID:: `+req~ssr-config-no-code~2+`
+ASIL:: B
+Allocated to:: the element, for its own schema
+Verification:: review (of the element's schema)
+ISO 26262:: 1-3.15 (part-clause numbers only)
+
+*Rationale.*
+Values can be checked against their ranges before start (<<req-ssr-config-validated,Deployment data is validated in full>>; xref:../up-l2/streamer.adoc#req-ssr-streamer-config-validated[The Streamer validates its deployment data in full]), while code carried in data would run outside the program that was verified.
+
+Waivers stay compiled into the program, so deployment data can only choose among them by id (xref:../safety/assurance.adoc#req-ssr-waiver-record[Waivers are recorded and can be found]).
+
+[[req-ssr-config-resource-ranges]]
+=== Resource IDs are checked at setup
+
+[.specitem,oft-sid="req~ssr-config-resource-ranges~1",oft-title="Resource IDs are checked at setup",oft-needs="impl,utest",oft-tags="SafetyUpRustCore"]
+--
+The element *MUST* check every role's resource ID against the ranges that the protocol's message attributes fix, when the role is built:
+
+* `+0x8000+` to `+0xFFFE+` for a publish topic and a notification origin;
+* `+0x0001+` to `+0x7FFF+` for a method;
+* `+0+` for a notification destination and a reply-to.
+
+The element *MUST* refuse an ID outside its range, naming the route and the range.
+--
+
+[horizontal]
+ID:: `+req~ssr-config-resource-ranges~1+`
+ASIL:: B
+Allocated to:: the element
+Verification:: test (each boundary value, on each role)
+
+*Rationale.*
+The protocol fixes these ranges in its message attributes (`+dsn~up-attributes-publish-source~2+`, `+dsn~up-attributes-notification-source~2+`, `+dsn~up-attributes-notification-sink~2+`, `+dsn~up-attributes-request-sink~2+`, `+dsn~up-attributes-request-source~2+`).
+
+Checking them when the role is built finds a wrong ID in deployment data at setup, instead of in a peer's refusal of the first message.

@@ -1,0 +1,57 @@
+{
+  "schema": "rx03-root-adoption/v1",
+  "at": "2026-11-20T20:34:49.824525+00:00",
+  "specification": {
+    "commit": "f18913c6ed062dc6d6c3d7a73dec7a33433b39e4",
+    "tree": "29c6019918c7527a6fa8f4ed3a82d6690bea3dfa",
+    "publication": "sdk-api-redesign-20261107-1/delivery-continuation/shared-up-rust-core-20261114/up-spec-cleanup-1/root-integration-20261120/SPEC-PUBLICATION.json"
+  },
+  "sdk": {
+    "commit": "0786fa6e3cd7dbe12c8c10a47d2b581914854b29",
+    "tree": "82a7621a70ce062e23376c1f5bf060cfe2c0b820",
+    "publication": "sdk-api-redesign-20261107-1/delivery-continuation/shared-up-rust-core-20261114/up-spec-cleanup-1/root-integration-20261120/SDK-PUBLICATION.json",
+    "mirror_exact": true,
+    "admitted_paths": 80,
+    "prior_49_dirty_tracked_paths_preserved": true
+  },
+  "review": "sdk-api-redesign-20261107-1/delivery-continuation/shared-up-rust-core-20261114/up-spec-cleanup-1/root-integration-20261120/REVIEW-CLOSURE.json",
+  "package_admission": "sdk-api-redesign-20261107-1/delivery-continuation/shared-up-rust-core-20261114/up-spec-cleanup-1/root-integration-20261120/PACKAGE-ADMISSION.json",
+  "adoption_filing": "sdk-api-redesign-20261107-1/delivery-continuation/shared-up-rust-core-20261114/up-spec-cleanup-1/root-integration-20261120/adoption/ROOT-FILING.json",
+  "SR_304": "closed",
+  "conformance_intake": "sdk-api-redesign-20261107-1/delivery-continuation/shared-up-rust-core-20261114/up-spec-cleanup-1/root-integration-20261120/conformance/FOLLOWUP-INTAKE.json",
+  "catalogue_status": "sdk-api-redesign-20261107-1/delivery-continuation/shared-up-rust-core-20261114/up-spec-cleanup-1/root-integration-20261120/conformance/CAT-STATUS.json",
+  "checks": "sdk-api-redesign-20261107-1/delivery-continuation/shared-up-rust-core-20261114/up-spec-cleanup-1/root-integration-20261120/sdk-checks/CHECK-DISPOSITION.json",
+  "disposition": "Reviewed specification and exact SDK documentary mirror published. Manual/registry and trace checks retain their observed failures; implementation conformance remains open.",
+  "completed": [
+    "feature-branch publication/readback of spec and SDK exact pair",
+    "root-owned adoption/transition/delivery/status filing",
+    "conformance intake registered and existing coordination continuation dispatched"
+  ],
+  "remaining": {
+    "component_transfer_entries": 84,
+    "component_transfer_destinations": 90,
+    "conformance_followups": 271,
+    "obligation_rows": 504,
+    "safety_page_rows": 226,
+    "CAT": "CAT-1 partial; CAT-2 open; CAT-3 twelve-case inventory prepared, assessments open; CAT-4 and CAT-5 unperformed",
+    "maintainer_proposals": "142 held; no external transmission authorized"
+  },
+  "coordination_dispatch": "sdk-api-redesign-20261107-1/delivery-continuation/shared-up-rust-core-20261114/up-spec-cleanup-1/root-integration-20261120/COORDINATION-DISPATCH.json",
+  "coordination_task": "node:delegated-task:command%3Amcp%3A29e2b003-6619-4818-a559-6b58e6b82baf%3Athread-send%3Arx03-conformance-adoption-routing-20261120",
+  "current_next_work": "Existing coordinator ordinal42 builds the first versioned conformance intake and generated catalogue draft. Root reviews actual output before any catalogue publication; component assessments and filing remain separate.",
+  "acceptance": {
+    "spec_adoption": true,
+    "implementation_conformance": false,
+    "formal_safety_item_signoff": false,
+    "native_audits_or_ergonomics_credit": false
+  },
+  "no_replay": [
+    "published spec/SDK commits",
+    "1395-file package verification",
+    "retained spec render/review/tag checks",
+    "four committed SDK documentary checks",
+    "completed storage retirements"
+  ],
+  "routing_completion": "sdk-api-redesign-20261107-1/delivery-continuation/shared-up-rust-core-20261114/up-spec-cleanup-1/root-integration-20261120/ROUTING-CONSUMPTION.json",
+  "catalogue_dispatch": "sdk-api-redesign-20261107-1/delivery-continuation/shared-up-rust-core-20261114/up-spec-cleanup-1/root-integration-20261120/CATALOGUE-DISPATCH.json"
+}

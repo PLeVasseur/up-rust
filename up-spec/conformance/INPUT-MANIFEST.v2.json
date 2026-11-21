@@ -1,0 +1,205 @@
+{
+  "schema": "rx03-catalogue-input-manifest/v2",
+  "version": "rx03-catalogue-20261120-v2",
+  "composition_owner": "root",
+  "snapshot_boundary": "Immutable documentary export of root RX-03 adoption and ordinal41 routing, successor to reviewed draft1",
+  "inputs": [
+    {
+      "id": "adoption",
+      "path": "records/adoption.json",
+      "expected": {
+        "/schema": "rx03-root-adoption/v1",
+        "/specification/commit": "f18913c6ed062dc6d6c3d7a73dec7a33433b39e4",
+        "/sdk/commit": "0786fa6e3cd7dbe12c8c10a47d2b581914854b29",
+        "/sdk/mirror_exact": true
+      },
+      "bytes": 4005,
+      "sha256": "fe7cc460f4e79cb20db59b99036ab14e695cc68cf4750187eea87ce8089a0771",
+      "origin_locator": "../ROOT-ADOPTION.json"
+    },
+    {
+      "id": "checks",
+      "path": "records/checks.json",
+      "expected": {
+        "/sdk_commit": "0786fa6e3cd7dbe12c8c10a47d2b581914854b29"
+      },
+      "bytes": 3874,
+      "sha256": "a3348c197a8695fb4e6015cb8f161cf821de9d364a57eea78b877d99beca77c0",
+      "origin_locator": "../sdk-checks/CHECK-DISPOSITION.json"
+    },
+    {
+      "id": "followups",
+      "path": "records/followups.json",
+      "expected": {},
+      "bytes": 631503,
+      "sha256": "0b060d5f0adae138282fddc24f4cc3709f434f750b2e8eae81097b5b57fd423d",
+      "origin_locator": "../conformance/FOLLOWUP-INTAKE.json"
+    },
+    {
+      "id": "obligations",
+      "path": "records/obligations.json",
+      "expected": {},
+      "bytes": 756762,
+      "sha256": "a4a3cad71c26ad0a63a6c01ca9bee13acedd45a704efa6e86d3698dc1a30b9dd",
+      "origin_locator": "../conformance/OBLIGATION-INVENTORY.json"
+    },
+    {
+      "id": "cases",
+      "path": "records/cases.json",
+      "expected": {},
+      "bytes": 26410,
+      "sha256": "930abd848e0540616e0499799fedf70f2eabc2ee9c5cc3f2548ba054771fd5a4",
+      "origin_locator": "../conformance/OBSERVATION-CASE-INTAKE.json"
+    },
+    {
+      "id": "routes",
+      "path": "records/routes.json",
+      "expected": {},
+      "bytes": 145883,
+      "sha256": "0d6fa061a26e646732fb771d9540bf6683d8aebbafae0e650dd6be9c4e3088e4",
+      "origin_locator": "../coordination/ROUTING-INDEX.json"
+    },
+    {
+      "id": "scopes",
+      "path": "records/scopes.json",
+      "expected": {},
+      "bytes": 57933,
+      "sha256": "1dcd4f7c45a35fffc9d07a2495080eb9a3a333831b52b001e22215b77569cd28",
+      "origin_locator": "../coordination/SCOPE-RECONCILIATION.json"
+    },
+    {
+      "id": "transfers",
+      "path": "records/transfers.json",
+      "expected": {},
+      "bytes": 98174,
+      "sha256": "b9bc43ad5e4b18402a083dcdb6d284fd3d25628818b98d2c5b641928841a1a54",
+      "origin_locator": "../coordination/COMPONENT-TRANSFER-ROUTES.json"
+    },
+    {
+      "id": "packet-SOURCE9",
+      "path": "records/packet-SOURCE9.json",
+      "expected": {},
+      "bytes": 36646,
+      "sha256": "e57ba31391ca026943e52b39ae33cc4ebd2a6096077d3e0424ff9e25933189f3",
+      "origin_locator": "../coordination/SOURCE9-INTAKE.json"
+    },
+    {
+      "id": "packet-WI1",
+      "path": "records/packet-WI1.json",
+      "expected": {},
+      "bytes": 10051,
+      "sha256": "43c63cc1eac3fdc1f52f827839008fc8fabc6d859a88cb5c33b0d094ddd30722",
+      "origin_locator": "../coordination/WI1-INTAKE.json"
+    },
+    {
+      "id": "packet-F14",
+      "path": "records/packet-F14.json",
+      "expected": {},
+      "bytes": 19527,
+      "sha256": "d780fdc0aea0f66f4343f657555a84d3389787ae0ed6e153ceebc634069937bf",
+      "origin_locator": "../coordination/F14-INTAKE.json"
+    },
+    {
+      "id": "packet-D7",
+      "path": "records/packet-D7.json",
+      "expected": {},
+      "bytes": 17885,
+      "sha256": "4f424327afc7adece90b9af621d3d6a3178721d8520898dacc2ad9f34754211f",
+      "origin_locator": "../coordination/D7-INTAKE.json"
+    },
+    {
+      "id": "packet-RTOS5",
+      "path": "records/packet-RTOS5.json",
+      "expected": {},
+      "bytes": 5914,
+      "sha256": "1d42d57e427bf5fb52c6a7291a6493fd418b65f9bc8acaab322ea94c2ef40188",
+      "origin_locator": "../coordination/RTOS5-INTAKE.json"
+    },
+    {
+      "id": "source9-freeze",
+      "path": "records/source9-freeze.json",
+      "expected": {
+        "/source9_pins/sha256": "ee18145ded0a64eed33eb23db6944a76e3d91894dab8a60000495ab1093c13a7"
+      },
+      "bytes": 3134,
+      "sha256": "8107fbb96df8a829bbefd20c1989c8d4f9218793f40a99f2f56daabdcb8adc84",
+      "origin_locator": "../../../requirements-source-reconciliation-9/FREEZE.json"
+    },
+    {
+      "id": "wire-handoff",
+      "path": "records/wire-handoff.json",
+      "expected": {
+        "/repair/source_pins_sha256": "911dd09078ccf4f3e78f83bd40c86fca7338d64cfe1471941d1067f21e919979"
+      },
+      "bytes": 2944,
+      "sha256": "842ad2bb5b1f5b85e3f1489cedeea1788a36ad96694539b56ae5c7616b91b528",
+      "origin_locator": "../../../wire-spec-reconciliation-1/s9-wi1-repair-1/HANDOFF.json"
+    },
+    {
+      "id": "f14-freeze",
+      "path": "records/f14-freeze.json",
+      "expected": {
+        "/tree": "0894483db84fdbdd9424b9696be3b7806b6adf9872fdc4a0838a584fb5ac5e0b"
+      },
+      "bytes": 2650,
+      "sha256": "1d224ca16d1d4f6afc8d0122b0180b586930a4506bae2f0e5f0100572be9680e",
+      "origin_locator": "../../../../iceoryx2-up-rust-core-branch-20261114/implementation-followthrough-14-classification-1/records/FREEZE.json"
+    },
+    {
+      "id": "f14-pins",
+      "path": "records/f14-pins.json",
+      "expected": {
+        "/composed_f14/staging_tree": "41bd5ed2e1d7a1b07b3a35027b2b7bc8debae882b4648fd30fb5162764d305b8",
+        "/composed_f14/adapter_tree_with_original_lock": "a98d18bc8dfc78aa2d739da52f6ab70dc6623fd6fd3510b6e3d5cb87d74e89a5"
+      },
+      "bytes": 3887,
+      "sha256": "a19ab66c359d3b165b53bed54688f5b5e09b0325495c12f599021c2d3d6e8c80",
+      "origin_locator": "../../../../iceoryx2-up-rust-core-branch-20261114/implementation-followthrough-14-classification-1/records/SOURCE-PINS.json"
+    },
+    {
+      "id": "d7-manifest",
+      "path": "records/d7-manifest.json",
+      "expected": {
+        "/files/SOURCE-PINS.json/sha256": "f033d1d557b8bd4e79c83fb70bdbbcd904e156637e5ab9b391b276eba53132e7"
+      },
+      "bytes": 11435,
+      "sha256": "a1ce0fc380d79c7c66fe50b51178272fe7596590283b46d0f9e2182729fa7021",
+      "origin_locator": "../../../../lola-up-rust-core-branch-20261114/lifetime-admission-design-7-classification-2/MANIFEST.json"
+    },
+    {
+      "id": "rtos-pins",
+      "path": "records/rtos-pins.json",
+      "expected": {
+        "/frozen_helper/new": "073d18f03f3662f3b2d97105a84274e47d65b13889dbcc8bf0b694b915b191e9"
+      },
+      "bytes": 6631,
+      "sha256": "6bc21cb08f91b382583fe9241e599c53f85e24495ae1fd8d04ced0821f8162d8",
+      "origin_locator": "../../../mcu-rtos-feasibility-5/ir5-1-repair-1/SOURCE-PINS.json"
+    }
+  ],
+  "known_root_supplied_historical_identity": {
+    "sdk_source_compatible_receipts": "dc7f22da2bf90d98d94d468621df26caadf853ca",
+    "basis": "Current root catalogue instruction; no receipt replay and no transfer of those results to 0786fa6 or private candidates"
+  },
+  "semantics": {
+    "reference_only_source_findings": "Original records retained byte-for-byte; embedded and Markdown views generated mechanically",
+    "current_assessment_default": "unassessed",
+    "applicability_default": "unknown",
+    "target_default": null,
+    "configuration_default": null,
+    "profile_default": null,
+    "root_role": "catalogue composition only; not a supplier or integrator",
+    "private_candidate_acceptance": "not accepted as component revisions; historical narrow reviews retain original scope"
+  },
+  "guardrails": {
+    "writes": "catalogue-v2 generated files only; named records are immutable inputs",
+    "source_content_reads": false,
+    "hashing": "SHA256 of documentary inputs only in the required read pass; no product evidence requalification",
+    "network": false,
+    "worker_dispatch": false,
+    "product_tests": false,
+    "publication": "candidate for authorized up-spec feature-branch documentation",
+    "mac_floor_decimal_gb": 20
+  },
+  "publication_state": "versioned_intake_catalogue"
+}

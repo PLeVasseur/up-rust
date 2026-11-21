@@ -1,0 +1,372 @@
+= Safety Assurance Governance, Verification and Evidence
+:toc: preamble
+
+The key words "*MUST*", "*MUST NOT*", "*REQUIRED*", "*SHALL*", "*SHALL NOT*", "*SHOULD*", "*SHOULD NOT*", "*RECOMMENDED*", "*MAY*", and "*OPTIONAL*" in this document are to be interpreted as described in https://www.rfc-editor.org/info/bcp14[IETF BCP14 (RFC2119 & RFC8174)]
+
+[NOTE]
+====
+This page holds cross-cutting assurance governance items of the up-rust SEooC requirement family (`+req~ssr-*+`): violation classes for assumptions of use, verification methods and supplier evidence reporting, `+unsafe+` inventory governance, waiver records and binding qualification records (limits, deviations and known failures).
+Whom each requirement binds and how claims and replacements work are stated in xref:../contract-generations.adoc[Which requirements an implementation follows] (xref:../contract-generations.adoc#req-ssr-requirements-bind[A requirement binds the actors to which it gives a duty]; xref:../contract-generations.adoc#req-ssr-contract-transition[What a part declares and claims, and when a replacement takes effect]; xref:../contract-generations.adoc#req-ssr-item-reading[How an item is read]).
+
+Conventions and tags: xref:README.adoc[Safety and assurance view].
+Element boundary, profile and assumptions of use: xref:elements/up-rust/README.adoc[up-rust SEooC element overview], xref:profiles/up-rust-asil-b.adoc[up-rust ASIL B SEooC profile] and xref:elements/up-rust/assumptions-of-use.adoc[up-rust SEooC assumptions of use].
+====
+
+[[req-ssr-violation-classes]]
+== How a violated assumption of use shows up
+
+[[violation]]
+[.specitem,oft-sid="req~ssr-violation-classes~1",oft-title="How a violated assumption of use shows up",oft-needs="uman",oft-tags="SafetyUpRustCore,SafetyStreamer,SafetyBinding,SafetyWire"]
+--
+*The classes.*
+The "Violation" text of an assumption of use says how a violation of the assumption shows up to an observer, in one of three classes.
+
+* *Refused at setup*: the observer detects the violation during initialization and refuses setup.
+The element refuses with the error that xref:../up-l1/runtime.adoc#req-ssr-mode-init-failure[Initialization failure] states.
+A build that fails counts as refused at setup.
+* *Counted*: the observer detects the violation in runtime mode, and returns or counts it as xref:../up-l1/bindings.adoc#req-ssr-error-no-silent-loss[No silent loss, and each loss counted once] and xref:../basics/error_model.adoc#req-ssr-refuse-before-heap[Refuse before touching the heap] state.
+* *Undetectable*: the observer cannot observe the violation.
+Only measures of the integrator's own can cover it (xref:elements/up-rust/assumptions-of-use.adoc#aou-seooc-violation-classes[The integrator covers each violation that its observer cannot detect]).
+
+*The observer.*
+The observer is the element, unless the text names another part, such as a binding, a wire or the Streamer.
+A class says what that observer can observe.
+It never says that a violation was not tested.
+
+*A limit of the contract.*
+A "Violation" text can state, instead of a class, a limit of the contract: that no requirement has a part check something.
+Such a text gives the violation none of the three classes, and the integrator has no detection to rely on for it.
+A limit of the contract is not a limit that a binding's qualification record states (<<req-ssr-binding-readme,A binding's qualification record states its limits and its failures>>).
+
+*No behaviour of its own.*
+A class adds no duty.
+What an observer does on a violation is stated by the requirement that the "Violation" text or this item links for the class.
+
+*Scope.*
+The assumptions of use of the up-rust SEooC requirement family, wherever they are filed.
+--
+
+[horizontal]
+ID:: `+req~ssr-violation-classes~1+`
+ASIL:: B
+Allocated to:: the "Violation" texts of the assumptions of use of the up-rust SEooC requirement family
+Verification:: review (each "Violation" text of the up-rust SEooC requirement family: each class that it uses, its observer, and the requirement that states what the observer does, read against this item)
+
+*Rationale.*
+An integrator plans its own measures from what the software can and cannot observe.
+One meaning for each class, with its observer named, keeps a violation that nothing observes from being read as one that was only left untested.
+
+[[req-ssr-verification-methods]]
+== The verification methods, and what a Verification line asks for
+
+[.specitem,oft-sid="req~ssr-verification-methods~2",oft-title="The verification methods, and what a Verification line asks for",oft-needs="uman",oft-tags="SafetyUpRustCore,SafetyStreamer,SafetyBinding,SafetyWire"]
+--
+*The methods.*
+The "Verification" line of each requirement of the up-rust SEooC requirement family names one or more methods of this table, and no other method:
+
+[cols="2,5,4",options="header"]
+|===
+| Method | What it shows | Default scope
+
+| `compile-fail` | A case that fails to compile, with the compiler's diagnostic checked against the one expected. It shows that the use that the case attempts is ruled out at compile time, such as an operation that is absent from a type | With the current stable compiler, and with the minimum supported version
+| `heap-window` | A test that counts every allocation and every free on all threads, with an observer at the Rust global allocator and another at the C library's allocation functions. The window opens when the transition of the transport under test returns. A positive control, a deliberate heap use inside the window, makes the window fail | On Linux, whose OS locks are built on futexes, with the current stable compiler and with the minimum supported version. On macOS, a pthread target, with the current stable compiler. Each with both observers
+| `miri` | The test, run under Miri | Under Stacked Borrows and under Tree Borrows, on Linux. The toolchain that Miri needs is a tool only
+| `fault-injection` | A test that injects a fault that the line's requirement covers, such as a peer process killed or restarted, a malformed or hostile frame, a flood, a publisher writing to a sample while it is read, or a primitive left lazy on purpose | On Linux, with the current stable compiler
+| `test` | A requirements-based test of behaviour, with boundary values | On Linux, with the current stable compiler and with the minimum supported version
+| `gate` | A static check over source or build output, such as a build on a sysroot without `alloc` or `std`, the panic-link check, a symbols check, the `unsafe` inventory check, a token scan, manifest checks, compile-time assertions or workspace lints | With the current stable compiler, and with the minimum supported version
+| `review` | An inspection, recorded in a review log | A record
+|===
+
+*A method with no qualifier.*
+A method that a "Verification" line names with no qualifier has the default scope of its row.
+A case that no qualifier holds for has the default scope of its method's row.
+
+*Qualifiers, paths and cases.*
+A line details a method in words after it, or in the list under the line.
+An entry of the list that begins with a method details that method, which the line names, together with the entries under it.
+Any other entry details each method that the line names.
+Words that state where or how the method is applied, by naming a platform, a target or a class of either, a compiler, or a model such as Stacked Borrows, are a qualifier of that method.
+Words that name a kind of target as the condition that a case puts under test, without stating where the method is applied, name that case.
+The other words name the paths or cases of the line's requirement that the method covers, or say how those cases run.
+A method whose line names no path or case for it covers the paths and cases that its requirement's statement names.
+A qualifier holds for the case whose words hold it.
+A qualifier that stands apart from every case, after the method or at the head of an entry, holds for every case of the method or of that entry.
+In each case that it holds for, a qualifier changes the method's scope as its words state, for what it names, and for the rest the method keeps the default scope of its row.
+An entry that begins with a method and stands under another entry details the paths and cases of that entry.
+For them it has the default scope of its own method's row, as the qualifiers that hold for its cases change it, and it takes no other platform, target, compiler or model from the entry that holds it.
+Where a method's description introduces cases with "including", in the line or in its list, those cases are added: the method still covers the cases that the statement names.
+Where a line offers a choice of methods for different cases, such as test or compile-fail, each method covers the cases that it can observe.
+A line that names several methods without such a choice keeps each method's stated coverage.
+
+*Profiles and toolchains.*
+The scope of a heap window, under whichever method a line names it, of a test that a line names under `fault-injection` or whose words say that it injects a fault, and of the panic-link check includes the ASIL profile (xref:elements/up-rust/build.adoc#req-ssr-build-panic-abort[The ASIL build aborts on panic and checks overflow]), whatever a qualifier states.
+A contract suite that relies on catching a panic runs on an unwinding test profile in place of the ASIL profile, for diagnosis only.
+Its result supports a requirement's evidence, and shows no requirement by itself.
+A run that a line places under Miri uses the toolchain that Miri needs, in place of the compilers of its method's row.
+
+*What a result shows.*
+A result directly shows the path, the platform, the target, the backend, the binding and the configuration that it ran on.
+Using it for another scope rests on an argument of its own, and no such argument replaces a run that a Verification line requires on a named platform, target, backend or configuration.
+A result on a test double is evidence for the code under test, within what the double observes.
+It is no evidence that a real part of that kind meets its requirements (xref:../up-l1/bindings.adoc#req-ssr-binding-scope[What a binding is, and the binding contract]).
+
+*The evidence.*
+The supplier of each part that a requirement of the up-rust SEooC requirement family binds *MUST* show, in its evidence for the duties that the requirement gives that part, each method that the requirement's "Verification" line names, in the scope that the method has for the requirement, applied to the paths and cases of those duties that the method covers.
+The evidence of a component conformance claim (xref:../contract-generations.adoc#req-ssr-contract-transition[What a part declares and claims, and when a replacement takes effect]) is that evidence for each requirement that the claim rests on.
+Revision 1 of this item gave the duty to show that evidence to each part that a requirement of the up-rust SEooC requirement family names; this revision gives it to that part's supplier.
+The supplier *MUST* report each piece of evidence by its state, which is what was done to obtain it, with the exact inputs, tool and configuration revisions that it was obtained with, its observation scope and its limitations, and *MUST NOT* present evidence of one state as evidence of another.
+The supplier *MUST* name the test double in each piece of evidence that rests on one.
+Compiling shows no execution, a source review shows no timing, and an emulator shows no physical timing.
+The names of the states are those of the part's versioned qualification record.
+
+*When a requirement is verified.*
+A requirement is verified only when its evidence shows each method of its line, in the scope that the method has for the requirement, applied to the paths and cases that the method covers, and those methods between them cover every path and case that its statement names.
+A result on another path is no evidence for the requirement.
+A method that cannot show a duty of the statement is no evidence for that duty, and the requirement is then not verified.
+--
+
+[horizontal]
+ID:: `+req~ssr-verification-methods~2+`
+ASIL:: B
+Allocated to:: the supplier of each part that a requirement of the up-rust SEooC requirement family binds
+Verification:: review
+* Each "Verification" line of the up-rust SEooC requirement family, against the table: it names one or more of the table's methods, and no other.
+* Each qualifier: the scope that it states, against the default scope of its method's row.
+* For each requirement, its evidence: each method of the requirement's line, in its scope, applied to the paths and cases that the method covers, with the methods between them covering every path and case that its statement names.
+* For each part, its supplier's evidence for the duties of each requirement that binds the part, whether or not a component conformance claim is made: reported by its state with its inputs, revisions, scope and limitations, and naming any test double that it rests on; and, for each component conformance claim, that evidence for each requirement that the claim rests on.
+* That no result on a test double is taken as evidence that a real part of that kind meets its requirements, and that any use of a result beyond its directly observed scope has its own argument, which replaces no run that the Verification line requires, its defaults and qualifiers included.
+ISO 26262:: 8-6.4.3.2 c, 8-9.4.1.1, 8-9.4.2.1, 8-9.4.3.1 (part-clause numbers only)
+
+*Rationale.*
+Every "Verification" line of the up-rust SEooC requirement family names its methods by a word, so each word needs one meaning, stated once, and in an item that meaning has a revision that rises when it changes.
+Several suppliers verify the parts that the up-rust SEooC requirement family binds, each with its own runs, runners and tool versions, which change from one release to the next; a default that names compilers by their role, and no run, runner or tool version, holds for all of them.
+A heap window on a pthread target catches lazy first-use allocation that OS locks built on futexes hide, so the default of the heap window has a platform of each kind.
+In the ASIL profile a panic ends the process and an arithmetic overflow panics, so a heap window, a test that injects a fault or the panic-link check shows how the ASIL build behaves only when it uses that profile.
+A suite that catches a panic needs unwinding, which that profile turns off.
+A result shows how the path that ran behaves, and another path, another platform or a stand-in for a part can run other code under other conditions.
+The code of a part performs its duties, and its supplier is the party that can produce and answer for the evidence.
+
+.A case and a qualifier in one Verification line
+====
+A line may read `+test (a service that keeps history refused at setup, on a 32-bit target)+`.
+The words "a service that keeps history refused at setup" name the case, and "on a 32-bit target" is a qualifier.
+The test then runs on a 32-bit target, with the current stable compiler and with the minimum supported version.
+====
+
+[[req-ssr-unsafe-inventory]]
+== Every `+unsafe+` is inventoried and justified
+
+[.specitem,oft-sid="req~ssr-unsafe-inventory~4",oft-title="Every `unsafe` is inventoried and justified",oft-needs="impl,utest",oft-tags="SafetyUpRustCore,SafetyWire"]
+--
+*The element.*
+The element *MUST* have each of its `+unsafe+` sites state the memory-safety obligation it relies on, and sit under a reviewed row of the element's inventory.
+The element *MUST* establish at the source, in the review of each row, that the obligation of each site under it holds; a run under Miri, a test or a target build does not replace that argument.
+The element *MUST* have an inventory check that refuses a new, changed or vanished site until its row is reviewed, and *MUST* release no build that fails that check.
+
+*Generated code.*
+Code that the element's derives generate is held to the element's requirements, as the element's own code is.
+Each generator of code for the element, such as a derive, *MUST* keep in its own crate the inventory of the `+unsafe+` that it emits, with the proof of each obligation and the constraints on its input under which that proof holds.
+The element *MUST* account for the generated code that its own build admits: the exact generator and configuration that produced it, and the generator's inventory and proof that cover the `+unsafe+` in it, without repeating that inventory's rows.
+Generated code in an application's build takes part in that application's image: the integrator accounts for it, with the exact generator and configuration that produced it (xref:elements/up-rust/assumptions-of-use.adoc#aou-seooc-build-configuration[The ASIL binary is built from its claimed graph, with the ASIL profile]).
+
+*Wires.*
+
+* The element *MUST NOT* require hand-written `+unsafe+` for implementing, wrapping or composing a wire.
+* Each wire *MUST NOT* require hand-written `+unsafe+` of whoever implements, wraps or composes it.
+* Each wire *MUST* contain no hand-written `+unsafe+`, unless it is a separate element with hand-written `+unsafe+` code of its own, as the clause "Outside these inventories" states.
+For each wire, this entry and the clause "Outside these inventories" replace two rules of revision 3 of this item: that the wire crates that this project ships contain no hand-written `+unsafe+`, and that only a wire from elsewhere with `+unsafe+` code of its own falls outside its inventories.
+* Each wire *MUST* keep each `+unsafe+` site of its code, generated code included, under a reviewed inventory row, its own or, for generated code, the generator's, and *MUST* have its build and release verification refuse a new, a changed or a vanished site until such a row accounts for it.
+
+*Bindings.*
+A binding's `+unsafe+` code is under inventory rows that are no part of the element's inventory: those rows, with the refusal of unreviewed sites, are stated in <<req-ssr-binding-unsafe-inventory,A binding inventories its own `unsafe`>>.
+That item replaces, for each binding, the clause on bindings of revision 3 of this item.
+The integrator's use of such a binding on the ASIL path is stated in xref:elements/up-rust/assumptions-of-use.adoc#aou-seooc-qualified-bindings-and-wires[Bindings and wires pass their contracts].
+
+*Outside these inventories.*
+A wire that is a separate element with hand-written `+unsafe+` code of its own, such as a wire over a C codec, falls outside the element's and the generators' inventories: the integrator's use of such a wire on the ASIL path, and the qualification of its `+unsafe+`, are stated in xref:elements/up-rust/assumptions-of-use.adoc#aou-seooc-qualified-bindings-and-wires[Bindings and wires pass their contracts].
+--
+
+[horizontal]
+ID:: `+req~ssr-unsafe-inventory~4+`
+ASIL:: B
+Allocated to:: the element; each generator of code for the element, for the inventory, the proof and the input constraints of the `+unsafe+` that it emits, kept in its own crate; each wire, for requiring no hand-written `+unsafe+` of whoever implements, wraps or composes it, for the inventory rows and change detection of its `+unsafe+` sites, and, unless it is a separate element with hand-written `+unsafe+` code of its own, for containing no hand-written `+unsafe+`
+Verification:: gate (the element's `+unsafe+` inventory check and each wire's change detection, each with a negative control for a new, a changed and a vanished site; a lint that denies an `+unsafe+` block or function without the documentation of its obligations), compile-fail (a derive under `+forbid(unsafe_code)+`), review (each row of the inventory, with the source-level argument that the obligation of each site under it holds; for generated code, the generator's inventory, proof and input constraints, against the exact generator and configuration that the element's build admits)
+
+*Rationale.*
+An `+unsafe+` operation requires its author to establish the memory-safety obligations that the compiler cannot prove.
+Ordinary type, reference and borrowing rules still apply (source: the Rust Reference, Rust 1.98.1, chapter https://doc.rust-lang.org/1.98.1/reference/unsafe-keyword.html[The unsafe keyword], section Unsafe blocks; the Rustonomicon, Rust 1.98.1, chapter https://doc.rust-lang.org/1.98.1/nomicon/meet-safe-and-unsafe.html[Meet Safe and Unsafe]).
+
+A generator's author knows the input constraints under which the code that it emits is sound, and the consuming build knows which generator and configuration it admitted, so each answers for its part.
+
+Keeping wires free of hand-written `+unsafe+` lets anyone write one without taking on memory-safety obligations.
+
+[[req-ssr-binding-unsafe-inventory]]
+== A binding inventories its own `+unsafe+`
+
+[.specitem,oft-sid="req~ssr-binding-unsafe-inventory~2",oft-title="A binding inventories its own `unsafe`",oft-needs="impl,utest",oft-tags="SafetyBinding"]
+--
+*The inventory.*
+Each binding *MUST* state, at each `+unsafe+` site of its own code, the memory-safety obligation that the site relies on, and *MUST* keep each such site under a reviewed row of its own inventory.
+
+*Generated code.*
+Each binding *MUST* keep each `+unsafe+` site of the code that a generator, such as a derive, emits into the binding under a reviewed inventory row, its own or the generator's.
+For all such code, the binding *MUST* account, in what is released with it, for the exact generator, configuration, inputs and generated output, and for the reviewed rows of the generator's own inventory, with their source-level proofs and input constraints, that cover each such site.
+The binding *MUST* name those generator rows by reference without repeating them, and *MUST* establish that the inputs meet those constraints and that the proofs' applicable invariants hold in the consuming build.
+
+*Change detection.*
+Each binding *MUST* have its build and release verification refuse a new, a changed or a vanished `+unsafe+` site of its own code, or of the code that a generator emits into the binding, until a reviewed row of its inventory or, for generated code, of the generator's accounts for it.
+
+*Its own inventory.*
+The inventory is the binding's own.
+It is no part of the element's inventory (<<req-ssr-unsafe-inventory,Every `unsafe` is inventoried and justified>>), and the element's inventory check does not reach it.
+For each binding, this item replaces the clause on bindings of revision 3 of that requirement, which had each binding that this project ships keep its own inventory under the same gate as the element's.
+--
+
+[horizontal]
+ID:: `+req~ssr-binding-unsafe-inventory~2+`
+ASIL:: B
+Allocated to:: each binding
+Verification:: gate (the binding's inventory check over its own sources and over the code that generators emit into the binding, with a negative control: a new, a changed and a vanished site, each refused), review (the exact generator, configuration, inputs and generated output; the referenced generator rows, their source-level proofs and input constraints; and the applicable invariants in the consuming build)
+
+*Rationale.*
+A binding's `+unsafe+` code runs on the same runtime paths as the element's.
+So its obligations need a reviewed record and a check of their own, as the element's do (<<req-ssr-unsafe-inventory,Every `unsafe` is inventoried and justified>>).
+
+.A binding's inventory in its own repository
+====
+A binding may keep its unsafe-site inventory in its repository and run the inventory check there.
+====
+
+[[req-ssr-waiver-record]]
+== Waivers are recorded and can be found
+
+[.specitem,oft-sid="req~ssr-waiver-record~3",oft-title="Waivers are recorded and can be found",oft-needs="impl,utest",oft-tags="SafetyUpRustCore"]
+--
+The element *MUST* hold each waiver as a record compiled into the program, with a name and a scope, and for each waiver *MUST*:
+
+* apply it only where it can be found in the code;
+* record it at the transition, and, where deployment data selects it and the transition admits it, report it there as active, with its name and its scope, in the element's startup report (xref:../basics/resources.adoc#req-ssr-heap-declared[The heap class is declared, with no default]);
+* keep it readable in runtime mode without heap;
+* refuse it by name at the transition, unless it names an approver other than its author.
+
+*The interference argument.*
+In the Enforce and Locked states, the element *MUST* refuse at the transition, by name, as a forbidden finding (xref:elements/up-rust/strict-mode.adoc#req-ssr-strict-states[Strict mode has four states]), a waiver that does not name its interference argument's kind and a reference.
+In the Report state, the element *MUST* record that as that finding and *MUST NOT* refuse the waiver for it (xref:elements/up-rust/assumptions-of-use.adoc#aou-seooc-waiver-approval[Waivers are approved with an interference argument]).
+
+*The compliance report.*
+What the compliance report lists of each active waiver is stated in xref:elements/up-rust/strict-mode.adoc#req-ssr-strict-report[Strict mode reports on every run].
+A report that lists a waiver records it; it is not the waiver's approval.
+
+*Deployment data.*
+The element *MUST NOT* let deployment data create a waiver: deployment data selects a waiver compiled into the program by its id, and nothing more.
+--
+
+[horizontal]
+ID:: `+req~ssr-waiver-record~3+`
+ASIL:: B
+Allocated to:: the element
+Verification:: test (the runtime lists the waiver; a record that names its author as approver is refused; in the Enforce and Locked states, a waiver that does not name its interference argument's kind and a reference is refused, and in the Report state it is admitted with a finding; the element's startup report lists each waiver that deployment data selects and the transition admits, as active, and does not report as active a selected waiver that the transition refuses, for its author named as approver and, in the Enforce and Locked states, for a missing interference argument, and a compiled-in waiver that deployment data does not select is recorded at the transition and not reported as active; deployment data that names an id that no compiled-in waiver has creates no waiver), review (findable)
+ISO 26262:: 9-7 (part-clause numbers only)
+
+*Rationale.*
+A binding ships a permit that states the use it needs, and a deployment files a waiver against it.
+So accepting the allocation is the deployment's recorded decision.
+
+Keeping waivers compiled in and selected by id limits deployment data to a choice among approved waivers.
+
+An approver other than the author gives each waiver a second person's check.
+
+A waiver that names its interference argument's kind and a reference leads a reviewer to the argument that interference from its allocation is excluded.
+The element can check that the argument is named, but not that it holds.
+
+[[req-ssr-binding-readme]]
+== A binding's qualification record states its limits and its failures
+
+[.specitem,oft-sid="req~ssr-binding-readme~4",oft-title="A binding's qualification record states its limits and its failures",oft-needs="uman",oft-tags="SafetyBinding"]
+--
+*The record.*
+Each binding *MUST* keep a qualification record, versioned with the binding, that states for each revision of the binding:
+
+* each target and configuration for which the binding claims its binding contract;
+* every runtime guarantee that its middleware cannot make, with measured figures where they exist;
+* the permits that it declares, which only a named waiver admits (xref:../up-l1/bindings.adoc#req-ssr-waiver-required[Middleware heap needs a named waiver]);
+* its limits, its deviations and its known failures, each classed as this item defines them;
+* the revision of its middleware, and of every other source that an entry relies on;
+* the evidence of the runs that its entries rest on, each with the target and the configuration that it ran on, and the history of each entry.
+
+The record is the authoritative statement of each of these.
+
+*Limits, deviations and known failures.*
+These definitions apply to the qualification record of each part and to each supported composition package (xref:profiles/up-rust-asil-b.adoc#req-ssr-element-configurations[The ASIL path and supported configurations]).
+An entry has one of three classes:
+
+* a _limit_: something that the part or supported composition package does not serve, or serves only within a stated bound, where the requirements of the up-rust SEooC requirement family let it declare what it serves;
+* a _deviation_, which the up-rust SEooC requirement family also calls a _known anomaly_, and once it is accepted an accepted anomaly: a departure from a requirement that binds that part or composition, with an exact scope and exact bounds, which no requirement of the up-rust SEooC requirement family excludes from acceptance, such as a binding's accepted instance of xref:../up-l1/bindings.adoc#req-ssr-binding-no-panic[No panic on any peer input];
+* a _known failure_: any other violation of a requirement that binds that part or composition.
+
+For each deviation the binding *MUST* state in the record an identifier and a revision, its exact scope and bounds, the evidence that it rests on and the date on which it lapses.
+In the record, the binding *MUST* keep its known failures apart from its limits and its deviations.
+Nothing makes a known failure a limit or a deviation: not its disclosure, not an acknowledgement and not a waiver.
+For each supported composition package, the composition-package releaser's duty to record the identifier, revision, exact scope and bounds, evidence and lapse date of each composition-package deviation and to keep composition-package known failures apart from limits and deviations is stated in xref:profiles/up-rust-asil-b.adoc#req-ssr-element-configurations[The ASIL path and supported configurations].
+
+*Whose defect.*
+For each limit, deviation and known failure, the binding *MUST* say in the record whether its cause lies in the binding's own code or in its middleware, and *MUST* name the exact source that the entry relies on: the document or file, its revision and the place in it.
+Which routes a known failure affects for strict mode is stated in xref:elements/up-rust/strict-mode.adoc#req-ssr-strict-ack-revision[An acknowledgement names a deviation by ID and revision].
+
+*Shared memory.*
+Where a binding or its middleware uses shared memory, the binding *MUST* disclose in its record that:
+
+* a write racing a zero-copy read is undefined behaviour even for a type that accepts every bit pattern;
+* the setup integrity check catches misdeployment, not a peer that lies about its level;
+* a private payload copy does not validate middleware-owned offsets, lengths or other shared state;
+* end-to-end protection, OS partitioning and timing budgets remain the integrator's duties.
+
+*The README.*
+The binding's README is a concise profile and index of the binding, and the binding *MAY* have its README link to the record.
+Where the README speaks of a matter that the record states, the record governs.
+
+*Scoped replacement.*
+This revision replaces revision 3 of this item for each binding, each part and each supported composition package, extending the definitions of _limit_, _deviation_ and _known failure_ and the non-acceptance of known failures to supported composition packages while cross-referencing xref:profiles/up-rust-asil-b.adoc#req-ssr-element-configurations[The ASIL path and supported configurations] for the composition-package releaser's deviation-field and separation duties and preserving all binding qualification-record and README duties of revision 3 of this item unchanged.
+--
+
+[horizontal]
+ID:: `+req~ssr-binding-readme~4+`
+ASIL:: B
+Allocated to:: each binding, for its record and README; each part and each supported composition package, as the subjects of the definitions of limit, deviation and known failure
+Verification:: review (every binding's record: the targets and configurations that it claims; each entry and its class; the identifier, revision, scope, bounds, evidence and lapse date of each deviation; the cause and the exact source of each limit, deviation and known failure; what its README says of the matters that the record states; and the definitions applied to entries of a binding, a wire, the element and a supported composition package, each against the requirements that bind that part or composition)
+
+*Rationale.*
+A deployment decision needs the limits of the middleware underneath the binding, including limits that setup declarations cannot remove.
+
+The timing budgets that the record discloses as the integrator's duty are the system's allocation.
+A timing package that a supported configuration offers is the supported composition package's releaser's (the element's supplier for an element-supported configuration package, or the explicit extension composer for an explicit extension package; xref:elements/up-rust/assumptions-of-use.adoc#aou-seooc-timing-budgets[Timing claims rest on a supported configuration, and the item's budgets are the integrator's]).
+
+The end-to-end protection that the record discloses as the integrator's duty is whatever the system supplies.
+
+A limit is something that the requirements let a binding declare.
+A deviation departs from a requirement within a scope and bounds that can be checked, so that an integrator can decide on it.
+A known failure is any other violation, and nothing can accept it, however exactly it is bounded.
+
+Whether a defect is the binding's or its middleware's decides who can repair it, so the record says which, with the source that shows it.
+
+[[composition-accountability]]
+== Composition and assurance accountability boundaries
+
+[NOTE]
+====
+This section is a non-normative pointer index; every obligation stands solely in its single canonical normative item:
+
+* *Element boundary, outside parts and component producers:* xref:elements/up-rust/README.adoc#req-ssr-element-boundary[The parts of the element, and element code] and <<req-ssr-unsafe-inventory,Every `unsafe` is inventoried and justified>> (with <<req-ssr-binding-unsafe-inventory,A binding inventories its own `unsafe`>> and xref:elements/streamer.adoc#req-ssr-streamer-memory-safety[The Streamer's own code cannot cause undefined behaviour, and its `unsafe` is inventoried]).
+* *Supported composition packages and explicit extension composers:* xref:profiles/up-rust-asil-b.adoc#req-ssr-element-configurations[The ASIL path and supported configurations].
+* *Claims, declarations and integrator assumptions of use:* xref:../contract-generations.adoc#req-ssr-contract-transition[What a part declares and claims, and when a replacement takes effect] and xref:elements/up-rust/assumptions-of-use.adoc#aou-seooc-assumptions-bind[An assumption of use binds the integrator who claims the scope, and replaces no requirement].
+* *Strict-mode observation limits and verification evidence:* xref:elements/up-rust/strict-mode.adoc#req-ssr-strict-lock[The locked build allows only enforcement], xref:elements/up-rust/strict-mode.adoc#req-ssr-strict-report[Strict mode reports on every run] and <<req-ssr-verification-methods,The verification methods, and what a Verification line asks for>>.
+====
+
+[NOTE]
+====
+Related technical obligations outside assurance governance:
+
+* *Binding middleware permits and waiver scope:* xref:../up-l1/bindings.adoc#req-ssr-waiver-required[Middleware heap needs a named waiver] and xref:../up-l1/bindings.adoc#req-ssr-waiver-scope[A waiver covers middleware and nothing else].
+* *Rust memory-safety soundness and safe-binding boundary:* xref:../languages/rust.adoc#req-ssr-unsafe-sound[Safe code cannot cause undefined behaviour] and xref:../languages/rust.adoc#req-ssr-unsafe-binding-untrusted[No binding written in safe code can break the element's memory safety].
+* *Checked-wire memory safety:* xref:../up-l1/wires/README.adoc#req-ssr-unsafe-wire-untrusted[No wire can break the element's memory safety].
+====

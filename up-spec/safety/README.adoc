@@ -1,69 +1,84 @@
-= Safety requirements for traceability
+= Safety and Assurance View
 :toc: preamble
 
 [NOTE]
 ====
-This area holds the requirements of the up-rust SEooC, and of the bindings, wires and Streamer that work with it.
-It is laid out like the protocol specification: what is shared comes first, then a part for each protocol layer, then a part for each SDK element.
+These pages provide the safety and assurance view of the specification for the up-rust SEooC requirement family (`+req~ssr-*+` and `+aou~seooc-*+`).
+Ordinary functional, resource, transport, communication and Rust-mapping items of the family live in the responsibility-led technical chapters alongside the rest of uProtocol, while assurance governance, fault-model navigation, assurance profiles and element-specific boundaries, build controls, strict mode and assumptions of use live here.
 
-* *What the area holds.*
-The area is named for its safety requirements and assumptions of use.
-It also holds what they rest on: the up-rust SEooC's ordinary functional contract, and its resource and fault obligations.
-* *Beside the protocol chapters.*
-Most items add to the protocol chapters, and some differ from them on purpose.
-How an item and a rule of the protocol chapters meet: <<req-ssr-contract-transition,What a part declares and claims, and when a replacement takes effect>>.
+* *Contract families and precedence.*
+  How the repository's three requirement families (classic protocol-chapter rules, the up-rust SEooC requirement family and the owned-frame SDK contract) are identified, whom each binds and how a replacement takes effect: xref:../contract-generations.adoc[Which requirements an implementation follows] (xref:../contract-generations.adoc#req-ssr-requirements-bind[A requirement binds the actors to which it gives a duty]; xref:../contract-generations.adoc#req-ssr-contract-transition[What a part declares and claims, and when a replacement takes effect]; xref:../contract-generations.adoc#req-ssr-item-reading[How an item is read]).
+* *Non-normative entry map.*
+  This page states conventions and navigation only; every normative obligation stands inside its own item block.
 ====
 
 [[layout]]
-== How this area is laid out
+== How the safety and assurance view is laid out
 
-NOTE: An item is filed by the protocol responsibility it concerns.
-Each obligation is stated in one item, and tables and indexes link to it.
+NOTE: An item is filed by the responsibility it concerns.
+Each obligation is stated once in a single canonical item, and views, profiles and indexes link to it.
 
-[cols="2,5,3",options="header"]
+=== Safety and assurance pages
+
+[cols="2,5",options="header"]
 |===
-| Part | What it holds | Protocol counterpart
+| Page | What it holds
 
-| This page | The conventions, and the shared concepts and fault models (<<concepts>>) | xref:../basics/README.adoc[The basics]
-| xref:up-l1/README.adoc[`up-l1/`] | What a binding and a wire guarantee, how shared memory is lent or copied between integrity levels, and what a deployment provides for its transports | xref:../up-l1/README.adoc[The transport layer (uP-L1)]
-| xref:up-l1/iceoryx2.adoc[`up-l1/iceoryx2.adoc`] | What is specific to one binding and its middleware, iceoryx2 | xref:../up-l1/iceoryx2.adoc[The iceoryx2 transport]
-| xref:up-l1/iceoryx2-frame.adoc[`up-l1/iceoryx2-frame.adoc`] | How the iceoryx2 binding places a frame in an iceoryx2 sample | xref:../up-l1/iceoryx2.adoc[The iceoryx2 transport]
-| xref:up-l1/lola.adoc[`up-l1/lola.adoc`] | What is specific to one binding and its middleware, LoLa | None: the protocol specification has no LoLa chapter
-| xref:up-l1/lola-envelope.adoc[`up-l1/lola-envelope.adoc`] | How the LoLa binding places a frame in a LoLa sample | None: the protocol specification has no LoLa chapter
-| xref:up-l1/xcdrv2.adoc[`up-l1/xcdrv2.adoc`] | One serialized format, the XCDR2 little-endian appendable profile | None: the protocol specification has no chapter for it
-| xref:up-l2/README.adoc[`up-l2/`] | RPC and message identity, and forwarding by the Streamer | xref:../up-l2/README.adoc[The communication layer (uP-L2)] and xref:../up-l2/dispatchers/README.adoc[its dispatchers]
-| xref:seooc-up-rust/README.adoc[`seooc-up-rust/`] | One SDK element: its scope and boundary, its claims and capability ceiling, its modes, memory, build and platform rules, and the index of its assumptions of use | None: an SDK element is not a protocol layer
+| xref:assurance.adoc[`assurance.adoc`]
+| Violation classes for assumptions of use, verification methods and supplier evidence reporting, `+unsafe+` inventory governance, waiver records and binding qualification records
+
+| <<fault-models,`#fault-models` (this page)>>
+| Safety-view index of the faulty-peer model, violation classes, integrity boundaries, end-to-end protection and fault-containment items
+
+| xref:profiles/README.adoc[`profiles/`]
+| Index of safety-assurance profiles, including xref:profiles/up-rust-asil-b.adoc[`profiles/up-rust-asil-b.adoc`] (the ASIL path, supported configuration packages and full chapter index for the `up-rust` ASIL B SEooC)
+
+| xref:elements/up-rust/README.adoc[`elements/up-rust/`]
+| The `up-rust` SEooC element boundary (E1 to E7) and claims (`README.adoc`), xref:elements/up-rust/assumptions-of-use.adoc[assumptions of use], xref:elements/up-rust/build.adoc[build and shipped content], and xref:elements/up-rust/strict-mode.adoc[strict mode]
+
+| xref:elements/streamer.adoc[`elements/streamer.adoc`]
+| The Streamer safety element boundary and assumptions of use (separate from E1 to E7)
 |===
 
-=== Where an item is filed
+=== Responsibility-led technical chapters
 
-* *Protocol requirements*, which every SDK of a kind must meet, are in the protocol chapters (`basics/`, `up-l1/`, `up-l2/`, `up-l3/`), tagged as those chapters tag them.
-* *A safety obligation of a protocol layer* is in that layer's part here.
-A restriction that only one binding has is in that binding's file, beneath its layer.
-* *An SDK element's own scope, boundary and implementation-specific rules* are in a directory of their own here, named `seooc-<sdk>/`.
-* *A concept or fault model that several parts rely on* is on this page.
-* *A part is added when it has content.*
-No empty directory mirrors a protocol chapter.
+[cols="2,5",options="header"]
+|===
+| Chapter | Technical obligations of the up-rust SEooC requirement family
+
+| xref:../contract-generations.adoc[`contract-generations.adoc`]
+| Requirement-family membership, actor binding, declaration and claim grammar, replacement precedence, item reading rules and classic-route exclusion from runtime mode
+
+| xref:../basics/README.adoc[`basics/`]
+| xref:../basics/resources.adoc[Resources, startup memory and heap classes], xref:../basics/configurations.adoc[configurations and deployment-data validation], xref:../basics/error_model.adoc[error model and runtime refusal], xref:../basics/uuid.adoc[message identifiers (UUID)], and xref:../basics/platform.adoc[platform contracts and atomics]
+
+| xref:../up-l1/README.adoc[`up-l1/`]
+| xref:../up-l1/runtime.adoc[Transport runtime, mode transitions, bounds, QoS and cleanup], xref:../up-l1/payload-paths.adoc[payload paths], xref:../up-l1/bindings.adoc[binding contract, observations, deadlines, TTL and waivers], xref:../up-l1/peers.adoc[peers and faulty-peer model], xref:../up-l1/integrity.adoc[integrity levels and copy routes], xref:../up-l1/README.adoc#transport-deployment-prerequisites[transport deployment prerequisites], middleware bindings (xref:../up-l1/iceoryx2.adoc[iceoryx2], xref:../up-l1/iceoryx2-frame.adoc[iceoryx2 frame], xref:../up-l1/lola.adoc[LoLa], xref:../up-l1/lola-envelope.adoc[LoLa envelope]), and xref:../up-l1/wires/README.adoc[wires] (xref:../up-l1/wires/native.adoc[native], xref:../up-l1/wires/serialized.adoc[serialized], xref:../up-l1/wires/xcdrv2.adoc[XCDR2], xref:../up-l1/wires/e2e.adoc[E2E protection])
+
+| xref:../up-l2/README.adoc[`up-l2/`]
+| xref:../up-l2/api.adoc[Communication Layer APIs and RPC interaction rules], xref:../up-l2/execution.adoc[execution and asynchronous seam], xref:../up-l2/streamer.adoc[bounded-runtime Streamer] and xref:../up-l2/dispatchers/README.adoc[dispatchers]
+
+| xref:../languages/rust.adoc[`languages/rust.adoc`]
+| Rust-specific mechanisms: crate isolation, runtime handle drop discipline, memory-safety soundness and safe-binding boundary
+|===
+
+Non-ASIL owned-frame SDK contract items (`+req~sdk-owned-frame-*+`, ordinary obligations, no ASIL) live in separate pages (xref:../basics/ownership.adoc[`basics/ownership.adoc`], xref:../up-l2/roles.adoc[`up-l2/roles.adoc`]) and explicitly separated sections of mixed chapters (xref:../basics/resources.adoc[`basics/resources.adoc`], xref:../basics/configurations.adoc[`basics/configurations.adoc`], xref:../up-l1/payload-paths.adoc[`up-l1/payload-paths.adoc`], xref:../up-l2/execution.adoc[`up-l2/execution.adoc`]); see xref:../contract-generations.adoc#req-sdk-owned-frame-contract[The owned-frame SDK contract binds the parts that declare it].
 
 [[filing]]
 === Filing and scope
 
-Where an item is filed says which protocol responsibility it concerns.
-The item states whom it binds, wherever it is filed: for a requirement, <<req-ssr-requirements-bind,A requirement binds the actors to which it gives a duty>>; for an assumption of use, xref:seooc-up-rust/assumptions-of-use.adoc#aou-seooc-assumptions-bind[An assumption of use binds the integrator who claims the scope, and replaces no requirement].
+Where an item is filed says which responsibility it concerns.
+The item's own statement decides whom it binds, wherever it is filed: for a requirement, xref:../contract-generations.adoc#req-ssr-requirements-bind[A requirement binds the actors to which it gives a duty]; for an assumption of use, xref:elements/up-rust/assumptions-of-use.adoc#aou-seooc-assumptions-bind[An assumption of use binds the integrator who claims the scope, and replaces no requirement].
 
 * *Other implementations.*
-Which implementations the items of this area bind, and how another implementation claims one of their contracts: <<req-ssr-contract-transition,What a part declares and claims, and when a replacement takes effect>>.
+  Which implementations the items of the up-rust SEooC requirement family bind, and how another implementation claims one of their contracts: xref:../contract-generations.adoc#req-ssr-contract-transition[What a part declares and claims, and when a replacement takes effect].
 * *An assumption of use keeps `seooc` in its ID wherever it is filed.*
-It is that element's assumption (xref:seooc-up-rust/assumptions-of-use.adoc#aou-seooc-assumptions-bind[An assumption of use binds the integrator who claims the scope, and replaces no requirement]).
-* *The protocol chapters.*
-How long a rule of the protocol chapters stays in force, and what replaces one: <<req-ssr-contract-transition,What a part declares and claims, and when a replacement takes effect>>.
+  It is that element's assumption (xref:elements/up-rust/assumptions-of-use.adoc#aou-seooc-assumptions-bind[An assumption of use binds the integrator who claims the scope, and replaces no requirement]).
+* *Classic protocol-chapter rules.*
+  How long a classic protocol-chapter rule stays in force, and what replaces one: xref:../contract-generations.adoc#req-ssr-contract-transition[What a part declares and claims, and when a replacement takes effect].
 
 [[concepts]]
 == Shared concepts and fault models
-
-[[shared-definitions]]
-Several parts of this area rely on the items of this section.
-An entry that is not an item names the items that state its concept.
 
 === Software obligations and deployment duties
 
@@ -71,382 +86,22 @@ An entry that is not an item names the items that state its concept.
 |===
 | Kind | Type | Who meets it
 
-| Software safety requirement | `req` | <<req-ssr-requirements-bind,A requirement binds the actors to which it gives a duty>>
-| Assumption of use | `aou` | xref:seooc-up-rust/assumptions-of-use.adoc#aou-seooc-assumptions-bind[An assumption of use binds the integrator who claims the scope, and replaces no requirement]
+| Software safety requirement | `req` | xref:../contract-generations.adoc#req-ssr-requirements-bind[A requirement binds the actors to which it gives a duty]
+| Assumption of use | `aou` | xref:elements/up-rust/assumptions-of-use.adoc#aou-seooc-assumptions-bind[An assumption of use binds the integrator who claims the scope, and replaces no requirement]
 |===
 
-The key words of each kind: <<req-ssr-item-reading,How an item is read>>.
+The key words of each kind, how an item is read, and how requirements bind and take effect: xref:../contract-generations.adoc#req-ssr-requirements-bind[A requirement binds the actors to which it gives a duty], xref:../contract-generations.adoc#req-ssr-contract-transition[What a part declares and claims, and when a replacement takes effect], xref:../contract-generations.adoc#req-ssr-item-reading[How an item is read] and xref:assurance.adoc#req-ssr-violation-classes[How a violated assumption of use shows up].
 
-[[req-ssr-requirements-bind]]
-=== A requirement binds the actors to which it gives a duty
+=== Fault models, claims and guarantees
 
-[.specitem,oft-sid="req~ssr-requirements-bind~3",oft-title="A requirement binds the actors to which it gives a duty",oft-needs="uman",oft-tags="SafetyUpRustCore,SafetyStreamer,SafetyBinding,SafetyWire"]
---
-*Whom it binds.*
-The statement of each software safety requirement of this area names the actor that answers for each of its duties, and states the conditions, qualifiers and exclusions that determine the reach of each duty.
-An actor is a part, or the supplier of a part.
-The requirement binds the actors to which its statement gives a duty, and no other, wherever it is filed.
-Each of them *MUST* meet each duty that the statement gives it, within that duty's reach, which only the statement determines.
-
-*Parts and suppliers.*
-A part is a software component that a statement names explicitly: the element or one of its named parts, a binding, a wire, a platform backend, the Streamer, an optional layer, or another named component.
-A part meets a duty in its code or, where the statement says so, in what is released with it, such as its declaration, its documentation or its qualification record.
-A part's supplier is the party that releases the part.
-The supplier answers for a duty on the part's records or evidence where a statement gives the supplier that duty.
-
-*A mention gives no duty.*
-A statement can name a part, a supplier, an integrator or anything else as the source, the recipient, the object, the place or the condition of another actor's duty.
-What is named only so answers for nothing there.
-An actor meets the duties that statements give it, and not every duty of an item that names it.
-
-*The "Allocated to" line.*
-Each requirement of this area has an "Allocated to" line, its explicit, reviewable allocation.
-The line mirrors the statement: it names each actor to which the statement gives a duty, with the qualifier that limits that actor's share, and it holds no actor, condition, qualifier or exclusion that the statement lacks.
-The line of a requirement whose statement only defines names the subject of its definitions, and gives nothing a duty by naming it.
-A line that names the subject of definitions beside the actors of its statement's duties says so, and gives that subject no duty.
-Where the line and the statement differ, the statement determines whom the requirement binds, and how far.
-
-*What does not decide it.*
-None of these changes whom a requirement binds, or how far: the page or the directory that holds it; its tags; a trace filter or a tracing run; the repository that implements or covers it, and who owns that repository; a status that a record keeps of its adoption, its implementation or its qualification.
-
-*Assumptions of use.*
-Whom an assumption of use binds is stated by xref:seooc-up-rust/assumptions-of-use.adoc#aou-seooc-assumptions-bind[An assumption of use binds the integrator who claims the scope, and replaces no requirement].
---
-
-[horizontal]
-ID:: `+req~ssr-requirements-bind~3+`
-ASIL:: B
-Allocated to:: each part, and each supplier of a part, that a requirement of this area binds
-Verification:: review
-* Each requirement's statement: it names the actor that answers for each of its duties, with the conditions, qualifiers and exclusions that determine each duty's reach.
-* Each requirement's "Allocated to" line: it names the actors to which the statement gives a duty, with their qualifiers, and holds nothing that the statement lacks.
-* That no page, directory, tag, trace filter, tracing run, repository, repository owner or recorded status is used to decide whom a requirement binds, or how far.
-
-*Rationale.*
-A requirement is read on its own, so whom it binds, and how far, is read from its statement.
-One text then decides that scope, and a claim or a safety manual that quotes the statement carries all of it.
-The "Allocated to" line keeps the allocation explicit, so that a review can check it against the statement.
-A statement names other parts to say whose input, storage or declaration a duty concerns, and a duty that fell on each of them would have no single part to answer for it.
-Pages, tags, tracing runs and repositories change as the specification is organized and traced.
-If whom a requirement binds depended on them, such a change could move a duty to another part or leave it with none.
-
-NOTE: How a contributor keeps a statement and its "Allocated to" line in agreement, and corrects a disagreement, is stated in xref:../CONTRIBUTING.adoc#safety-area[Changing the safety area of the specification].
-
-[[req-ssr-contract-transition]]
-=== What a part declares and claims, and when a replacement takes effect
-
-[.specitem,oft-sid="req~ssr-contract-transition~2",oft-title="What a part declares and claims, and when a replacement takes effect",oft-needs="uman",oft-tags="SafetyUpRustCore,SafetyStreamer,SafetyBinding,SafetyWire"]
---
-*What binds a part.*
-A requirement of this area binds a part as <<req-ssr-requirements-bind,A requirement binds the actors to which it gives a duty>> states, at the revision in force for that part, whether or not the part has a declaration.
-A declaration, a component or deployment conformance claim, a change of tags and a tracing or coverage run change neither which requirements bind a part nor how far.
-A claim of a safety-assurance scope changes whom a requirement binds only where the requirement's own stated condition names such a claim.
-
-*Revisions.*
-A revision of the specification is one adopted state of the text of this repository.
-It is separate from the revision of an item, and it holds each item at one revision (<<req-ssr-item-reading,How an item is read>>).
-
-*The declaration.*
-Each part that a requirement of this area binds *MUST* state, in a declaration that is released with it, which part it is, the revision of the specification that its claims rest on, and each named profile that it follows.
-A named profile is one that an item of the specification names, with each of its items by identifier or link, and the part *MUST NOT* name any other profile in its declaration.
-The profile's own statement of its version is read at the declared revision.
-The dependency closure of an item is each item that its statement names or links, and each item that those name or link in turn; that of a named profile is that of its items.
-For the part's claims, the declared revision fixes the revision of each item and of its closure.
-The closure adds no duty: it makes no part answer for a duty of another part.
-
-*Component claims.*
-A component conformance claim is a claim that a part meets items of this area.
-In each such claim, the part *MUST* name its declaration and each item that the claim rests on, at the revision that the declared revision of the specification fixes.
-A claim that rests on an item rests on its dependency closure too.
-Where a claim rests on fewer than all the requirements that bind the part, the part *MUST* rest it on a named profile that it declares.
-A claim's evidence is evidence for those revisions, for that profile and for the configuration that the evidence names, and for nothing else.
-
-*The supplier.*
-The supplier of each such part *MUST* release the part's declaration, and each component conformance claim made for the part, with the part.
-The supplier *MUST* keep a record of where the part implements each item of this area that binds it, and of who made each entry of that record.
-For an SDK, this duty of its supplier replaces the earlier convention of this area that an SDK which implements an item keeps its own record of where it does so.
-The record is kept with the part, outside the specification, and it is no statement of this area.
-What the supplier shows as the evidence of a claim is stated in xref:seooc-up-rust/README.adoc#req-ssr-verification-methods[The verification methods, and what a Verification line asks for].
-
-*Deployment claims.*
-A deployment declaration names the deployment's profile (xref:seooc-up-rust/README.adoc#req-ssr-element-configurations[The ASIL path and supported configurations]), the revision of the specification, and each part that the deployment composes, with that part's declaration.
-A deployment conformance claim is a claim that a deployment meets the assumptions of use.
-Both belong to the integrator, and both are separate from every component conformance claim.
-When the integrator makes them, and what a deployment conformance claim names, are stated in xref:seooc-up-rust/assumptions-of-use.adoc#aou-seooc-assumptions-bind[An assumption of use binds the integrator who claims the scope, and replaces no requirement].
-A component conformance claim is no claim about a deployment, and a deployment conformance claim adds nothing to what a part's own claims state of that part.
-
-*What a claim covers.*
-A claim covers what it names.
-Ordinary functional behaviour, native resource behaviour (xref:seooc-up-rust/heap.adoc#req-ssr-heap-none[No heap in runtime mode on a native path]), a finite timing bound and a safety-assurance scope (xref:seooc-up-rust/qos.adoc#req-ssr-qos-no-downgrade[QoS is honored or refused, never weakened]) are four separate subjects of a claim.
-A claim to one of them, and the evidence for it, is neither a claim to another nor evidence for it.
-
-*What establishes no claim.*
-A report that a part produces at build time or at run time, such as a setup result, a route's report or a strict-mode report, establishes the checks that it names and nothing else.
-It is neither a component conformance claim nor a deployment conformance claim, and it qualifies neither a part nor a deployment.
-None of these establishes a claim either: a successful build; a tag; a tracing or coverage run; an operating system, an architecture, a compiler or a middleware; a certificate or a qualification of a dependency, which holds for that dependency in its own scope.
-
-*Another implementation.*
-An implementation of uProtocol that no requirement of this area binds is bound by none of them, wherever they are filed.
-It takes a contract of this area only by its own declaration, as a part that the items of that contract name: the declaration names that part, a named profile and the revision of the specification, and the requirements of that profile then bind the implementation as that part.
-
-*Replacement.*
-A rule of the protocol chapters, or an item of this area at a revision, stays in force for the implementations and the behaviour that it covers until an adopted replacement takes effect for them.
-A replacement is an item of this area, or a change of a protocol chapter, that names the rule that it replaces, reallocates or retires, the actors that the rule bound, and the implementations and the behaviour for which it does so, and it takes effect only for those.
-A new revision of an item replaces its earlier revision for each actor to which both revisions give a duty.
-For an actor to which only the earlier revision gives a duty, the earlier revision stays in force until a text replaces or retires that actor's duty, or gives it to another actor or to another item, by name.
-A text is adopted when it is stated in a revision of the specification that normal adoption produced.
-No status that a record keeps of a text's adoption, implementation or qualification decides that.
-An item of this area lifts a rule of the protocol chapters, a security requirement included, only where it is such a replacement.
-A rule of the protocol chapters keeps its own reach, whether or not an implementation that it covers also follows the items of this area.
-
-*Where an item meets a chapter's rule.*
-An item and a chapter's rule meet in one of three ways.
-
-* Where one implementation can meet both, both hold.
-* Where one implementation cannot meet both for a behaviour, a part that the item binds *MUST* say so in its declaration, naming the item at its revision.
-It *MUST NOT* claim conformance to the chapter's rule for that behaviour, and *MUST NOT* name both rules in one claim for it.
-* Where the two texts do not settle whether one implementation can meet both, a claim of conformance to one is no claim about the other, and the part *MUST NOT* rest a claim on an answer to that question.
---
-
-[horizontal]
-ID:: `+req~ssr-contract-transition~2+`
-ASIL:: B
-Allocated to:: each part that a requirement of this area binds; the supplier of each such part, for releasing its declaration and claims with it and for the record of where it implements each item
-Verification:: review
-* Each part's declaration: it names the part, the revision of the specification and each named profile that the part follows, and no other profile.
-* Each component conformance claim: it names the declaration and each item that it rests on, with their dependency closure, at their revisions, and it rests on a named profile where it rests on fewer than all the requirements that bind the part.
-* For each such part, its supplier's release of the declaration and of each component conformance claim with the part, and the supplier's record of where the part implements each item that binds it, with who made each entry.
-* Where one implementation cannot meet an item and a chapter's rule: the part's declaration says so with the item's revision, the part claims no conformance to the chapter's rule for that behaviour, and no claim names both rules.
-* That no claim rests on an answer that the two texts do not settle, on a report's checks beyond what the report names, or on anything that this item says establishes no claim.
-
-*Rationale.*
-A claim is read against an exact text, so it names that text and the part that it is made for.
-A part cannot speak for the deployment that composes it, and a deployment cannot add to what a part's supplier has shown, so the two kinds of claim stay apart and each has one party that answers for it.
-A report shows the checks that ran, and what no check observes stays unshown.
-The protocol chapters cover implementations that the items of this area do not name, so only a text that names a rule, and those for whom it replaces it, can lift that rule.
-A tracing run is arranged for coverage, so what binds a part does not depend on how a run is arranged.
-
-[[req-ssr-peer-fault-model]]
-=== The requirements hold against a faulty peer
-
-[.specitem,oft-sid="req~ssr-peer-fault-model~2",oft-title="The requirements hold against a faulty peer",oft-needs="impl,utest,uman",oft-tags="SafetyUpRustCore,SafetyStreamer,SafetyBinding,SafetyWire"]
---
-*The faulty-peer model.*
-Every peer is treated as faulty, never malicious.
-
-* A peer may send any content, at any time and in any volume, and may choose any source URI.
-* A peer may stop sending, stall, exit, be killed or restart at any time.
-* A faulty peer includes one that writes values its own middleware never writes, into shared memory it can write.
-* A peer below a reader's level may write its own shared memory at any moment, and the route that its reader then takes is stated in xref:up-l1/integrity.adoc#req-ssr-integrity-zero-copy[Zero-copy only from a writer at or above the reader].
-
-*The duty.*
-Each part that a requirement of this area binds *MUST* meet each duty that the requirement gives it against everything that this model allows of a peer: each input, each write into shared memory, and each stop, stall, exit, kill and restart.
-
-*The model's scope.*
-The peers of the up-rust SEooC, on every transport.
-The model applies within the access restriction that the integrator provides: only the processes deployed to use a transport's resources reach them (xref:up-l1/deployment.adoc#aou-seooc-peer-access[Only authorized processes reach the transport]).
-What lies outside that scope is outside this item's duty, which releases no part from a requirement as its own statement reads.
-
-*The boundary between safety and security.*
-Only deliberate exploitation, such as engineering a peer-ID hash collision, is out of scope, as security.
-That exclusion is the model's boundary between safety and security: it does not say that a peer that exploits deliberately is harmless, or that the requirements hold against it.
-
-*Rules left in force.*
-The model bounds only the safety argument.
-It leaves in force the protocol's security requirements, such as those of xref:../up-l1/README.adoc[uP-L1] against address spoofing and unauthorized access.
-It also does not make a lower-assurance process harmless because it runs apart: the rules for lending and copying cover what such a process can write into shared memory.
-
-*The safety manual.*
-Each such part *MUST* state the model, its scope and the boundary between safety and security in the safety manual that is released with it.
---
-
-[horizontal]
-ID:: `+req~ssr-peer-fault-model~2+`
-ASIL:: B
-Allocated to:: each part that a requirement of this area binds
-Verification:: fault-injection, review
-* *fault-injection*
-** Malformed and truncated frames, and frames with any bytes in their header, their envelope and their payload.
-** Arbitrary byte strings, decoded by each wire.
-** A flood on every receive kind, and one peer that fills a route's depth, its slots or its peer table.
-** Frames at any time, frames that carry an earlier incarnation of their peer included.
-** Frames from undeclared sources, and from any source URI.
-** A peer process that stalls, exits, is killed or restarts during traffic.
-** A peer process that writes values its own middleware never writes, into shared memory that it can write.
-** A peer process below the reader's level that writes its shared memory while it is read.
-* *review*
-** For each part, that the verification of each requirement that binds it covers the faults of this item that bear on that requirement.
-** For each part, that the safety manual released with it states the model, its scope and the boundary between safety and security.
-ISO 26262:: 6-Annex D.2.2, 6-Annex D.2.3, 6-Annex D.2.4 (part-clause numbers only)
-
-*Rationale.*
-Peers run in other processes, often over middleware this project does not control.
-A requirement that held only for well-formed input would leave a process open to every peer that fails.
-
-The element, the bindings, the wires and the Streamer handle the same frames and the same shared memory, so a fault that one of them does not withstand reaches the others.
-
-[[faulty-peer]]
-=== Items that rely on the faulty-peer model
-
-The list below indexes items known to rely on <<req-ssr-peer-fault-model,The requirements hold against a faulty peer>>.
-
-* *The integrator's side.*
-** xref:up-l1/deployment.adoc#aou-seooc-peer-access[Only authorized processes reach the transport].
-** xref:seooc-up-rust/assumptions-of-use.adoc#aou-seooc-process-isolation[Processes or partitions are isolated].
-** xref:seooc-up-rust/assumptions-of-use.adoc#aou-seooc-peer-rates[Peer rates on shared routes are the integrator's].
-** xref:seooc-up-rust/assumptions-of-use.adoc#aou-seooc-application-reacts[The application reacts to what the element reports].
-** xref:seooc-up-rust/assumptions-of-use.adoc#aou-seooc-e2e-protection[The integrator decides which routes need end-to-end protection].
-** xref:up-l1/iceoryx2.adoc#aou-seooc-iceoryx2-level-separation[On iceoryx2, each integrity level has its own processes, domain and OS user] and xref:up-l1/iceoryx2.adoc#aou-seooc-iceoryx2-limits[A deployment on iceoryx2 accepts that binding's limits, and no known failure as one].
-** xref:up-l1/lola.adoc#aou-seooc-lola-assumptions-kept[A deployment on LoLa keeps the assumptions of LoLa that the binding names for the integrator].
-* *The element, for the peers of a transport.*
-The four items of xref:up-l1/peers.adoc[peers of a transport]: xref:up-l1/peers.adoc#req-ssr-peer-failure-normal[Peer failure is normal input]; xref:up-l1/peers.adoc#req-ssr-native-abi-agreed[A native representation never crosses an ABI]; xref:up-l1/peers.adoc#req-ssr-peer-stale-rejected[Stale peers are rejected] and xref:up-l1/peers.adoc#req-ssr-peer-admission[Undeclared peers cannot lock out declared ones].
-* *The element, for memory safety and shared memory.*
-** xref:seooc-up-rust/memory-safety.adoc#req-ssr-unsafe-sound[Safe code cannot cause undefined behaviour].
-** xref:up-l1/integrity.adoc#req-ssr-integrity-declared[Each transport declares one integrity level]; xref:up-l1/integrity.adoc#req-ssr-integrity-zero-copy[Zero-copy only from a writer at or above the reader]; xref:up-l1/integrity.adoc#req-ssr-integrity-any-bits[In-place types accept every bit pattern]; xref:up-l1/integrity.adoc#req-ssr-integrity-checked-at-admission[In-place frames are checked once, at admission] and xref:up-l1/integrity.adoc#req-ssr-integrity-carrier-crossing[Upward carrier crossings copy once, or are refused].
-** xref:up-l1/native-wire.adoc#req-ssr-native-type[A native payload type holds its whole value in one fixed layout] and xref:up-l1/native-wire.adoc#req-ssr-native-agreement[A native type is read only under its exactly agreed layout].
-* *The element, for bounded work.*
-xref:seooc-up-rust/bounded-work.adoc#req-ssr-bound-work[Work per call is bounded by setup data].
-* *The element, for refusal.*
-xref:seooc-up-rust/errors.adoc#req-ssr-refuse-no-panic[No panic on runtime paths].
-* *A binding.*
-** xref:up-l1/bindings.adoc#req-ssr-binding-no-panic[No panic on any peer input] and xref:up-l1/bindings.adoc#req-ssr-binding-frame-drop[What a received frame's destructor may do].
-** xref:up-l1/bindings.adoc#req-ssr-binding-bounded[A binding bounds its own work and its waits].
-** xref:up-l1/bindings.adoc#req-ssr-binding-lent-storage[Lent storage is exclusive, disjoint and stable for as long as it is held] and xref:up-l1/bindings.adoc#req-ssr-binding-shared-state[A lending binding says which way its ports write shared state].
-** xref:up-l1/bindings.adoc#req-ssr-binding-readme[A binding's qualification record states its limits and its failures].
-** xref:up-l1/iceoryx2.adoc#req-ssr-binding-iceoryx2-panic-paths[iceoryx2's allowed panic paths are named, bounded and disclosed] and xref:up-l1/iceoryx2.adoc#req-ssr-binding-iceoryx2-static-segments[On iceoryx2, every publisher has a static data segment].
-** xref:up-l1/lola.adoc#req-ssr-binding-lola-foreign-boundary[Nothing unwinds across the LoLa binding's boundary, and a termination path is a panic path].
-** xref:up-l1/lola-envelope.adoc#req-ssr-binding-lola-envelope-checks[On LoLa, a sample that is not a well-formed envelope is refused before any of it is used]; xref:up-l1/lola-envelope.adoc#req-ssr-binding-lola-envelope-routing-hint[On LoLa, the routing hint is untrusted, and the metadata decides] and xref:up-l1/lola-envelope.adoc#req-ssr-binding-lola-envelope-metadata[On LoLa, the metadata is the selected wire's, and is checked before delivery].
-** xref:up-l1/iceoryx2-frame.adoc#req-ssr-binding-iceoryx2-frame-checks[On iceoryx2, a sample that is not a well-formed frame is refused before any of it is used] and xref:up-l1/iceoryx2-frame.adoc#req-ssr-binding-iceoryx2-frame-metadata[On iceoryx2, the binding carries the metadata unchanged, and its identity is the element's to check].
-* *A wire.*
-xref:up-l1/wires.adoc#req-ssr-wire-no-panic[Encoding and decoding never panic].
-* *The Streamer.*
-xref:up-l2/streamer.adoc#req-ssr-config-exact-addresses[ASIL Streamer routes name exact source addresses]; xref:up-l2/streamer.adoc#req-ssr-streamer-containment[A fault stays on its route]; xref:up-l2/streamer.adoc#req-ssr-streamer-no-panic[The Streamer does not panic in runtime mode] and xref:up-l2/streamer.adoc#req-ssr-streamer-memory-safety[The Streamer's own code cannot cause undefined behaviour, and its `+unsafe+` is inventoried].
-
-[[integrity-level]]
-=== Integrity levels
-
-The items that state them: xref:up-l1/integrity.adoc#req-ssr-integrity-declared[Each transport declares one integrity level] for the software, xref:up-l1/deployment.adoc#aou-seooc-integrity-levels[Each transport's integrity level is assigned correctly] for the integrator's assignment, xref:up-l1/integrity.adoc#req-ssr-integrity-zero-copy[Zero-copy only from a writer at or above the reader], xref:up-l1/integrity.adoc#req-ssr-integrity-carrier-crossing[Upward carrier crossings copy once, or are refused] and xref:up-l1/bindings.adoc#req-ssr-binding-integrity-level[A lending binding records and reports the writer's level] for what levels decide of routes and crossings, xref:seooc-up-rust/assumptions-of-use.adoc#aou-seooc-capability-ceiling[Data above ASIL B relies on measures outside the element] for data above ASIL B and for the element inside a process or partition that holds software at ASIL C or D, and xref:seooc-up-rust/qos.adoc#req-ssr-qos-no-downgrade[QoS is honored or refused, never weakened] and xref:seooc-up-rust/heap.adoc#req-ssr-heap-guarantees[A stronger resource guarantee is required by name, and admitted or refused] for what a level does not request.
-
-[[process-failure]]
-=== Process failure and restart
-
-The items that state it: xref:seooc-up-rust/assumptions-of-use.adoc#aou-seooc-supervisor-restart[A supervisor outside the process restarts it] for the supervisor.
-xref:seooc-up-rust/runtime-modes.adoc#req-ssr-mode-no-shutdown[No shutdown in runtime mode], xref:seooc-up-rust/runtime-modes.adoc#req-ssr-mode-one-way[There is no way back] and xref:seooc-up-rust/runtime-modes.adoc#req-ssr-mode-restart[A restart is an initialization] for the element, xref:up-l1/peers.adoc#req-ssr-peer-failure-normal[Peer failure is normal input] for the survivors, and xref:up-l1/bindings.adoc#req-ssr-binding-predecessor-cleanup[A binding cleans up after a dead predecessor, in initialization] for a binding.
-
-[[memory-separation]]
-=== Memory separation
-
-The items that state it: xref:seooc-up-rust/assumptions-of-use.adoc#aou-seooc-process-isolation[Processes or partitions are isolated], and <<req-ssr-peer-fault-model,The requirements hold against a faulty peer>> for what a peer may write in shared memory.
-
-[[req-ssr-violation-classes]]
-=== How a violated assumption of use shows up
-
-[[violation]]
-[.specitem,oft-sid="req~ssr-violation-classes~1",oft-title="How a violated assumption of use shows up",oft-needs="uman",oft-tags="SafetyUpRustCore,SafetyStreamer,SafetyBinding,SafetyWire"]
---
-*The classes.*
-The "Violation" text of an assumption of use says how a violation of the assumption shows up to an observer, in one of three classes.
-
-* *Refused at setup*: the observer detects the violation during initialization and refuses setup.
-The element refuses with the error that xref:seooc-up-rust/runtime-modes.adoc#req-ssr-mode-init-failure[Initialization failure] states.
-A build that fails counts as refused at setup.
-* *Counted*: the observer detects the violation in runtime mode, and returns or counts it as xref:seooc-up-rust/errors.adoc#req-ssr-error-no-silent-loss[No silent loss, and each loss counted once] and xref:seooc-up-rust/errors.adoc#req-ssr-refuse-before-heap[Refuse before touching the heap] state.
-* *Undetectable*: the observer cannot observe the violation.
-Only measures of the integrator's own can cover it (xref:seooc-up-rust/assumptions-of-use.adoc#aou-seooc-violation-classes[The integrator covers each violation that its observer cannot detect]).
-
-*The observer.*
-The observer is the element, unless the text names another part, such as a binding, a wire or the Streamer.
-A class says what that observer can observe.
-It never says that a violation was not tested.
-
-*A limit of the contract.*
-A "Violation" text can state, instead of a class, a limit of the contract: that no requirement has a part check something.
-Such a text gives the violation none of the three classes, and the integrator has no detection to rely on for it.
-A limit of the contract is not a limit that a binding's qualification record states (xref:up-l1/bindings.adoc#req-ssr-binding-readme[A binding's qualification record states its limits and its failures]).
-
-*No behaviour of its own.*
-A class adds no duty.
-What an observer does on a violation is stated by the requirement that the "Violation" text or this item links for the class.
-
-*Scope.*
-The assumptions of use of this area, wherever they are filed.
---
-
-[horizontal]
-ID:: `+req~ssr-violation-classes~1+`
-ASIL:: B
-Allocated to:: the "Violation" texts of the assumptions of use of this area
-Verification:: review (each "Violation" text of this area: each class that it uses, its observer, and the requirement that states what the observer does, read against this item)
-
-*Rationale.*
-An integrator plans its own measures from what the software can and cannot observe.
-One meaning for each class, with its observer named, keeps a violation that nothing observes from being read as one that was only left untested.
-
-[[claims-model]]
-=== Claims and guarantees
-
-What a claim covers, and what establishes none: <<req-ssr-contract-transition,What a part declares and claims, and when a replacement takes effect>>.
-The element's own claims: xref:seooc-up-rust/README.adoc#claims[The SEooC's claims], xref:seooc-up-rust/qos.adoc#req-ssr-qos-no-downgrade[QoS is honored or refused, never weakened] and xref:seooc-up-rust/heap.adoc#req-ssr-heap-guarantees[A stronger resource guarantee is required by name, and admitted or refused].
+* *Faulty-peer model and fault containment:* xref:../up-l1/peers.adoc#req-ssr-peer-fault-model[The requirements hold against a faulty peer] and <<fault-models,fault-model and fault-containment map>>.
+* *Violation classes:* xref:assurance.adoc#req-ssr-violation-classes[How a violated assumption of use shows up] and xref:elements/up-rust/assumptions-of-use.adoc#aou-seooc-violation-classes[The integrator covers each violation that its observer cannot detect].
+* *Claims and guarantees:* xref:../contract-generations.adoc#req-ssr-contract-transition[What a part declares and claims, and when a replacement takes effect], xref:elements/up-rust/README.adoc#claims[the SEooC's claims], xref:../up-l1/runtime.adoc#req-ssr-qos-no-downgrade[QoS is honored or refused, never weakened] and xref:../basics/resources.adoc#req-ssr-heap-guarantees[A stronger resource guarantee is required by name, and admitted or refused].
 
 == The items
 
-An item of this area is a software safety requirement, of type `req`, or an assumption of use, of type `aou`: the types that up-spec already uses.
-
-[[req-ssr-item-reading]]
-=== How an item is read
-
-[[spec-first]]
-[.specitem,oft-sid="req~ssr-item-reading~1",oft-title="How an item is read",oft-needs="uman",oft-tags="SafetyUpRustCore,SafetyStreamer,SafetyBinding,SafetyWire"]
---
-*The statement.*
-An item's statement is everything inside the item's block: its paragraphs, its labels in bold, its lists and its tables.
-The statements of the items of this area, and nothing else on its pages, state its duties, its permissions, its conditions and its definitions.
-
-*Outside the statement.*
-The `ID` row, the ASIL, the "Allocated to" line, the "Verification" line, the ISO 26262 references, the "Violation" text of an assumption of use and the rationale are not part of the statement.
-Neither they nor a note, an example, a figure, a table, an index or a summary outside an item's block add, change or lift a duty.
-Where one of them differs from a statement, the statement governs.
-A "Verification" line describes evidence for its statement (xref:seooc-up-rust/README.adoc#req-ssr-verification-methods[The verification methods, and what a Verification line asks for]): it adds no duty, and it is no condition of one.
-A duty holds as its statement says, whether or not a part meets it yet, whether or not anyone has shown how to meet it, and whether or not evidence for it exists.
-An ISO 26262 reference names a clause that an item relates to, and nothing more.
-
-*Key words.*
-A statement states a duty with the key word "MUST" or "MUST NOT" in a requirement and with "SHALL" or "SHALL NOT" in an assumption of use, and a permission with "MAY", each as BCP 14 defines it (https://www.rfc-editor.org/info/bcp14[IETF BCP 14: RFC 2119 and RFC 8174]).
-"MUST" and "SHALL" are equally strong: the two words tell a requirement, whose duty falls on a part or on its supplier, from an assumption of use, whose duty falls on the integrator.
-A statement that states a duty in other words binds just the same.
-A clause that defines a term, or that states a condition, a fact or a limit, has no key word, and holds wherever a statement relies on it.
-
-*Names.*
-A name in a statement, such as that of an operation, a setting, a state, a counter or a named result, is part of the specification, and no citation of code.
-No statement, rationale or Verification line rests on an implementation's source files, internal names, review records or current state.
-
-*References.*
-A statement refers to another item by its title, linked to the item's anchor, which holds the item's type and name without its revision.
-The reference means that item at the revision that the same revision of the specification holds.
-A statement that names an earlier revision of an item, as a replacement does, means that revision.
-An item of a protocol chapter that has no anchor or no title is named instead by its identifier, which holds its revision.
-
-*Revisions.*
-An item's revision identifies its meaning: the actors, the conditions and applicability, the duties and outcomes, the exceptions and quantifiers, and the scope in time, resources and ownership that its statement gives.
-Two texts of one item at one revision have one meaning, and a text with another meaning has another revision.
-An item's name is never changed or reused, and an item keeps its name and its revision wherever it is filed.
---
-
-[horizontal]
-ID:: `+req~ssr-item-reading~1+`
-ASIL:: B
-Allocated to:: the items of this area
-Verification:: review
-* Each page of this area: no duty, permission, condition or definition stands only outside an item's block.
-* Each statement: its key words, its names and its references, read against this item.
-* Each item whose text differs between two revisions of the specification: the same revision only where its meaning is the same.
-* That no page makes a duty wait for an implementation, for its evidence or for a recorded status.
-
-*Rationale.*
-The items say what an implementation must satisfy, and an implementation's code, tests and reviews trace to the items.
-So a reader has to know which words of a page are the contract, and no word of the contract can depend on what one implementation does.
-A claim names an item at a revision, so a revision that kept its number while its meaning changed would let the claim say something that its evidence does not show.
-The two key words for a duty follow the convention of xref:../basics/payload_encoding_registry.adoc[the payload encoding registry] ("Requirement Ownership").
+An item of the up-rust SEooC requirement family is a software safety requirement, of type `req`, or an assumption of use, of type `aou`: the types that up-spec already uses.
+How an item is read: xref:../contract-generations.adoc#req-ssr-item-reading[How an item is read].
 
 === Identifiers
 
@@ -461,28 +116,28 @@ The attributes are those of OpenFastTrace (OFT), the tool that traces the items.
 After the block come the `ID` row and the ASIL, and the item's ISO 26262 references and its rationale where it has them; a requirement also has its allocation and its verification methods there, and an assumption of use its "Violation" text.
 
 [[source]]
-NOTE: A rationale explains the rule as it stands, and an item keeps a source note where a rule or a contract-affecting definition relies on an external source: xref:../CONTRIBUTING.adoc#safety-area[Changing the safety area of the specification], "Sources and rationales".
+NOTE: A rationale explains the rule as it stands, and an item keeps a source note where a rule or a contract-affecting definition relies on an external source: xref:../CONTRIBUTING.adoc#safety-area[the contributor guidelines for safety items], "Sources and rationales".
 
-How a contributor writes, revises, files and tags an item: xref:../CONTRIBUTING.adoc#safety-area[Changing the safety area of the specification].
+How a contributor writes, revises, files and tags an item: xref:../CONTRIBUTING.adoc#safety-area[the contributor guidelines for safety items].
 
 [[tags]]
 == Tags
 
 NOTE: A tag is trace metadata: a selector by which a tracing tool chooses a group of items.
-It decides neither whom an item binds nor an item's scope, status or conformance (<<req-ssr-requirements-bind,A requirement binds the actors to which it gives a duty>>).
-Every item here carries a tag of this legend, and no tag of the protocol chapters.
+It decides neither whom an item binds nor an item's scope, status or conformance (xref:../contract-generations.adoc#req-ssr-requirements-bind[A requirement binds the actors to which it gives a duty]).
+Every item of the up-rust SEooC requirement family carries a tag of this legend, and no classic protocol-chapter tag.
 
 [cols="2,5",options="header"]
 |===
 | Tag | The group of items that it selects
 
-| `SafetyUpRustCore` | the items of the element, with the shared items of this page that it relies on
-| `SafetyStreamer` | the items of the Streamer, with the shared items of this page that it relies on
-| `SafetyBinding` | the items of every binding, with the shared items of this page that they rely on
+| `SafetyUpRustCore` | the items of the element, with the shared items of the up-rust SEooC requirement family that it relies on
+| `SafetyStreamer` | the items of the Streamer, with the shared items of the up-rust SEooC requirement family that it relies on
+| `SafetyBinding` | the items of every binding, with the shared items of the up-rust SEooC requirement family that they rely on
 | `SafetyBindingPull` | with `SafetyBinding`, the items of pull bindings only
 | `SafetyIceoryx2` | the items of the iceoryx2 binding
 | `SafetyLola` | the items of the LoLa binding
-| `SafetyWire` | the items of every wire, with the shared items of this page that they rely on
+| `SafetyWire` | the items of every wire, with the shared items of the up-rust SEooC requirement family that they rely on
 | `SafetyWireSerialized` | the items of every serialized wire
 | `SafetyXcdr2` | the items of each wire of the XCDR2 little-endian appendable profile
 | `SafetyE2eWire` | the items of the end-to-end protection wire
@@ -493,10 +148,10 @@ Every item here carries a tag of this legend, and no tag of the protocol chapter
 
 [NOTE]
 ====
-Each repository that covers items here gets one gate tag, named after it: `SafetyGateUpRust`, `SafetyGateStreamer`, `SafetyGateIceoryx2`, `SafetyGateXcdrV2`, and so on.
+Each repository that covers items of the up-rust SEooC requirement family gets one gate tag, named after it: `SafetyGateUpRust`, `SafetyGateStreamer`, `SafetyGateIceoryx2`, `SafetyGateXcdrV2`, and so on.
 
 * An item gets a repository's gate tag once that repository covers it in OFT's sense, with at least one coverage link of each type the item needs.
-* Coverage in OFT's sense says nothing about whether an item is verified (xref:seooc-up-rust/README.adoc#req-ssr-verification-methods[The verification methods, and what a Verification line asks for]), adopted or met.
+* Coverage in OFT's sense says nothing about whether an item is verified (xref:assurance.adoc#req-ssr-verification-methods[The verification methods, and what a Verification line asks for]), adopted or met.
 ====
 
 === Coverage needs
@@ -514,11 +169,48 @@ The `oft-needs` attribute names the coverage that a tracing tool asks for.
 [[tracing]]
 === Tracing
 
-How a repository traces these items is kept with that repository's own trace record, and what a contributor does when an item is added, gated or filed elsewhere is stated in xref:../CONTRIBUTING.adoc#safety-area[Changing the safety area of the specification].
+How a repository traces these items is kept with that repository's own trace record, and what a contributor does when an item is added, gated or filed elsewhere is stated in xref:../CONTRIBUTING.adoc#safety-area[the contributor guidelines for safety items].
 
 == ISO 26262
 
-NOTE: Items and text in this area cite ISO 26262:2018 by part and clause number only, written `part-clause`, for example `6-7.4.13`, or `part-Table n`; every such number is that of this edition.
+NOTE: Items and text of the up-rust SEooC requirement family cite ISO 26262:2018 by part and clause number only, written `part-clause`, for example `6-7.4.13`, or `part-Table n`; every such number is that of this edition.
 No text of the standard appears here, quoted or closely paraphrased, and no table that maps it.
 
-A reference is trace metadata: it names a clause that an item relates to (<<req-ssr-item-reading,How an item is read>>).
+A reference is trace metadata: it names a clause that an item relates to (xref:../contract-generations.adoc#req-ssr-item-reading[How an item is read]).
+
+[[fault-models]]
+== Fault models and fault-containment map
+
+NOTE: This non-normative map indexes fault-model, violation-class, integrity, end-to-end protection and fault-containment items of the up-rust SEooC requirement family (`+req~ssr-*+` and `+aou~seooc-*+`); the linked canonical items govern.
+
+* *Faulty-peer model and undetectable violation classes:*
+  xref:../up-l1/peers.adoc#req-ssr-peer-fault-model[The requirements hold against a faulty peer];
+  xref:assurance.adoc#req-ssr-violation-classes[How a violated assumption of use shows up];
+  xref:elements/up-rust/assumptions-of-use.adoc#aou-seooc-violation-classes[The integrator covers each violation that its observer cannot detect].
+* *Integrator isolation, supervision and ceilings:*
+  xref:elements/up-rust/assumptions-of-use.adoc#aou-seooc-peer-access[Only authorized processes reach the transport],
+  xref:elements/up-rust/assumptions-of-use.adoc#aou-seooc-process-isolation[Processes or partitions are isolated],
+  xref:elements/up-rust/assumptions-of-use.adoc#aou-seooc-supervisor-restart[A supervisor outside the process restarts it],
+  xref:elements/up-rust/assumptions-of-use.adoc#aou-seooc-capability-ceiling[Data above ASIL B relies on measures outside the element],
+  xref:elements/up-rust/assumptions-of-use.adoc#aou-seooc-peer-rates[Peer rates on shared routes are the integrator's],
+  xref:elements/up-rust/assumptions-of-use.adoc#aou-seooc-application-reacts[The application reacts to what the element reports] and
+  xref:elements/up-rust/assumptions-of-use.adoc#aou-seooc-e2e-protection[The integrator decides which routes need end-to-end protection].
+* *Shared-memory integrity, ABI and E2E black-channel detection:*
+  xref:../up-l1/integrity.adoc#req-ssr-integrity-declared[Each transport declares one integrity level],
+  xref:../up-l1/integrity.adoc#req-ssr-integrity-zero-copy[Zero-copy only from a writer at or above the reader],
+  xref:../up-l1/integrity.adoc#req-ssr-integrity-any-bits[In-place types accept every bit pattern],
+  xref:../up-l1/integrity.adoc#req-ssr-integrity-carrier-crossing[Upward carrier crossings copy once, or are refused],
+  xref:../up-l1/wires/native.adoc#req-ssr-native-type[A native payload type holds its whole value in one fixed layout],
+  xref:../up-l1/peers.adoc#req-ssr-native-abi-agreed[A native representation never crosses an ABI],
+  xref:../up-l1/wires/e2e.adoc#req-ssr-e2e-detects[The E2E wire detects each fault] and
+  xref:../up-l1/wires/e2e.adoc#req-ssr-e2e-resync[A restart resynchronizes, stale frames are refused, and no arrival order locks a sender out].
+* *Runtime containment across element, bindings, wires and Streamer:*
+  xref:../up-l1/runtime.adoc#req-ssr-bound-work[Work per call is bounded by setup data],
+  xref:../up-l1/runtime.adoc#req-ssr-mode-no-shutdown[No shutdown in runtime mode],
+  xref:../basics/error_model.adoc#req-ssr-refuse-no-panic[No panic on runtime paths],
+  xref:../languages/rust.adoc#req-ssr-unsafe-sound[Safe code cannot cause undefined behaviour],
+  xref:../up-l1/bindings.adoc#req-ssr-binding-no-panic[No panic on any peer input],
+  xref:../up-l1/wires/README.adoc#req-ssr-wire-no-panic[Encoding and decoding never panic],
+  xref:../up-l1/iceoryx2.adoc#req-ssr-binding-iceoryx2-panic-paths[iceoryx2's allowed panic paths are named, bounded and disclosed],
+  xref:../up-l1/lola.adoc#req-ssr-binding-lola-foreign-boundary[Nothing unwinds across the LoLa binding's boundary, and a termination path is a panic path] and
+  xref:../up-l2/streamer.adoc#req-ssr-streamer-containment[A fault stays on its route].

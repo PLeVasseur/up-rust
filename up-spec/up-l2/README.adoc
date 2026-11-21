@@ -33,3 +33,31 @@ NOTE: The uProtocol Communication Layer (uP-L2) defines the message patterns (pu
 | The dispatcher uEntities defined in xref:dispatchers/README.adoc#dispatcher-types[Types of Dispatchers].
 
 |===
+
+== Communication-Layer Chapters for the up-rust SEooC and Owned-Frame Contracts
+
+[NOTE]
+====
+* *Contract-family membership.*
+The classic Communication Layer APIs (`LanguageLibrary`, `CommunicationLayerImpl`) live in xref:api.adoc[`api.adoc`] and the classic dispatcher rules live in xref:dispatchers/README.adoc[`dispatchers/README.adoc`].
+The chapters indexed below also hold communication-layer items of the owned-frame SDK contract (`+req~sdk-owned-frame-*+`, `OwnedFrame*` tags, no ASIL) and the up-rust SEooC requirement family (`+req~ssr-*+` and `+aou~seooc-*+`, `ASIL:: B`, `Safety*` tags).
+Filing these contracts under `up-l2/` neither merges the three families nor binds classic uP-L2 implementations or SDKs of other languages: whom each item binds, and when a scoped replacement takes effect for a named part, is stated in xref:../contract-generations.adoc[Which requirements an implementation follows] (xref:../contract-generations.adoc#req-ssr-requirements-bind[A requirement binds the actors to which it gives a duty]; xref:../contract-generations.adoc#req-ssr-contract-transition[What a part declares and claims, and when a replacement takes effect]; xref:../contract-generations.adoc#req-ssr-item-reading[How an item is read]; xref:../contract-generations.adoc#req-sdk-owned-frame-contract[The owned-frame SDK contract binds the parts that declare it]).
+* *Assumptions of use and safety view.*
+Claim-scoped integrator assumptions of use for the up-rust SEooC live in xref:../safety/elements/up-rust/assumptions-of-use.adoc[the element's assumptions of use], and Streamer element scope, crate isolation, memory safety and operating assumptions live in xref:../safety/elements/streamer.adoc[Streamer Safety Element].
+Conventions, tags and assurance governance live in xref:../safety/README.adoc[Safety and Assurance View] and xref:../safety/assurance.adoc[Assurance and verification governance].
+====
+
+=== Communication-layer chapters
+
+[cols="3,3,4",options="header"]
+|===
+| File | Tags | What it holds
+
+| xref:api.adoc[`api.adoc`] | `LanguageLibrary`, `CommunicationLayerImpl`, `SafetyUpRustCore` | Classic Communication Layer APIs (`Subscriber`, `Publisher`, `Notifier`, `NotificationListener`, `RpcServer`, `RpcClient`) and the up-rust SEooC RPC interaction rules (deadlines, correlation, arrival wire checks, undecodable-request answers and no-server failure)
+| xref:roles.adoc[`roles.adoc`] | `OwnedFrameSdk` | Owned-frame SDK application roles, backend-neutral handles, stated defaults and layer-above-core route/result preservation
+| xref:execution.adoc[`execution.adoc`] | `SafetyUpRustCore`, `OwnedFrameSdk`, `OwnedFrameScheduler` | The up-rust SEooC executor-independent asynchronous interface seam and the owned-frame SDK message operation kinds, asynchronous layer and scheduler integration contracts
+| xref:streamer.adoc[`streamer.adoc`] | `SafetyStreamer`, `SafetyUpRustCore` | Bounded-runtime ASIL Streamer and carrier-route forwarding behavior, route locking, exact addresses, heap-free and panic-free runtime paths, containment, per-leg QoS, deployment-data validation, workers, route gates, operator control, monitors, degraded reporting, watchdog hook and dispatch/RPC error obligations
+| xref:dispatchers/README.adoc[`dispatchers/README.adoc`] | `uStreamer` (classic dispatcher rules) | Classic dispatcher types, forwarding, dead-letter and RPC error response rules for all dispatchers outside the bounded-runtime Streamer profile
+|===
+
+Related message-identity, shared-foundation and element-safety chapters live in xref:../basics/uuid.adoc[UUID and up-rust SEooC message ID uniqueness], xref:../basics/ownership.adoc[frame and value ownership], xref:../basics/resources.adoc[shared resource lifecycle and storage], xref:../basics/configurations.adoc[configurations and deployment-data validation], xref:../basics/error_model.adoc[error model], xref:../up-l1/README.adoc[Transport & Session Layer (uP-L1)], xref:../safety/elements/up-rust/README.adoc[the up-rust SEooC element] and xref:../safety/elements/streamer.adoc[Streamer Safety Element].

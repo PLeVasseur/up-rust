@@ -1,0 +1,260 @@
+{
+ "schema": "lola-d7c2-manifest-v1",
+ "frozen_utc": "2026-11-16T23:27:59Z",
+ "status": "FROZEN private successor of classification-1 integrating the sealed D7 review; not compiled; no self-acceptance",
+ "write_root": "lola-up-rust-core-branch-20261114/lifetime-admission-design-7-classification-2/",
+ "immutable_inputs": {
+  "review_handoff": "4d067bad7eb0aeaec8a6e9522fab8574ef30540d5f5bc5013968e8ee41629ee5",
+  "review_verdict": "48130c64d75e1b98f18b846077e669156da9ffd4dd9fe4bcf0dd8624da01e4f9",
+  "review_seal": "4ae1a3c21787a16d746e86e6de6f1573fc708cb5b23d123fb805c2919eab49c5",
+  "review_findings": "3368a5a1d30e97f4e39fb72deac4b27236af4dc98a354a7319dd245568fe771d",
+  "d7_source_pins": "0c79488a816d47d5b254dac0eb78adf51dbef04ada68461790e706f9be6e53ad",
+  "addendum_pins": "2f8253c0a8ef698e85ec5c743d3e45d454e24e2e10b9ddbd7e5f1d453136e633",
+  "classification1_manifest": "35f846ed3436cf283c1c01e26e4038f4bcfe0f79c9d7648bde62fbfe7c2f1573",
+  "unsafe_policy": "3def70720d329a869b074bff11f914a6acd58da222368c15e9c54665fac28b25",
+  "unsafe_skill": "27e8df5bc9bc6f43e11747e67e695bf8ee8c4f59d6412270784d72382a4d3026"
+ },
+ "files": {
+  "ACCOUNTING.json": {
+   "bytes": 1839,
+   "sha256": "d35e4cafadb02bccd8e35923d0be9724ac6dbc3bf946660d20c6d3f30e3541f5"
+  },
+  "CHECK-PLAN.md": {
+   "bytes": 1825,
+   "sha256": "39f87dbb799920d15914e7541a995fe1c7b44bb01038d7617d738a35de3693b1"
+  },
+  "CORRECTIONS.md": {
+   "bytes": 3328,
+   "sha256": "821afe2e33a90e57e2d6b38a907a915f05169e3e6d0b3fd441177a337433c3ad"
+  },
+  "DECISIONS-DELTA.md": {
+   "bytes": 3534,
+   "sha256": "5587f02959e34c878b72406f046830d13471763ed383b0413be3591897a1a5a8"
+  },
+  "HANDOFF.md": {
+   "bytes": 1547,
+   "sha256": "ca8a5a7b3470b602e487a3098690f68224b00f900df68daf8cc8a46b18c55af2"
+  },
+  "PATCH-JOINS.json": {
+   "bytes": 6333,
+   "sha256": "1aabb3f5bb78e1540f63c5b54a1b31cd27c5fc6ea04d0db28dab28a1729651de"
+  },
+  "PROOF.md": {
+   "bytes": 15260,
+   "sha256": "6ef6bcb3d61e958cb1ef6ec5d9459c24cbefcf4b15d1023fb957b53e8400bd94"
+  },
+  "README-LOLA-COUNTS.md": {
+   "bytes": 2530,
+   "sha256": "9af4c64859293ed3f970c8303ad224295f8dbb89aa0d5a64b948533a2fc2e4ec"
+  },
+  "REPORT.md": {
+   "bytes": 2991,
+   "sha256": "7bbe5c76c930137bf8ee5f4d595eb3068c6bc5c758f41456b7c65d28534fb6f6"
+  },
+  "SOURCE-PINS.json": {
+   "bytes": 8350,
+   "sha256": "f033d1d557b8bd4e79c83fb70bdbbcd904e156637e5ab9b391b276eba53132e7"
+  },
+  "logs/START-UTC.txt": {
+   "bytes": 21,
+   "sha256": "1c9b9288c20da26a58cd90ebca9403f3c9402aaf1f3f77709dcc43a1fc479aa2"
+  },
+  "patches/PATCH-INDEX.json": {
+   "bytes": 13081,
+   "sha256": "82ffe4b260c7c9e4c4a01144d9d77892b97c6a28535cf71c5d174f163abd13ac"
+  },
+  "patches/cumulative/up_lola_bridge.cpp.proposed.patch": {
+   "bytes": 18126,
+   "sha256": "cbba6daa67886ebd958a5dc96cdf23ddd40f9044b466c3af7b3b691db4a8c8bb"
+  },
+  "patches/cumulative/up_lola_bridge.h.proposed.patch": {
+   "bytes": 4287,
+   "sha256": "55efaec6c495293a20cff9896e77f43ab5d1614c75fab1d58f4909ca57e993c2"
+  },
+  "patches/cumulative/alternatives/BE-1/up_lola_bridge.cpp.proposed.patch": {
+   "bytes": 18162,
+   "sha256": "8551400b4cd002d40e352cbb237119604e22e8e2e1289b1164e2aa4ead478ffd"
+  },
+  "patches/cumulative/dependency/score-communication/score/message_passing/unix_domain/unix_domain_engine.h.patch": {
+   "bytes": 885,
+   "sha256": "a9f19e9d49db74a37cedbb59c8a6f01d2b8cfd5fce836051ebb5efc8b4be87de"
+  },
+  "patches/cumulative/dependency/score-communication/score/mw/com/exit_quiescence.h.patch": {
+   "bytes": 1744,
+   "sha256": "60ca3b518ee5d9a706cbe46c2eb6f77f271697097ba2d86de81f92c48a42a852"
+  },
+  "patches/cumulative/dependency/score-communication/score/mw/com/impl/i_binding_runtime.h.patch": {
+   "bytes": 1258,
+   "sha256": "7af4e832007e76722bf75b18accf3f0de72a5f6397991f214c698369da319af3"
+  },
+  "patches/cumulative/dependency/score-communication/score/mw/com/impl/runtime.cpp.patch": {
+   "bytes": 8115,
+   "sha256": "c0acd47006d50dabb3953db49fc41a049b6702035e0ec55c5bc38fefb84247a7"
+  },
+  "patches/cumulative/dependency/score-communication/score/mw/com/impl/setup_refusal.h.patch": {
+   "bytes": 2299,
+   "sha256": "c03c0faee2f32dcd60b1c4d3751c9723843e4c17db05628fb0bdba97f06f7f03"
+  },
+  "patches/cumulative/dependency/score-communication/score/mw/com/impl/bindings/lola/runtime.h.patch": {
+   "bytes": 856,
+   "sha256": "5847c62ac52c3814754801b88e971c0a057ec7cc31396a29d044a9cf4b48204a"
+  },
+  "patches/cumulative/dependency/score-communication/score/mw/com/impl/bindings/lola/messaging/message_passing_service.cpp.patch": {
+   "bytes": 1538,
+   "sha256": "714a9c3ebb4760a5a632a0519f45b6a2578493a0804c1a81bf805bcdfd1a1d36"
+  },
+  "patches/cumulative/dependency/score-communication/score/mw/com/impl/bindings/lola/messaging/message_passing_service.h.patch": {
+   "bytes": 1278,
+   "sha256": "21a3a4d38cc229aed8b730c625c09586e75ff0718919ba9ac3639d17aec5ad55"
+  },
+  "patches/cumulative/rust/core-adapter/src/lib.rs.patch": {
+   "bytes": 3906,
+   "sha256": "450c4117b348cb1b3c3f620bc89a5d8523f1daffbdeced96beeeed0f924692d3"
+  },
+  "patches/cumulative/rust/core-adapter/src/native.rs.patch": {
+   "bytes": 17011,
+   "sha256": "2dd3453c8aa9345818aa9b6ffd5be42d9fe3293ec6800fffc07c32da56fb89ee"
+  },
+  "patches/cumulative/rust/root/src/sys.rs.patch": {
+   "bytes": 17616,
+   "sha256": "cdc9c9d5fba72183341cb0ccd68d811cf8d4a1ea4a225b2aaa08287c4781b732"
+  },
+  "patches/cumulative/sdk-relay/dc7f22da-relay/core/src/transport/mod.rs.patch": {
+   "bytes": 652,
+   "sha256": "1d9c2e2f96301b03af1a8e928a63f6ccac9b468650273e4ba46caa44214fa406"
+  },
+  "patches/incremental/up_lola_bridge.cpp.proposed.patch": {
+   "bytes": 1966,
+   "sha256": "eb9179bd0e14a4327d3a8b932724a6570b17553cc67a9c39f6eec808ad419d89"
+  },
+  "patches/incremental/up_lola_bridge.h.proposed.patch": {
+   "bytes": 0,
+   "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+  },
+  "patches/incremental/alternatives/BE-1/up_lola_bridge.cpp.proposed.patch": {
+   "bytes": 2002,
+   "sha256": "021736a0cbcfdcb4831140f458e99db5268d0b4c56303ff0689417be206d57da"
+  },
+  "patches/incremental/dependency/score-communication/score/message_passing/unix_domain/unix_domain_engine.h.patch": {
+   "bytes": 0,
+   "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+  },
+  "patches/incremental/dependency/score-communication/score/mw/com/exit_quiescence.h.patch": {
+   "bytes": 1744,
+   "sha256": "60ca3b518ee5d9a706cbe46c2eb6f77f271697097ba2d86de81f92c48a42a852"
+  },
+  "patches/incremental/dependency/score-communication/score/mw/com/impl/i_binding_runtime.h.patch": {
+   "bytes": 0,
+   "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+  },
+  "patches/incremental/dependency/score-communication/score/mw/com/impl/runtime.cpp.patch": {
+   "bytes": 4800,
+   "sha256": "f857e6937d194e991ad5373f8bc2b10510d19d0769bbe89d481db6dec468f475"
+  },
+  "patches/incremental/dependency/score-communication/score/mw/com/impl/setup_refusal.h.patch": {
+   "bytes": 0,
+   "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+  },
+  "patches/incremental/dependency/score-communication/score/mw/com/impl/bindings/lola/runtime.h.patch": {
+   "bytes": 0,
+   "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+  },
+  "patches/incremental/dependency/score-communication/score/mw/com/impl/bindings/lola/messaging/message_passing_service.cpp.patch": {
+   "bytes": 0,
+   "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+  },
+  "patches/incremental/dependency/score-communication/score/mw/com/impl/bindings/lola/messaging/message_passing_service.h.patch": {
+   "bytes": 0,
+   "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+  },
+  "patches/incremental/rust/core-adapter/src/lib.rs.patch": {
+   "bytes": 1169,
+   "sha256": "9637a0b7a82650b42fe31283d461ac26cf98030185ccc9152fc59afe0128a9ef"
+  },
+  "patches/incremental/rust/core-adapter/src/native.rs.patch": {
+   "bytes": 12625,
+   "sha256": "a7740e06d975f449909ff9c5a37b4e288346c19c81e2ee026986d77ec80c0e83"
+  },
+  "patches/incremental/rust/root/src/sys.rs.patch": {
+   "bytes": 16085,
+   "sha256": "046207c3b3304b785e3cd2a928df1f179430cbe79bdf1262bdeae1e77edf4df0"
+  },
+  "patches/incremental/sdk-relay/dc7f22da-relay/core/src/transport/mod.rs.patch": {
+   "bytes": 0,
+   "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+  },
+  "proposed/up_lola_bridge.cpp.proposed": {
+   "bytes": 138349,
+   "sha256": "49dd7506654230a4a28cc68521ca74f6bec3657046642ee1f0a33df3a5ac3ebc"
+  },
+  "proposed/up_lola_bridge.h.proposed": {
+   "bytes": 16645,
+   "sha256": "99e58606fa76e1b00f52f8b0088bfca0adc55689d67ef714e221db2214e348e6"
+  },
+  "proposed/alternatives/BE-1/up_lola_bridge.cpp.proposed": {
+   "bytes": 154455,
+   "sha256": "0252fbc77b9c7cae4b7342d94e50be835f291a1d004ecf7ab66d062627752ee8"
+  },
+  "proposed/dependency/score-communication/score/message_passing/unix_domain/unix_domain_engine.h": {
+   "bytes": 8111,
+   "sha256": "8e56ed60bee491bc134472977a6f39ec494b513dbf2a390fe05aa4e65931042a"
+  },
+  "proposed/dependency/score-communication/score/mw/com/exit_quiescence.h": {
+   "bytes": 9695,
+   "sha256": "6df013745412dbdd8f0c7206490565753aa057d2e30b8f11a0aa3a8ceaacab41"
+  },
+  "proposed/dependency/score-communication/score/mw/com/impl/i_binding_runtime.h": {
+   "bytes": 4907,
+   "sha256": "48f58ba56f453f75712d97ca6ae7e7102c4d04153aeb3e04d1555a1009adac4e"
+  },
+  "proposed/dependency/score-communication/score/mw/com/impl/runtime.cpp": {
+   "bytes": 45432,
+   "sha256": "b5c1b8f54a07a8c904f2984d6e2b92378e76863b0db7613f51901e264bd681ca"
+  },
+  "proposed/dependency/score-communication/score/mw/com/impl/setup_refusal.h": {
+   "bytes": 2140,
+   "sha256": "0ad2f9659132ef54e432f45482f12fca44b6527a31ea4e265ada618c9be246e5"
+  },
+  "proposed/dependency/score-communication/score/mw/com/impl/bindings/lola/runtime.h": {
+   "bytes": 5150,
+   "sha256": "94385db38f4d2d00f8005ade1aaca94d3ed761a313cf2d6b3c35fbce2cfb84d7"
+  },
+  "proposed/dependency/score-communication/score/mw/com/impl/bindings/lola/messaging/message_passing_service.cpp": {
+   "bytes": 14170,
+   "sha256": "c94e1765b5e09658778efca5edd168d0248ab34a68b544105940074cdec5ed83"
+  },
+  "proposed/dependency/score-communication/score/mw/com/impl/bindings/lola/messaging/message_passing_service.h": {
+   "bytes": 13543,
+   "sha256": "699ef29b3f3d930e3250be950eaf6cdfa818b61c9904c20855ae54ef3264464e"
+  },
+  "proposed/rust/core-adapter/src/lib.rs": {
+   "bytes": 24199,
+   "sha256": "0da11e587c0dc9473c70797fbd3e4fd15245e90945ddae2154c60ffc75ceeece"
+  },
+  "proposed/rust/core-adapter/src/native.rs": {
+   "bytes": 46897,
+   "sha256": "70255fa3d25ca9c8f845a98d9862d9d7694d854c73b8fdffc26bbf12885c0ed7"
+  },
+  "proposed/rust/root/src/sys.rs": {
+   "bytes": 40749,
+   "sha256": "85d584cf5efc1996e5f507245ddccc615f14d75eceb06b837f2d18b12bf92a66"
+  },
+  "proposed/sdk-relay/dc7f22da-relay/core/src/transport/mod.rs": {
+   "bytes": 22952,
+   "sha256": "c5865cd5fb15c3bf5f50d9ac944e8f9331b54190fd45b3796caf80448537e2e8"
+  },
+  "tools/apply_classification2_patches.py": {
+   "bytes": 28071,
+   "sha256": "d785ac38f5452f2752b794f23e51bcde0009efdda724c8e342f9fcd241f0dd23"
+  },
+  "tools/check_receipt8.py": {
+   "bytes": 9108,
+   "sha256": "29e0f8bb3941bf4bf706166dad5a8ad9a5a4baa34e8157a9e39520a70ba23207"
+  }
+ },
+ "output_totals": {
+  "files_other_than_this": 783336,
+  "this_file_bytes": 11426,
+  "total_bytes": 794762
+ }
+}

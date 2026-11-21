@@ -1,0 +1,63 @@
+{
+ "schema": "source9-freeze/v1",
+ "frozen_utc": "2026-11-16T23:24:50Z",
+ "state": "FROZEN_PENDING_NEW_INDEPENDENT_REVIEW",
+ "package_abs": "/Users/pete.levasseur/.t3/scratch/2026-10-30-let-s-pick-back-up-e41a50a5/sdk-api-redesign-20261107-1/delivery-continuation/shared-up-rust-core-20261114/requirements-source-reconciliation-9",
+ "source9_pins": {
+  "path": "SOURCE9-PINS.json",
+  "sha256": "ee18145ded0a64eed33eb23db6944a76e3d91894dab8a60000495ab1093c13a7",
+  "files": 117,
+  "manifest_sha256": "6e5b867e7f7812790e26ea0cf60dc9d1b83c5d43d99adc0fe606e024b85f6a4d"
+ },
+ "accounting": {
+  "path": "ACCOUNTING.json",
+  "sha256": "9351dfef8c3c9f83a84d6253729e5565186371e9cc7c3af6dd26d0cb3c468729",
+  "note": "written after SOURCE9-PINS.json; pinned here"
+ },
+ "event_log": {
+  "path": "records/EVENTS.jsonl",
+  "note": "append-only delivery receipts, outside the manifest",
+  "pre_freeze_sha256": "1bf32d3b78ba53f387aae85bfee08b416c9c602d854f385010f79c779f1011cb"
+ },
+ "outputs": {
+  "report": "REPORT.md",
+  "handoff": "HANDOFF.md",
+  "proof": "PROOF.md",
+  "source_patch": "SOURCE9.patch",
+  "cumulative_patch": "CUMULATIVE.patch",
+  "derivative": "derivative/",
+  "six_obligations": "SIX-OBLIGATIONS.json",
+  "review_response": "REVIEW-RESPONSE.json",
+  "native_agreement_a": "NATIVE-AGREEMENT-A.json",
+  "wire_interface": [
+   "SDK-WIRE-INTERFACE.json",
+   "SDK-WIRE-INTERFACE-ADDENDUM-1.json"
+  ],
+  "inventory": [
+   "inventory/CHECK-RESULT.json",
+   "inventory/SOURCE9-DELTA.json",
+   "inventory/unsafe_inventory.composed9.toml",
+   "inventory/unsafe_inventory.composed9.patch",
+   "inventory/unsafe_inventory.composed.toml"
+  ],
+  "validation_plan": "VALIDATION-PLAN.json",
+  "io_plan": "IO-PLAN.json",
+  "input_ledger": "records/INPUT-LEDGER.jsonl"
+ },
+ "key_shas": {
+  "CUMULATIVE.patch": "70d308924ec97bfd2f8768d1eb02cec6bc6ea2b9a5dd0e6aabdfc17da69a1dff",
+  "NATIVE-AGREEMENT-A.json": "716379dae7f9635068ef7902be01397ca1a9b8934865fff573be6bcf59205bfd",
+  "PROOF.md": "e06ceeba4a71d85427aeb741475427d5a8a1faa58070e70e9c81ca5b1d96af4e",
+  "REVIEW-RESPONSE.json": "b9b68a961d4eb9ecac65408e3b204b4f9fcea295a5422ef7d2c7ba3a00c6b4fb",
+  "SDK-WIRE-INTERFACE-ADDENDUM-1.json": "e1fd619b1b605de914ec0978b03d5a5cbf04f453938d317fde4cf9342ddd3674",
+  "SDK-WIRE-INTERFACE.json": "d20d24a1a778566ae46729486ab0bfebb4a22d640a5657e9ea08843f259cfbcb",
+  "SIX-OBLIGATIONS.json": "80ee4ef8d54ff2f2d0d92265d64a6b2d3fd70a937c49d4e604fe1c80038fc241",
+  "SOURCE9.patch": "78c79f2c3353a494fafed202f1c84aa6d31123712934f9d6192db2855123deba",
+  "VALIDATION-PLAN.json": "6b6e0a899e6c2095606b5706f8281bea7e0769d93beff63fb115cf5c8026ceab",
+  "inventory/CHECK-RESULT.json": "f7f299197a6c75a9868b3423e3fb5cd9920e3c3031dc38ae15863e2a20aad9a9",
+  "inventory/SOURCE9-DELTA.json": "47ec46005b3a6a1fc8d79b9d1c6180c6bf843a1a6fa43e5b0fd2fe397ace390e",
+  "inventory/unsafe_inventory.composed9.patch": "70d18f3281265ea84871c5548b77b75434bf7c3f97a3084469c2e01f557da519"
+ },
+ "compiler_qualification": "none (VALIDATION-PLAN.json)",
+ "authority": "Author freeze only. No self-acceptance; the coordinator commissions a new independent review; root relays completion."
+}

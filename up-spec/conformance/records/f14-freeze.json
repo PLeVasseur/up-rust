@@ -1,0 +1,76 @@
+{
+ "schema": "f14-freeze-v1",
+ "utc": "2026-11-16T23:03:38.467964+00:00",
+ "files": {
+  "HANDOFF.json": {
+   "bytes": 1794,
+   "sha256": "4f49b36a6d00f91f37a502c71416db661d33b9de09fa0b8dc692a68115a94a6d"
+  },
+  "SOURCE-PROOF.md": {
+   "bytes": 31828,
+   "sha256": "3bbe4bbc74c7ef3a3cde7c8c0c925eef835926986a994bf1f74a2f9fe7b92123"
+  },
+  "REPORT.md": {
+   "bytes": 6346,
+   "sha256": "1be210b7d552df249b049cb363c53015d05b4882220f9db0717145eb1ca422f4"
+  },
+  "CHECK-PLAN.md": {
+   "bytes": 2492,
+   "sha256": "20737b0f6e5aa9aa83c4167ca208a303796f2e6b78a72026bf67f8146cc269c8"
+  },
+  "records/OVERLAY-MANIFEST.json": {
+   "bytes": 5863,
+   "sha256": "66223aec59704efb5427172d4aad085d42781671fb4b0a860e280d4c7093890b"
+  },
+  "records/SOURCE-PINS.json": {
+   "bytes": 3887,
+   "sha256": "a19ab66c359d3b165b53bed54688f5b5e09b0325495c12f599021c2d3d6e8c80"
+  },
+  "records/PATCH-JOINS.json": {
+   "bytes": 6815,
+   "sha256": "df13dfb95c1a013a9ed5b1c0298509674e203b47c4f608348ade0f34a2efe2fd"
+  },
+  "records/JOURNAL.md": {
+   "bytes": 5349,
+   "sha256": "89023e162ad2cba1d699c847b70b54f698698c24013f804123dfcaa55c950159"
+  },
+  "records/LEDGER.md": {
+   "bytes": 3821,
+   "sha256": "e28fbe444eb6730b7105a52cc374a637b5b9c1b5457e939eef80870c41f79fb8"
+  },
+  "tools/overlay.py": {
+   "bytes": 18400,
+   "sha256": "aea7b391967d66937373e7945137e88f592cb44d24ff54169d7ca05707af3ece"
+  },
+  "overlay/staging/iceoryx2-bb-posix-0.9.2/src/file_descriptor.rs": {
+   "bytes": 20896,
+   "sha256": "ba3271e60bd04b32e667895cc64d209028e946b2cc48255507d809120cb2cae6"
+  },
+  "overlay/staging/iceoryx2-bb-posix-0.9.2/src/clock.rs": {
+   "bytes": 16116,
+   "sha256": "39154488d3d21b46aea1084a5860cb6e98c46a73a0f772ec68ba2c707667f7ac"
+  },
+  "overlay/staging/iceoryx2-0.9.2/src/port/notifier.rs": {
+   "bytes": 24537,
+   "sha256": "cd6a7e740dd810b9a120875598801148c51f86c65fab4ad28e2db4b4027c28b4"
+  },
+  "overlay/staging/iceoryx2-cal-0.9.2/src/zero_copy_connection/common.rs": {
+   "bytes": 87456,
+   "sha256": "a3609b2ffe09e629cc3cae1a6f4a09a441d832d99a308d5c3e877c38c210101f"
+  },
+  "overlay/staging/iceoryx2-cal-0.9.2/src/shared_memory/common.rs": {
+   "bytes": 35233,
+   "sha256": "340c024de661416e864954e93817931a284af822a04fa127ec60b4336c716393"
+  },
+  "overlay/private-adapter/snapshot/src/lib.rs": {
+   "bytes": 1277,
+   "sha256": "f08921f8799f2022f4fe9b5765ad224c990d19e0f4e8a5ef0ea7caa8e79c3507"
+  },
+  "overlay/private-adapter/snapshot/src/two_mode.rs": {
+   "bytes": 147788,
+   "sha256": "7dc080910d390f8c037b155b426dea13afbaae6ffd0d423256549794a2b8a47d"
+  }
+ },
+ "total_bytes": 419898,
+ "tree": "0894483db84fdbdd9424b9696be3b7806b6adf9872fdc4a0838a584fb5ac5e0b"
+}

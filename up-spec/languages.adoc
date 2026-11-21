@@ -100,3 +100,10 @@ A language library
 --
 * *MUST* use a CI workflow that determines the code coverage of the test suite on a regular basis and fails if the coverage falls below a configured threshold. Implementers *SHOULD* strive for 100% coverage.
 --
+
+== Language-Specific Mappings
+
+NOTE: The requirements above apply to all uProtocol Language Libraries.
+Language-specific realizations live under `languages/` and bind only the actors their statements name (xref:contract-generations.adoc[Which requirements an implementation follows]); they impose no crate or package layout on other languages.
+
+* xref:languages/rust.adoc[*Rust language mapping*]: Rust-specific mechanism requirements for the up-rust SEooC requirement family (runtime handle drop discipline, crate isolation, memory-safety soundness and safe-binding boundary) and navigation to related Rust-scoped duties.

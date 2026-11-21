@@ -1,0 +1,168 @@
+{
+ "schema": "ir5-1-source-pins-v1",
+ "utc": "2026-11-16T23:07:43.544155+00:00",
+ "write_root": "mcu-rtos-feasibility-5/ir5-1-repair-1",
+ "inputs": [
+  {
+   "path": "shared-up-rust-core-20261114/mcu-rtos-feasibility-5/review-independent-1/HANDOFF.md",
+   "bytes": 5224,
+   "sha256": "0f71777e25f7387cc6a8f8cb75e872ff8ec502a4ff41d31ea2015164820a66e5",
+   "expected": "0f71777e25f7387cc6a8f8cb75e872ff8ec502a4ff41d31ea2015164820a66e5",
+   "matches": true
+  },
+  {
+   "path": "shared-up-rust-core-20261114/mcu-rtos-feasibility-5/review-independent-1/REVIEW.md",
+   "bytes": 24079,
+   "sha256": "92b6aa94b15f4e361a06bef9725457b8d9b0eb6cbc40ec3c6a1b1c96c0e07a6b",
+   "expected": "92b6aa94b15f4e361a06bef9725457b8d9b0eb6cbc40ec3c6a1b1c96c0e07a6b",
+   "matches": true
+  },
+  {
+   "path": "shared-up-rust-core-20261114/mcu-rtos-feasibility-5/review-independent-1/SEAL.json",
+   "bytes": 3618,
+   "sha256": "84887fdf6c377e8cac7db4c5f759297bee458ed24c7cd11c63be0d4c82b72f81",
+   "expected": "84887fdf6c377e8cac7db4c5f759297bee458ed24c7cd11c63be0d4c82b72f81",
+   "matches": true
+  },
+  {
+   "path": "shared-up-rust-core-20261114/mcu-rtos-feasibility-5/review-independent-1/DISPOSITIONS.json",
+   "bytes": 77201,
+   "sha256": "c5a362289b4ae1cb6515cac8280d980202a5b11aff6b1b61f969d2cc825f6397",
+   "expected": "c5a362289b4ae1cb6515cac8280d980202a5b11aff6b1b61f969d2cc825f6397",
+   "matches": true
+  },
+  {
+   "path": "shared-up-rust-core-20261114/mcu-rtos-feasibility-5/review-independent-1/FINDINGS.json",
+   "bytes": 158524,
+   "sha256": "b30e5c403e515393dd6a06d22bef6ad1eab8b0da3b78d913f955cd50f6bb2dcf",
+   "expected": "b30e5c403e515393dd6a06d22bef6ad1eab8b0da3b78d913f955cd50f6bb2dcf",
+   "matches": true
+  },
+  {
+   "path": "shared-up-rust-core-20261114/mcu-rtos-feasibility-5/DISPOSITIONS.json",
+   "bytes": 52120,
+   "sha256": "2ffe5452c7551e0cce01d6930dd86ffe74219e60925c870c7749814fa4978ef5",
+   "expected": "2ffe5452c7551e0cce01d6930dd86ffe74219e60925c870c7749814fa4978ef5",
+   "matches": true
+  },
+  {
+   "path": "shared-up-rust-core-20261114/mcu-rtos-feasibility-5/HANDOFF.md",
+   "bytes": 9188,
+   "sha256": "957722919868fe116d8b541bfce9fd23385ca57c2419875ea680e666d0a184f1",
+   "expected": "957722919868fe116d8b541bfce9fd23385ca57c2419875ea680e666d0a184f1",
+   "matches": true
+  },
+  {
+   "path": "shared-up-rust-core-20261114/mcu-rtos-feasibility-5/UNSAFE-INVENTORY.md",
+   "bytes": 10030,
+   "sha256": "93a6f667c01692a4d992ef5b0e8f1602f3d41da1e4dc0c3c4bb3008c74011377",
+   "expected": "93a6f667c01692a4d992ef5b0e8f1602f3d41da1e4dc0c3c4bb3008c74011377",
+   "matches": true
+  },
+  {
+   "path": "shared-up-rust-core-20261114/mcu-rtos-feasibility-5/controls/fake-libtock-runtime/src/lib.rs",
+   "bytes": 26239,
+   "sha256": "d19e45c07f536e24f4e778925fa88b0e06bc62d0b759060ed2110613b90887bc",
+   "expected": "d19e45c07f536e24f4e778925fa88b0e06bc62d0b759060ed2110613b90887bc",
+   "matches": true
+  },
+  {
+   "path": "shared-up-rust-core-20261114/mcu-rtos-feasibility-5/tools/token_check.py",
+   "bytes": 7324,
+   "sha256": "f32a5e8a328bb7710eeac41df1aeef1c778c49f3881a427f0455d82168a44efc",
+   "expected": "f32a5e8a328bb7710eeac41df1aeef1c778c49f3881a427f0455d82168a44efc",
+   "matches": true
+  },
+  {
+   "path": "UNSAFE-REVIEW.md",
+   "bytes": 5123,
+   "sha256": "3def70720d329a869b074bff11f914a6acd58da222368c15e9c54665fac28b25",
+   "expected": "3def70720d329a869b074bff11f914a6acd58da222368c15e9c54665fac28b25",
+   "matches": true
+  },
+  {
+   "path": "skills/unsafe-rust-review/SKILL.md",
+   "bytes": 92720,
+   "sha256": "27e8df5bc9bc6f43e11747e67e695bf8ee8c4f59d6412270784d72382a4d3026",
+   "expected": "27e8df5bc9bc6f43e11747e67e695bf8ee8c4f59d6412270784d72382a4d3026",
+   "matches": true
+  },
+  {
+   "path": "shared-up-rust-core-20261114/overall-completion-assessment-4/root-followthrough/POST-DISPLAY-EVENT-DIRECTION.json",
+   "bytes": 3959,
+   "sha256": "b94030175dfea5aac2c2a771ba0408b01fe5fca1dececb94d99bc51c6f93ad8d",
+   "expected": "b94030175dfea5aac2c2a771ba0408b01fe5fca1dececb94d99bc51c6f93ad8d",
+   "matches": true
+  },
+  {
+   "path": "shared-up-rust-core-20261114/delivery-continuity-1/classification-completion-1/RTOS5-IR5-1-REPAIR-ADMISSION.json",
+   "bytes": 2836,
+   "sha256": "d90325e82e7756a327c87d4065b02abdc0607551a650c688cdf04390fcfc8c80",
+   "expected": null,
+   "matches": null
+  }
+ ],
+ "outputs": [
+  {
+   "path": "shared-up-rust-core-20261114/mcu-rtos-feasibility-5/ir5-1-repair-1/DELTA.md",
+   "bytes": 7930,
+   "sha256": "278b9cef9de382e208747a0a45015c4227a9f78ec023d4e5ef8cbe808ecf5af9",
+   "expected": null,
+   "matches": null
+  },
+  {
+   "path": "shared-up-rust-core-20261114/mcu-rtos-feasibility-5/ir5-1-repair-1/JOINS.json",
+   "bytes": 20032,
+   "sha256": "c935742e44abaf66d2cf118bde968484d0cf96c4f63a7c9f669a91d784c4a6c5",
+   "expected": null,
+   "matches": null
+  },
+  {
+   "path": "shared-up-rust-core-20261114/mcu-rtos-feasibility-5/ir5-1-repair-1/controls/fake-libtock-runtime/src/lib.rs",
+   "bytes": 28693,
+   "sha256": "073d18f03f3662f3b2d97105a84274e47d65b13889dbcc8bf0b694b915b191e9",
+   "expected": null,
+   "matches": null
+  },
+  {
+   "path": "shared-up-rust-core-20261114/mcu-rtos-feasibility-5/ir5-1-repair-1/patches/IR5-1-rtos5-helper.patch",
+   "bytes": 6227,
+   "sha256": "17d23ec87fb3ff4ae9b15313cae6184a4fa488aa56b6eb5b25b311d5dac286cb",
+   "expected": null,
+   "matches": null
+  },
+  {
+   "path": "shared-up-rust-core-20261114/mcu-rtos-feasibility-5/ir5-1-repair-1/tools/check_and_patch.py",
+   "bytes": 4381,
+   "sha256": "697520b47e9b0e84064ca77055d9ee3ac21a43c950175d80c269ec623dc1a654",
+   "expected": null,
+   "matches": null
+  },
+  {
+   "path": "shared-up-rust-core-20261114/mcu-rtos-feasibility-5/ir5-1-repair-1/tools/make_records.py",
+   "bytes": 6883,
+   "sha256": "88b10abc6d737bcbee758215f1a8ce3deebf3a0190e8e2e0484769ad8c3ac31a",
+   "expected": null,
+   "matches": null
+  },
+  {
+   "path": "shared-up-rust-core-20261114/mcu-rtos-feasibility-5/ir5-1-repair-1/tools/token_check_rtos5.py",
+   "bytes": 7324,
+   "sha256": "f32a5e8a328bb7710eeac41df1aeef1c778c49f3881a427f0455d82168a44efc",
+   "expected": null,
+   "matches": null
+  },
+  {
+   "path": "shared-up-rust-core-20261114/mcu-rtos-feasibility-5/ir5-1-repair-1/work/CHECKS.json",
+   "bytes": 898,
+   "sha256": "84d2055029408678b6c26784c5ce9087c3d5e1f27b917650b621133e89c8ceed",
+   "expected": null,
+   "matches": null
+  }
+ ],
+ "frozen_helper": {
+  "old": "d19e45c07f536e24f4e778925fa88b0e06bc62d0b759060ed2110613b90887bc",
+  "new": "073d18f03f3662f3b2d97105a84274e47d65b13889dbcc8bf0b694b915b191e9"
+ },
+ "non_circular": "HANDOFF.md seals this file; this file hashes neither HANDOFF.md nor ACCOUNTING.json."
+}

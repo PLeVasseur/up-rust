@@ -1,0 +1,538 @@
+{
+  "schema": "rx03-existing-portfolio-intake-v1",
+  "target_spec": {
+    "commit": "f18913c6ed062dc6d6c3d7a73dec7a33433b39e4",
+    "tree": "29c6019918c7527a6fa8f4ed3a82d6690bea3dfa",
+    "identity_basis": "root supplied publication; no git/network/hash check here"
+  },
+  "sdk_pairing": {
+    "candidate": "0786fa6e3cd7dbe12c8c10a47d2b581914854b29",
+    "status": "root reports exact committed checks in progress before install/push; not accepted or published by this packet"
+  },
+  "root_worker_observation": "Current task input: root checked all five recorded owner threads; completed, no active workers. Historical graph state fields are not current execution.",
+  "acceptance_boundary": "implementation_conformance",
+  "dispatch_status": "documentary_packet_ready; no dispatch or source admission granted by this work",
+  "source_text_policy": "IDs and JSON pointers only; read requirement, amendment, historical caveat and destination portion at the referenced original row. Do not deduplicate source rows.",
+  "applicability_required": [
+    "exact component/source revision and custody",
+    "published specification revision",
+    "target and architecture",
+    "configuration and feature set",
+    "selected profile and route kind",
+    "responsible supplier/component versus deployment actor",
+    "lifecycle/calling context and applicable guarantees"
+  ],
+  "evidence_rules_ref": "CAT-NEXT-WORK.json#/assessment_rules",
+  "review_prerequisites": {
+    "policy_workspace_path": "sdk-api-redesign-20261107-1/delivery-continuation/UNSAFE-REVIEW.md",
+    "skill_workspace_path": "sdk-api-redesign-20261107-1/delivery-continuation/skills/unsafe-rust-review/SKILL.md",
+    "requirement": "Required for any future unsafe Rust or safe API invariant authoring/review; preserve pinned policy and existing independent-review prerequisites. This routing is not a source safety review."
+  },
+  "prohibited_inference": [
+    "publication implies implementation compliance",
+    "old compiler receipt validates new sources",
+    "documentary transfer equals acceptance",
+    "completed author means completed conformance",
+    "unknown route/profile means not applicable"
+  ],
+  "next_root_action": "Use this exact packet to admit a bounded same-owner applicability/current-source assessment with a named private successor and resource grant. Preserve frozen predecessors and existing findings. This receipt supplies routing, not engineering authority.",
+  "portfolio_id": "lola",
+  "owner_route_ref": "../conformance/OWNER-ROUTES.json#/groups/3",
+  "existing_work_item": "lola-d7-classification-source",
+  "existing_thread_id": "thread:delegated-task:command%3Amcp%3A446dd6ff-aa70-4f9b-9014-4d9400d80aad%3Adelegate-task%3Alola-design6-exit-proof-repair-opus-20261116-v1",
+  "thread_identity_source": "sdk-api-redesign-20261107-1/delivery-continuation/shared-up-rust-core-20261114/WORK-GRAPH.json#node:lola-d7-classification-source/owner",
+  "scope_ref": "../conformance/OWNER-ROUTES.json#/groups/3/scope",
+  "frozen_history": {
+    "roots": [
+      "lifetime-admission-design-7",
+      "lifetime-admission-design-7-classification-1",
+      "lifetime-admission-design-7-classification-2",
+      "lifetime-admission-design-7-classification-2/review-independent-1"
+    ],
+    "relative_to": "lola-up-rust-core-branch-20261114",
+    "boundary": "Frozen D7 composition and resealed REQUEST_CHANGES review remain historical. Preserve RI1-ROOT-SLICE-ISIZE and RI1-STATUS-DOC repair/review prerequisites unless a later exact accepted receipt establishes closure. No new status assessment here.",
+    "interface": "Published successor-process, count/capacity, admitted policy and Wait duties remain exact. No same-process retry duty is inferred and no product policy is selected.",
+    "next": "Assess D7 binding/dependency actor portions under the same owner; retained native/QNX/cancellation and deployment evidence keep their original scope."
+  },
+  "followups": [
+    {
+      "id": "RX03-FU-001",
+      "ref": "../conformance/FOLLOWUP-INTAKE.json#/rows/0",
+      "source_disposition": "unchecked",
+      "remaining_scope_portfolios": [
+        "streamer-deferred",
+        "selected-part-roster",
+        "additional-wires-deferred"
+      ]
+    },
+    {
+      "id": "RX03-FU-002",
+      "ref": "../conformance/FOLLOWUP-INTAKE.json#/rows/1",
+      "source_disposition": "unchecked",
+      "remaining_scope_portfolios": [
+        "streamer-deferred",
+        "selected-part-roster"
+      ]
+    },
+    {
+      "id": "RX03-FU-003",
+      "ref": "../conformance/FOLLOWUP-INTAKE.json#/rows/2",
+      "source_disposition": "evidence_gap",
+      "remaining_scope_portfolios": [
+        "streamer-deferred",
+        "selected-part-roster"
+      ]
+    },
+    {
+      "id": "RX03-FU-005",
+      "ref": "../conformance/FOLLOWUP-INTAKE.json#/rows/4",
+      "source_disposition": "annotation_only",
+      "remaining_scope_portfolios": [
+        "streamer-deferred",
+        "selected-part-roster"
+      ]
+    },
+    {
+      "id": "RX03-FU-006",
+      "ref": "../conformance/FOLLOWUP-INTAKE.json#/rows/5",
+      "source_disposition": "annotation_only",
+      "remaining_scope_portfolios": [
+        "streamer-deferred",
+        "selected-part-roster"
+      ]
+    },
+    {
+      "id": "RX03-FU-015",
+      "ref": "../conformance/FOLLOWUP-INTAKE.json#/rows/14",
+      "source_disposition": "evidence_gap",
+      "remaining_scope_portfolios": [
+        "other-bindings"
+      ]
+    },
+    {
+      "id": "RX03-FU-023",
+      "ref": "../conformance/FOLLOWUP-INTAKE.json#/rows/22",
+      "source_disposition": "evidence_gap",
+      "remaining_scope_portfolios": []
+    },
+    {
+      "id": "RX03-FU-032",
+      "ref": "../conformance/FOLLOWUP-INTAKE.json#/rows/31",
+      "source_disposition": "unchecked",
+      "remaining_scope_portfolios": []
+    },
+    {
+      "id": "RX03-FU-034",
+      "ref": "../conformance/FOLLOWUP-INTAKE.json#/rows/33",
+      "source_disposition": "unchecked",
+      "remaining_scope_portfolios": [
+        "other-bindings",
+        "additional-wires-deferred"
+      ]
+    },
+    {
+      "id": "RX03-FU-040",
+      "ref": "../conformance/FOLLOWUP-INTAKE.json#/rows/39",
+      "source_disposition": "unchecked",
+      "remaining_scope_portfolios": [
+        "other-bindings"
+      ]
+    },
+    {
+      "id": "RX03-FU-067",
+      "ref": "../conformance/FOLLOWUP-INTAKE.json#/rows/66",
+      "source_disposition": "evidence_gap",
+      "remaining_scope_portfolios": []
+    },
+    {
+      "id": "RX03-FU-070",
+      "ref": "../conformance/FOLLOWUP-INTAKE.json#/rows/69",
+      "source_disposition": "unchecked",
+      "remaining_scope_portfolios": [
+        "other-bindings"
+      ]
+    },
+    {
+      "id": "RX03-FU-089",
+      "ref": "../conformance/FOLLOWUP-INTAKE.json#/rows/88",
+      "source_disposition": "evidence_gap",
+      "remaining_scope_portfolios": [
+        "other-bindings"
+      ]
+    },
+    {
+      "id": "RX03-FU-101",
+      "ref": "../conformance/FOLLOWUP-INTAKE.json#/rows/100",
+      "source_disposition": "unchecked",
+      "remaining_scope_portfolios": []
+    },
+    {
+      "id": "RX03-FU-102",
+      "ref": "../conformance/FOLLOWUP-INTAKE.json#/rows/101",
+      "source_disposition": "unchecked",
+      "remaining_scope_portfolios": [
+        "other-bindings"
+      ]
+    },
+    {
+      "id": "RX03-FU-103",
+      "ref": "../conformance/FOLLOWUP-INTAKE.json#/rows/102",
+      "source_disposition": "unchecked",
+      "remaining_scope_portfolios": [
+        "other-bindings"
+      ]
+    },
+    {
+      "id": "RX03-FU-104",
+      "ref": "../conformance/FOLLOWUP-INTAKE.json#/rows/103",
+      "source_disposition": "evidence_gap",
+      "remaining_scope_portfolios": [
+        "other-bindings"
+      ]
+    },
+    {
+      "id": "RX03-FU-105",
+      "ref": "../conformance/FOLLOWUP-INTAKE.json#/rows/104",
+      "source_disposition": "evidence_gap",
+      "remaining_scope_portfolios": [
+        "other-bindings"
+      ]
+    },
+    {
+      "id": "RX03-FU-107",
+      "ref": "../conformance/FOLLOWUP-INTAKE.json#/rows/106",
+      "source_disposition": "unchecked",
+      "remaining_scope_portfolios": []
+    },
+    {
+      "id": "RX03-FU-108",
+      "ref": "../conformance/FOLLOWUP-INTAKE.json#/rows/107",
+      "source_disposition": "implementation_gap",
+      "remaining_scope_portfolios": [
+        "other-bindings"
+      ]
+    },
+    {
+      "id": "RX03-FU-109",
+      "ref": "../conformance/FOLLOWUP-INTAKE.json#/rows/108",
+      "source_disposition": "unchecked",
+      "remaining_scope_portfolios": [
+        "other-bindings"
+      ]
+    },
+    {
+      "id": "RX03-FU-110",
+      "ref": "../conformance/FOLLOWUP-INTAKE.json#/rows/109",
+      "source_disposition": "unchecked",
+      "remaining_scope_portfolios": []
+    },
+    {
+      "id": "RX03-FU-111",
+      "ref": "../conformance/FOLLOWUP-INTAKE.json#/rows/110",
+      "source_disposition": "unchecked",
+      "remaining_scope_portfolios": [
+        "other-bindings"
+      ]
+    },
+    {
+      "id": "RX03-FU-112",
+      "ref": "../conformance/FOLLOWUP-INTAKE.json#/rows/111",
+      "source_disposition": "unchecked",
+      "remaining_scope_portfolios": [
+        "other-bindings"
+      ]
+    },
+    {
+      "id": "RX03-FU-114",
+      "ref": "../conformance/FOLLOWUP-INTAKE.json#/rows/113",
+      "source_disposition": "unchecked",
+      "remaining_scope_portfolios": [
+        "other-bindings"
+      ]
+    },
+    {
+      "id": "RX03-FU-115",
+      "ref": "../conformance/FOLLOWUP-INTAKE.json#/rows/114",
+      "source_disposition": "evidence_gap",
+      "remaining_scope_portfolios": [
+        "other-bindings"
+      ]
+    },
+    {
+      "id": "RX03-FU-116",
+      "ref": "../conformance/FOLLOWUP-INTAKE.json#/rows/115",
+      "source_disposition": "unchecked",
+      "remaining_scope_portfolios": [
+        "other-bindings"
+      ]
+    },
+    {
+      "id": "RX03-FU-119",
+      "ref": "../conformance/FOLLOWUP-INTAKE.json#/rows/118",
+      "source_disposition": "unchecked",
+      "remaining_scope_portfolios": []
+    },
+    {
+      "id": "RX03-FU-125",
+      "ref": "../conformance/FOLLOWUP-INTAKE.json#/rows/124",
+      "source_disposition": "unchecked",
+      "remaining_scope_portfolios": []
+    },
+    {
+      "id": "RX03-FU-127",
+      "ref": "../conformance/FOLLOWUP-INTAKE.json#/rows/126",
+      "source_disposition": "unchecked",
+      "remaining_scope_portfolios": [
+        "other-bindings"
+      ]
+    },
+    {
+      "id": "RX03-FU-129",
+      "ref": "../conformance/FOLLOWUP-INTAKE.json#/rows/128",
+      "source_disposition": "unchecked",
+      "remaining_scope_portfolios": [
+        "other-bindings"
+      ]
+    },
+    {
+      "id": "RX03-FU-154",
+      "ref": "../conformance/FOLLOWUP-INTAKE.json#/rows/153",
+      "source_disposition": "evidence_gap",
+      "remaining_scope_portfolios": []
+    },
+    {
+      "id": "RX03-FU-155",
+      "ref": "../conformance/FOLLOWUP-INTAKE.json#/rows/154",
+      "source_disposition": "implementation_gap",
+      "remaining_scope_portfolios": []
+    },
+    {
+      "id": "RX03-FU-156",
+      "ref": "../conformance/FOLLOWUP-INTAKE.json#/rows/155",
+      "source_disposition": "implementation_gap",
+      "remaining_scope_portfolios": []
+    },
+    {
+      "id": "RX03-FU-157",
+      "ref": "../conformance/FOLLOWUP-INTAKE.json#/rows/156",
+      "source_disposition": "evidence_gap",
+      "remaining_scope_portfolios": []
+    },
+    {
+      "id": "RX03-FU-158",
+      "ref": "../conformance/FOLLOWUP-INTAKE.json#/rows/157",
+      "source_disposition": "unchecked",
+      "remaining_scope_portfolios": []
+    },
+    {
+      "id": "RX03-FU-159",
+      "ref": "../conformance/FOLLOWUP-INTAKE.json#/rows/158",
+      "source_disposition": "evidence_gap",
+      "remaining_scope_portfolios": []
+    },
+    {
+      "id": "RX03-FU-160",
+      "ref": "../conformance/FOLLOWUP-INTAKE.json#/rows/159",
+      "source_disposition": "evidence_gap",
+      "remaining_scope_portfolios": []
+    },
+    {
+      "id": "RX03-FU-161",
+      "ref": "../conformance/FOLLOWUP-INTAKE.json#/rows/160",
+      "source_disposition": "evidence_gap",
+      "remaining_scope_portfolios": []
+    },
+    {
+      "id": "RX03-FU-162",
+      "ref": "../conformance/FOLLOWUP-INTAKE.json#/rows/161",
+      "source_disposition": "evidence_gap",
+      "remaining_scope_portfolios": []
+    },
+    {
+      "id": "RX03-FU-163",
+      "ref": "../conformance/FOLLOWUP-INTAKE.json#/rows/162",
+      "source_disposition": "evidence_gap",
+      "remaining_scope_portfolios": []
+    },
+    {
+      "id": "RX03-FU-165",
+      "ref": "../conformance/FOLLOWUP-INTAKE.json#/rows/164",
+      "source_disposition": "unchecked",
+      "remaining_scope_portfolios": []
+    },
+    {
+      "id": "RX03-FU-166",
+      "ref": "../conformance/FOLLOWUP-INTAKE.json#/rows/165",
+      "source_disposition": "unchecked",
+      "remaining_scope_portfolios": []
+    },
+    {
+      "id": "RX03-FU-167",
+      "ref": "../conformance/FOLLOWUP-INTAKE.json#/rows/166",
+      "source_disposition": "annotation_only",
+      "remaining_scope_portfolios": []
+    },
+    {
+      "id": "RX03-FU-169",
+      "ref": "../conformance/FOLLOWUP-INTAKE.json#/rows/168",
+      "source_disposition": "evidence_gap",
+      "remaining_scope_portfolios": []
+    },
+    {
+      "id": "RX03-FU-170",
+      "ref": "../conformance/FOLLOWUP-INTAKE.json#/rows/169",
+      "source_disposition": "evidence_gap",
+      "remaining_scope_portfolios": []
+    },
+    {
+      "id": "RX03-FU-171",
+      "ref": "../conformance/FOLLOWUP-INTAKE.json#/rows/170",
+      "source_disposition": "evidence_gap",
+      "remaining_scope_portfolios": []
+    },
+    {
+      "id": "RX03-FU-172",
+      "ref": "../conformance/FOLLOWUP-INTAKE.json#/rows/171",
+      "source_disposition": "evidence_gap",
+      "remaining_scope_portfolios": []
+    },
+    {
+      "id": "RX03-FU-173",
+      "ref": "../conformance/FOLLOWUP-INTAKE.json#/rows/172",
+      "source_disposition": "unchecked",
+      "remaining_scope_portfolios": []
+    },
+    {
+      "id": "RX03-FU-178",
+      "ref": "../conformance/FOLLOWUP-INTAKE.json#/rows/177",
+      "source_disposition": "unchecked",
+      "remaining_scope_portfolios": [
+        "additional-wires-deferred"
+      ]
+    },
+    {
+      "id": "RX03-FU-213",
+      "ref": "../conformance/FOLLOWUP-INTAKE.json#/rows/212",
+      "source_disposition": "unchecked",
+      "remaining_scope_portfolios": [
+        "other-bindings"
+      ]
+    },
+    {
+      "id": "RX03-FU-214",
+      "ref": "../conformance/FOLLOWUP-INTAKE.json#/rows/213",
+      "source_disposition": "unchecked",
+      "remaining_scope_portfolios": [
+        "other-bindings"
+      ]
+    },
+    {
+      "id": "RX03-FU-216",
+      "ref": "../conformance/FOLLOWUP-INTAKE.json#/rows/215",
+      "source_disposition": "unchecked",
+      "remaining_scope_portfolios": [
+        "additional-wires-deferred"
+      ]
+    },
+    {
+      "id": "RX03-FU-235",
+      "ref": "../conformance/FOLLOWUP-INTAKE.json#/rows/234",
+      "source_disposition": "unchecked",
+      "remaining_scope_portfolios": []
+    },
+    {
+      "id": "RX03-FU-236",
+      "ref": "../conformance/FOLLOWUP-INTAKE.json#/rows/235",
+      "source_disposition": "unchecked",
+      "remaining_scope_portfolios": []
+    },
+    {
+      "id": "RX03-FU-246",
+      "ref": "../conformance/FOLLOWUP-INTAKE.json#/rows/245",
+      "source_disposition": "unchecked",
+      "remaining_scope_portfolios": [
+        "other-bindings"
+      ]
+    },
+    {
+      "id": "RX03-FU-249",
+      "ref": "../conformance/FOLLOWUP-INTAKE.json#/rows/248",
+      "source_disposition": "unchecked",
+      "remaining_scope_portfolios": [
+        "streamer-deferred",
+        "selected-part-roster"
+      ]
+    },
+    {
+      "id": "RX03-FU-252",
+      "ref": "../conformance/FOLLOWUP-INTAKE.json#/rows/251",
+      "source_disposition": "unchecked",
+      "remaining_scope_portfolios": [
+        "other-bindings"
+      ]
+    },
+    {
+      "id": "RX03-FU-253",
+      "ref": "../conformance/FOLLOWUP-INTAKE.json#/rows/252",
+      "source_disposition": "unchecked",
+      "remaining_scope_portfolios": [
+        "other-bindings"
+      ]
+    },
+    {
+      "id": "RX03-FU-254",
+      "ref": "../conformance/FOLLOWUP-INTAKE.json#/rows/253",
+      "source_disposition": "unchecked",
+      "remaining_scope_portfolios": [
+        "other-bindings"
+      ]
+    },
+    {
+      "id": "RX03-FU-268",
+      "ref": "../conformance/FOLLOWUP-INTAKE.json#/rows/267",
+      "source_disposition": "unchecked",
+      "remaining_scope_portfolios": [
+        "streamer-deferred",
+        "selected-part-roster"
+      ]
+    }
+  ],
+  "followup_count": 61,
+  "source_disposition_counts": {
+    "unchecked": 36,
+    "evidence_gap": 19,
+    "annotation_only": 3,
+    "implementation_gap": 3
+  },
+  "filing_transfer_ids": [
+    "RX03-XFER-008",
+    "RX03-XFER-043",
+    "RX03-XFER-081",
+    "RX03-XFER-082",
+    "RX03-XFER-083",
+    "RX03-XFER-090"
+  ],
+  "consulted_transfer_ids": [
+    "RX03-XFER-080",
+    "RX03-XFER-084",
+    "RX03-XFER-085"
+  ],
+  "transfer_index_ref": "COMPONENT-TRANSFER-ROUTES.json#/entries",
+  "transfer_boundary": "Filing routes retain the source's destination owner/portion; Source9/F14/D7 portfolio routing does not grant edits to root documentary pairing or frozen component files.",
+  "observation_case_ids": [
+    "O4",
+    "O5",
+    "O6",
+    "O7",
+    "O9",
+    "O10",
+    "O11",
+    "O12"
+  ],
+  "root_dispatch_eligibility": "ready_for_root_scoped_intake; exact revision/custody/resource admission still required before engineering",
+  "return_contract": [
+    "row-level applicability tuples with source/evidence references, truthful current gaps and no automatic tag bumps",
+    "precise owned-scope changes/evidence requests and affected independent-review prerequisites",
+    "actual freeze/failure/question event to this coordinator, with root copied through the returned receipt; original owner and parent/run identity preserved"
+  ]
+}

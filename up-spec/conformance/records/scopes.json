@@ -1,0 +1,1738 @@
+{
+  "schema": "rx03-owner-scope-reconciliation-v1",
+  "purpose": "Route every originally unresolved actor scope into an existing or explicitly deferred portfolio without inventing a named implementation owner.",
+  "summary": {
+    "original_rows": 130,
+    "also_existing_owner_portion": 83,
+    "only_remaining_portfolios": 47,
+    "scope_memberships": 144,
+    "portfolio_routing_complete": true,
+    "implementation_ownership_complete": false
+  },
+  "scope_portfolios": [
+    {
+      "id": "streamer-deferred",
+      "source_route_id": "streamer-unresolved",
+      "source_ref": "../conformance/OWNER-ROUTES.json#/groups/5",
+      "existing_graph_node_ids": [
+        "spec-final3-conformance-pe-c",
+        "later-integrations"
+      ],
+      "coordination_owner": "root",
+      "routing_state": "deliberately_deferred",
+      "implementation_owner": null,
+      "implementation_owner_status": "not_established_by_named_metadata",
+      "remaining_boundary": "Crate, binary and supplier/manual scopes remain separate. No coherent Streamer implementation writer is recorded; retain deferral and current SDK interface dependencies.",
+      "acceptance_boundary": "implementation_conformance",
+      "followup_ids": [
+        "RX03-FU-001",
+        "RX03-FU-002",
+        "RX03-FU-003",
+        "RX03-FU-005",
+        "RX03-FU-006",
+        "RX03-FU-018",
+        "RX03-FU-028",
+        "RX03-FU-041",
+        "RX03-FU-042",
+        "RX03-FU-048",
+        "RX03-FU-063",
+        "RX03-FU-075",
+        "RX03-FU-076",
+        "RX03-FU-077",
+        "RX03-FU-078",
+        "RX03-FU-079",
+        "RX03-FU-080",
+        "RX03-FU-081",
+        "RX03-FU-082",
+        "RX03-FU-083",
+        "RX03-FU-084",
+        "RX03-FU-085",
+        "RX03-FU-086",
+        "RX03-FU-095",
+        "RX03-FU-096",
+        "RX03-FU-097",
+        "RX03-FU-197",
+        "RX03-FU-212",
+        "RX03-FU-217",
+        "RX03-FU-218",
+        "RX03-FU-249",
+        "RX03-FU-255",
+        "RX03-FU-256",
+        "RX03-FU-257",
+        "RX03-FU-258",
+        "RX03-FU-259",
+        "RX03-FU-260",
+        "RX03-FU-261",
+        "RX03-FU-262",
+        "RX03-FU-265",
+        "RX03-FU-268"
+      ]
+    },
+    {
+      "id": "api-async",
+      "source_route_id": "async-unresolved",
+      "source_ref": "../conformance/OWNER-ROUTES.json#/groups/6",
+      "existing_graph_node_ids": [
+        "api-async"
+      ],
+      "coordination_owner": "root",
+      "routing_state": "existing_pending_portfolio",
+      "implementation_owner": null,
+      "implementation_owner_status": "not_established_by_named_metadata",
+      "remaining_boundary": "Tokio, Embassy and scheduler implementation ownership/custody is not established by the inspected metadata. Source9 retains its SDK/shared-interface portions; this does not assign a second SDK writer.",
+      "acceptance_boundary": "implementation_conformance",
+      "followup_ids": [
+        "RX03-FU-012",
+        "RX03-FU-021",
+        "RX03-FU-195",
+        "RX03-FU-198",
+        "RX03-FU-207",
+        "RX03-FU-210",
+        "RX03-FU-241",
+        "RX03-FU-270",
+        "RX03-FU-271"
+      ]
+    },
+    {
+      "id": "e2e-deferred",
+      "source_route_id": "e2e-unresolved",
+      "source_ref": "../conformance/OWNER-ROUTES.json#/groups/7",
+      "existing_graph_node_ids": [
+        "later-integrations"
+      ],
+      "coordination_owner": "root",
+      "routing_state": "deliberately_deferred",
+      "implementation_owner": null,
+      "implementation_owner_status": "not_established_by_named_metadata",
+      "remaining_boundary": "E2E part E6 and its runtime integration remain deferred. Shared SDK receive/builder duties can be recorded separately; no E2E engineering resumes.",
+      "acceptance_boundary": "implementation_conformance",
+      "followup_ids": [
+        "RX03-FU-025",
+        "RX03-FU-049",
+        "RX03-FU-050",
+        "RX03-FU-051",
+        "RX03-FU-052",
+        "RX03-FU-053",
+        "RX03-FU-054",
+        "RX03-FU-055",
+        "RX03-FU-056",
+        "RX03-FU-057",
+        "RX03-FU-058",
+        "RX03-FU-059",
+        "RX03-FU-060",
+        "RX03-FU-219",
+        "RX03-FU-220",
+        "RX03-FU-221",
+        "RX03-FU-222",
+        "RX03-FU-223",
+        "RX03-FU-224",
+        "RX03-FU-225",
+        "RX03-FU-226"
+      ]
+    },
+    {
+      "id": "xcdr2-deferred",
+      "source_route_id": "xcdr2-unresolved",
+      "source_ref": "../conformance/OWNER-ROUTES.json#/groups/8",
+      "existing_graph_node_ids": [
+        "later-integrations"
+      ],
+      "coordination_owner": "root",
+      "routing_state": "separate_deferred_wire_portfolio",
+      "implementation_owner": null,
+      "implementation_owner_status": "not_established_by_named_metadata",
+      "remaining_boundary": "The recorded existing XCDR2 implementation and derive need their own source/custody and coherent scope; native/Protobuf ownership does not include them. SDK references do not transfer XCDR2 implementation ownership.",
+      "acceptance_boundary": "implementation_conformance",
+      "followup_ids": [
+        "RX03-FU-177",
+        "RX03-FU-183",
+        "RX03-FU-184",
+        "RX03-FU-185",
+        "RX03-FU-186",
+        "RX03-FU-187",
+        "RX03-FU-188",
+        "RX03-FU-189",
+        "RX03-FU-190"
+      ]
+    },
+    {
+      "id": "allocation-providers",
+      "source_route_id": "providers-unresolved",
+      "source_ref": "../conformance/OWNER-ROUTES.json#/groups/9",
+      "existing_graph_node_ids": [
+        "consumer-round"
+      ],
+      "coordination_owner": "root",
+      "routing_state": "existing_pending_portfolio",
+      "implementation_owner": null,
+      "implementation_owner_status": "not_established_by_named_metadata",
+      "remaining_boundary": "Cortex-M and RISC-V providers require separately identified revisions and implementation custody; RTOS5 is not their owner merely because MCU targets are involved. Source9 owns only its SDK helper/interface portion.",
+      "acceptance_boundary": "implementation_conformance",
+      "followup_ids": [
+        "RX03-FU-035",
+        "RX03-FU-195",
+        "RX03-FU-199",
+        "RX03-FU-201",
+        "RX03-FU-202",
+        "RX03-FU-240"
+      ]
+    },
+    {
+      "id": "other-platform-backends",
+      "source_route_id": "other-platforms-unresolved",
+      "source_ref": "../conformance/OWNER-ROUTES.json#/groups/10",
+      "existing_graph_node_ids": [
+        "later-integrations"
+      ],
+      "coordination_owner": "root",
+      "routing_state": "existing_pending_portfolio",
+      "implementation_owner": null,
+      "implementation_owner_status": "not_established_by_named_metadata",
+      "remaining_boundary": "Identify selected host/custom/non-RTOS backend and supported-configuration records. RTOS5 custody remains limited to its recorded MCU/RTOS scope.",
+      "acceptance_boundary": "implementation_conformance",
+      "followup_ids": [
+        "RX03-FU-013",
+        "RX03-FU-016",
+        "RX03-FU-029",
+        "RX03-FU-199"
+      ]
+    },
+    {
+      "id": "additional-wires-deferred",
+      "source_route_id": "other-wires-unresolved",
+      "source_ref": "../conformance/OWNER-ROUTES.json#/groups/11",
+      "existing_graph_node_ids": [
+        "later-integrations"
+      ],
+      "coordination_owner": "root",
+      "routing_state": "separate_deferred_wire_portfolio",
+      "implementation_owner": null,
+      "implementation_owner_status": "not_established_by_named_metadata",
+      "remaining_boundary": "Enumerate selected metadata/serialized wires beyond native/Protobuf; a generic wire duty does not select a new wire or authorize its engineering.",
+      "acceptance_boundary": "implementation_conformance",
+      "followup_ids": [
+        "RX03-FU-001",
+        "RX03-FU-034",
+        "RX03-FU-035",
+        "RX03-FU-177",
+        "RX03-FU-178",
+        "RX03-FU-179",
+        "RX03-FU-180",
+        "RX03-FU-181",
+        "RX03-FU-182",
+        "RX03-FU-216",
+        "RX03-FU-227",
+        "RX03-FU-239",
+        "RX03-FU-247",
+        "RX03-FU-250",
+        "RX03-FU-251"
+      ]
+    },
+    {
+      "id": "other-bindings",
+      "source_route_id": "other-bindings-unresolved",
+      "source_ref": "../conformance/OWNER-ROUTES.json#/groups/12",
+      "existing_graph_node_ids": [
+        "later-integrations"
+      ],
+      "coordination_owner": "root",
+      "routing_state": "existing_pending_portfolio",
+      "implementation_owner": null,
+      "implementation_owner_status": "not_established_by_named_metadata",
+      "remaining_boundary": "Enumerate actual classic UTransport/other binding implementations and revisions; iceoryx2/LoLa are subsets only when the duty applies. No new binding writer is inferred.",
+      "acceptance_boundary": "implementation_conformance",
+      "followup_ids": [
+        "RX03-FU-015",
+        "RX03-FU-034",
+        "RX03-FU-040",
+        "RX03-FU-070",
+        "RX03-FU-089",
+        "RX03-FU-102",
+        "RX03-FU-103",
+        "RX03-FU-104",
+        "RX03-FU-105",
+        "RX03-FU-108",
+        "RX03-FU-109",
+        "RX03-FU-111",
+        "RX03-FU-112",
+        "RX03-FU-114",
+        "RX03-FU-115",
+        "RX03-FU-116",
+        "RX03-FU-127",
+        "RX03-FU-129",
+        "RX03-FU-192",
+        "RX03-FU-193",
+        "RX03-FU-194",
+        "RX03-FU-213",
+        "RX03-FU-214",
+        "RX03-FU-246",
+        "RX03-FU-252",
+        "RX03-FU-253",
+        "RX03-FU-254"
+      ]
+    },
+    {
+      "id": "deployment-records",
+      "source_route_id": "deployment-unresolved",
+      "source_ref": "../conformance/OWNER-ROUTES.json#/groups/13",
+      "existing_graph_node_ids": [
+        "later-integrations"
+      ],
+      "coordination_owner": "root",
+      "routing_state": "root_owned_applicability_work",
+      "implementation_owner": null,
+      "implementation_owner_status": "not_established_by_named_metadata",
+      "remaining_boundary": "Select actual deployment graph, integrator and target/configuration/profile tuples. Deployment duties remain with the integrator, separate from supplier and binding duties.",
+      "acceptance_boundary": "implementation_conformance",
+      "followup_ids": [
+        "RX03-FU-095",
+        "RX03-FU-152",
+        "RX03-FU-164",
+        "RX03-FU-168",
+        "RX03-FU-191"
+      ]
+    },
+    {
+      "id": "selected-part-roster",
+      "source_route_id": "all-parts-unresolved",
+      "source_ref": "../conformance/OWNER-ROUTES.json#/groups/14",
+      "existing_graph_node_ids": [
+        "later-integrations"
+      ],
+      "coordination_owner": "root",
+      "routing_state": "root_owned_applicability_work",
+      "implementation_owner": null,
+      "implementation_owner_status": "not_established_by_named_metadata",
+      "remaining_boundary": "Close the selected-part roster, including optional/external parts and suppliers. Known component routes do not constitute a complete roster.",
+      "acceptance_boundary": "implementation_conformance",
+      "followup_ids": [
+        "RX03-FU-001",
+        "RX03-FU-002",
+        "RX03-FU-003",
+        "RX03-FU-005",
+        "RX03-FU-006",
+        "RX03-FU-249",
+        "RX03-FU-268"
+      ]
+    }
+  ],
+  "rows": [
+    {
+      "followup_id": "RX03-FU-001",
+      "source_ref": "../conformance/FOLLOWUP-INTAKE.json#/rows/0",
+      "existing_owner_portions": [
+        "sdk-core",
+        "iceoryx2",
+        "lola",
+        "native-protobuf"
+      ],
+      "remaining_portfolio_ids": [
+        "streamer-deferred",
+        "selected-part-roster",
+        "additional-wires-deferred"
+      ],
+      "status": "portfolio_routed; exact actor applicability/custody remains at the named boundaries"
+    },
+    {
+      "followup_id": "RX03-FU-002",
+      "source_ref": "../conformance/FOLLOWUP-INTAKE.json#/rows/1",
+      "existing_owner_portions": [
+        "sdk-core",
+        "iceoryx2",
+        "lola",
+        "native-protobuf"
+      ],
+      "remaining_portfolio_ids": [
+        "streamer-deferred",
+        "selected-part-roster"
+      ],
+      "status": "portfolio_routed; exact actor applicability/custody remains at the named boundaries"
+    },
+    {
+      "followup_id": "RX03-FU-003",
+      "source_ref": "../conformance/FOLLOWUP-INTAKE.json#/rows/2",
+      "existing_owner_portions": [
+        "sdk-core",
+        "iceoryx2",
+        "lola",
+        "native-protobuf"
+      ],
+      "remaining_portfolio_ids": [
+        "streamer-deferred",
+        "selected-part-roster"
+      ],
+      "status": "portfolio_routed; exact actor applicability/custody remains at the named boundaries"
+    },
+    {
+      "followup_id": "RX03-FU-005",
+      "source_ref": "../conformance/FOLLOWUP-INTAKE.json#/rows/4",
+      "existing_owner_portions": [
+        "sdk-core",
+        "iceoryx2",
+        "lola",
+        "native-protobuf"
+      ],
+      "remaining_portfolio_ids": [
+        "streamer-deferred",
+        "selected-part-roster"
+      ],
+      "status": "portfolio_routed; exact actor applicability/custody remains at the named boundaries"
+    },
+    {
+      "followup_id": "RX03-FU-006",
+      "source_ref": "../conformance/FOLLOWUP-INTAKE.json#/rows/5",
+      "existing_owner_portions": [
+        "sdk-core",
+        "iceoryx2",
+        "lola",
+        "native-protobuf"
+      ],
+      "remaining_portfolio_ids": [
+        "streamer-deferred",
+        "selected-part-roster"
+      ],
+      "status": "portfolio_routed; exact actor applicability/custody remains at the named boundaries"
+    },
+    {
+      "followup_id": "RX03-FU-012",
+      "source_ref": "../conformance/FOLLOWUP-INTAKE.json#/rows/11",
+      "existing_owner_portions": [],
+      "remaining_portfolio_ids": [
+        "api-async"
+      ],
+      "status": "portfolio_routed; exact actor applicability/custody remains at the named boundaries"
+    },
+    {
+      "followup_id": "RX03-FU-013",
+      "source_ref": "../conformance/FOLLOWUP-INTAKE.json#/rows/12",
+      "existing_owner_portions": [
+        "sdk-core",
+        "rtos-platform"
+      ],
+      "remaining_portfolio_ids": [
+        "other-platform-backends"
+      ],
+      "status": "portfolio_routed; exact actor applicability/custody remains at the named boundaries"
+    },
+    {
+      "followup_id": "RX03-FU-015",
+      "source_ref": "../conformance/FOLLOWUP-INTAKE.json#/rows/14",
+      "existing_owner_portions": [
+        "sdk-core",
+        "iceoryx2",
+        "lola"
+      ],
+      "remaining_portfolio_ids": [
+        "other-bindings"
+      ],
+      "status": "portfolio_routed; exact actor applicability/custody remains at the named boundaries"
+    },
+    {
+      "followup_id": "RX03-FU-016",
+      "source_ref": "../conformance/FOLLOWUP-INTAKE.json#/rows/15",
+      "existing_owner_portions": [
+        "sdk-core",
+        "rtos-platform"
+      ],
+      "remaining_portfolio_ids": [
+        "other-platform-backends"
+      ],
+      "status": "portfolio_routed; exact actor applicability/custody remains at the named boundaries"
+    },
+    {
+      "followup_id": "RX03-FU-018",
+      "source_ref": "../conformance/FOLLOWUP-INTAKE.json#/rows/17",
+      "existing_owner_portions": [],
+      "remaining_portfolio_ids": [
+        "streamer-deferred"
+      ],
+      "status": "portfolio_routed; exact actor applicability/custody remains at the named boundaries"
+    },
+    {
+      "followup_id": "RX03-FU-021",
+      "source_ref": "../conformance/FOLLOWUP-INTAKE.json#/rows/20",
+      "existing_owner_portions": [
+        "sdk-core"
+      ],
+      "remaining_portfolio_ids": [
+        "api-async"
+      ],
+      "status": "portfolio_routed; exact actor applicability/custody remains at the named boundaries"
+    },
+    {
+      "followup_id": "RX03-FU-025",
+      "source_ref": "../conformance/FOLLOWUP-INTAKE.json#/rows/24",
+      "existing_owner_portions": [
+        "sdk-core"
+      ],
+      "remaining_portfolio_ids": [
+        "e2e-deferred"
+      ],
+      "status": "portfolio_routed; exact actor applicability/custody remains at the named boundaries"
+    },
+    {
+      "followup_id": "RX03-FU-028",
+      "source_ref": "../conformance/FOLLOWUP-INTAKE.json#/rows/27",
+      "existing_owner_portions": [],
+      "remaining_portfolio_ids": [
+        "streamer-deferred"
+      ],
+      "status": "portfolio_routed; exact actor applicability/custody remains at the named boundaries"
+    },
+    {
+      "followup_id": "RX03-FU-029",
+      "source_ref": "../conformance/FOLLOWUP-INTAKE.json#/rows/28",
+      "existing_owner_portions": [
+        "sdk-core",
+        "rtos-platform"
+      ],
+      "remaining_portfolio_ids": [
+        "other-platform-backends"
+      ],
+      "status": "portfolio_routed; exact actor applicability/custody remains at the named boundaries"
+    },
+    {
+      "followup_id": "RX03-FU-034",
+      "source_ref": "../conformance/FOLLOWUP-INTAKE.json#/rows/33",
+      "existing_owner_portions": [
+        "sdk-core",
+        "iceoryx2",
+        "lola",
+        "native-protobuf"
+      ],
+      "remaining_portfolio_ids": [
+        "other-bindings",
+        "additional-wires-deferred"
+      ],
+      "status": "portfolio_routed; exact actor applicability/custody remains at the named boundaries"
+    },
+    {
+      "followup_id": "RX03-FU-035",
+      "source_ref": "../conformance/FOLLOWUP-INTAKE.json#/rows/34",
+      "existing_owner_portions": [
+        "sdk-core",
+        "native-protobuf"
+      ],
+      "remaining_portfolio_ids": [
+        "allocation-providers",
+        "additional-wires-deferred"
+      ],
+      "status": "portfolio_routed; exact actor applicability/custody remains at the named boundaries"
+    },
+    {
+      "followup_id": "RX03-FU-040",
+      "source_ref": "../conformance/FOLLOWUP-INTAKE.json#/rows/39",
+      "existing_owner_portions": [
+        "sdk-core",
+        "iceoryx2",
+        "lola"
+      ],
+      "remaining_portfolio_ids": [
+        "other-bindings"
+      ],
+      "status": "portfolio_routed; exact actor applicability/custody remains at the named boundaries"
+    },
+    {
+      "followup_id": "RX03-FU-041",
+      "source_ref": "../conformance/FOLLOWUP-INTAKE.json#/rows/40",
+      "existing_owner_portions": [
+        "sdk-core"
+      ],
+      "remaining_portfolio_ids": [
+        "streamer-deferred"
+      ],
+      "status": "portfolio_routed; exact actor applicability/custody remains at the named boundaries"
+    },
+    {
+      "followup_id": "RX03-FU-042",
+      "source_ref": "../conformance/FOLLOWUP-INTAKE.json#/rows/41",
+      "existing_owner_portions": [],
+      "remaining_portfolio_ids": [
+        "streamer-deferred"
+      ],
+      "status": "portfolio_routed; exact actor applicability/custody remains at the named boundaries"
+    },
+    {
+      "followup_id": "RX03-FU-048",
+      "source_ref": "../conformance/FOLLOWUP-INTAKE.json#/rows/47",
+      "existing_owner_portions": [
+        "sdk-core"
+      ],
+      "remaining_portfolio_ids": [
+        "streamer-deferred"
+      ],
+      "status": "portfolio_routed; exact actor applicability/custody remains at the named boundaries"
+    },
+    {
+      "followup_id": "RX03-FU-049",
+      "source_ref": "../conformance/FOLLOWUP-INTAKE.json#/rows/48",
+      "existing_owner_portions": [],
+      "remaining_portfolio_ids": [
+        "e2e-deferred"
+      ],
+      "status": "portfolio_routed; exact actor applicability/custody remains at the named boundaries"
+    },
+    {
+      "followup_id": "RX03-FU-050",
+      "source_ref": "../conformance/FOLLOWUP-INTAKE.json#/rows/49",
+      "existing_owner_portions": [],
+      "remaining_portfolio_ids": [
+        "e2e-deferred"
+      ],
+      "status": "portfolio_routed; exact actor applicability/custody remains at the named boundaries"
+    },
+    {
+      "followup_id": "RX03-FU-051",
+      "source_ref": "../conformance/FOLLOWUP-INTAKE.json#/rows/50",
+      "existing_owner_portions": [],
+      "remaining_portfolio_ids": [
+        "e2e-deferred"
+      ],
+      "status": "portfolio_routed; exact actor applicability/custody remains at the named boundaries"
+    },
+    {
+      "followup_id": "RX03-FU-052",
+      "source_ref": "../conformance/FOLLOWUP-INTAKE.json#/rows/51",
+      "existing_owner_portions": [],
+      "remaining_portfolio_ids": [
+        "e2e-deferred"
+      ],
+      "status": "portfolio_routed; exact actor applicability/custody remains at the named boundaries"
+    },
+    {
+      "followup_id": "RX03-FU-053",
+      "source_ref": "../conformance/FOLLOWUP-INTAKE.json#/rows/52",
+      "existing_owner_portions": [],
+      "remaining_portfolio_ids": [
+        "e2e-deferred"
+      ],
+      "status": "portfolio_routed; exact actor applicability/custody remains at the named boundaries"
+    },
+    {
+      "followup_id": "RX03-FU-054",
+      "source_ref": "../conformance/FOLLOWUP-INTAKE.json#/rows/53",
+      "existing_owner_portions": [],
+      "remaining_portfolio_ids": [
+        "e2e-deferred"
+      ],
+      "status": "portfolio_routed; exact actor applicability/custody remains at the named boundaries"
+    },
+    {
+      "followup_id": "RX03-FU-055",
+      "source_ref": "../conformance/FOLLOWUP-INTAKE.json#/rows/54",
+      "existing_owner_portions": [
+        "sdk-core"
+      ],
+      "remaining_portfolio_ids": [
+        "e2e-deferred"
+      ],
+      "status": "portfolio_routed; exact actor applicability/custody remains at the named boundaries"
+    },
+    {
+      "followup_id": "RX03-FU-056",
+      "source_ref": "../conformance/FOLLOWUP-INTAKE.json#/rows/55",
+      "existing_owner_portions": [
+        "sdk-core"
+      ],
+      "remaining_portfolio_ids": [
+        "e2e-deferred"
+      ],
+      "status": "portfolio_routed; exact actor applicability/custody remains at the named boundaries"
+    },
+    {
+      "followup_id": "RX03-FU-057",
+      "source_ref": "../conformance/FOLLOWUP-INTAKE.json#/rows/56",
+      "existing_owner_portions": [
+        "sdk-core"
+      ],
+      "remaining_portfolio_ids": [
+        "e2e-deferred"
+      ],
+      "status": "portfolio_routed; exact actor applicability/custody remains at the named boundaries"
+    },
+    {
+      "followup_id": "RX03-FU-058",
+      "source_ref": "../conformance/FOLLOWUP-INTAKE.json#/rows/57",
+      "existing_owner_portions": [],
+      "remaining_portfolio_ids": [
+        "e2e-deferred"
+      ],
+      "status": "portfolio_routed; exact actor applicability/custody remains at the named boundaries"
+    },
+    {
+      "followup_id": "RX03-FU-059",
+      "source_ref": "../conformance/FOLLOWUP-INTAKE.json#/rows/58",
+      "existing_owner_portions": [],
+      "remaining_portfolio_ids": [
+        "e2e-deferred"
+      ],
+      "status": "portfolio_routed; exact actor applicability/custody remains at the named boundaries"
+    },
+    {
+      "followup_id": "RX03-FU-060",
+      "source_ref": "../conformance/FOLLOWUP-INTAKE.json#/rows/59",
+      "existing_owner_portions": [
+        "sdk-core"
+      ],
+      "remaining_portfolio_ids": [
+        "e2e-deferred"
+      ],
+      "status": "portfolio_routed; exact actor applicability/custody remains at the named boundaries"
+    },
+    {
+      "followup_id": "RX03-FU-063",
+      "source_ref": "../conformance/FOLLOWUP-INTAKE.json#/rows/62",
+      "existing_owner_portions": [],
+      "remaining_portfolio_ids": [
+        "streamer-deferred"
+      ],
+      "status": "portfolio_routed; exact actor applicability/custody remains at the named boundaries"
+    },
+    {
+      "followup_id": "RX03-FU-070",
+      "source_ref": "../conformance/FOLLOWUP-INTAKE.json#/rows/69",
+      "existing_owner_portions": [
+        "iceoryx2",
+        "lola"
+      ],
+      "remaining_portfolio_ids": [
+        "other-bindings"
+      ],
+      "status": "portfolio_routed; exact actor applicability/custody remains at the named boundaries"
+    },
+    {
+      "followup_id": "RX03-FU-075",
+      "source_ref": "../conformance/FOLLOWUP-INTAKE.json#/rows/74",
+      "existing_owner_portions": [],
+      "remaining_portfolio_ids": [
+        "streamer-deferred"
+      ],
+      "status": "portfolio_routed; exact actor applicability/custody remains at the named boundaries"
+    },
+    {
+      "followup_id": "RX03-FU-076",
+      "source_ref": "../conformance/FOLLOWUP-INTAKE.json#/rows/75",
+      "existing_owner_portions": [],
+      "remaining_portfolio_ids": [
+        "streamer-deferred"
+      ],
+      "status": "portfolio_routed; exact actor applicability/custody remains at the named boundaries"
+    },
+    {
+      "followup_id": "RX03-FU-077",
+      "source_ref": "../conformance/FOLLOWUP-INTAKE.json#/rows/76",
+      "existing_owner_portions": [],
+      "remaining_portfolio_ids": [
+        "streamer-deferred"
+      ],
+      "status": "portfolio_routed; exact actor applicability/custody remains at the named boundaries"
+    },
+    {
+      "followup_id": "RX03-FU-078",
+      "source_ref": "../conformance/FOLLOWUP-INTAKE.json#/rows/77",
+      "existing_owner_portions": [],
+      "remaining_portfolio_ids": [
+        "streamer-deferred"
+      ],
+      "status": "portfolio_routed; exact actor applicability/custody remains at the named boundaries"
+    },
+    {
+      "followup_id": "RX03-FU-079",
+      "source_ref": "../conformance/FOLLOWUP-INTAKE.json#/rows/78",
+      "existing_owner_portions": [],
+      "remaining_portfolio_ids": [
+        "streamer-deferred"
+      ],
+      "status": "portfolio_routed; exact actor applicability/custody remains at the named boundaries"
+    },
+    {
+      "followup_id": "RX03-FU-080",
+      "source_ref": "../conformance/FOLLOWUP-INTAKE.json#/rows/79",
+      "existing_owner_portions": [],
+      "remaining_portfolio_ids": [
+        "streamer-deferred"
+      ],
+      "status": "portfolio_routed; exact actor applicability/custody remains at the named boundaries"
+    },
+    {
+      "followup_id": "RX03-FU-081",
+      "source_ref": "../conformance/FOLLOWUP-INTAKE.json#/rows/80",
+      "existing_owner_portions": [],
+      "remaining_portfolio_ids": [
+        "streamer-deferred"
+      ],
+      "status": "portfolio_routed; exact actor applicability/custody remains at the named boundaries"
+    },
+    {
+      "followup_id": "RX03-FU-082",
+      "source_ref": "../conformance/FOLLOWUP-INTAKE.json#/rows/81",
+      "existing_owner_portions": [],
+      "remaining_portfolio_ids": [
+        "streamer-deferred"
+      ],
+      "status": "portfolio_routed; exact actor applicability/custody remains at the named boundaries"
+    },
+    {
+      "followup_id": "RX03-FU-083",
+      "source_ref": "../conformance/FOLLOWUP-INTAKE.json#/rows/82",
+      "existing_owner_portions": [],
+      "remaining_portfolio_ids": [
+        "streamer-deferred"
+      ],
+      "status": "portfolio_routed; exact actor applicability/custody remains at the named boundaries"
+    },
+    {
+      "followup_id": "RX03-FU-084",
+      "source_ref": "../conformance/FOLLOWUP-INTAKE.json#/rows/83",
+      "existing_owner_portions": [],
+      "remaining_portfolio_ids": [
+        "streamer-deferred"
+      ],
+      "status": "portfolio_routed; exact actor applicability/custody remains at the named boundaries"
+    },
+    {
+      "followup_id": "RX03-FU-085",
+      "source_ref": "../conformance/FOLLOWUP-INTAKE.json#/rows/84",
+      "existing_owner_portions": [],
+      "remaining_portfolio_ids": [
+        "streamer-deferred"
+      ],
+      "status": "portfolio_routed; exact actor applicability/custody remains at the named boundaries"
+    },
+    {
+      "followup_id": "RX03-FU-086",
+      "source_ref": "../conformance/FOLLOWUP-INTAKE.json#/rows/85",
+      "existing_owner_portions": [],
+      "remaining_portfolio_ids": [
+        "streamer-deferred"
+      ],
+      "status": "portfolio_routed; exact actor applicability/custody remains at the named boundaries"
+    },
+    {
+      "followup_id": "RX03-FU-089",
+      "source_ref": "../conformance/FOLLOWUP-INTAKE.json#/rows/88",
+      "existing_owner_portions": [
+        "sdk-core",
+        "iceoryx2",
+        "lola"
+      ],
+      "remaining_portfolio_ids": [
+        "other-bindings"
+      ],
+      "status": "portfolio_routed; exact actor applicability/custody remains at the named boundaries"
+    },
+    {
+      "followup_id": "RX03-FU-095",
+      "source_ref": "../conformance/FOLLOWUP-INTAKE.json#/rows/94",
+      "existing_owner_portions": [
+        "sdk-core"
+      ],
+      "remaining_portfolio_ids": [
+        "streamer-deferred",
+        "deployment-records"
+      ],
+      "status": "portfolio_routed; exact actor applicability/custody remains at the named boundaries"
+    },
+    {
+      "followup_id": "RX03-FU-096",
+      "source_ref": "../conformance/FOLLOWUP-INTAKE.json#/rows/95",
+      "existing_owner_portions": [],
+      "remaining_portfolio_ids": [
+        "streamer-deferred"
+      ],
+      "status": "portfolio_routed; exact actor applicability/custody remains at the named boundaries"
+    },
+    {
+      "followup_id": "RX03-FU-097",
+      "source_ref": "../conformance/FOLLOWUP-INTAKE.json#/rows/96",
+      "existing_owner_portions": [],
+      "remaining_portfolio_ids": [
+        "streamer-deferred"
+      ],
+      "status": "portfolio_routed; exact actor applicability/custody remains at the named boundaries"
+    },
+    {
+      "followup_id": "RX03-FU-102",
+      "source_ref": "../conformance/FOLLOWUP-INTAKE.json#/rows/101",
+      "existing_owner_portions": [
+        "iceoryx2",
+        "lola"
+      ],
+      "remaining_portfolio_ids": [
+        "other-bindings"
+      ],
+      "status": "portfolio_routed; exact actor applicability/custody remains at the named boundaries"
+    },
+    {
+      "followup_id": "RX03-FU-103",
+      "source_ref": "../conformance/FOLLOWUP-INTAKE.json#/rows/102",
+      "existing_owner_portions": [
+        "iceoryx2",
+        "lola"
+      ],
+      "remaining_portfolio_ids": [
+        "other-bindings"
+      ],
+      "status": "portfolio_routed; exact actor applicability/custody remains at the named boundaries"
+    },
+    {
+      "followup_id": "RX03-FU-104",
+      "source_ref": "../conformance/FOLLOWUP-INTAKE.json#/rows/103",
+      "existing_owner_portions": [
+        "iceoryx2",
+        "lola"
+      ],
+      "remaining_portfolio_ids": [
+        "other-bindings"
+      ],
+      "status": "portfolio_routed; exact actor applicability/custody remains at the named boundaries"
+    },
+    {
+      "followup_id": "RX03-FU-105",
+      "source_ref": "../conformance/FOLLOWUP-INTAKE.json#/rows/104",
+      "existing_owner_portions": [
+        "iceoryx2",
+        "lola"
+      ],
+      "remaining_portfolio_ids": [
+        "other-bindings"
+      ],
+      "status": "portfolio_routed; exact actor applicability/custody remains at the named boundaries"
+    },
+    {
+      "followup_id": "RX03-FU-108",
+      "source_ref": "../conformance/FOLLOWUP-INTAKE.json#/rows/107",
+      "existing_owner_portions": [
+        "iceoryx2",
+        "lola"
+      ],
+      "remaining_portfolio_ids": [
+        "other-bindings"
+      ],
+      "status": "portfolio_routed; exact actor applicability/custody remains at the named boundaries"
+    },
+    {
+      "followup_id": "RX03-FU-109",
+      "source_ref": "../conformance/FOLLOWUP-INTAKE.json#/rows/108",
+      "existing_owner_portions": [
+        "iceoryx2",
+        "lola"
+      ],
+      "remaining_portfolio_ids": [
+        "other-bindings"
+      ],
+      "status": "portfolio_routed; exact actor applicability/custody remains at the named boundaries"
+    },
+    {
+      "followup_id": "RX03-FU-111",
+      "source_ref": "../conformance/FOLLOWUP-INTAKE.json#/rows/110",
+      "existing_owner_portions": [
+        "iceoryx2",
+        "lola"
+      ],
+      "remaining_portfolio_ids": [
+        "other-bindings"
+      ],
+      "status": "portfolio_routed; exact actor applicability/custody remains at the named boundaries"
+    },
+    {
+      "followup_id": "RX03-FU-112",
+      "source_ref": "../conformance/FOLLOWUP-INTAKE.json#/rows/111",
+      "existing_owner_portions": [
+        "iceoryx2",
+        "lola"
+      ],
+      "remaining_portfolio_ids": [
+        "other-bindings"
+      ],
+      "status": "portfolio_routed; exact actor applicability/custody remains at the named boundaries"
+    },
+    {
+      "followup_id": "RX03-FU-114",
+      "source_ref": "../conformance/FOLLOWUP-INTAKE.json#/rows/113",
+      "existing_owner_portions": [
+        "iceoryx2",
+        "lola"
+      ],
+      "remaining_portfolio_ids": [
+        "other-bindings"
+      ],
+      "status": "portfolio_routed; exact actor applicability/custody remains at the named boundaries"
+    },
+    {
+      "followup_id": "RX03-FU-115",
+      "source_ref": "../conformance/FOLLOWUP-INTAKE.json#/rows/114",
+      "existing_owner_portions": [
+        "iceoryx2",
+        "lola"
+      ],
+      "remaining_portfolio_ids": [
+        "other-bindings"
+      ],
+      "status": "portfolio_routed; exact actor applicability/custody remains at the named boundaries"
+    },
+    {
+      "followup_id": "RX03-FU-116",
+      "source_ref": "../conformance/FOLLOWUP-INTAKE.json#/rows/115",
+      "existing_owner_portions": [
+        "iceoryx2",
+        "lola"
+      ],
+      "remaining_portfolio_ids": [
+        "other-bindings"
+      ],
+      "status": "portfolio_routed; exact actor applicability/custody remains at the named boundaries"
+    },
+    {
+      "followup_id": "RX03-FU-127",
+      "source_ref": "../conformance/FOLLOWUP-INTAKE.json#/rows/126",
+      "existing_owner_portions": [
+        "iceoryx2",
+        "lola"
+      ],
+      "remaining_portfolio_ids": [
+        "other-bindings"
+      ],
+      "status": "portfolio_routed; exact actor applicability/custody remains at the named boundaries"
+    },
+    {
+      "followup_id": "RX03-FU-129",
+      "source_ref": "../conformance/FOLLOWUP-INTAKE.json#/rows/128",
+      "existing_owner_portions": [
+        "sdk-core",
+        "iceoryx2",
+        "lola"
+      ],
+      "remaining_portfolio_ids": [
+        "other-bindings"
+      ],
+      "status": "portfolio_routed; exact actor applicability/custody remains at the named boundaries"
+    },
+    {
+      "followup_id": "RX03-FU-152",
+      "source_ref": "../conformance/FOLLOWUP-INTAKE.json#/rows/151",
+      "existing_owner_portions": [],
+      "remaining_portfolio_ids": [
+        "deployment-records"
+      ],
+      "status": "portfolio_routed; exact actor applicability/custody remains at the named boundaries"
+    },
+    {
+      "followup_id": "RX03-FU-164",
+      "source_ref": "../conformance/FOLLOWUP-INTAKE.json#/rows/163",
+      "existing_owner_portions": [],
+      "remaining_portfolio_ids": [
+        "deployment-records"
+      ],
+      "status": "portfolio_routed; exact actor applicability/custody remains at the named boundaries"
+    },
+    {
+      "followup_id": "RX03-FU-168",
+      "source_ref": "../conformance/FOLLOWUP-INTAKE.json#/rows/167",
+      "existing_owner_portions": [
+        "sdk-core"
+      ],
+      "remaining_portfolio_ids": [
+        "deployment-records"
+      ],
+      "status": "portfolio_routed; exact actor applicability/custody remains at the named boundaries"
+    },
+    {
+      "followup_id": "RX03-FU-177",
+      "source_ref": "../conformance/FOLLOWUP-INTAKE.json#/rows/176",
+      "existing_owner_portions": [
+        "native-protobuf"
+      ],
+      "remaining_portfolio_ids": [
+        "xcdr2-deferred",
+        "additional-wires-deferred"
+      ],
+      "status": "portfolio_routed; exact actor applicability/custody remains at the named boundaries"
+    },
+    {
+      "followup_id": "RX03-FU-178",
+      "source_ref": "../conformance/FOLLOWUP-INTAKE.json#/rows/177",
+      "existing_owner_portions": [
+        "iceoryx2",
+        "lola",
+        "native-protobuf"
+      ],
+      "remaining_portfolio_ids": [
+        "additional-wires-deferred"
+      ],
+      "status": "portfolio_routed; exact actor applicability/custody remains at the named boundaries"
+    },
+    {
+      "followup_id": "RX03-FU-179",
+      "source_ref": "../conformance/FOLLOWUP-INTAKE.json#/rows/178",
+      "existing_owner_portions": [
+        "native-protobuf"
+      ],
+      "remaining_portfolio_ids": [
+        "additional-wires-deferred"
+      ],
+      "status": "portfolio_routed; exact actor applicability/custody remains at the named boundaries"
+    },
+    {
+      "followup_id": "RX03-FU-180",
+      "source_ref": "../conformance/FOLLOWUP-INTAKE.json#/rows/179",
+      "existing_owner_portions": [
+        "native-protobuf"
+      ],
+      "remaining_portfolio_ids": [
+        "additional-wires-deferred"
+      ],
+      "status": "portfolio_routed; exact actor applicability/custody remains at the named boundaries"
+    },
+    {
+      "followup_id": "RX03-FU-181",
+      "source_ref": "../conformance/FOLLOWUP-INTAKE.json#/rows/180",
+      "existing_owner_portions": [
+        "native-protobuf"
+      ],
+      "remaining_portfolio_ids": [
+        "additional-wires-deferred"
+      ],
+      "status": "portfolio_routed; exact actor applicability/custody remains at the named boundaries"
+    },
+    {
+      "followup_id": "RX03-FU-182",
+      "source_ref": "../conformance/FOLLOWUP-INTAKE.json#/rows/181",
+      "existing_owner_portions": [
+        "native-protobuf"
+      ],
+      "remaining_portfolio_ids": [
+        "additional-wires-deferred"
+      ],
+      "status": "portfolio_routed; exact actor applicability/custody remains at the named boundaries"
+    },
+    {
+      "followup_id": "RX03-FU-183",
+      "source_ref": "../conformance/FOLLOWUP-INTAKE.json#/rows/182",
+      "existing_owner_portions": [
+        "sdk-core"
+      ],
+      "remaining_portfolio_ids": [
+        "xcdr2-deferred"
+      ],
+      "status": "portfolio_routed; exact actor applicability/custody remains at the named boundaries"
+    },
+    {
+      "followup_id": "RX03-FU-184",
+      "source_ref": "../conformance/FOLLOWUP-INTAKE.json#/rows/183",
+      "existing_owner_portions": [
+        "sdk-core"
+      ],
+      "remaining_portfolio_ids": [
+        "xcdr2-deferred"
+      ],
+      "status": "portfolio_routed; exact actor applicability/custody remains at the named boundaries"
+    },
+    {
+      "followup_id": "RX03-FU-185",
+      "source_ref": "../conformance/FOLLOWUP-INTAKE.json#/rows/184",
+      "existing_owner_portions": [
+        "sdk-core"
+      ],
+      "remaining_portfolio_ids": [
+        "xcdr2-deferred"
+      ],
+      "status": "portfolio_routed; exact actor applicability/custody remains at the named boundaries"
+    },
+    {
+      "followup_id": "RX03-FU-186",
+      "source_ref": "../conformance/FOLLOWUP-INTAKE.json#/rows/185",
+      "existing_owner_portions": [
+        "sdk-core"
+      ],
+      "remaining_portfolio_ids": [
+        "xcdr2-deferred"
+      ],
+      "status": "portfolio_routed; exact actor applicability/custody remains at the named boundaries"
+    },
+    {
+      "followup_id": "RX03-FU-187",
+      "source_ref": "../conformance/FOLLOWUP-INTAKE.json#/rows/186",
+      "existing_owner_portions": [
+        "sdk-core"
+      ],
+      "remaining_portfolio_ids": [
+        "xcdr2-deferred"
+      ],
+      "status": "portfolio_routed; exact actor applicability/custody remains at the named boundaries"
+    },
+    {
+      "followup_id": "RX03-FU-188",
+      "source_ref": "../conformance/FOLLOWUP-INTAKE.json#/rows/187",
+      "existing_owner_portions": [
+        "sdk-core"
+      ],
+      "remaining_portfolio_ids": [
+        "xcdr2-deferred"
+      ],
+      "status": "portfolio_routed; exact actor applicability/custody remains at the named boundaries"
+    },
+    {
+      "followup_id": "RX03-FU-189",
+      "source_ref": "../conformance/FOLLOWUP-INTAKE.json#/rows/188",
+      "existing_owner_portions": [
+        "sdk-core"
+      ],
+      "remaining_portfolio_ids": [
+        "xcdr2-deferred"
+      ],
+      "status": "portfolio_routed; exact actor applicability/custody remains at the named boundaries"
+    },
+    {
+      "followup_id": "RX03-FU-190",
+      "source_ref": "../conformance/FOLLOWUP-INTAKE.json#/rows/189",
+      "existing_owner_portions": [
+        "sdk-core"
+      ],
+      "remaining_portfolio_ids": [
+        "xcdr2-deferred"
+      ],
+      "status": "portfolio_routed; exact actor applicability/custody remains at the named boundaries"
+    },
+    {
+      "followup_id": "RX03-FU-191",
+      "source_ref": "../conformance/FOLLOWUP-INTAKE.json#/rows/190",
+      "existing_owner_portions": [],
+      "remaining_portfolio_ids": [
+        "deployment-records"
+      ],
+      "status": "portfolio_routed; exact actor applicability/custody remains at the named boundaries"
+    },
+    {
+      "followup_id": "RX03-FU-192",
+      "source_ref": "../conformance/FOLLOWUP-INTAKE.json#/rows/191",
+      "existing_owner_portions": [],
+      "remaining_portfolio_ids": [
+        "other-bindings"
+      ],
+      "status": "portfolio_routed; exact actor applicability/custody remains at the named boundaries"
+    },
+    {
+      "followup_id": "RX03-FU-193",
+      "source_ref": "../conformance/FOLLOWUP-INTAKE.json#/rows/192",
+      "existing_owner_portions": [],
+      "remaining_portfolio_ids": [
+        "other-bindings"
+      ],
+      "status": "portfolio_routed; exact actor applicability/custody remains at the named boundaries"
+    },
+    {
+      "followup_id": "RX03-FU-194",
+      "source_ref": "../conformance/FOLLOWUP-INTAKE.json#/rows/193",
+      "existing_owner_portions": [],
+      "remaining_portfolio_ids": [
+        "other-bindings"
+      ],
+      "status": "portfolio_routed; exact actor applicability/custody remains at the named boundaries"
+    },
+    {
+      "followup_id": "RX03-FU-195",
+      "source_ref": "../conformance/FOLLOWUP-INTAKE.json#/rows/194",
+      "existing_owner_portions": [
+        "sdk-core"
+      ],
+      "remaining_portfolio_ids": [
+        "api-async",
+        "allocation-providers"
+      ],
+      "status": "portfolio_routed; exact actor applicability/custody remains at the named boundaries"
+    },
+    {
+      "followup_id": "RX03-FU-197",
+      "source_ref": "../conformance/FOLLOWUP-INTAKE.json#/rows/196",
+      "existing_owner_portions": [
+        "sdk-core"
+      ],
+      "remaining_portfolio_ids": [
+        "streamer-deferred"
+      ],
+      "status": "portfolio_routed; exact actor applicability/custody remains at the named boundaries"
+    },
+    {
+      "followup_id": "RX03-FU-198",
+      "source_ref": "../conformance/FOLLOWUP-INTAKE.json#/rows/197",
+      "existing_owner_portions": [
+        "sdk-core"
+      ],
+      "remaining_portfolio_ids": [
+        "api-async"
+      ],
+      "status": "portfolio_routed; exact actor applicability/custody remains at the named boundaries"
+    },
+    {
+      "followup_id": "RX03-FU-199",
+      "source_ref": "../conformance/FOLLOWUP-INTAKE.json#/rows/198",
+      "existing_owner_portions": [
+        "sdk-core",
+        "rtos-platform"
+      ],
+      "remaining_portfolio_ids": [
+        "other-platform-backends",
+        "allocation-providers"
+      ],
+      "status": "portfolio_routed; exact actor applicability/custody remains at the named boundaries"
+    },
+    {
+      "followup_id": "RX03-FU-201",
+      "source_ref": "../conformance/FOLLOWUP-INTAKE.json#/rows/200",
+      "existing_owner_portions": [
+        "sdk-core"
+      ],
+      "remaining_portfolio_ids": [
+        "allocation-providers"
+      ],
+      "status": "portfolio_routed; exact actor applicability/custody remains at the named boundaries"
+    },
+    {
+      "followup_id": "RX03-FU-202",
+      "source_ref": "../conformance/FOLLOWUP-INTAKE.json#/rows/201",
+      "existing_owner_portions": [
+        "sdk-core"
+      ],
+      "remaining_portfolio_ids": [
+        "allocation-providers"
+      ],
+      "status": "portfolio_routed; exact actor applicability/custody remains at the named boundaries"
+    },
+    {
+      "followup_id": "RX03-FU-207",
+      "source_ref": "../conformance/FOLLOWUP-INTAKE.json#/rows/206",
+      "existing_owner_portions": [
+        "sdk-core"
+      ],
+      "remaining_portfolio_ids": [
+        "api-async"
+      ],
+      "status": "portfolio_routed; exact actor applicability/custody remains at the named boundaries"
+    },
+    {
+      "followup_id": "RX03-FU-210",
+      "source_ref": "../conformance/FOLLOWUP-INTAKE.json#/rows/209",
+      "existing_owner_portions": [
+        "sdk-core"
+      ],
+      "remaining_portfolio_ids": [
+        "api-async"
+      ],
+      "status": "portfolio_routed; exact actor applicability/custody remains at the named boundaries"
+    },
+    {
+      "followup_id": "RX03-FU-212",
+      "source_ref": "../conformance/FOLLOWUP-INTAKE.json#/rows/211",
+      "existing_owner_portions": [],
+      "remaining_portfolio_ids": [
+        "streamer-deferred"
+      ],
+      "status": "portfolio_routed; exact actor applicability/custody remains at the named boundaries"
+    },
+    {
+      "followup_id": "RX03-FU-213",
+      "source_ref": "../conformance/FOLLOWUP-INTAKE.json#/rows/212",
+      "existing_owner_portions": [
+        "iceoryx2",
+        "lola"
+      ],
+      "remaining_portfolio_ids": [
+        "other-bindings"
+      ],
+      "status": "portfolio_routed; exact actor applicability/custody remains at the named boundaries"
+    },
+    {
+      "followup_id": "RX03-FU-214",
+      "source_ref": "../conformance/FOLLOWUP-INTAKE.json#/rows/213",
+      "existing_owner_portions": [
+        "iceoryx2",
+        "lola"
+      ],
+      "remaining_portfolio_ids": [
+        "other-bindings"
+      ],
+      "status": "portfolio_routed; exact actor applicability/custody remains at the named boundaries"
+    },
+    {
+      "followup_id": "RX03-FU-216",
+      "source_ref": "../conformance/FOLLOWUP-INTAKE.json#/rows/215",
+      "existing_owner_portions": [
+        "iceoryx2",
+        "lola",
+        "native-protobuf"
+      ],
+      "remaining_portfolio_ids": [
+        "additional-wires-deferred"
+      ],
+      "status": "portfolio_routed; exact actor applicability/custody remains at the named boundaries"
+    },
+    {
+      "followup_id": "RX03-FU-217",
+      "source_ref": "../conformance/FOLLOWUP-INTAKE.json#/rows/216",
+      "existing_owner_portions": [],
+      "remaining_portfolio_ids": [
+        "streamer-deferred"
+      ],
+      "status": "portfolio_routed; exact actor applicability/custody remains at the named boundaries"
+    },
+    {
+      "followup_id": "RX03-FU-218",
+      "source_ref": "../conformance/FOLLOWUP-INTAKE.json#/rows/217",
+      "existing_owner_portions": [],
+      "remaining_portfolio_ids": [
+        "streamer-deferred"
+      ],
+      "status": "portfolio_routed; exact actor applicability/custody remains at the named boundaries"
+    },
+    {
+      "followup_id": "RX03-FU-219",
+      "source_ref": "../conformance/FOLLOWUP-INTAKE.json#/rows/218",
+      "existing_owner_portions": [
+        "sdk-core"
+      ],
+      "remaining_portfolio_ids": [
+        "e2e-deferred"
+      ],
+      "status": "portfolio_routed; exact actor applicability/custody remains at the named boundaries"
+    },
+    {
+      "followup_id": "RX03-FU-220",
+      "source_ref": "../conformance/FOLLOWUP-INTAKE.json#/rows/219",
+      "existing_owner_portions": [
+        "sdk-core"
+      ],
+      "remaining_portfolio_ids": [
+        "e2e-deferred"
+      ],
+      "status": "portfolio_routed; exact actor applicability/custody remains at the named boundaries"
+    },
+    {
+      "followup_id": "RX03-FU-221",
+      "source_ref": "../conformance/FOLLOWUP-INTAKE.json#/rows/220",
+      "existing_owner_portions": [
+        "sdk-core"
+      ],
+      "remaining_portfolio_ids": [
+        "e2e-deferred"
+      ],
+      "status": "portfolio_routed; exact actor applicability/custody remains at the named boundaries"
+    },
+    {
+      "followup_id": "RX03-FU-222",
+      "source_ref": "../conformance/FOLLOWUP-INTAKE.json#/rows/221",
+      "existing_owner_portions": [
+        "sdk-core"
+      ],
+      "remaining_portfolio_ids": [
+        "e2e-deferred"
+      ],
+      "status": "portfolio_routed; exact actor applicability/custody remains at the named boundaries"
+    },
+    {
+      "followup_id": "RX03-FU-223",
+      "source_ref": "../conformance/FOLLOWUP-INTAKE.json#/rows/222",
+      "existing_owner_portions": [
+        "sdk-core"
+      ],
+      "remaining_portfolio_ids": [
+        "e2e-deferred"
+      ],
+      "status": "portfolio_routed; exact actor applicability/custody remains at the named boundaries"
+    },
+    {
+      "followup_id": "RX03-FU-224",
+      "source_ref": "../conformance/FOLLOWUP-INTAKE.json#/rows/223",
+      "existing_owner_portions": [
+        "sdk-core"
+      ],
+      "remaining_portfolio_ids": [
+        "e2e-deferred"
+      ],
+      "status": "portfolio_routed; exact actor applicability/custody remains at the named boundaries"
+    },
+    {
+      "followup_id": "RX03-FU-225",
+      "source_ref": "../conformance/FOLLOWUP-INTAKE.json#/rows/224",
+      "existing_owner_portions": [
+        "sdk-core"
+      ],
+      "remaining_portfolio_ids": [
+        "e2e-deferred"
+      ],
+      "status": "portfolio_routed; exact actor applicability/custody remains at the named boundaries"
+    },
+    {
+      "followup_id": "RX03-FU-226",
+      "source_ref": "../conformance/FOLLOWUP-INTAKE.json#/rows/225",
+      "existing_owner_portions": [
+        "sdk-core"
+      ],
+      "remaining_portfolio_ids": [
+        "e2e-deferred"
+      ],
+      "status": "portfolio_routed; exact actor applicability/custody remains at the named boundaries"
+    },
+    {
+      "followup_id": "RX03-FU-227",
+      "source_ref": "../conformance/FOLLOWUP-INTAKE.json#/rows/226",
+      "existing_owner_portions": [
+        "sdk-core",
+        "native-protobuf"
+      ],
+      "remaining_portfolio_ids": [
+        "additional-wires-deferred"
+      ],
+      "status": "portfolio_routed; exact actor applicability/custody remains at the named boundaries"
+    },
+    {
+      "followup_id": "RX03-FU-239",
+      "source_ref": "../conformance/FOLLOWUP-INTAKE.json#/rows/238",
+      "existing_owner_portions": [
+        "native-protobuf"
+      ],
+      "remaining_portfolio_ids": [
+        "additional-wires-deferred"
+      ],
+      "status": "portfolio_routed; exact actor applicability/custody remains at the named boundaries"
+    },
+    {
+      "followup_id": "RX03-FU-240",
+      "source_ref": "../conformance/FOLLOWUP-INTAKE.json#/rows/239",
+      "existing_owner_portions": [],
+      "remaining_portfolio_ids": [
+        "allocation-providers"
+      ],
+      "status": "portfolio_routed; exact actor applicability/custody remains at the named boundaries"
+    },
+    {
+      "followup_id": "RX03-FU-241",
+      "source_ref": "../conformance/FOLLOWUP-INTAKE.json#/rows/240",
+      "existing_owner_portions": [],
+      "remaining_portfolio_ids": [
+        "api-async"
+      ],
+      "status": "portfolio_routed; exact actor applicability/custody remains at the named boundaries"
+    },
+    {
+      "followup_id": "RX03-FU-246",
+      "source_ref": "../conformance/FOLLOWUP-INTAKE.json#/rows/245",
+      "existing_owner_portions": [
+        "iceoryx2",
+        "lola"
+      ],
+      "remaining_portfolio_ids": [
+        "other-bindings"
+      ],
+      "status": "portfolio_routed; exact actor applicability/custody remains at the named boundaries"
+    },
+    {
+      "followup_id": "RX03-FU-247",
+      "source_ref": "../conformance/FOLLOWUP-INTAKE.json#/rows/246",
+      "existing_owner_portions": [
+        "native-protobuf"
+      ],
+      "remaining_portfolio_ids": [
+        "additional-wires-deferred"
+      ],
+      "status": "portfolio_routed; exact actor applicability/custody remains at the named boundaries"
+    },
+    {
+      "followup_id": "RX03-FU-249",
+      "source_ref": "../conformance/FOLLOWUP-INTAKE.json#/rows/248",
+      "existing_owner_portions": [
+        "sdk-core",
+        "iceoryx2",
+        "lola",
+        "native-protobuf"
+      ],
+      "remaining_portfolio_ids": [
+        "streamer-deferred",
+        "selected-part-roster"
+      ],
+      "status": "portfolio_routed; exact actor applicability/custody remains at the named boundaries"
+    },
+    {
+      "followup_id": "RX03-FU-250",
+      "source_ref": "../conformance/FOLLOWUP-INTAKE.json#/rows/249",
+      "existing_owner_portions": [
+        "native-protobuf"
+      ],
+      "remaining_portfolio_ids": [
+        "additional-wires-deferred"
+      ],
+      "status": "portfolio_routed; exact actor applicability/custody remains at the named boundaries"
+    },
+    {
+      "followup_id": "RX03-FU-251",
+      "source_ref": "../conformance/FOLLOWUP-INTAKE.json#/rows/250",
+      "existing_owner_portions": [
+        "native-protobuf"
+      ],
+      "remaining_portfolio_ids": [
+        "additional-wires-deferred"
+      ],
+      "status": "portfolio_routed; exact actor applicability/custody remains at the named boundaries"
+    },
+    {
+      "followup_id": "RX03-FU-252",
+      "source_ref": "../conformance/FOLLOWUP-INTAKE.json#/rows/251",
+      "existing_owner_portions": [
+        "iceoryx2",
+        "lola"
+      ],
+      "remaining_portfolio_ids": [
+        "other-bindings"
+      ],
+      "status": "portfolio_routed; exact actor applicability/custody remains at the named boundaries"
+    },
+    {
+      "followup_id": "RX03-FU-253",
+      "source_ref": "../conformance/FOLLOWUP-INTAKE.json#/rows/252",
+      "existing_owner_portions": [
+        "iceoryx2",
+        "lola"
+      ],
+      "remaining_portfolio_ids": [
+        "other-bindings"
+      ],
+      "status": "portfolio_routed; exact actor applicability/custody remains at the named boundaries"
+    },
+    {
+      "followup_id": "RX03-FU-254",
+      "source_ref": "../conformance/FOLLOWUP-INTAKE.json#/rows/253",
+      "existing_owner_portions": [
+        "iceoryx2",
+        "lola"
+      ],
+      "remaining_portfolio_ids": [
+        "other-bindings"
+      ],
+      "status": "portfolio_routed; exact actor applicability/custody remains at the named boundaries"
+    },
+    {
+      "followup_id": "RX03-FU-255",
+      "source_ref": "../conformance/FOLLOWUP-INTAKE.json#/rows/254",
+      "existing_owner_portions": [],
+      "remaining_portfolio_ids": [
+        "streamer-deferred"
+      ],
+      "status": "portfolio_routed; exact actor applicability/custody remains at the named boundaries"
+    },
+    {
+      "followup_id": "RX03-FU-256",
+      "source_ref": "../conformance/FOLLOWUP-INTAKE.json#/rows/255",
+      "existing_owner_portions": [],
+      "remaining_portfolio_ids": [
+        "streamer-deferred"
+      ],
+      "status": "portfolio_routed; exact actor applicability/custody remains at the named boundaries"
+    },
+    {
+      "followup_id": "RX03-FU-257",
+      "source_ref": "../conformance/FOLLOWUP-INTAKE.json#/rows/256",
+      "existing_owner_portions": [],
+      "remaining_portfolio_ids": [
+        "streamer-deferred"
+      ],
+      "status": "portfolio_routed; exact actor applicability/custody remains at the named boundaries"
+    },
+    {
+      "followup_id": "RX03-FU-258",
+      "source_ref": "../conformance/FOLLOWUP-INTAKE.json#/rows/257",
+      "existing_owner_portions": [],
+      "remaining_portfolio_ids": [
+        "streamer-deferred"
+      ],
+      "status": "portfolio_routed; exact actor applicability/custody remains at the named boundaries"
+    },
+    {
+      "followup_id": "RX03-FU-259",
+      "source_ref": "../conformance/FOLLOWUP-INTAKE.json#/rows/258",
+      "existing_owner_portions": [],
+      "remaining_portfolio_ids": [
+        "streamer-deferred"
+      ],
+      "status": "portfolio_routed; exact actor applicability/custody remains at the named boundaries"
+    },
+    {
+      "followup_id": "RX03-FU-260",
+      "source_ref": "../conformance/FOLLOWUP-INTAKE.json#/rows/259",
+      "existing_owner_portions": [],
+      "remaining_portfolio_ids": [
+        "streamer-deferred"
+      ],
+      "status": "portfolio_routed; exact actor applicability/custody remains at the named boundaries"
+    },
+    {
+      "followup_id": "RX03-FU-261",
+      "source_ref": "../conformance/FOLLOWUP-INTAKE.json#/rows/260",
+      "existing_owner_portions": [],
+      "remaining_portfolio_ids": [
+        "streamer-deferred"
+      ],
+      "status": "portfolio_routed; exact actor applicability/custody remains at the named boundaries"
+    },
+    {
+      "followup_id": "RX03-FU-262",
+      "source_ref": "../conformance/FOLLOWUP-INTAKE.json#/rows/261",
+      "existing_owner_portions": [],
+      "remaining_portfolio_ids": [
+        "streamer-deferred"
+      ],
+      "status": "portfolio_routed; exact actor applicability/custody remains at the named boundaries"
+    },
+    {
+      "followup_id": "RX03-FU-265",
+      "source_ref": "../conformance/FOLLOWUP-INTAKE.json#/rows/264",
+      "existing_owner_portions": [],
+      "remaining_portfolio_ids": [
+        "streamer-deferred"
+      ],
+      "status": "portfolio_routed; exact actor applicability/custody remains at the named boundaries"
+    },
+    {
+      "followup_id": "RX03-FU-268",
+      "source_ref": "../conformance/FOLLOWUP-INTAKE.json#/rows/267",
+      "existing_owner_portions": [
+        "sdk-core",
+        "iceoryx2",
+        "lola",
+        "native-protobuf"
+      ],
+      "remaining_portfolio_ids": [
+        "streamer-deferred",
+        "selected-part-roster"
+      ],
+      "status": "portfolio_routed; exact actor applicability/custody remains at the named boundaries"
+    },
+    {
+      "followup_id": "RX03-FU-270",
+      "source_ref": "../conformance/FOLLOWUP-INTAKE.json#/rows/269",
+      "existing_owner_portions": [
+        "sdk-core"
+      ],
+      "remaining_portfolio_ids": [
+        "api-async"
+      ],
+      "status": "portfolio_routed; exact actor applicability/custody remains at the named boundaries"
+    },
+    {
+      "followup_id": "RX03-FU-271",
+      "source_ref": "../conformance/FOLLOWUP-INTAKE.json#/rows/270",
+      "existing_owner_portions": [
+        "sdk-core"
+      ],
+      "remaining_portfolio_ids": [
+        "api-async"
+      ],
+      "status": "portfolio_routed; exact actor applicability/custody remains at the named boundaries"
+    }
+  ],
+  "zero_row_unresolved_route": {
+    "source_ref": "../conformance/OWNER-ROUTES.json#/groups/15",
+    "followups": 0
+  },
+  "deferral_guard": "Streamer, E2E and additional-wire scopes remain distinct and deferred; pending api-async/provider/backend/binding work is not relabeled as deliberately deferred or assigned to one of the five writers.",
+  "no_owner_decision_queue": true
+}

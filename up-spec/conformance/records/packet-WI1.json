@@ -1,0 +1,261 @@
+{
+  "schema": "rx03-existing-portfolio-intake-v1",
+  "target_spec": {
+    "commit": "f18913c6ed062dc6d6c3d7a73dec7a33433b39e4",
+    "tree": "29c6019918c7527a6fa8f4ed3a82d6690bea3dfa",
+    "identity_basis": "root supplied publication; no git/network/hash check here"
+  },
+  "sdk_pairing": {
+    "candidate": "0786fa6e3cd7dbe12c8c10a47d2b581914854b29",
+    "status": "root reports exact committed checks in progress before install/push; not accepted or published by this packet"
+  },
+  "root_worker_observation": "Current task input: root checked all five recorded owner threads; completed, no active workers. Historical graph state fields are not current execution.",
+  "acceptance_boundary": "implementation_conformance",
+  "dispatch_status": "documentary_packet_ready; no dispatch or source admission granted by this work",
+  "source_text_policy": "IDs and JSON pointers only; read requirement, amendment, historical caveat and destination portion at the referenced original row. Do not deduplicate source rows.",
+  "applicability_required": [
+    "exact component/source revision and custody",
+    "published specification revision",
+    "target and architecture",
+    "configuration and feature set",
+    "selected profile and route kind",
+    "responsible supplier/component versus deployment actor",
+    "lifecycle/calling context and applicable guarantees"
+  ],
+  "evidence_rules_ref": "CAT-NEXT-WORK.json#/assessment_rules",
+  "review_prerequisites": {
+    "policy_workspace_path": "sdk-api-redesign-20261107-1/delivery-continuation/UNSAFE-REVIEW.md",
+    "skill_workspace_path": "sdk-api-redesign-20261107-1/delivery-continuation/skills/unsafe-rust-review/SKILL.md",
+    "requirement": "Required for any future unsafe Rust or safe API invariant authoring/review; preserve pinned policy and existing independent-review prerequisites. This routing is not a source safety review."
+  },
+  "prohibited_inference": [
+    "publication implies implementation compliance",
+    "old compiler receipt validates new sources",
+    "documentary transfer equals acceptance",
+    "completed author means completed conformance",
+    "unknown route/profile means not applicable"
+  ],
+  "next_root_action": "Use this exact packet to admit a bounded same-owner applicability/current-source assessment with a named private successor and resource grant. Preserve frozen predecessors and existing findings. This receipt supplies routing, not engineering authority.",
+  "portfolio_id": "native-protobuf",
+  "owner_route_ref": "../conformance/OWNER-ROUTES.json#/groups/1",
+  "existing_work_item": "spec-final3-conformance-w",
+  "existing_thread_id": "thread:delegated-task:command%3Amcp%3A446dd6ff-aa70-4f9b-9014-4d9400d80aad%3Adelegate-task%3Anative-protobuf-published-contract-reconciliation-20261116-v1",
+  "thread_identity_source": "sdk-api-redesign-20261107-1/delivery-continuation/shared-up-rust-core-20261114/overall-completion-assessment-4/root-followthrough/WIRE-SUCCESSOR-ACTUAL-ROOT-LAUNCH.json#/childThreadId",
+  "scope_ref": "../conformance/OWNER-ROUTES.json#/groups/1/scope",
+  "frozen_history": {
+    "roots": [
+      "wire-spec-reconciliation-1",
+      "wire-spec-reconciliation-1/s9-wi1-repair-1",
+      "wire-spec-reconciliation-1/s9-wi1-repair-1/review-independent-1"
+    ],
+    "relative_to": "shared-up-rust-core-20261114",
+    "boundary": "Frozen WI-1 candidate/repair and REQUEST_CHANGES_PRIVATE review remain historical. Preserve README/check composition, exact unsafe-kernel source evidence, native agreement and SDK error-interface integration prerequisites.",
+    "interface": "Use the exact accepted/current SDK interface when root binds it. No expansion to XCDR2, E2E or other wires.",
+    "next": "Assess native and Protobuf separately at exact source/interface pins, preserving declared owning serialized allocation and native-path guarantees."
+  },
+  "followups": [
+    {
+      "id": "RX03-FU-001",
+      "ref": "../conformance/FOLLOWUP-INTAKE.json#/rows/0",
+      "source_disposition": "unchecked",
+      "remaining_scope_portfolios": [
+        "streamer-deferred",
+        "selected-part-roster",
+        "additional-wires-deferred"
+      ]
+    },
+    {
+      "id": "RX03-FU-002",
+      "ref": "../conformance/FOLLOWUP-INTAKE.json#/rows/1",
+      "source_disposition": "unchecked",
+      "remaining_scope_portfolios": [
+        "streamer-deferred",
+        "selected-part-roster"
+      ]
+    },
+    {
+      "id": "RX03-FU-003",
+      "ref": "../conformance/FOLLOWUP-INTAKE.json#/rows/2",
+      "source_disposition": "evidence_gap",
+      "remaining_scope_portfolios": [
+        "streamer-deferred",
+        "selected-part-roster"
+      ]
+    },
+    {
+      "id": "RX03-FU-005",
+      "ref": "../conformance/FOLLOWUP-INTAKE.json#/rows/4",
+      "source_disposition": "annotation_only",
+      "remaining_scope_portfolios": [
+        "streamer-deferred",
+        "selected-part-roster"
+      ]
+    },
+    {
+      "id": "RX03-FU-006",
+      "ref": "../conformance/FOLLOWUP-INTAKE.json#/rows/5",
+      "source_disposition": "annotation_only",
+      "remaining_scope_portfolios": [
+        "streamer-deferred",
+        "selected-part-roster"
+      ]
+    },
+    {
+      "id": "RX03-FU-034",
+      "ref": "../conformance/FOLLOWUP-INTAKE.json#/rows/33",
+      "source_disposition": "unchecked",
+      "remaining_scope_portfolios": [
+        "other-bindings",
+        "additional-wires-deferred"
+      ]
+    },
+    {
+      "id": "RX03-FU-035",
+      "ref": "../conformance/FOLLOWUP-INTAKE.json#/rows/34",
+      "source_disposition": "unchecked",
+      "remaining_scope_portfolios": [
+        "allocation-providers",
+        "additional-wires-deferred"
+      ]
+    },
+    {
+      "id": "RX03-FU-177",
+      "ref": "../conformance/FOLLOWUP-INTAKE.json#/rows/176",
+      "source_disposition": "unchecked",
+      "remaining_scope_portfolios": [
+        "xcdr2-deferred",
+        "additional-wires-deferred"
+      ]
+    },
+    {
+      "id": "RX03-FU-178",
+      "ref": "../conformance/FOLLOWUP-INTAKE.json#/rows/177",
+      "source_disposition": "unchecked",
+      "remaining_scope_portfolios": [
+        "additional-wires-deferred"
+      ]
+    },
+    {
+      "id": "RX03-FU-179",
+      "ref": "../conformance/FOLLOWUP-INTAKE.json#/rows/178",
+      "source_disposition": "evidence_gap",
+      "remaining_scope_portfolios": [
+        "additional-wires-deferred"
+      ]
+    },
+    {
+      "id": "RX03-FU-180",
+      "ref": "../conformance/FOLLOWUP-INTAKE.json#/rows/179",
+      "source_disposition": "unchecked",
+      "remaining_scope_portfolios": [
+        "additional-wires-deferred"
+      ]
+    },
+    {
+      "id": "RX03-FU-181",
+      "ref": "../conformance/FOLLOWUP-INTAKE.json#/rows/180",
+      "source_disposition": "unchecked",
+      "remaining_scope_portfolios": [
+        "additional-wires-deferred"
+      ]
+    },
+    {
+      "id": "RX03-FU-182",
+      "ref": "../conformance/FOLLOWUP-INTAKE.json#/rows/181",
+      "source_disposition": "unchecked",
+      "remaining_scope_portfolios": [
+        "additional-wires-deferred"
+      ]
+    },
+    {
+      "id": "RX03-FU-216",
+      "ref": "../conformance/FOLLOWUP-INTAKE.json#/rows/215",
+      "source_disposition": "unchecked",
+      "remaining_scope_portfolios": [
+        "additional-wires-deferred"
+      ]
+    },
+    {
+      "id": "RX03-FU-227",
+      "ref": "../conformance/FOLLOWUP-INTAKE.json#/rows/226",
+      "source_disposition": "unchecked",
+      "remaining_scope_portfolios": [
+        "additional-wires-deferred"
+      ]
+    },
+    {
+      "id": "RX03-FU-239",
+      "ref": "../conformance/FOLLOWUP-INTAKE.json#/rows/238",
+      "source_disposition": "unchecked",
+      "remaining_scope_portfolios": [
+        "additional-wires-deferred"
+      ]
+    },
+    {
+      "id": "RX03-FU-247",
+      "ref": "../conformance/FOLLOWUP-INTAKE.json#/rows/246",
+      "source_disposition": "unchecked",
+      "remaining_scope_portfolios": [
+        "additional-wires-deferred"
+      ]
+    },
+    {
+      "id": "RX03-FU-249",
+      "ref": "../conformance/FOLLOWUP-INTAKE.json#/rows/248",
+      "source_disposition": "unchecked",
+      "remaining_scope_portfolios": [
+        "streamer-deferred",
+        "selected-part-roster"
+      ]
+    },
+    {
+      "id": "RX03-FU-250",
+      "ref": "../conformance/FOLLOWUP-INTAKE.json#/rows/249",
+      "source_disposition": "unchecked",
+      "remaining_scope_portfolios": [
+        "additional-wires-deferred"
+      ]
+    },
+    {
+      "id": "RX03-FU-251",
+      "ref": "../conformance/FOLLOWUP-INTAKE.json#/rows/250",
+      "source_disposition": "unchecked",
+      "remaining_scope_portfolios": [
+        "additional-wires-deferred"
+      ]
+    },
+    {
+      "id": "RX03-FU-268",
+      "ref": "../conformance/FOLLOWUP-INTAKE.json#/rows/267",
+      "source_disposition": "unchecked",
+      "remaining_scope_portfolios": [
+        "streamer-deferred",
+        "selected-part-roster"
+      ]
+    }
+  ],
+  "followup_count": 21,
+  "source_disposition_counts": {
+    "unchecked": 17,
+    "evidence_gap": 2,
+    "annotation_only": 2
+  },
+  "filing_transfer_ids": [],
+  "consulted_transfer_ids": [
+    "RX03-XFER-086",
+    "RX03-XFER-087",
+    "RX03-XFER-088"
+  ],
+  "transfer_index_ref": "COMPONENT-TRANSFER-ROUTES.json#/entries",
+  "transfer_boundary": "No dedicated native/Protobuf filing destination exists in the 90 transfers; C11 wire entries are SDK trace records. Wire owner supplies scope confirmation only; root retains documentary filing.",
+  "observation_case_ids": [
+    "O10",
+    "O12"
+  ],
+  "root_dispatch_eligibility": "ready_for_root_scoped_intake; exact revision/custody/resource admission still required before engineering",
+  "return_contract": [
+    "row-level applicability tuples with source/evidence references, truthful current gaps and no automatic tag bumps",
+    "precise owned-scope changes/evidence requests and affected independent-review prerequisites",
+    "actual freeze/failure/question event to this coordinator, with root copied through the returned receipt; original owner and parent/run identity preserved"
+  ]
+}

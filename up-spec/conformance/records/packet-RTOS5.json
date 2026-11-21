@@ -1,0 +1,115 @@
+{
+  "schema": "rx03-existing-portfolio-intake-v1",
+  "target_spec": {
+    "commit": "f18913c6ed062dc6d6c3d7a73dec7a33433b39e4",
+    "tree": "29c6019918c7527a6fa8f4ed3a82d6690bea3dfa",
+    "identity_basis": "root supplied publication; no git/network/hash check here"
+  },
+  "sdk_pairing": {
+    "candidate": "0786fa6e3cd7dbe12c8c10a47d2b581914854b29",
+    "status": "root reports exact committed checks in progress before install/push; not accepted or published by this packet"
+  },
+  "root_worker_observation": "Current task input: root checked all five recorded owner threads; completed, no active workers. Historical graph state fields are not current execution.",
+  "acceptance_boundary": "implementation_conformance",
+  "dispatch_status": "documentary_packet_ready; no dispatch or source admission granted by this work",
+  "source_text_policy": "IDs and JSON pointers only; read requirement, amendment, historical caveat and destination portion at the referenced original row. Do not deduplicate source rows.",
+  "applicability_required": [
+    "exact component/source revision and custody",
+    "published specification revision",
+    "target and architecture",
+    "configuration and feature set",
+    "selected profile and route kind",
+    "responsible supplier/component versus deployment actor",
+    "lifecycle/calling context and applicable guarantees"
+  ],
+  "evidence_rules_ref": "CAT-NEXT-WORK.json#/assessment_rules",
+  "review_prerequisites": {
+    "policy_workspace_path": "sdk-api-redesign-20261107-1/delivery-continuation/UNSAFE-REVIEW.md",
+    "skill_workspace_path": "sdk-api-redesign-20261107-1/delivery-continuation/skills/unsafe-rust-review/SKILL.md",
+    "requirement": "Required for any future unsafe Rust or safe API invariant authoring/review; preserve pinned policy and existing independent-review prerequisites. This routing is not a source safety review."
+  },
+  "prohibited_inference": [
+    "publication implies implementation compliance",
+    "old compiler receipt validates new sources",
+    "documentary transfer equals acceptance",
+    "completed author means completed conformance",
+    "unknown route/profile means not applicable"
+  ],
+  "next_root_action": "Use this exact packet to admit a bounded same-owner applicability/current-source assessment with a named private successor and resource grant. Preserve frozen predecessors and existing findings. This receipt supplies routing, not engineering authority.",
+  "portfolio_id": "rtos-platform",
+  "owner_route_ref": "../conformance/OWNER-ROUTES.json#/groups/4",
+  "existing_work_item": "rtos5-repair",
+  "existing_thread_id": "thread:delegated-task:command%3Amcp%3A446dd6ff-aa70-4f9b-9014-4d9400d80aad%3Adelegate-task%3Amcu-rtos4-tock-x7-repair-opus-20261116-v1",
+  "thread_identity_source": "sdk-api-redesign-20261107-1/delivery-continuation/shared-up-rust-core-20261114/WORK-GRAPH.json#node:rtos5-repair/owner",
+  "scope_ref": "../conformance/OWNER-ROUTES.json#/groups/4/scope",
+  "frozen_history": {
+    "roots": [
+      "mcu-rtos-feasibility-5",
+      "mcu-rtos-feasibility-5/ir5-1-repair-1",
+      "mcu-rtos-feasibility-5/ir5-1-repair-1/review-independent-1"
+    ],
+    "relative_to": "shared-up-rust-core-20261114",
+    "boundary": "IR5-1 private documentation-only acceptance is preserved. V1 changed-helper compilation, H1-L1 scope and other integration/documentation gaps retain historical scope; V2(a) covers only original six RTOS4 rows/run2.",
+    "interface": "Only named MCU/RTOS configurations; no implicit assignment of Cortex/RISC-V providers or host/custom platforms.",
+    "next": "Assess RX-03 platform/atomic-width/lazy-init/helper-selection applicability for supported configurations; no redundant IR5-1 review or replay."
+  },
+  "followups": [
+    {
+      "id": "RX03-FU-013",
+      "ref": "../conformance/FOLLOWUP-INTAKE.json#/rows/12",
+      "source_disposition": "evidence_gap",
+      "remaining_scope_portfolios": [
+        "other-platform-backends"
+      ]
+    },
+    {
+      "id": "RX03-FU-016",
+      "ref": "../conformance/FOLLOWUP-INTAKE.json#/rows/15",
+      "source_disposition": "unchecked",
+      "remaining_scope_portfolios": [
+        "other-platform-backends"
+      ]
+    },
+    {
+      "id": "RX03-FU-029",
+      "ref": "../conformance/FOLLOWUP-INTAKE.json#/rows/28",
+      "source_disposition": "evidence_gap",
+      "remaining_scope_portfolios": [
+        "other-platform-backends"
+      ]
+    },
+    {
+      "id": "RX03-FU-038",
+      "ref": "../conformance/FOLLOWUP-INTAKE.json#/rows/37",
+      "source_disposition": "evidence_gap",
+      "remaining_scope_portfolios": []
+    },
+    {
+      "id": "RX03-FU-199",
+      "ref": "../conformance/FOLLOWUP-INTAKE.json#/rows/198",
+      "source_disposition": "evidence_gap",
+      "remaining_scope_portfolios": [
+        "other-platform-backends",
+        "allocation-providers"
+      ]
+    }
+  ],
+  "followup_count": 5,
+  "source_disposition_counts": {
+    "evidence_gap": 4,
+    "unchecked": 1
+  },
+  "filing_transfer_ids": [],
+  "consulted_transfer_ids": [
+    "RX03-XFER-012"
+  ],
+  "transfer_index_ref": "COMPONENT-TRANSFER-ROUTES.json#/entries",
+  "transfer_boundary": "No exclusive RTOS transfer exists. Supported-configuration transfer is shared with root's roster and component suppliers; RTOS can supply only its applicable configuration facts.",
+  "observation_case_ids": [],
+  "root_dispatch_eligibility": "ready_for_root_scoped_intake; exact revision/custody/resource admission still required before engineering",
+  "return_contract": [
+    "row-level applicability tuples with source/evidence references, truthful current gaps and no automatic tag bumps",
+    "precise owned-scope changes/evidence requests and affected independent-review prerequisites",
+    "actual freeze/failure/question event to this coordinator, with root copied through the returned receipt; original owner and parent/run identity preserved"
+  ]
+}

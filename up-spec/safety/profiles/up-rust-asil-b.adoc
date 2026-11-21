@@ -1,0 +1,209 @@
+= up-rust ASIL B SEooC Profile
+:toc: preamble
+
+The key words "*MUST*", "*MUST NOT*", "*REQUIRED*", "*SHALL*", "*SHALL NOT*", "*SHOULD*", "*SHOULD NOT*", "*RECOMMENDED*", "*MAY*", and "*OPTIONAL*" in this document are to be interpreted as described in https://www.rfc-editor.org/info/bcp14[IETF BCP14 (RFC2119 & RFC8174)]
+
+[NOTE]
+====
+This profile defines the ASIL path and supported configurations for the `up-rust` safety element out of context (SEooC) and indexes the chapters that carry its ASIL B obligations.
+This page describes intended specification scope: it is not a conformance claim, a safety case or a qualification record (xref:../../contract-generations.adoc#req-ssr-contract-transition[What a part declares and claims, and when a replacement takes effect]; xref:../elements/up-rust/README.adoc#claims[the SEooC's claims]; xref:../elements/up-rust/assumptions-of-use.adoc#aou-seooc-assumptions-bind[An assumption of use binds the integrator who claims the scope, and replaces no requirement]).
+====
+
+[[req-ssr-element-configurations]]
+== The ASIL path and supported configurations
+
+[.specitem,oft-sid="req~ssr-element-configurations~3",oft-title="The ASIL path and supported configurations",oft-needs="uman",oft-tags="SafetyUpRustCore,SafetyStreamer"]
+--
+*The ASIL path.*
+A configuration is on the ASIL path where an integrator claims the element's safety-assurance scope for it (xref:../elements/up-rust/assumptions-of-use.adoc#aou-seooc-assumptions-bind[An assumption of use binds the integrator who claims the scope, and replaces no requirement]).
+An ASIL application, an ASIL process, an ASIL binary, an ASIL image and the ASIL build are the applications, processes, binaries, final images and build of a configuration on the ASIL path.
+Each of these words names the scope that the integrator claims, and qualifies nothing by itself.
+What ordinary use is, and what holds for it, is stated in xref:../elements/up-rust/assumptions-of-use.adoc#aou-seooc-assumptions-bind[An assumption of use binds the integrator who claims the scope, and replaces no requirement].
+
+*Supported configurations.*
+A supported configuration package (also called a supported composition package) is a versioned package that states a configuration's exact component versions, cross-component lifecycle and dependency closure, platform backend, synchronization and execution model, startup checks, sizing, guarantees, supported execution contexts, build settings, dependency scope, compatibility statement, assembled supplier evidence, deviations, unresolved conditions and limitations.
+A supported configuration is one for which a releaser provides such a package; a configuration that has no supported composition package is not a supported configuration.
+For each element-supported configuration package, the element's supplier releases the package with the element and retains release responsibility for it.
+The releaser of a supported composition package (the element's supplier for each element-supported configuration package that it provides, or an explicit extension composer for each explicit extension package that it releases) *MUST* own, provide and answer for the package's compatibility statement and assembled supplier evidence, covering exact component versions, cross-component lifecycle and dependency closure, guarantees, covered execution contexts, deviations and unresolved conditions.
+For each composition-package deviation that it states, the releaser *MUST* record an identifier and a revision, its exact scope and bounds, the evidence that it rests on and the date on which it lapses, and *MUST* keep composition-package known failures apart from limits and deviations; nothing makes a composition-package known failure a limit or a deviation (xref:../assurance.adoc#req-ssr-binding-readme[A binding's qualification record states its limits and its failures]).
+In each supported composition package that it provides, the releaser (including the element's supplier for each element-supported configuration package that it provides) *MUST* state each size on which the configuration's sizing relies and that the element's own computation does not give, such as the storage of a scheduler's tasks and timers, an allocator's overhead and each thread's stack, and *MUST* name each such size that the package does not establish (xref:../../basics/resources.adoc#req-ssr-memory-computable[Startup storage is computable before start]).
+Where a supported composition package admits a startup-provisioning helper or a serialized owned-value runtime adapter, the releaser (including the element's supplier for each element-supported configuration package that it provides) *MUST* state in the package the helper's or adapter's identity, its selected functions, its scope—for a startup-provisioning helper, the storage regions that it supplies; for a serialized owned-value runtime adapter, the wire or allocation-provider role that it implements or serves as an explicitly identified subcomponent of and the routes, directions and allocation domains that it covers—its retained state, its dependencies and its supported execution contexts.
+An explicit extension composer that assembles and releases a composition package or extension beyond an element-supported configuration package *MUST* assume composition-supplier responsibility for its extension, including its compatibility statement, sizing disclosures, helper or adapter scope declarations and assembled supplier evidence, and *MUST NOT* silently label or present that extension as element-supplier-supported.
+Component producers retain their own component's allocated requirements, source-bound records, proof obligations, evidence and source-level `+unsafe+` obligations (xref:../elements/up-rust/README.adoc#req-ssr-element-boundary[The parts of the element, and element code]).
+A bundle of individually reviewed or evidenced parts is not proof of their combination; when no supplier offers a needed composition, that gap is recorded; an application user is not silently made a new supplier, and an integrator assumes extension-supplier duties only where it deliberately creates and declares a custom extension.
+Reusable supplier or composition-package evidence assists integrator validation and never discharges any applicable assumption of use (xref:../elements/up-rust/assumptions-of-use.adoc#aou-seooc-assumptions-bind[An assumption of use binds the integrator who claims the scope, and replaces no requirement]; xref:../../contract-generations.adoc#req-ssr-contract-transition[What a part declares and claims, and when a replacement takes effect]).
+A platform profile is a class of target, an operating system or a bare-metal environment with an architecture, that a supported configuration package names.
+
+*The deployment profile.*
+A deployment profile is the selection that a deployment declaration names (xref:../../contract-generations.adoc#req-ssr-contract-transition[What a part declares and claims, and when a replacement takes effect]):
+
+* the parts that the deployment composes, each with its declaration;
+* the interfaces between them;
+* the services that the deployment requires, and those that it leaves optional;
+* how many of each part it has;
+* the assumptions of use that apply to it.
+
+A part that the profile does not select is outside the deployment's claimed scope.
+
+*Optional layers and selected function admissions.*
+On the ASIL path, a configuration *MAY* select:
+
+* no optional helper, retaining the minimal no-helper selection and its static or caller-provided non-heap storage-origin restriction (xref:../../basics/resources.adoc#req-ssr-memory-static[ASIL-path storage is static or caller-provided]);
+* an explicitly selected, named startup-provisioning helper whose admitted function on the ASIL path is limited to obtaining declared startup backing before the relevant transition and delegating placement, admission and transition to the element's safety crate (xref:../elements/up-rust/build.adoc#req-ssr-crate-core-only-binary[The checked policy stays in the safety crate, and no admitted optional layer bypasses or reimplements it]);
+* an explicitly selected, named serialized owned-value runtime adapter, confined strictly to implementing or serving as an explicitly identified subcomponent of an existing wire or allocation-provider role, solely for acquisition, resize and exactly-once release of serialized message-owned values already permitted by that route's declared heap class (xref:../../up-l1/payload-paths.adoc#req-ssr-heap-none[No heap in runtime mode on a native path]; xref:../../basics/resources.adoc#req-ssr-heap-declared[The heap class is declared, with no default]); or
+* both selected functions together.
+
+Startup provisioning and the serialized owned-value runtime adapter are independent functional selections: a serialized owned-value runtime adapter need not provision startup memory, and a startup-provisioning helper need not run during runtime.
+Where a single memory provider, allocation provider or helper fulfills both resource roles on the ASIL path, it *MUST* account for each acquisition and each lifetime separately under the rules of its respective role.
+
+There is no free-standing "helper may allocate" permission on the ASIL path: every runtime acquisition, resize or release by an admitted serialized owned-value runtime adapter belongs strictly to an existing permitted wire or allocation-provider role and operation.
+All other optional layers—generic collection libraries, arbitrary application helpers, executors, optional asynchronous layers, application-role layers and whole `+alloc+` or `+std+` crates—remain excluded from the ASIL path and are never admitted merely by linkage: a deployment profile on the ASIL path selects none of them.
+The contracts that items give an excluded optional layer, such as those of an asynchronous layer, remain its own, and none of them admits it to the ASIL path.
+That is a boundary of the ASIL path.
+It lifts no contract of an optional layer, of a classic route or of a wire that the ASIL path leaves out, it says nothing of their integrity level, and it leaves their ordinary use as it is.
+
+Linking, packaging or naming a startup-provisioning helper or a serialized owned-value runtime adapter grants neither heap-origin startup-storage permission (xref:../../basics/resources.adoc#req-ssr-memory-static[ASIL-path storage is static or caller-provided]), nor runtime allocation permission (xref:../../up-l1/payload-paths.adoc#req-ssr-heap-none[No heap in runtime mode on a native path]), nor safety-assurance qualification (xref:../../contract-generations.adoc#req-ssr-contract-transition[What a part declares and claims, and when a replacement takes effect]).
+Each admitted startup-provisioning helper and each admitted serialized owned-value runtime adapter remains a separately composed part outside the element (xref:../elements/up-rust/README.adoc#req-ssr-element-boundary[The parts of the element, and element code]).
+
+Each startup-provisioning helper admitted on the ASIL path *MUST* declare, in what is released with it:
+
+* the startup-provisioning functions that it provides;
+* the storage regions and allocation domains that it obtains;
+* any state that it retains after acquisition, including any destruction or release code reachable after the acquisition object ends;
+* its dependencies;
+* the execution contexts from which it may be called.
+
+Each such startup-provisioning helper *MUST* obtain declared startup backing only before the relevant transition, *MUST* delegate placement, admission and transition to the element's safety crate, and *MUST NOT* exercise any other optional-layer function on the ASIL path.
+
+Each serialized owned-value runtime adapter admitted on the ASIL path *MUST* declare, in what is released with it:
+
+* the serialized owned-value runtime-adapter functions that it provides;
+* the existing wire or allocation-provider role that it implements or serves as an explicitly identified subcomponent of;
+* the allocation domains, named allocation points and resource and failure policy that it covers (xref:../../basics/resources.adoc#req-ssr-heap-declared[The heap class is declared, with no default]);
+* any state that it retains, including any destruction or release code reachable from values that it creates;
+* its dependencies;
+* the execution contexts from which it may be called.
+
+Each such serialized owned-value runtime adapter *MUST* confine its work strictly to that existing wire or allocation-provider role, solely for acquisition, resize and exactly-once release of serialized message-owned values already permitted by that route's declared heap class, *MUST* perform no control-state, report or outcome, startup-backing, native, shared-causal or general application allocation, and *MUST NOT* exercise any other optional-layer function on the ASIL path.
+What a configuration needs to admit an optional layer, and what an admitted layer must not do, is stated in xref:../elements/up-rust/build.adoc#req-ssr-crate-core-only-binary[The checked policy stays in the safety crate, and no admitted optional layer bypasses or reimplements it].
+
+*Assured helper claim dependencies.*
+For every startup-provisioning helper and serialized owned-value runtime adapter admitted on the ASIL path, the helper-authored-code duties, package-releaser guarantee declarations and transitive evidence duties, and element admission and refusal duties are those of xref:../../basics/resources.adoc#req-ssr-heap-guarantees[A stronger resource guarantee is required by name, and admitted or refused], "Assured helper admission".
+That item defines the affected transport and route scope, including native-only startup backing, and separates the mandatory assured-helper guarantees from ordinary serialized use and separately requested non-waiting and finite-timing guarantees.
+Initialization request screening and refusal disposition remain governed by xref:../../up-l1/runtime.adoc#req-ssr-mode-init-failure[Initialization failure].
+
+*Public extension.*
+The element *MUST* allow any party to supply a startup-provisioning helper or a serialized owned-value runtime adapter through the element's public, documented interfaces, with no closed supplier allowlist, private registration or privilege by package or supplier name.
+For an SDK that declares the owned-frame SDK contract, xref:../../basics/configurations.adoc#req-sdk-owned-frame-extension-public[A part that an application selects is selected through public interfaces alone] states the corresponding ordinary extension rule; neither contract family merges its declaration or claim grammar into the other (xref:../../contract-generations.adoc#req-ssr-contract-transition[What a part declares and claims, and when a replacement takes effect]; xref:../../contract-generations.adoc#req-sdk-owned-frame-contract[The owned-frame SDK contract binds the parts that declare it]).
+
+*Scoped replacement.*
+This revision replaces the blanket optional-layer exclusion and the element-supplier-only package wording of revision 2 of this item for the element, the element's supplier, each releaser of a supported composition package, each explicit extension composer, each startup-provisioning helper admitted on the ASIL path, each serialized owned-value runtime adapter admitted on the ASIL path and each memory provider or allocation provider fulfilling both roles: solely for ASIL-path configurations and deployments that explicitly select an admitted startup-provisioning helper to obtain declared startup backing before the relevant transition, an admitted serialized owned-value runtime adapter confined strictly to an existing wire or allocation-provider role for serialized message-owned values permitted by that route's declared heap class, or both as independent functional selections, and for reconciling supported-composition-package releaser and explicit-extension-composer accountability—including recording identifier, revision, exact scope/bounds, evidence and lapse date for each composition-package deviation and keeping composition-package known failures apart from limits and deviations—while retaining the element's supplier's release responsibility for element-supported configuration packages.
+For ASIL-path configurations that select neither optional function, the minimal no-helper selection and its storage-origin restriction remain unchanged; for all other optional layers, the exclusion of revision 2 of this item remains in force.
+--
+
+[horizontal]
+ID:: `+req~ssr-element-configurations~3+`
+ASIL:: B
+Allocated to:: the releaser of each supported composition package (the element's supplier for each element-supported configuration package that it provides, and each explicit extension composer for each explicit extension package that it releases), for owning, providing and answering for the package's compatibility statement and assembled supplier evidence, for the sizes and admitted startup-provisioning helper and serialized owned-value runtime adapter scope stated in the package, for recording identifier, revision, exact scope and bounds, evidence and lapse date for each composition-package deviation and keeping known failures apart from limits and deviations;
+each explicit extension composer, for assuming composition-supplier responsibility for its extension (compatibility statement, sizing disclosures, helper or adapter scope declarations, deviation records, known-failure separation and assembled supplier evidence included), and not silently labeling or presenting that extension as element-supplier-supported;
+the element, for permitting any startup-provisioning helper or serialized owned-value runtime adapter through public interfaces without a closed supplier allowlist, private registration or privilege by package or supplier name, and as the subject of the definitions;
+each startup-provisioning helper admitted on the ASIL path, for its released declaration, startup-only backing scope, delegating placement, admission and transition to the safety crate, exercising no other optional-layer function on the ASIL path, and accounting separately for each acquisition and lifetime when one memory provider, allocation provider or helper fulfills both roles;
+each serialized owned-value runtime adapter admitted on the ASIL path, for its released declaration, confining its work strictly to an existing wire or allocation-provider role for permitted serialized message-owned values, performing no control-state, report/outcome, startup-backing, native, shared-causal or general application allocation, exercising no other optional-layer function on the ASIL path, and accounting separately for each acquisition and lifetime when one memory provider, allocation provider or helper fulfills both roles;
+each memory provider or allocation provider fulfilling both a startup-provisioning helper role and a serialized owned-value runtime adapter role, for accounting separately for each acquisition and lifetime
+Verification:: review
+* Each statement and allocation that names the ASIL path, an ASIL application, process, binary, image or build, a supported configuration or supported composition package, a platform profile, a deployment profile, an optional layer, a startup-provisioning helper or a serialized owned-value runtime adapter, read against this item.
+* Each supported composition package (element-supported configuration package or explicit extension package): its compatibility statement and assembled supplier evidence (exact component versions, cross-component lifecycle and dependency closure, guarantees, covered execution contexts, deviations and unresolved conditions); for each composition-package deviation, its recorded identifier, revision, exact scope and bounds, supporting evidence and lapse date, and strict separation of composition-package known failures from limits and deviations; clear attribution to the element's supplier for element-supported packages or to the explicit extension composer for extensions without silently labeling or presenting an extension as element-supplier-supported; no bundle of individually reviewed parts treated as proof of their combination, recording of any gap where no supplier offers a needed composition, no silent transfer of supplier responsibility to an application user, and no presentation of supplier or composition-package evidence as discharging an assumption of use; each size on which its sizing relies and that the element's computation does not give, stated or named as not established; and where the package admits a startup-provisioning helper or a serialized owned-value runtime adapter, its identity, selected functions, storage regions or wire or allocation-provider role and affected routes, directions and domains, retained state, dependencies and supported execution contexts.
+* The helper function selections and declared scopes identify the admissions governed by xref:../../basics/resources.adoc#req-ssr-heap-guarantees[A stronger resource guarantee is required by name, and admitted or refused]; that item supplies the helper-assurance verification.
+* The element's public interfaces for taking startup regions from a startup-provisioning helper or composing a serialized owned-value runtime adapter: open to any party's helper or adapter with no closed supplier allowlist, private registration or privilege by package or supplier name.
+* Each startup-provisioning helper and each serialized owned-value runtime adapter admitted on the ASIL path: its released declaration, independence of the two selections, separate acquisition and lifetime accounting where one provider fulfills both roles, strict confinement of each selection to its admitted scope (startup-only backing with safety-crate delegation, or an existing wire or allocation-provider role for permitted serialized message-owned values with no free-standing allocation permission), and the exclusion of generic collection libraries, arbitrary application helpers, executors, optional asynchronous or application-role layers and whole `+alloc+` or `+std+` crates merely by linkage from the ASIL path.
+
+*Rationale.*
+The assumptions of use bind the integrator that claims the element's assurance for a configuration (xref:../elements/up-rust/assumptions-of-use.adoc#aou-seooc-assumptions-bind[An assumption of use binds the integrator who claims the scope, and replaces no requirement]), so the words of the ASIL path name exactly that claimed scope.
+A supported composition package states once what a supported configuration offers, with an accountable releaser owning its compatibility statement and assembled supplier evidence, so that every application team that selects one relies on that statement for its platform without mistaking a bundle of individually reviewed parts for combination proof or silently taking on supplier duties.
+The element computes its own startup storage, and the sizes that depend on a scheduler, an allocator or a thread's stack are known only to whoever puts the configuration together, so the package's releaser states them or says that they are not established.
+A deployment that names what it composes can be checked against that selection, and what merely runs beside it gains no place in the claim.
+Separating two independent functional admissions—startup provisioning and a serialized owned-value runtime adapter confined strictly to an existing wire or allocation-provider role—keeps arbitrary runtime helpers, generic collection libraries, executors, optional asynchronous or application-role layers and whole `+alloc+` or `+std+` crates out of the ASIL path while letting declared helpers obtain startup backing before transition or serve permitted serialized message-owned values through the safety crate's unchanged checks.
+Tying assured helper admissions explicitly to recoverable exhaustion and panic-free cleanup prevents silent process aborts or panics on assured helper paths while keeping non-waiting acquisition, non-waiting release and finite timing separately requested and leaving ordinary serialized ownership available without unrequested stronger guarantees.
+Keeping helper and adapter selection on public interfaces prevents a closed supplier allowlist without equating linkage with storage-origin permission, runtime allocation permission or qualification.
+
+== Platform realization journeys
+
+[NOTE]
+====
+This section is AS-NEEDED, non-normative guidance summarizing intended platform configurations and refusal boundaries.
+It adds, changes and weakens no requirement or assumption of use, makes no supported-port or qualification claim, and establishes no safety rating from bare-metal execution, fixed pools, `+no_std+` or an operating system certificate.
+====
+
+=== General-purpose OS
+
+A general-purpose operating system configuration selects a real binding and wire, an explicit platform backend, storage or memory providers, and an explicit compiler, library and middleware scope.
+Applications can call the checked synchronous or polled core directly, or independently select optional role and asynchronous conveniences under their ordinary contracts.
+Hosted startup allocation can provision persistent startup storage in ordinary use, while native runtime causality (xref:../../up-l1/payload-paths.adoc#req-ssr-heap-none[No heap in runtime mode on a native path]) still holds.
+A serialized route carrying owning values declares its heap class and resource and failure policy (xref:../../basics/resources.adoc#req-ssr-heap-declared[The heap class is declared, with no default]) and requests any stronger guarantee by name (xref:../../basics/resources.adoc#req-ssr-heap-guarantees[A stronger resource guarantee is required by name, and admitted or refused]).
+Running on a general-purpose operating system, or making no safety claim, waives no applicable ordinary duty.
+
+=== QNX or another safety OS
+
+A safety operating system configuration begins from the same ordinary contracts and identifies the exact OS product and version, target, library and API subset, toolchain, platform backend, scheduling and process model, memory provider and middleware.
+A platform backend can use OS services directly without depending on a host standard library; a startup convenience helper package is neither the OS platform backend nor the language standard library.
+On the ASIL path, the deployment selects no optional helper (keeping static or caller-provided non-heap startup storage), explicitly selects an admitted startup-provisioning helper, independently selects an admitted serialized owned-value runtime adapter confined strictly to an existing wire or allocation-provider role, or selects both under <<req-ssr-element-configurations,The ASIL path and supported configurations>>, precreating required resources, accounting for initialization influence, dependencies and retained state, and naming and evidencing recoverable exhaustion and panic-free cleanup for any admitted assured helper function.
+A certified operating system contributes only within its own covered scope and does not qualify helpers or the assembled image; the composition releaser supplies compatibility and assembled evidence for its package, while the integrator matches the deployment and validates every applicable assumption of use (xref:../elements/up-rust/assumptions-of-use.adoc#aou-seooc-assumptions-bind[An assumption of use binds the integrator who claims the scope, and replaces no requirement]).
+
+=== Bare metal, concrete minimum
+
+An intended bare-metal configuration uses a target that genuinely exposes 32-bit atomic loads, stores and compare-and-swap (xref:../../basics/platform.adoc#req-ssr-atomic-width[No target needs an atomic width it lacks]; xref:../elements/up-rust/assumptions-of-use.adoc#aou-seooc-target-environment[The target environment is verified]), a coherent single-core memory model or an explicitly covered cross-core model, a supported frame binding, a checked native wire with fixed slots, and static or caller-owned startup backing.
+The platform backend supplies a synchronized wall clock together with the required monotonic timing service, explicit interrupt and thread contexts, expected-value wake semantics and source-bound backend evidence (xref:../../basics/platform.adoc#req-ssr-platform-contract[Every platform backend of the element keeps the platform's rules]; xref:../../up-l1/runtime.adoc#req-ssr-mode-entry-clock[The wall clock is read before runtime mode]; xref:../elements/up-rust/assumptions-of-use.adoc#aou-seooc-clock[The platform provides the clocks]).
+
+Key realization and refusal boundaries on bare metal:
+
+* *Atomics, masks and binding limits.*
+  A target without required 32-bit compare-and-swap is excluded by the target contract rather than made supported by an arbitrary emulation crate.
+  A private interrupt mask excludes only the participants that it masks; it is not a cross-core or DMA exclusion lock (xref:../../basics/platform.adoc#req-ssr-atomic-width[No target needs an atomic width it lacks]).
+  A selected binding can impose narrower target limits—for example, the pinned iceoryx2 0.9.3 profile excludes 32-bit targets (xref:../../up-l1/iceoryx2.adoc#req-ssr-binding-iceoryx2-profile[The iceoryx2 binding follows one profile, stated for one release of iceoryx2]).
+* *Autonomous progress versus a main loop.*
+  A polled application can issue synchronous traffic calls, but required autonomous monitoring or progress duties require a platform service that progresses independently of the next application call; no generic application main loop substitutes for those duties.
+  A timer or interrupt mechanism can provide bounded monitoring or progress only where its documented memory ordering and execution contexts satisfy the platform contract.
+* *Startup backing, serialized adapter, fixed slots and cleanup isolation.*
+  A memory provider's state outlives every owner that can release through it, fixed-slot return is distinct from general allocator release, and native paths perform no general runtime allocation even where an allocator exists elsewhere in the image.
+  An explicitly selected startup-provisioning helper can obtain retained startup backing from a declared allocator over reserved RAM before transition under <<req-ssr-element-configurations,The ASIL path and supported configurations>> and xref:../../basics/resources.adoc#req-ssr-memory-static[ASIL-path storage is static or caller-provided].
+  Independently, an explicitly selected serialized owned-value runtime adapter can serve message-owned values strictly within an existing wire or allocation-provider role under <<req-ssr-element-configurations,The ASIL path and supported configurations>> and xref:../../up-l1/payload-paths.adoc#req-ssr-heap-none[No heap in runtime mode on a native path], with every serialized value requiring a non-native, non-shared ending path (refused by name where none exists; xref:../../up-l1/runtime.adoc#req-ssr-heap-slot-types[A decoded value is destroyed once, as its route's class admits]).
+  On serialized routes carrying owning values, a release established not to wait can run inline; a possibly waiting release on a route that requires non-waiting release needs an initialization-created autonomous release service whose progress is independent of application calls and transitively isolated from bounded operations, deadline and accounting work, hand-offs and unrelated slot returns (xref:../../up-l1/runtime.adoc#req-ssr-release-lease-drop[A lease gives back its slot and nothing else]).
+  Placing a blocking destructor in a timer interrupt handler or another context does not satisfy that isolation.
+  Where a bare-metal platform cannot supply that autonomous release service and isolation, setup refuses the requested route or guarantee by name, while ordinary serialized routes with a disclosed waiting route-specific cleanup path remain separately admissible; a finite cleanup deadline needs its own mechanism and evidence, and pending values remain charged.
+* *Whole reset domain.*
+  Reinitialization follows the baseline whole-process or whole-partition restart semantics, realized on bare metal as resetting the whole reset domain of all relevant memory users (xref:../../up-l1/runtime.adoc#req-ssr-mode-restart[A restart is an initialization]; xref:../elements/up-rust/assumptions-of-use.adoc#aou-seooc-supervisor-restart[A supervisor outside the process restarts it]).
+  A producer-only watchdog reset cannot revoke backing still owned by another core, peer or DMA engine: those participants are stopped or quiesced before reuse, or their valid ownership is preserved rather than recycling memory behind them.
+  Independent supervision and coexistence or memory-protection measures are supplied where the claim requires them (xref:../elements/up-rust/assumptions-of-use.adoc#aou-seooc-process-isolation[Processes or partitions are isolated]).
+* *Evidence boundary.*
+  Supplier evidence covers its own mechanisms and named participants and contexts; the integrator validates actual loads, priorities, clock accuracy, memory and access controls, uncovered participants, safe reactions and reset wiring.
+  Neither bare-metal execution, fixed pools nor `+no_std+` confers a safety rating.
+
+== Chapters carrying up-rust ASIL B SEooC obligations
+
+NOTE: This index is non-normative navigation; whom each item binds is stated only by its own statement (xref:../../contract-generations.adoc#req-ssr-requirements-bind[A requirement binds the actors to which it gives a duty]).
+
+[cols="2,5",options="header"]
+|===
+| Scope | Chapters
+
+| Contract governance, profile and assurance
+| xref:../../contract-generations.adoc[Contract generations and family binding]; <<req-ssr-element-configurations,The ASIL path and supported configurations>>; xref:../assurance.adoc[Safety assurance governance, verification and evidence]
+
+| Element boundary, assumptions, build and strict mode
+| xref:../elements/up-rust/README.adoc[up-rust SEooC element overview]; xref:../elements/up-rust/assumptions-of-use.adoc[Assumptions of use]; xref:../elements/up-rust/build.adoc[Build and shipped content]; xref:../elements/up-rust/strict-mode.adoc[Strict mode]; xref:../elements/streamer.adoc[Streamer safety element]
+
+| Shared fundamentals (`basics/`)
+| xref:../../basics/resources.adoc[Resources, startup memory and heap classes]; xref:../../basics/configurations.adoc[Configurations and deployment-data validation]; xref:../../basics/error_model.adoc[Error model and runtime refusal]; xref:../../basics/uuid.adoc[Message identifiers (UUID)]; xref:../../basics/platform.adoc[Platform contracts and atomics]
+
+| Transport layer (`up-l1/`)
+| xref:../../up-l1/runtime.adoc[Transport runtime, modes, bounds, QoS and cleanup]; xref:../../up-l1/payload-paths.adoc[Payload paths]; xref:../../up-l1/bindings.adoc[Binding contract, observations, deadlines, TTL and waivers]; xref:../../up-l1/peers.adoc[Peers and fault model]; xref:../../up-l1/integrity.adoc[Integrity levels and copy routes]; xref:../../up-l1/iceoryx2.adoc[iceoryx2 binding]; xref:../../up-l1/iceoryx2-frame.adoc[iceoryx2 physical frame]; xref:../../up-l1/lola.adoc[LoLa binding]; xref:../../up-l1/lola-envelope.adoc[LoLa physical envelope]; xref:../../up-l1/wires/README.adoc[Wires] (xref:../../up-l1/wires/native.adoc[native], xref:../../up-l1/wires/serialized.adoc[serialized], xref:../../up-l1/wires/xcdrv2.adoc[XCDR2], xref:../../up-l1/wires/e2e.adoc[end-to-end protection])
+
+| Communication layer (`up-l2/`)
+| xref:../../up-l2/api.adoc[Communication Layer APIs and RPC interaction rules]; xref:../../up-l2/execution.adoc[Execution and asynchronous seam]; xref:../../up-l2/streamer.adoc[Bounded-runtime Streamer]
+
+| Language mapping (`languages/`)
+| xref:../../languages/rust.adoc[Rust language mapping]
+|===
+
+Non-normative overview and fault-model navigation pages live at xref:../README.adoc#fault-models[safety fault-model navigation], xref:../../up-l1/README.adoc[uP-L1 transport overview] and xref:../../up-l1/README.adoc#transport-deployment-prerequisites[transport deployment prerequisites].
+Ordinary non-ASIL owned-frame SDK contract pages (`xref:../../basics/ownership.adoc[basics/ownership.adoc]` and `xref:../../up-l2/roles.adoc[up-l2/roles.adoc]`) carry zero `Safety*` / ASIL B obligations.

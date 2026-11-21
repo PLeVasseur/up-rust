@@ -1,0 +1,22 @@
+{
+  "schema_version": 1,
+  "catalogue_kind": "separately_identified_conformance_assessments",
+  "notes": "Successor assessment index. Currently contains zero ingested assessments (records is intentionally empty); all 787 historical intake slots in ../intake.v2.json remain unassessed.",
+  "historical_intake_provenance": {
+    "input_manifest": "../INPUT-MANIFEST.v2.json",
+    "intake_catalogue": "../intake.v2.json",
+    "intake_readme": "../README.md",
+    "baseline_spec_revision": "f18913c6ed062dc6d6c3d7a73dec7a33433b39e4",
+    "reorganized_spec_baseline_commit": "1bb360852a2922bfdb0309b71e2069ac3e50716e",
+    "counts_are_overlapping_documentary_categories": true,
+    "historical_counts": {
+      "obligations": 504,
+      "historical_followups": 271,
+      "observation_cases": 12,
+      "pending_destinations": 90,
+      "pending_entries": 84,
+      "unassessed_implementation_evidence_slots": 787
+    }
+  },
+  "records": []
+}

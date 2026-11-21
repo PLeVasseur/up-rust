@@ -1,0 +1,285 @@
+= uP-L1 Peers and Fault Model
+:toc: preamble
+
+The key words "*MUST*", "*MUST NOT*", "*REQUIRED*", "*SHALL*", "*SHALL NOT*", "*SHOULD*", "*SHOULD NOT*", "*RECOMMENDED*", "*MAY*", and "*OPTIONAL*" in this document are to be interpreted as described in https://www.rfc-editor.org/info/bcp14[IETF BCP14 (RFC2119 & RFC8174)]
+
+[NOTE]
+====
+This page holds transport-layer peer fault-model requirements of the up-rust SEooC requirement family (`+req~ssr-*+`, `ASIL:: B`, `Safety*` tags).
+Filing on this page does not broaden any requirement to all uP-L1 implementations: whom each item binds, and how the repository's requirement families meet, is stated in xref:../contract-generations.adoc[Which requirements an implementation follows] (xref:../contract-generations.adoc#req-ssr-requirements-bind[A requirement binds the actors to which it gives a duty]; xref:../contract-generations.adoc#req-ssr-item-reading[How an item is read]).
+
+Additional safety-view fault-model navigation is indexed in xref:../safety/README.adoc#fault-models[Fault models and fault-containment map], and element scope in xref:../safety/elements/up-rust/README.adoc[the up-rust SEooC element].
+A peer's death and restart are stated in <<req-ssr-peer-failure-normal,Peer failure is normal input>> and <<req-ssr-peer-stale-rejected,Stale peers are rejected>>, a peer of another ABI in <<req-ssr-native-abi-agreed,A native representation never crosses an ABI>>, declared peer admission in <<req-ssr-peer-admission,Undeclared peers cannot lock out declared ones>>, and RPC calls and message identity in xref:../up-l2/api.adoc[the communication layer's interaction rules].
+====
+
+[[req-ssr-peer-fault-model]]
+== The requirements hold against a faulty peer
+
+[.specitem,oft-sid="req~ssr-peer-fault-model~2",oft-title="The requirements hold against a faulty peer",oft-needs="impl,utest,uman",oft-tags="SafetyUpRustCore,SafetyStreamer,SafetyBinding,SafetyWire"]
+--
+*The faulty-peer model.*
+Every peer is treated as faulty, never malicious.
+
+* A peer may send any content, at any time and in any volume, and may choose any source URI.
+* A peer may stop sending, stall, exit, be killed or restart at any time.
+* A faulty peer includes one that writes values its own middleware never writes, into shared memory it can write.
+* A peer below a reader's level may write its own shared memory at any moment, and the route that its reader then takes is stated in xref:integrity.adoc#req-ssr-integrity-zero-copy[Zero-copy only from a writer at or above the reader].
+
+*The duty.*
+Each part that a requirement of the up-rust SEooC requirement family binds *MUST* meet each duty that the requirement gives it against everything that this model allows of a peer: each input, each write into shared memory, and each stop, stall, exit, kill and restart.
+
+*The model's scope.*
+The peers of the up-rust SEooC, on every transport.
+The model applies within the access restriction that the integrator provides: only the processes deployed to use a transport's resources reach them (xref:../safety/elements/up-rust/assumptions-of-use.adoc#aou-seooc-peer-access[Only authorized processes reach the transport]).
+What lies outside that scope is outside this item's duty, which releases no part from a requirement as its own statement reads.
+
+*The boundary between safety and security.*
+Only deliberate exploitation, such as engineering a peer-ID hash collision, is out of scope, as security.
+That exclusion is the model's boundary between safety and security: it does not say that a peer that exploits deliberately is harmless, or that the requirements hold against it.
+
+*Rules left in force.*
+The model bounds only the safety argument.
+It leaves in force the protocol's security requirements, such as those of xref:README.adoc[uP-L1] against address spoofing and unauthorized access.
+It also does not make a lower-assurance process harmless because it runs apart: the rules for lending and copying cover what such a process can write into shared memory.
+
+*The safety manual.*
+Each such part *MUST* state the model, its scope and the boundary between safety and security in the safety manual that is released with it.
+--
+
+[horizontal]
+ID:: `+req~ssr-peer-fault-model~2+`
+ASIL:: B
+Allocated to:: each part that a requirement of the up-rust SEooC requirement family binds
+Verification:: fault-injection, review
+* *fault-injection*
+** Malformed and truncated frames, and frames with any bytes in their header, their envelope and their payload.
+** Arbitrary byte strings, decoded by each wire.
+** A flood on every receive kind, and one peer that fills a route's depth, its slots or its peer table.
+** Frames at any time, frames that carry an earlier incarnation of their peer included.
+** Frames from undeclared sources, and from any source URI.
+** A peer process that stalls, exits, is killed or restarts during traffic.
+** A peer process that writes values its own middleware never writes, into shared memory that it can write.
+** A peer process below the reader's level that writes its shared memory while it is read.
+* *review*
+** For each part, that the verification of each requirement that binds it covers the faults of this item that bear on that requirement.
+** For each part, that the safety manual released with it states the model, its scope and the boundary between safety and security.
+ISO 26262:: 6-Annex D.2.2, 6-Annex D.2.3, 6-Annex D.2.4 (part-clause numbers only)
+
+*Rationale.*
+Peers run in other processes, often over middleware this project does not control.
+A requirement that held only for well-formed input would leave a process open to every peer that fails.
+
+The element, the bindings, the wires and the Streamer handle the same frames and the same shared memory, so a fault that one of them does not withstand reaches the others.
+
+[[req-ssr-peer-failure-normal]]
+== Peer failure is normal input
+
+[.specitem,oft-sid="req~ssr-peer-failure-normal~4",oft-title="Peer failure is normal input",oft-needs="impl,utest",oft-tags="SafetyUpRustCore"]
+--
+*Effects in surviving processes.*
+In each process that stays up, the element *MUST NOT* let a peer process that dies at any instruction, or restarts, cause any of the following in element code:
+
+* a panic;
+* a heap acquisition;
+* an unbounded wait;
+* a heap release on a native route, on a route whose heap class is none or in work they share.
+
+That holds whatever the peer sent or wrote before it failed (<<req-ssr-peer-fault-model,The requirements hold against a faulty peer>>).
+
+*The exception.*
+The one exception to the unbounded wait is the release of what the failure ends.
+The element *MUST NOT* let that release wait for a peer, and *MUST* keep what it releases charged until it completes.
+
+* Where it is pending cleanup, a retained owner's deferred return included, it is isolated as xref:runtime.adoc#req-ssr-release-lease-drop[A lease gives back its slot and nothing else] states.
+The element *MUST NOT* let a survivor's operation, its arrival, deadline or expiry accounting, or its health report wait for it.
+The element *MUST NOT* let another owner's return wait for it either, except the return of an owner whose own release needs the same dependency, the one that the pending release's declared policy names (xref:runtime.adoc#req-ssr-release-lease-drop[A lease gives back its slot and nothing else], "Isolation").
+For the return of such an owner, this exception replaces revision 3 of this item, which let no other owner's return wait for that release.
+* On a serialized route whose declared heap class admits allocation, and which does not require non-waiting release (xref:../basics/resources.adoc#req-ssr-heap-guarantees[A stronger resource guarantee is required by name, and admitted or refused]), an owned value's release runs under the route's declared policy on a path of that route, after the failure's outcome has been recorded, as xref:runtime.adoc#req-ssr-heap-slot-types[A decoded value is destroyed once, as its route's class admits] states.
+
+*What survivors see.*
+In those processes, the element *MUST* show the failure only as silence, counted deadline misses, call errors, or a reported peer loss or restart.
+The element *MUST* have each of these due without waiting for that release, and *MUST* record each before the release of what it ended starts.
+
+*Routes that declare allocation.*
+On a serialized route whose declared heap class admits allocation, a call or frame that such an outcome ends releases what it owns exactly once as xref:runtime.adoc#req-ssr-heap-slot-types[A decoded value is destroyed once, as its route's class admits] states.
+The element *MUST NOT* let the failure cause any other heap use there.
+
+*What a failure never releases.*
+On every route, the element *MUST NOT* let a peer's failure, or the cleanup that follows it, release a route, a role, a table, a startup region or another runtime resource, or revoke an owner, other than what the failure ended.
+
+*Other parts.*
+What a binding owes when a peer fails is stated in xref:bindings.adoc#req-ssr-binding-no-panic[No panic on any peer input], xref:bindings.adoc#req-ssr-binding-bounded[A binding bounds its own work and its waits] and xref:bindings.adoc#req-ssr-binding-peer-identity[Peer identity is stable, and incarnations rise].
+What the integrator provides is stated in xref:../safety/elements/up-rust/assumptions-of-use.adoc#aou-seooc-process-isolation[Processes or partitions are isolated] and xref:../safety/elements/up-rust/assumptions-of-use.adoc#aou-seooc-application-reacts[The application reacts to what the element reports].
+--
+
+[horizontal]
+ID:: `+req~ssr-peer-failure-normal~4+`
+ASIL:: B
+Allocated to:: the element
+Verification:: fault-injection inside a heap-window
+* A peer killed and restarted during traffic, on a real binding and on test doubles of both kinds of binding, lending and handoff.
+* On a serialized route that admits owning values, a restart report that fails a call holding a decoded response, with that one release under the declared class and nothing else.
+* On such a route that requires non-waiting release, the call error reported while that release is held pending.
+* On one that does not, the call error recorded before that release starts.
+* A release held pending behind its named dependency while a survivor's operations, its arrival, deadline and expiry accounting, its health report and the return of an owner that does not need that dependency go on.
+* An owner whose own release needs that same dependency: still owned and charged until the dependency is free, with nothing else held.
+* After each case, every route, role, table and startup region still held, and no owner revoked that the failure did not end.
+ISO 26262:: 9-7.4.4 g, 6-Annex D.2.4 (part-clause numbers only)
+
+*Rationale.*
+Peers run in other processes, often over middleware this project does not control.
+So each process has to protect itself from their failures rather than rely on them.
+A peer dying or restarting is therefore normal input to a transport, and a frame from an earlier incarnation of a peer is refused as stale (<<req-ssr-peer-stale-rejected,Stale peers are rejected>>).
+
+_Heap use after a failure._
+A peer's failure can end a call that holds a decoded owned response, and that value still has to be destroyed, once.
+The release of what the failure ends is confined to the route's declared class (xref:payload-paths.adoc#req-ssr-heap-none[No heap in runtime mode on a native path]).
+
+_Where that release runs._
+An ordinary owning route uses no release service and requires none (xref:../basics/resources.adoc#req-ssr-heap-guarantees[A stronger resource guarantee is required by name, and admitted or refused]), and an owned value's release there can wait behind an allocator's lock like any other.
+So on a route that requires non-waiting release, an owned value's release that can wait is kept pending and apart.
+On a route that does not, it runs under the route's declared policy, after the failure's outcome is recorded and never in native or shared work.
+A retained owner's deferred return is pending cleanup on every route.
+
+_What waits, and what does not._
+A survivor that waited for a dead peer's cleanup would fail with it.
+One owner's return can wait for that cleanup only where its own release needs the very dependency that the cleanup waits for, since nothing else could release it.
+
+[[req-ssr-native-abi-agreed]]
+== A native representation never crosses an ABI
+
+[.specitem,oft-sid="req~ssr-native-abi-agreed~2",oft-title="A native representation never crosses an ABI",oft-needs="impl,utest",oft-tags="SafetyUpRustCore,SafetyBinding"]
+--
+*The fingerprint.*
+The element *MUST* state an ABI fingerprint of its target:
+
+* its byte order;
+* its pointer width;
+* the size and alignment of each scalar that a native type admits, `+u128+` and `+i128+` included (xref:wires/native.adoc#req-ssr-native-type[A native payload type holds its whole value in one fixed layout]).
+
+*Bindings.*
+Each binding that carries native frames between processes *MUST* exchange the fingerprint at setup.
+For each route that admits a native wire, such a binding *MUST*:
+
+* record the fingerprint that the element states, when it creates its side of the route;
+* report to the element each fingerprint that it finds recorded for the route's peers, and each peer for which it finds none.
+
+Such a binding *MUST NOT* report a fingerprint that it did not find.
+
+*Refusal at setup.*
+At setup, the element *MUST* refuse a route whose wire carries a native representation where the route's binding reports a peer's fingerprint that differs from the element's own.
+The element *MUST* name the route, both ABIs and a serialized route as the fix in that refusal.
+The element *MUST* also refuse such a route where the binding reports a peer that has recorded no fingerprint, and *MUST* name the route and the missing fingerprint in that refusal.
+
+*No substitute.*
+A missing or a different fingerprint has no other outcome than that refusal.
+The element *MUST NOT* reinterpret or convert the payload, serve the route in another form or admit it on trust (xref:payload-paths.adoc#req-ssr-payload-route-form[A route's form is fixed at setup, by what the route declares and never by a name]).
+
+*What the fingerprint agrees.*
+An equal fingerprint agrees the ABI, and no more: it agrees no type and no layout (xref:wires/native.adoc#req-ssr-native-agreement[A native type is read only under its exactly agreed layout]).
+The name of an operating system or of a toolchain agrees no ABI.
+
+*Replacement of revision 1.*
+For the element and for each such binding, this revision replaces two sentences of revision 1 of this item: the recording of a fingerprint, which revision 1 gave every peer of the route, is the binding's, and the refusal of a peer that records none, which it gave a native peer, is the element's.
+
+*Peers that do not use the element.*
+This item gives a duty to the element and to a binding in each process that uses them, and to no other peer.
+For a peer that uses neither, this revision retires the recording of a fingerprint and the refusal of a peer that records none, which revision 1 gave every peer and a native peer.
+Such a peer's participation is the deployment's condition: the peers of a route are the deployment's to declare (xref:../safety/elements/up-rust/assumptions-of-use.adoc#aou-seooc-deployment-data[Deployment data is in range, verified and protected]), and the element still refuses a frame whose writer's ABI or layout is not established, as xref:wires/native.adoc#req-ssr-native-agreement[A native type is read only under its exactly agreed layout] states.
+
+*Scope.*
+A serialized route needs no fingerprint, and this item does not affect it.
+--
+
+[horizontal]
+ID:: `+req~ssr-native-abi-agreed~2+`
+ASIL:: B
+Allocated to:: the element; each binding that carries native frames between processes, for exchanging, recording and reporting the fingerprint
+Verification:: test
+* The fingerprint: its byte order, its pointer width and the size and alignment of each scalar, on targets whose fingerprints differ in each of them.
+* The binding contract suite, on test doubles and between two processes on a real binding that carries native frames: the element's fingerprint recorded and exchanged, and an equal fingerprint, a different one and a missing one each reported as it was found.
+* The element's refusal at setup of a route whose peer's fingerprint differs, naming the route, both ABIs and a serialized route as the fix.
+* The element's refusal at setup of a route whose peer recorded no fingerprint, naming the route and the missing fingerprint.
+* After each refusal, no route prepared in another form, and no payload converted or reinterpreted.
+
+*Rationale.*
+The same type, built for two targets, can have two in-memory layouts.
+An explicit ABI agreement prevents interpreting one target layout as another.
+
+Only a binding reaches a route's peers at setup, so the binding carries the fingerprint and reports what it finds.
+Only the element admits a route, so the element refuses.
+
+A copy or a conversion made in place of that refusal would hide the mismatch from the deployment that has to resolve it.
+
+[[req-ssr-peer-stale-rejected]]
+== Stale peers are rejected
+
+[.specitem,oft-sid="req~ssr-peer-stale-rejected~4",oft-title="Stale peers are rejected",oft-needs="impl,utest",oft-tags="SafetyUpRustCore"]
+--
+*Stale frames.*
+The element *MUST* recognize a frame from an earlier incarnation of a peer by the frame's full incarnation, refuse it as stale, never treat it as current, and count it.
+
+*Identity and incarnation.*
+A peer's identity is the one that its binding gives it, stable across its restarts (xref:bindings.adoc#req-ssr-binding-peer-identity[Peer identity is stable, and incarnations rise]), and the incarnation the element records for it *MUST* only rise.
+
+*One exclusive step.*
+The element *MUST* compare a frame's full peer identity and incarnation with the recorded ones, and record a newer incarnation, as one exclusive step of its configuration's mechanism, so that no concurrent classification, restart, loss or restart report can:
+
+* make a stale incarnation current;
+* move the recorded incarnation back; or
+* tie one peer's frames to another peer's entry.
+
+*Concurrent classification.*
+In classification, the element *MUST NOT* place a limit on how many frames of one peer are classified at once.
+In classification, the element *MUST NOT* refuse a frame except as stale, as undeclared (<<req-ssr-peer-admission,Undeclared peers cannot lock out declared ones>>), or because the table that the declaration sized is genuinely full.
+
+*Restart reports.*
+On a binding's restart report, the element *MUST* fail the calls tied to older incarnations of that peer, and count the report.
+--
+
+[horizontal]
+ID:: `+req~ssr-peer-stale-rejected~4+`
+ASIL:: B
+Allocated to:: the element
+Verification:: test, fault-injection, review
+* *test*
+** A stale incarnation refused and counted.
+** A newer one recorded, with the calls of older incarnations failed.
+** Frames of one peer classified concurrently from several threads, and on an MCU from an interrupt handler where its configuration admits one, with no misclassification and no limit on concurrent classifications.
+** The loss of an old incarnation racing the current incarnation's frames.
+** An unknown identity that is never a wildcard.
+** A genuinely full table refused as full.
+* *fault-injection*: a restart on a real binding, and a test double that restarts.
+* *review*: the exclusive step's source argument for each configuration's mechanism, against every participant that can reach the table.
+
+*Rationale.*
+Without this rule, a restarted peer could inherit frames or calls from its predecessor, and contention could turn a stale incarnation into a current one.
+
+_Mechanisms._
+A mechanism whose representation brings a limit, such as a refusal under contention or a cap on how many frames of one peer are classified at once, does not meet this item.
+A mechanism that keeps each peer's full identity and incarnation in one exclusive record has neither limit.
+
+Full width removes a wrap window.
+The exclusion argument still needs the review of each mechanism (xref:../basics/platform.adoc#req-ssr-atomic-width[No target needs an atomic width it lacks]).
+
+[[req-ssr-peer-admission]]
+== Undeclared peers cannot lock out declared ones
+
+[.specitem,oft-sid="req~ssr-peer-admission~2",oft-title="Undeclared peers cannot lock out declared ones",oft-needs="impl,utest",oft-tags="SafetyUpRustCore"]
+--
+On a route with a declared list of peers, the element *MUST* refuse and count a frame from an undeclared source before the frame takes a peer-table entry.
+
+* The element *MUST* size the table from the declaration, and *MUST* have any declaration that the table or the binding cannot hold refused at setup.
+* The element *MUST* return a lost peer's entry.
+* The element *MUST NOT* let that return make a later peer's frames be refused as stale, whatever frames of the lost peer are in flight at that moment.
+--
+
+[horizontal]
+ID:: `+req~ssr-peer-admission~2+`
+ASIL:: B
+Allocated to:: the element
+Verification:: fault-injection (strangers first, then declared clients; a lost peer racing its own last frame, on two threads), miri, test
+
+*Rationale.*
+An undeclared source that could take a peer-table entry could fill the table, which is sized for the declared peers, and lock them out.
+Reuse that lost an entry's identity under concurrency could tie a lost peer's frames to a later peer, or have a later peer's frames refused as stale.

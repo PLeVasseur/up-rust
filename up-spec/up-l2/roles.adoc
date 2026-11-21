@@ -1,0 +1,234 @@
+= Owned-Frame SDK: Application Roles and Layer Results
+:toc: preamble
+
+The key words "*MUST*", "*MUST NOT*", "*REQUIRED*", "*SHALL*", "*SHALL NOT*", "*SHOULD*", "*SHOULD NOT*", "*RECOMMENDED*", "*MAY*", and "*OPTIONAL*" in this document are to be interpreted as described in https://www.rfc-editor.org/info/bcp14[IETF BCP14 (RFC2119 & RFC8174)]
+
+[NOTE]
+====
+* *Contract-family membership.*
+This page holds application-role and layer-preservation requirements of the owned-frame SDK contract (`+req~sdk-owned-frame-*+`, `OwnedFrameSdk` tag, no ASIL).
+Conventions and tags: xref:../contract-generations.adoc#owned-frame-conventions[the owned-frame SDK contract conventions].
+What an SDK, its core and a layer above the core are, and whom an item of the owned-frame SDK contract binds—only parts whose declaration names that contract, and for offering-conditioned duties wherever the part makes that offering—is stated in xref:../contract-generations.adoc#req-sdk-owned-frame-contract[The owned-frame SDK contract binds the parts that declare it].
+* *What this page holds.*
+This page states what a declaring SDK offers an application above its core on owned-frame routes:
+** the application roles, the backend-neutral handles an application keeps for them, and their stated defaults;
+** what every layer above the core (including the asynchronous layer in xref:execution.adoc[uP-L2 Execution and Asynchronous Seam] and any startup-memory layer) leaves as admitted: the route, each result of the core, and initialization/runtime mode separation (also binding non-element SDK cores for Modes).
+* *Related chapters.*
+Message operation kinds, the asynchronous layer and scheduler integrations are stated in xref:execution.adoc[uP-L2 Execution and Asynchronous Seam].
+Shared vocabulary is indexed in xref:../terms.adoc[Terms].
+====
+
+== Words used on this page
+
+These words have the meaning that the items give them.
+Where an SDK's core is not the element, a word that an item of the up-rust SEooC requirement family defines for the element or for a part that works with it is read as the clause "Words of the up-rust SEooC requirement family" of xref:../contract-generations.adoc#req-sdk-owned-frame-contract[The owned-frame SDK contract binds the parts that declare it] states.
+
+* An *owned-frame route*: xref:../contract-generations.adoc#req-sdk-owned-frame-contract[The owned-frame SDK contract binds the parts that declare it].
+* An *adapter*: xref:../up-l1/payload-paths.adoc#req-sdk-owned-frame-adapter[An adapter keeps a message whole across a crossing, or refuses it by name].
+* A *memory provider* and an *allocation provider*: xref:../basics/resources.adoc#req-sdk-owned-frame-provider-selection[The selected memory provider is the only one used, and selecting it claims nothing].
+* The *Communication Layer APIs*: xref:api.adoc[Communication Layer APIs].
+* The *element*: xref:../safety/elements/up-rust/README.adoc#req-ssr-element-boundary[The parts of the element, and element code].
+* A *transport*, *initialization* and *runtime mode*: xref:../basics/resources.adoc#req-ssr-mode-two-types[Two modes, as two types].
+* A *binding*, its *middleware* and a *test double*: xref:../up-l1/bindings.adoc#req-ssr-binding-scope[What a binding is, and the binding contract].
+* A *wire*, and a *native* or a *serialized* route: xref:../up-l1/wires/README.adoc#req-ssr-wire-scope[What a wire is, and the wire contract].
+* A route's *form*: xref:../up-l1/payload-paths.adoc#req-ssr-payload-route-form[A route's form is fixed at setup, by what the route declares and never by a name].
+* A *transmit loan*: xref:../up-l1/bindings.adoc#req-ssr-binding-lent-storage[Lent storage is exclusive, disjoint and stable for as long as it is held], "A transmit loan".
+* *QoS*: xref:../up-l1/runtime.adoc#req-ssr-qos-declared[QoS is declared per route at setup]; an *overflow policy*: xref:../up-l1/runtime.adoc#req-ssr-qos-overflow[Overflow acts as declared].
+* A *heap class*, an *allocation domain* and a route's *declared policy*: xref:../basics/resources.adoc#req-ssr-heap-declared[The heap class is declared, with no default].
+* *Non-waiting acquisition*, *non-waiting release* and each other stronger *guarantee*: xref:../basics/resources.adoc#req-ssr-heap-guarantees[A stronger resource guarantee is required by name, and admitted or refused].
+* A route's *capacity*: xref:../basics/resources.adoc#req-ssr-memory-computable[Startup storage is computable before start], "The capacities".
+* An *idle wait* and a *logical deadline*: xref:../up-l1/runtime.adoc#req-ssr-bound-wait[Every bounded wait has a logical deadline].
+* The element's *asynchronous interface*: xref:execution.adoc#req-ssr-async-seam[The asynchronous interface has a written, executor-independent contract].
+* *Synchronous or polled* traffic: xref:../up-l1/runtime.adoc#req-ssr-crate-sync-path[Traffic is synchronous or polled].
+
+
+[[req-sdk-owned-frame-roles]]
+== Each application role is offered on its own, as one family for both kinds of route
+
+[.specitem,oft-sid="req~sdk-owned-frame-roles~1",oft-title="Each application role is offered on its own, as one family for both kinds of route",oft-needs="impl,utest,uman",oft-tags="OwnedFrameSdk"]
+--
+*The roles.*
+The application roles take their names and messaging patterns from the xref:api.adoc[Communication Layer APIs] of uP-L2: publisher, subscriber, notifier, notification listener, RPC client and RPC server.
+The application-role layer is the layer above the core through which an application declares and uses roles on owned-frame routes.
+It is not the classic Communication Layer APIs, which keep their contract beside it (xref:../contract-generations.adoc#req-sdk-owned-frame-classic-apis[The classic APIs keep their contract beside owned-frame routes]).
+
+*On its own.*
+Where an SDK offers an application-role layer, the layer *MUST* let an application declare and use any subset of the roles that it offers.
+The layer *MUST NOT* make a role require an object of another role.
+The layer *MUST NOT* make an object that carries every role a precondition of using a role.
+
+*Peers apart.*
+The layer *MUST NOT* require, for the use of a role, its peer role (the other role of its messaging pattern) in the same application or process.
+The layer *MUST NOT* require, for the use of a role, a declaration of its peer role, or a declaration object that is created once for both.
+The topic or method and its message types, on which peers agree, are no such declaration.
+
+*One family.*
+Where the layer offers a role on native and on serialized routes, the layer *MUST* offer it as one family for both: one way to declare the role and one set of operations, apart from the differences that the route's form makes (xref:../up-l1/payload-paths.adoc#req-ssr-payload-route-form[A route's form is fixed at setup, by what the route declares and never by a name]) in how a payload is written, read, owned and allocated, and in what encoding and decoding can return.
+The layer *MUST* state in its documentation, with the role, each such difference.
+
+*Both levels.*
+The layer *MUST* make each role usable by an application that implements no binding, no wire and no memory provider of its own.
+Use without the application-role layer: a layer above the core is one that an application can leave out (xref:../contract-generations.adoc#req-sdk-owned-frame-contract[The owned-frame SDK contract binds the parts that declare it]); where the core is the element, xref:../safety/elements/up-rust/build.adoc#req-ssr-crate-core-only-binary[The checked policy stays in the safety crate, and no admitted optional layer bypasses or reimplements it] keeps the element's checked policy usable without any optional application layer.
+--
+
+[horizontal]
+ID:: `+req~sdk-owned-frame-roles~1+`
+Allocated to:: the SDK's application-role layer
+Verification:: test, review
+* *test*
+** Each role declared and used alone, by an application that declares no other role.
+** Each role used with its peer role in another process, and with no peer.
+** Each role that the layer offers on both kinds of route, declared and used on a native route and on a serialized route, with one way to declare it and one set of operations, apart from each difference of form stated with the role.
+** Each role used by an application that implements no binding, no wire and no memory provider of its own.
+* *review*: the interfaces of the application-role layer: no role that requires an object of another role, no object that carries every role required before a role is used, no declaration of a peer role and no declaration object created once for both required, and each difference between a role's native and serialized use stated in the documentation with the role.
+
+*Rationale.*
+An application often needs one role, such as a publisher, while the peers of that role run in other processes and are deployed on their own.
+A role that needed another role's object, its peer in the same process or a declaration made once for both peers would make such an application build and run what it does not use.
+Peers still agree on their topic or method and its message types, which is what lets them talk.
+One family for both kinds of route lets an application change a route's wire while it keeps how it declares the role and which operations it uses.
+Only what the route's form decides can differ: how a payload is written, read, owned and allocated, and what encoding and decoding can return.
+Most applications only send and receive messages, so a role that needed them to implement a binding, a wire or a memory provider would keep them from using it.
+
+[[req-sdk-owned-frame-handles]]
+== A role's handle names no binding, wire, provider or scheduler, and setup makes those choices
+
+[.specitem,oft-sid="req~sdk-owned-frame-handles~1",oft-title="A role's handle names no binding, wire, provider or scheduler, and setup makes those choices",oft-needs="impl,utest",oft-tags="OwnedFrameSdk"]
+--
+*Handles.*
+The application-role layer *MUST NOT* name a binding, a middleware, a wire or its codec, a memory provider or a scheduler in the type of the handle that an application keeps for a role, or in that handle's operations.
+In the type of a role's handle and in that handle's operations, the layer *MUST NOT* name anything of the application's domain other than the role and the message types of its topic or method.
+
+*Choices at setup.*
+A role's transport, wire, QoS and memory provider are chosen in initialization, when the role is declared.
+Where the core is the element, none of them changes in runtime mode (xref:../basics/resources.adoc#req-ssr-mode-no-setup-at-runtime[Setup is impossible in runtime mode]), and how a route's QoS is declared or given its one documented default is stated in xref:../up-l1/runtime.adoc#req-ssr-qos-declared[QoS is declared per route at setup].
+The layer *MUST NOT* require the application to name one of them again, or to name a scheduler, in an operation on a handle.
+
+*No placeholder.*
+The layer *MUST NOT* require, to declare a role, a value or a type that names a binding, a middleware, a wire or its codec, a memory provider or a scheduler that the application has not chosen for the role.
+
+*Every wire alike.*
+Where the SDK lets an application select a wire, the SDK *MUST* offer that selection through interfaces that are the same for every wire.
+An interface that names one wire or one payload format *MAY* be offered by that wire's own part.
+The SDK *MUST NOT* make such an interface part of its core or of a layer above its core.
+--
+
+[horizontal]
+ID:: `+req~sdk-owned-frame-handles~1+`
+Allocated to:: the SDK's application-role layer; the SDK, for selecting every wire through the same interfaces, and for keeping each interface that names one wire or one payload format out of its core and its layers above the core
+Verification:: test, review
+* *test*
+** The code of one application that uses its handles, unchanged, with each of two bindings, two wires of one form and two memory providers chosen at setup, and under two scheduler integrations.
+** A handle of each role kept in a type of the application's own that names no binding, middleware, wire, codec, memory provider or scheduler.
+** Each operation of each handle used without naming again a choice made at setup, and without naming a scheduler.
+** Each role declared with only the choices that the application made.
+** Two wires selected through the same interface, at each place where the SDK lets an application select a wire.
+* *review*: each handle's type and operations, which name no binding, middleware, wire, codec, memory provider or scheduler, and of the application's domain at most the role and its message types; each role's declaration, which takes no value or type that names a choice not made; the interfaces that select a wire, the same for every wire; the core and each layer above it, which hold no interface that names one wire or one payload format.
+
+*Rationale.*
+An application keeps its handles in its own types and passes them through its own code.
+A handle that named its binding, wire, memory provider or scheduler would carry a deployment choice into every place that holds it, so changing that choice would change the application.
+Making each choice once, at setup, keeps it in one place.
+A value that names an engine or a codec that the application never chose is a value with no meaning that the application still has to write.
+One way of selecting every wire keeps the core and the roles free of any one format, while a wire's own part can still offer a shorthand for it.
+
+[[req-sdk-owned-frame-defaults]]
+== Each default is stated where it applies, with the way to change it
+
+[.specitem,oft-sid="req~sdk-owned-frame-defaults~1",oft-title="Each default is stated where it applies, with the way to change it",oft-needs="impl,utest,uman",oft-tags="OwnedFrameSdk"]
+--
+*First use.*
+The application-role layer *MUST* let an application declare and use a role by stating only what has no default.
+
+*A default is a stated choice.*
+Wherever the layer makes a choice that the application did not state, the layer *MUST* state in its documentation, at the interface where the choice applies, what the default is and how the application changes it.
+
+*One setting at a time.*
+Where an application states one more setting, the layer *MUST NOT* require it to restate a setting that the new one does not depend on, or to use another role family or another kind of handle.
+The layer *MUST* state in its documentation, with each setting, the other settings that it depends on.
+
+*No default where a declaration is required.*
+The layer *MUST NOT* supply a default for a setting that an item requires to be declared (xref:../basics/resources.adoc#req-ssr-heap-declared[The heap class is declared, with no default]).
+
+*Shown.*
+Where the core is the element, what a route got, the QoS in force among it, is in its report: xref:../up-l1/bindings.adoc#req-ssr-error-route-report[Each route reports what it got].
+--
+
+[horizontal]
+ID:: `+req~sdk-owned-frame-defaults~1+`
+Allocated to:: the SDK's application-role layer
+Verification:: test, review
+* *test*
+** Each role declared and used by stating only the settings that have no default.
+** One more setting stated with only the settings that its documentation says it depends on, and with the same role family and kind of handle.
+** A declaration that leaves unstated a setting that an item requires to be declared, such as a route's heap class, with no default supplied for it.
+* *review*: the documentation of each interface at which the layer makes a choice that the application did not state, which states the default and how to change it; the documentation of each setting, which states the settings that it depends on; no default for a setting that an item requires to be declared.
+
+*Rationale.*
+An application starts with the few settings that have no default, and adds others when it needs them.
+A default that the documentation does not state where it applies is a choice that the application makes without knowing it.
+Adding one setting without restating the rest keeps a small change small, and a setting that depends on another says so where it is documented.
+A setting that an item requires to be declared has no default, because a default would let a route pass as declared when nothing was declared.
+
+[[req-sdk-owned-frame-layer-results]]
+== A layer above the core keeps its route as admitted, and passes on each result with its meaning
+
+[.specitem,oft-sid="req~sdk-owned-frame-layer-results~1",oft-title="A layer above the core keeps its route as admitted, and passes on each result with its meaning",oft-needs="impl,utest",oft-tags="OwnedFrameSdk"]
+--
+*The same route.*
+Each layer above the core *MUST* run each operation that it offers on the route that setup admitted, in the route's admitted form.
+The layer *MUST NOT* change an operation's wire, form or QoS, or who owns what the operation takes or returns.
+The layer *MUST NOT* serve an operation in a form other than the route's admitted form, such as a native operation by a serialized one, or a view by a copy (xref:../up-l1/payload-paths.adoc#req-ssr-payload-route-form[A route's form is fixed at setup, by what the route declares and never by a name]).
+
+*Nothing added.*
+On the path of an operation that it offers, the layer *MUST NOT* add:
+
+* a copy or a staging of the payload (xref:../up-l1/payload-paths.adoc#req-ssr-payload-written-once[A payload is written once, into the storage that carries it]);
+* in runtime mode on a native route, an allocation or a free of the layer's own, or one that it causes in a memory provider (xref:../up-l1/payload-paths.adoc#req-ssr-heap-none[No heap in runtime mode on a native path]);
+* in runtime mode on another route, where the core is the element, an allocation or a free of the layer's own, or one that it causes in a memory provider and that the route's heap class does not admit (xref:../basics/resources.adoc#req-ssr-heap-declared[The heap class is declared, with no default]);
+* a retry of an operation that may already have been submitted.
+
+What the scheduler work that an operation causes keeps on a native path of the element is stated in xref:execution.adoc#req-ssr-async-seam[The asynchronous interface has a written, executor-independent contract]; on another route, its scheduler integration states what that work can allocate and what heap memory it can release (xref:execution.adoc#req-sdk-owned-frame-scheduler-integration[A scheduler integration supplies wake-ups, timers and contexts through public interfaces]).
+What the layer may offer as a nonblocking attempt or as a progress step: xref:execution.adoc#req-sdk-owned-frame-operation-kinds[Each message operation is a nonblocking attempt, a bounded wait or asynchronous, and none hides a wait].
+
+*Pending state.*
+A layer that offers an operation that completes later *MAY* keep the state that represents the operation while it is pending, within the limits of the list above.
+Where the core is not the element, the layer *MUST* submit or give back each transmit loan before its operation returns pending.
+For the element, xref:execution.adoc#req-ssr-async-seam[The asynchronous interface has a written, executor-independent contract] states this.
+
+*Results.*
+The layer *MUST* pass on each result of the core's operation with its meaning: a refusal with its cause, a count with what it covers and whether it is complete, and a loss or a partial delivery as that (xref:../up-l1/bindings.adoc#req-ssr-error-no-silent-loss[No silent loss, and each loss counted once]).
+The layer *MUST* pass a result that arrives after the operation returned pending to the caller in the operation's completion.
+The layer *MUST NOT* report an unknown or partial delivery as delivered or consumed.
+
+*Modes.*
+The layer *MUST* offer setup only in initialization, and traffic only in runtime mode (xref:../basics/resources.adoc#req-ssr-mode-no-setup-at-runtime[Setup is impossible in runtime mode]; xref:../basics/resources.adoc#req-ssr-mode-no-traffic-before-runtime[Traffic is impossible before runtime mode]).
+Where the types of its interface cannot rule out a setup operation after the transition, or a traffic operation before it, such as at an entry point of a C interface, the layer *MUST* refuse that operation with a named result and change nothing.
+Where the SDK's core is not the element, the core *MUST* meet each duty of this clause for the setup and traffic operations that it offers.
+--
+
+[horizontal]
+ID:: `+req~sdk-owned-frame-layer-results~1+`
+Allocated to:: each layer above the core, and, where the core is not the element, each such layer also for submitting or giving back each transmit loan before its operation returns pending; the core of an SDK whose core is not the element, for the duties of the clause "Modes" for the setup and traffic operations that it offers
+Verification:: test, compile-fail, review
+* *test*
+** Each operation of each layer above the core on a native and on a serialized route, each lent and handed off, run on the route and in the form that setup admitted, with its wire, QoS and owner unchanged.
+** On a lending test double: the address that a payload is written at, through a layer, is the loan's.
+** The allocations and frees that a layer's operations make or cause in runtime mode, counted in the layer and in a memory provider: none on a native route; and, where the core is the element, on another route none of the layer's own and none in a memory provider that the route's heap class does not admit.
+** A binding test double that records each submission, with a failure after a submission: no second submission.
+** An operation that returns pending and completes later: the result of the core's operation reaching the caller in the completion, with its meaning, and, where the core is not the element, no transmit loan held while the operation is pending.
+** Each result that the core returns, passed on with its meaning: a refusal with its cause, a complete and an incomplete count, a loss and a partial delivery, and an unknown delivery reported neither as delivered nor as consumed.
+** Where the types of a layer's interface cannot rule them out, a setup operation after the transition and a traffic operation before it: each refused with a named result, with nothing changed.
+** Where the SDK's core is not the element and the types of its interface cannot rule them out, a setup operation of the core after the transition and a traffic operation of the core before it: each refused with a named result, with nothing changed.
+* *compile-fail*: a setup operation of a layer on a value in runtime mode, and a traffic operation of a layer on a value in initialization mode, where the layer's types rule them out, and the same operations of the core of an SDK whose core is not the element, where its types rule them out.
+* *review*: each operation path of each layer above the core: the route and form that setup admitted, with no change of wire, form, QoS or owner; no copy, staging or retry added; and no allocation or free that the clause "Nothing added" excludes.
+
+*Rationale.*
+A layer above the core is where an application meets its routes, so whatever the layer adds, every application that uses it gets.
+A copy, an allocation or a retry added there would change what a route does, while the core's guarantees still appeared to hold.
+An allocation that the layer causes in a provider is the layer's doing as much as one that it makes itself, and what the work that it causes in a scheduler can allocate is stated where that work is governed.
+A heap class shows only what a route's wire, binding and allocation provider allocate, so an allocation of a layer's own on a route of the element would be heap use that no declaration shows.
+An operation that completes later needs its state while it is pending, and keeping that state changes nothing that the route does, where a transmit loan held across the wait would.
+A retry of an operation that may already have been submitted can deliver a message twice.
+A result whose meaning changed on its way up would have the application react to something that did not happen.
+Where the language or the interface cannot keep the two modes apart by type, a refusal by name is what keeps them apart.

@@ -1,0 +1,463 @@
+= up-rust SEooC: Strict Mode
+:toc: preamble
+
+The key words "*MUST*", "*MUST NOT*", "*REQUIRED*", "*SHALL*", "*SHALL NOT*", "*SHOULD*", "*SHOULD NOT*", "*RECOMMENDED*", "*MAY*", and "*OPTIONAL*" in this document are to be interpreted as described in https://www.rfc-editor.org/info/bcp14[IETF BCP14 (RFC2119 & RFC8174)]
+
+Conventions and tags: xref:../../README.adoc[Safety and assurance view].
+Scope and element boundary: xref:README.adoc[the up-rust SEooC element overview] (part E7 of xref:README.adoc#req-ssr-element-boundary[The parts of the element, and element code]).
+Build controls and strict-mode component isolation: xref:build.adoc#req-ssr-crate-core-only-binary[The checked policy stays in the safety crate, and no admitted optional layer bypasses or reimplements it].
+
+NOTE: Strict mode is an opt-in initialization-mode policy checker kept in a component of its own.
+It reads each route's declarations and adds refusals and reports of its own without lifting any check of the element's checked policy or qualifying a configuration.
+
+[[req-ssr-strict-states]]
+== Strict mode has four states
+
+[.specitem,oft-sid="req~ssr-strict-states~1",oft-title="Strict mode has four states",oft-needs="impl,utest",oft-tags="SafetyUpRustCore"]
+--
+*The four states.*
+The element's strict mode *MUST* have exactly four states, and each setup is in one of them:
+
+* *Off*, the default: strict mode runs no check, makes no finding, produces no report and refuses nothing.
+Without the strict-build setting, a setup that selects no state is in Off.
+* *Report*: strict mode runs its checks and reports their findings as <<req-ssr-strict-report,Strict mode reports on every run>> states, and refuses nothing for a finding.
+* *Enforce*: strict mode does what Report does, and refuses at setup what each forbidden finding and each denied finding names.
+* *Locked*: the Enforce state under the strict-build setting, which rules every other state out (<<req-ssr-strict-lock,The locked build allows only enforcement>>).
+Under the strict-build setting, every setup is in the Locked state, a setup that selects no state included.
+Each rule that an item of the up-rust SEooC requirement family states for the Enforce state holds in the Locked state.
+
+*Findings.*
+Each finding has one severity, which the item that states its rule gives it:
+
+* _forbidden_: a violation of a rule that strict mode checks, or that another item has a part, such as the Streamer, check in these states, or a known failure that affects a route.
+No acknowledgement lifts it.
+* _denied_: a deviation that a route reaches while its acknowledgement is missing or stale (<<req-ssr-strict-ack-revision,An acknowledgement names a deviation by ID and revision>>).
+A current acknowledgement of that deviation makes the finding a warning.
+* _warning_: a missing declaration or incomplete evidence, where the item that states the rule classes it so, or a deviation that a current acknowledgement names.
+A warning is reported and refuses nothing in any state.
+
+What a deviation and a known failure are is stated in xref:../../assurance.adoc#req-ssr-binding-readme[A binding's qualification record states its limits and its failures].
+
+*What a state refuses.*
+
+* In the Off and Report states, strict mode *MUST NOT* refuse a setup, a transport or a route for a finding.
+* In the Enforce state, strict mode *MUST* refuse what each forbidden finding and each denied finding names: the route's build, where the finding concerns one route, and the transition otherwise.
+* Strict mode *MUST NOT* refuse a route for a finding that does not concern that route.
+* What a part outside the element, such as the Streamer, refuses or records for a finding of a check that its own item gives it is stated by that item, and strict mode refuses nothing for such a finding.
+
+*Ordinary setup refusals.*
+A refusal that another item states for invalid setup input holds in every state, Off included.
+No state of strict mode lifts it or turns it into a report.
+
+*What legalizes nothing.*
+A warning, an acknowledgement and a report change no requirement.
+A forbidden finding stays a violation in every state, and a known failure stays a failure whatever is acknowledged or reported.
+--
+
+[horizontal]
+ID:: `+req~ssr-strict-states~1+`
+ASIL:: B
+Allocated to:: the element's strict mode
+Verification:: test
+* One configuration with a forbidden, a denied and a warning finding, in each state:
+** in Off, no check, no finding, no report and nothing refused;
+** in Report, the three findings reported and nothing refused;
+** in Enforce and in Locked, the forbidden and the denied finding refused, at the route's build where the finding concerns one route and at the transition otherwise, and the warning not refused;
+** in Enforce and in Locked, the denied finding not refused once a current acknowledgement names its deviation, and reported as a warning.
+* A setup that selects no state: in Off without the strict-build setting, and in the Locked state under it.
+* A route that a finding does not concern, not refused for it.
+* A setup that another item refuses for invalid input, refused in each of the four states.
+
+*Rationale.*
+A path from a prototype to an enforced configuration needs a state that shows every finding without stopping the run, and a state that refuses.
+Typed severities keep apart what must be fixed, what must be accepted on record and what is only shown.
+If a report or an acknowledgement could turn a violation into an accepted case, the checker would become a way around the requirements that it checks.
+
+[[req-ssr-strict-init-only]]
+== Strict mode checks in initialization only
+
+[.specitem,oft-sid="req~ssr-strict-init-only~1",oft-title="Strict mode checks in initialization only",oft-needs="impl,utest",oft-tags="SafetyUpRustCore"]
+--
+*When checks run.*
+The element's strict mode *MUST* run each strict-mode policy check in initialization mode, before the transition: at a route's build for the rules that concern one route, and at the transition for the rest.
+
+*Cost of checking.*
+
+* Strict mode *MUST* make each check's findings fixed-size values that can be copied.
+* Strict mode *MUST* write each check's reports into storage that the caller provides.
+* Strict mode *MUST NOT* let a check allocate, block or panic.
+
+*Runtime paths.*
+Strict mode *MUST NOT* let runtime paths execute the strict-policy checker, consult its policy or produce its findings.
+
+*Initialization-selected runtime behaviour.*
+Strict mode *MAY* select, through a setting fixed during initialization, runtime behaviour that another item explicitly requires.
+The runtime path then reads only that fixed setting: it does not consult the strict policy, and nothing reopens initialization.
+Behaviour so selected keeps every requirement that binds runtime paths.
+--
+
+[horizontal]
+ID:: `+req~ssr-strict-init-only~1+`
+ASIL:: B
+Allocated to:: the element's strict mode
+Verification:: test, gate, review
+* *test*
+** Each rule's finding at setup, with a negative control per rule.
+** Setup and the transition in the Report state and in the Enforce state, on a configuration whose setup otherwise allocates nothing, with every allocation and every free on all threads counted by an observer at the Rust global allocator and another at the C library's allocation functions, a positive control showing that the count fires, and none found; on macOS too, with the current stable compiler.
+** Each report written into storage that the caller provides.
+* *gate*: a compile-time assertion, for each type of finding, that it is a fixed-size value that can be copied.
+* *review*: each policy check run in initialization mode, at a route's build for a rule that concerns one route and at the transition for the rest; no runtime path runs the policy checker or reads its policy; no path of the checker blocks or panics; initialization-selected runtime behaviour is distinguished from policy checking and keeps the requirements on runtime paths.
+
+*Rationale.*
+Admission findings must be complete before runtime starts, so policy checking cannot add runtime allocation or configuration work.
+
+The admitted configuration can still select a runtime behaviour that another item requires, which then runs under that item's own rules.
+
+.An initialization-selected runtime behaviour
+====
+The strict older-incarnation refusal of xref:../../../up-l1/wires/e2e.adoc#req-ssr-e2e-resync[A restart resynchronizes, stale frames are refused, and no arrival order locks a sender out] applies on an ASIL RPC request route that selects the E2E wire and is initialized with strict mode in its Enforce or Locked state.
+That state at initialization is the fixed setting that selects it, and the refusal runs in runtime mode under the runtime no-heap and bounded-work requirements.
+E2E receive semantics can differ between configurations.
+====
+
+[[req-ssr-strict-lock]]
+== The locked build allows only enforcement
+
+[.specitem,oft-sid="req~ssr-strict-lock~4",oft-title="The locked build allows only enforcement",oft-needs="impl,utest",oft-tags="SafetyUpRustCore"]
+--
+*The strict-build setting.*
+The strict-build setting is a build-time setting of the element that only the integrator's build configuration sets.
+
+*Only Enforce.*
+Under the strict-build setting, the element's strict mode *MUST* have only its Enforce state, the Locked state (<<req-ssr-strict-states,Strict mode has four states>>):
+
+* code that names another state fails to compile;
+* deployment data that names one is refused at setup.
+
+Under the strict-build setting, strict mode *MUST* ensure that every transport carries a strict-mode policy.
+
+*The declared-graph check.*
+The declared-graph check compares the integrator's declarations with what the build and the setup can observe.
+
+* Its inputs are the integrator's declaration of the binary's final image, with its claimed safety dependency graph, the class that it gives each crate and any explicitly selected ASIL-path helper function—a named startup-provisioning helper and/or a named serialized owned-value runtime adapter confined strictly to implementing or serving as an explicitly identified subcomponent of an existing wire or allocation-provider role (xref:assumptions-of-use.adoc#aou-seooc-build-configuration[The ASIL binary is built from its claimed graph, with the ASIL profile], clause "Classification"; xref:../../profiles/up-rust-asil-b.adoc#req-ssr-element-configurations[The ASIL path and supported configurations])—the member information that the build supplies with the configuration, which names each crate that the build links, and each route's declared heap class.
+* At build time it observes each crate that takes part in the strict build and can tell whether the declared graph and declared ASIL-path function selections admit it.
+At setup it observes each crate that the supplied member information names, each declared startup-provisioning helper and serialized owned-value runtime adapter selection, and each binding, wire, allocation provider, platform backend and route that the setup builds.
+* The declared graph admits a crate that the declaration accounts for, in one of its classes, and no crate that the declaration does not account for.
+It admits a binding, wire, allocation provider or platform backend that the setup builds only where the claimed graph holds it, and a route only where the claimed graph holds each binding, each wire and each allocation provider that the route uses and the route's declared heap class is admitted as "What the refusal follows" states.
+* On the ASIL path, the declared-graph check admits an optional helper crate or function in the claimed graph only where the configuration explicitly selects one or both of the two admitted ASIL-path functional selections—a named startup-provisioning helper obtaining declared startup backing before the relevant transition, or a named serialized owned-value runtime adapter confined strictly to implementing or serving as an explicitly identified subcomponent of an existing wire or allocation-provider role for serialized message-owned values already permitted by that route's declared heap class—with its exact selected functions, generated code, transitive dependencies and retained state accounted for in the claimed graph (xref:../../profiles/up-rust-asil-b.adoc#req-ssr-element-configurations[The ASIL path and supported configurations]; xref:build.adoc#req-ssr-crate-core-only-binary[The checked policy stays in the safety crate, and no admitted optional layer bypasses or reimplements it]).
+It continues to refuse any unadmitted optional layer, generic collection crate, arbitrary application helper, executor, optional asynchronous or application-role layer, or whole `+std+` or `+alloc+` crate presented in the claimed graph or built into an ASIL-path setup, admitting none of them merely by linkage or crate name.
+* For a crate that the declaration accounts for outside the claimed graph, and that the setup does not build as a binding, wire, allocation provider, platform backend or admitted helper, such a crate remains admitted (continuing the replacement introduced in revision 3 of this item for the clause "Refusal outside the declared graph" of revision 2 of this item).
+
+*Its findings.*
+Each of these is a forbidden finding, which names the crate, the helper or adapter selection, the route or the missing declaration, and for a crate, helper or route its replacement where one exists:
+
+* a crate, binding, wire, allocation provider, platform backend, helper or adapter selection, or route that the declared graph does not admit;
+* an unadmitted optional layer, generic collection crate, arbitrary application helper, executor, optional asynchronous or application-role layer, or whole `+std+` or `+alloc+` crate present in the claimed graph or built into an ASIL-path setup;
+* a startup-provisioning helper used without explicit startup-provisioning selection or outside startup backing before the relevant transition, or a serialized owned-value runtime adapter declared or used outside an existing wire or allocation-provider role;
+* in a configuration under the strict-build setting, or in an ASIL process (xref:../../profiles/up-rust-asil-b.adoc#req-ssr-element-configurations[The ASIL path and supported configurations]), a claimed safety dependency graph that is not declared, or member information that the build does not supply.
+
+*By state.*
+
+* In the Report state, strict mode *MUST* report each such finding and *MUST NOT* refuse for it.
+* In the Enforce state, with or without the strict-build setting, strict mode *MUST* refuse each such finding at setup.
+* Under the strict-build setting, strict mode *MUST* also ensure that a crate that the declared graph does not admit, and that can tell at build time, fails to build, naming its replacement.
+A crate that takes part in the strict build can carry that refusal; the element's strict mode answers for it.
+
+*What the refusal follows.*
+Strict mode *MUST* base the refusal on the actual dependency graph, the explicitly selected ASIL-path helper functions and their roles, and each route's declared heap class, not on a crate's name:
+
+* a wire, allocation provider or admitted serialized owned-value runtime adapter (acting strictly within its wire or allocation-provider role) that uses the heap is refused on a native route and admitted on a serialized route that declares its allocation;
+* an explicitly selected startup-provisioning helper admitted for declared startup backing before the relevant transition is admitted for that startup role without admitting runtime allocation or unadmitted optional layers;
+* code that the claimed graph does not contain keeps its ordinary use.
+
+Classic routes stay outside the two-mode contract, as xref:../../../contract-generations.adoc#req-ssr-mode-classic-excluded[Classic routes never enter runtime mode] states.
+
+*Observation limits.*
+Strict-mode locking and its declared-graph check enumerate nothing beyond the crates that take part in the strict build and can tell at build time, the supplied member information, and the bindings, wires, allocation providers, platform backends, helper selections and routes that setup builds:
+
+* strict-mode locking is not a universal complete-image scanner: comparing the complete final image with its declared graph remains verification evidence of the integrator outside the element (xref:assumptions-of-use.adoc#aou-seooc-build-configuration[The ASIL binary is built from its claimed graph, with the ASIL profile]);
+* strict-mode locking does not establish a qualified part or a qualified combination (xref:assumptions-of-use.adoc#aou-seooc-qualified-bindings-and-wires[Bindings and wires pass their contracts]);
+* strict-mode locking does not manufacture stronger resource guarantees (xref:../../../basics/resources.adoc#req-ssr-heap-guarantees[A stronger resource guarantee is required by name, and admitted or refused]);
+* strict-mode locking does not discharge any assumption of use (xref:assumptions-of-use.adoc#aou-seooc-assumptions-bind[An assumption of use binds the integrator who claims the scope, and replaces no requirement]).
+
+*Scoped replacement.*
+For the element's strict mode, this revision replaces revision 3 of this item across all configurations, reconciling strict-build and declared-graph gating with the two explicitly admitted ASIL-path functional selections (a named startup-provisioning helper and a named serialized owned-value runtime adapter confined strictly to an existing wire or allocation-provider role), continuing to refuse unadmitted optional layers, generic collection crates, arbitrary application helpers, executors, optional asynchronous or application-role layers and whole `+std+` or `+alloc+` crates, and stating explicitly strict-mode locking's observation limits, while preserving the Locked state, the admission of crates accounted for outside the claimed graph and all other duties of revision 3 of this item.
+--
+
+[horizontal]
+ID:: `+req~ssr-strict-lock~4+`
+ASIL:: B
+Allocated to:: the element's strict mode
+Verification:: gate, test, review
+* *gate*
+** Under the strict-build setting, a crate that the declared graph does not admit—an unadmitted optional layer, generic collection crate, arbitrary helper or whole `+std+` or `+alloc+` crate that can tell at build time included—fails to build, naming its replacement.
+** Under the strict-build setting, a probe naming another state fails to compile.
+* *test*
+** Under the strict-build setting, deployment data naming another state is refused at setup.
+** Under the strict-build setting, each transport that setup builds, carrying a strict-mode policy.
+** A binding, a wire, an allocation provider, a platform backend and a route that the declared graph does not admit: each reported and not refused in the Report state, and refused at setup in the Enforce state, with and without the strict-build setting, naming its replacement.
+** A crate that cannot tell at build time, named in the supplied member information and not accounted for by the declaration: reported in the Report state, and refused at setup in the Enforce state.
+** A crate named in the supplied member information that the declaration accounts for outside the claimed graph, such as an application crate: no finding in the Report state, and admitted at setup in the Enforce state, with and without the strict-build setting; the same crate built by the setup as a binding, wire, allocation provider, platform backend or admitted helper: reported in the Report state, and refused at setup in the Enforce state.
+** An explicitly selected startup-provisioning helper accounted for in the claimed graph: admitted for declared startup backing without admitting runtime allocation or unadmitted optional layers; an unselected startup-provisioning helper reported in Report and refused at setup in Enforce and Locked.
+** An explicitly selected serialized owned-value runtime adapter accounted for in the claimed graph within an existing wire or allocation-provider role: refused on a native route and admitted on a serialized route that declares its allocation; an adapter declared or used outside an existing wire or allocation-provider role reported in Report and refused at setup in Enforce and Locked.
+** An unadmitted optional layer, generic collection crate, arbitrary application helper, executor, optional asynchronous or application-role layer, or whole `+std+` or `+alloc+` crate in the claimed graph or ASIL-path setup: reported in Report and refused at setup in Enforce and Locked.
+** An ASIL process with no declared graph, and one whose build supplies no member information: each reported in the Report state, and refused at setup in the Enforce state.
+** A configuration that is not on the ASIL path, under the strict-build setting, with no declared graph or with no member information: refused at setup.
+** An allocating wire or allocation provider refused on a native route and admitted on a serialized route that declares its allocation.
+* *review*: declared-graph gating based on actual dependency graph, explicitly selected ASIL-path function roles and each route's declared heap class rather than crate names alone, and observation limits preserved with no claim of universal complete-image scanning, qualified-combination proof, stronger resource guarantees or assumption-of-use discharge.
+
+*Rationale.*
+A lock that the integrator sets in the build keeps a development setting or a convenience dependency from quietly bringing back runtime behaviour that the claim does not support.
+
+Refusing every crate of a kind, such as every allocating wire or an explicitly admitted startup-provisioning helper or wire/provider serialized runtime adapter, would refuse configurations the safety case can support, while admitting optional layers or whole `+std+` or `+alloc+` crates by linkage alone would defeat the claimed graph.
+Judging the claimed graph, the exact selected ASIL-path helper roles and each route's declared class refuses only what the claim cannot support while letting ordinary users keep communicating.
+
+A check can see only what takes part in the build or the setup that runs it.
+So comparing a whole final image with its declared graph, qualifying a combination, establishing stronger resource guarantees and validating applicable assumptions of use stay outside strict-mode locking.
+
+[[req-ssr-strict-rules]]
+== The rules that strict mode checks
+
+[.specitem,oft-sid="req~ssr-strict-rules~3",oft-title="The rules that strict mode checks",oft-needs="impl,utest",oft-tags="SafetyUpRustCore"]
+--
+*Refusals in the Enforce state.*
+In its Enforce state, the Locked state included, the element's strict mode *MUST* refuse at setup, each as a forbidden finding (<<req-ssr-strict-states,Strict mode has four states>>):
+
+* a transport or route at C or D, unless `+above_capability+` names the integrator's measures (xref:assumptions-of-use.adoc#aou-seooc-capability-ceiling[Data above ASIL B relies on measures outside the element]);
+* C or D data whose only protection is an end-to-end mechanism of ASIL B capability, unless `+decomposition+` names the argument (xref:assumptions-of-use.adoc#aou-seooc-capability-ceiling[Data above ASIL B relies on measures outside the element]);
+* an ASIL route over a transport that the integrator classifies as a black channel, with no protection named (xref:assumptions-of-use.adoc#aou-seooc-e2e-protection[The integrator decides which routes need end-to-end protection]);
+* an ASIL RPC route that selects the E2E wire and whose clients are not declared increasing from a counter (xref:assumptions-of-use.adoc#aou-seooc-e2e-protection[The integrator decides which routes need end-to-end protection]);
+* a custom platform that names no contract-test evidence (xref:assumptions-of-use.adoc#aou-seooc-integrator-platform[A custom platform keeps the platform's rules]);
+* a setup still alive and not entered when `+enter_runtime_all+` returns (xref:assumptions-of-use.adoc#aou-seooc-build-order[Applications build every transport and role before the last transition]);
+* a binding, wire, allocation provider, admitted startup-provisioning helper or admitted serialized owned-value runtime adapter that is not on the integrator's qualified list (xref:assumptions-of-use.adoc#aou-seooc-qualified-bindings-and-wires[Bindings and wires pass their contracts]);
+* an ASIL-path startup-provisioning helper or serialized owned-value runtime adapter selection that omits its required declaration of selected functions, storage regions or wire or allocation-provider role, allocation domains, retained state, dependencies or supported execution contexts, or that uses a serialized owned-value runtime adapter outside an existing wire or allocation-provider role or outside permitted serialized message-owned-value scope (xref:../../profiles/up-rust-asil-b.adoc#req-ssr-element-configurations[The ASIL path and supported configurations]; xref:../../../up-l1/payload-paths.adoc#req-ssr-heap-none[No heap in runtime mode on a native path]);
+* an ASIL-path configuration or affected route that selects an assured startup-provisioning helper or assured serialized owned-value runtime adapter admission where recoverable exhaustion and panic-free cleanup are not explicitly named in the composition assurance contract and in each affected route and package, or where either guarantee lacks bound evidence covering covered acquisition, resize, owned-value cleanup, setup-created values and all reached dependencies—including where either guarantee is inferred only from an ASIL label or where recoverable exhaustion rests only on a fallible wrapper over an allocator whose stated contract may abort (xref:../../profiles/up-rust-asil-b.adoc#req-ssr-element-configurations[The ASIL path and supported configurations]; xref:../../../basics/resources.adoc#req-ssr-heap-guarantees[A stronger resource guarantee is required by name, and admitted or refused]);
+* a serialized route or composition admitting owned values—including values produced, resized or released through an admitted serialized owned-value runtime adapter—whose declaration names no non-native, non-shared ending path on which to end those values (xref:../../../basics/resources.adoc#req-ssr-heap-declared[The heap class is declared, with no default]; xref:../../../up-l1/runtime.adoc#req-ssr-heap-slot-types[A decoded value is destroyed once, as its route's class admits]);
+* a composition-package authority violation: an explicit extension presented or declared as element-supplier-supported, an unoffered combination presented as supported, or a claimed supported configuration package whose releaser authority or compatibility record is missing (xref:assumptions-of-use.adoc#aou-seooc-qualified-bindings-and-wires[Bindings and wires pass their contracts]; xref:../../profiles/up-rust-asil-b.adoc#req-ssr-element-configurations[The ASIL path and supported configurations]);
+* an ASIL process built with unwinding, as the clause "An ASIL process built with unwinding" states.
+
+The assured-helper claim-dependency refusal above applies only where an assured helper or adapter admission is selected on the ASIL path.
+Strict mode *MUST NOT* refuse an ordinary serialized route for lacking unrequested stronger guarantees, and non-waiting acquisition, non-waiting release and finite timing remain separately requested guarantees rather than defaults of an assured helper admission.
+For composition-package deviations as for part deviations, strict mode applies <<req-ssr-strict-ack-revision,An acknowledgement names a deviation by ID and revision>>, refusing each route within the scope of a reached composition-package deviation whose acknowledgement is missing or stale as a denied finding in the Enforce and Locked states, and refusing each route that a known failure affects as a forbidden finding whatever is acknowledged.
+
+*The Report state.*
+In its Report state, strict mode *MUST* report each of these as a finding and *MUST NOT* refuse for it.
+
+*Checks on every configuration.*
+In the Enforce state, with or without the strict-build setting, and whether or not a configuration has an assurance package, strict mode *MUST* apply these checks to every configuration (xref:assumptions-of-use.adoc#aou-seooc-target-environment[The target environment is verified]):
+
+* the target check: the entry of this item on a custom platform;
+* the dependency and ownership checks: the declared-graph check, with its judgement of declared helper and adapter selections, each route's declared heap class and non-native, non-shared serialized ending-path declarations (<<req-ssr-strict-lock,The locked build allows only enforcement>>);
+* the composition-package authority, known-failure and part or composition-package deviation checks (<<req-ssr-strict-ack-revision,An acknowledgement names a deviation by ID and revision>>).
+
+*An ASIL process built with unwinding.*
+In the Enforce state, strict mode *MUST* refuse at setup an ASIL process (xref:../../profiles/up-rust-asil-b.adoc#req-ssr-element-configurations[The ASIL path and supported configurations]) that was built with unwinding (xref:assumptions-of-use.adoc#aou-seooc-build-configuration[The ASIL binary is built from its claimed graph, with the ASIL profile]).
+The check runs in the process that it judges, so it reaches only a process in which the element's strict mode runs.
+Strict mode *MUST NOT* refuse, for this rule, a process that is not an ASIL process, built with unwinding, or an ASIL process built with `+panic = "abort"+`.
+
+*Observation limits.*
+Strict mode's rule checks judge only the declarations, setup facts, supplied member information, qualification and composition-package records and build flags observable at setup in the process where strict mode runs:
+
+* they are not a universal complete-image scanner;
+* they establish no qualified-combination proof;
+* passing setup checks performs no automatic discharge of any assumption of use (xref:assumptions-of-use.adoc#aou-seooc-assumptions-bind[An assumption of use binds the integrator who claims the scope, and replaces no requirement]);
+* the Off, Report, Enforce and Locked states never manufacture stronger resource guarantees and never substitute for complete-image classification, Cargo's ASIL build profile, a selected assurance scope or actual qualification (xref:../../../basics/resources.adoc#req-ssr-heap-guarantees[A stronger resource guarantee is required by name, and admitted or refused]; xref:../../../contract-generations.adoc#req-ssr-contract-transition[What a part declares and claims, and when a replacement takes effect]).
+
+*Scoped replacement.*
+For the element's strict mode, this revision replaces revision 2 of this item across all configurations, incorporating rule checks for declared helper and adapter selections, assured helper claim dependencies (recoverable exhaustion and panic-free cleanup named explicitly in the composition assurance contract and affected routes when an assured helper admission is selected), non-native, non-shared serialized ending-path declarations, and composition-package authority and deviations, and stating explicitly strict mode's observation limits, while preserving ordinary serialized routes without unrequested stronger defaults and all existing rules and checks of revision 2 of this item.
+--
+
+[horizontal]
+ID:: `+req~ssr-strict-rules~3+`
+ASIL:: B
+Allocated to:: the element's strict mode
+Verification:: test, review
+* *test*
+** Each refusal in the Enforce state, with a negative control per rule: the same configuration admitted with `+above_capability+` or `+decomposition+` named, with a protection named, with its clients declared increasing from a counter, with contract-test evidence named, with every setup entered, with the binding, wire, allocation provider, admitted startup-provisioning helper or admitted serialized owned-value runtime adapter on the qualified list, with complete and role-valid helper and adapter selection declarations, with recoverable exhaustion and panic-free cleanup explicitly named and evidenced across covered transitive operations when an assured helper admission is selected, with a declared non-native, non-shared ending path on a serialized route admitting owned values, and with matching composition-package authority and compatibility records.
+** An assured helper admission with recoverable exhaustion or panic-free cleanup inferred only from an ASIL label or backed only by a fallible wrapper over an allocator whose contract may abort: refused in the Enforce and Locked states and reported in the Report state; an ordinary serialized route without an assured helper admission not refused for lacking unrequested stronger guarantees, and non-waiting acquisition, non-waiting release and finite timing checked only when separately requested.
+** A composition-package deviation reached by a route: refused as a denied finding in the Enforce and Locked states when unacknowledged or stale, turned into a warning when currently acknowledged, and reported without refusal in the Report state.
+** Each refusal of this item on the same configuration in the Report state: reported, and not refused.
+** Each check that the clause "Checks on every configuration" names, in the Enforce state with and without the strict-build setting, on a configuration with and on one without an assurance package, on a configuration that it refuses and on one that it admits.
+** An ASIL process built with unwinding, refused at setup in the Enforce state, and neither a process that is not an ASIL process, built with unwinding, nor an ASIL process built with `+panic = "abort"+` refused for it.
+* *review*: observation limits preserved across all rules, with no universal complete-image scanner, no qualified-combination proof, no automatic assumption-of-use discharge from setup checks, and no strict-mode state manufacturing stronger resource guarantees or substituting for qualification.
+
+*Rationale.*
+Each rule checks a declaration, record or observable condition on which an assumption of use or admitted composition rests, so that the Enforce state refuses a configuration that lacks it while preserving ordinary serialized ownership and keeping strict-mode checks distinct from complete-image verification, combination qualification and assumption-of-use validation.
+
+NOTE: Refusals of the Enforce state that concern another item's own subject are stated with that subject: xref:../../../up-l1/runtime.adoc#req-ssr-qos-declared[QoS is declared per route at setup], xref:../../../up-l1/runtime.adoc#req-ssr-qos-no-downgrade[QoS is honored or refused, never weakened], xref:../../../up-l1/bindings.adoc#req-ssr-qos-deadline[Deadlines are monitored], xref:../../assurance.adoc#req-ssr-waiver-record[Waivers are recorded and can be found], xref:../../../up-l2/streamer.adoc#req-ssr-streamer-operator-control[Operator changes go through a declared interface] and xref:../../../up-l2/streamer.adoc#req-ssr-streamer-monitors[Worker and transport monitors trip routes].
+
+[[req-ssr-strict-ack-revision]]
+== An acknowledgement names a deviation by ID and revision
+
+[.specitem,oft-sid="req~ssr-strict-ack-revision~4",oft-title="An acknowledgement names a deviation by ID and revision",oft-needs="impl,utest",oft-tags="SafetyUpRustCore"]
+--
+*An acknowledgement.*
+An acknowledgement is the integrator's record, given to strict mode, that it has reviewed one deviation and accepts it for its deployment (xref:assumptions-of-use.adoc#aou-seooc-qualified-bindings-and-wires[Bindings and wires pass their contracts]).
+What a deviation and a known failure are is stated in xref:../../assurance.adoc#req-ssr-binding-readme[A binding's qualification record states its limits and its failures], and strict mode takes each as the qualification record of its part or the record of its supported composition package states it (xref:../../profiles/up-rust-asil-b.adoc#req-ssr-element-configurations[The ASIL path and supported configurations]).
+The element's strict mode *MUST* treat a record as an acknowledgement only where it names one deviation by its identifier and its revision, never by its type, with a reference, an approver and a date.
+A record in any other form acknowledges nothing.
+
+*What it covers.*
+An acknowledgement covers only the deviation that it names, at the revision that it names, within the scope that the deviation's record states.
+Strict mode *MUST NOT* take it to accept a known failure, to waive a requirement or to change what a requirement states.
+
+*A raised revision.*
+When a deviation's revision rises, an acknowledgement of its earlier revision no longer holds: it is stale.
+
+*What a known failure affects.*
+For this rule, a route uses a part or a supported composition package where the route relies on that part's work or belongs to a deployment that uses that composition package, including work through dependencies or shared state.
+The element's strict mode *MUST* treat a known failure stated for a revision of a part or of a supported composition package as affecting every route that uses that revision, unless that part's qualification record or that composition package's record states a narrower scope and the route's setup facts establish that the route is outside it.
+The part or package may be a binding, a wire, the element, a supported composition package or another part on which the route relies; the scope comes from that part's qualification record or that composition package's record.
+A narrower scope may state targets, configurations, operations and settings, with the conditions that apply together in each case and any alternative cases.
+A condition that the record does not limit excludes no route.
+Strict mode *MUST NOT* treat a route as outside the scope unless its setup facts establish that it is outside every stated case; a missing or unknown fact does not establish that exclusion.
+An acknowledgement changes no failure's scope.
+
+*By state.*
+What this clause states for the Enforce state holds in the Locked state (<<req-ssr-strict-states,Strict mode has four states>>).
+
+* In the Enforce state, strict mode *MUST* refuse at setup each route within the scope of a deviation whose acknowledgement is missing or stale, until an acknowledgement names that deviation at its current revision.
+* In the Enforce state, strict mode *MUST* refuse at setup each route that a known failure affects, whatever is acknowledged.
+* Strict mode *MUST NOT* refuse, for a deviation or a known failure, a route that the deviation's scope does not reach or that the failure does not affect.
+* In the Report state, strict mode *MUST NOT* refuse for either; what it reports of them is stated in <<req-ssr-strict-report,Strict mode reports on every run>>.
+
+*Scoped replacement.*
+This revision replaces revision 3 of this item for the element's strict mode across all configurations, authorizing and requiring strict mode to read deviations, known failures and their stated scopes from supported composition package records (element-supported configuration packages and explicit extension packages) as well as part qualification records, while preserving all revision-3 acknowledgement-form, stale-revision, known-failure refusal and per-state duties unchanged.
+--
+
+[horizontal]
+ID:: `+req~ssr-strict-ack-revision~4+`
+ASIL:: B
+Allocated to:: the element's strict mode
+Verification:: test
+* An acknowledgement of an earlier revision, separately for a part deviation and a composition-package deviation: stale, so that the deviation's routes are refused again in the Enforce state until it is acknowledged at the current revision.
+* An acknowledgement that names an unknown identifier, one that names a deviation by its type, and one without a reference, an approver or a date: each acknowledging no deviation, so that the deviations' routes are still refused in the Enforce state.
+* An acknowledgement that names a known failure (in a part qualification record or a supported composition package record), admitting nothing.
+* In the Enforce state, each route that a known failure affects refused whatever is acknowledged, and a route that it does not affect not refused for it.
+* A known failure with no stated scope limit, separately in a binding's, a wire's, the element's qualification record and a supported composition package's record: every route using the recorded revision affected, and a route using no affected part or package revision not refused for that failure.
+* A failure limited to one target together with one setting: the route matching both refused, and a route outside either condition not refused for that failure.
+* A record with alternative combinations of target, configuration, operation and settings: a route matching either combination refused, and a route established outside every combination not refused for that failure.
+* Missing scope limits, and missing or unknown setup facts that do not establish exclusion: no exclusion inferred. Work through a dependency or shared state included in the comparison, even where the route never calls the failing operation directly.
+* The same affected route sets shown in the compliance report as <<req-ssr-strict-report,Strict mode reports on every run>> requires.
+* A route outside a part or composition-package deviation's stated scope, not refused for that deviation.
+* The same configurations in the Locked state: the same refusals as in Enforce; in the Report state: the same affected route sets reported, and no refusal for those findings.
+
+*Rationale.*
+Acknowledging an earlier deviation cannot establish acceptance of a later change to its scope or consequences.
+A known failure is neither a limit nor a deviation, so no acknowledgement admits a route that it affects (xref:assumptions-of-use.adoc#aou-seooc-qualified-bindings-and-wires[Bindings and wires pass their contracts]).
+
+[[req-ssr-strict-report]]
+== Strict mode reports on every run
+
+[.specitem,oft-sid="req~ssr-strict-report~5",oft-title="Strict mode reports on every run",oft-needs="impl,utest",oft-tags="SafetyUpRustCore"]
+--
+Whenever the element's strict mode is in its Report or Enforce state, the Locked state included, it *MUST* produce a compliance report at setup.
+Strict mode *MUST* include in the report:
+
+* every finding, with its severity, its rule, its route, the requirement IDs it serves and its fix;
+* every named refusal produced at setup, naming the route, guarantee, helper or adapter selection, serialized ending path, composition-package authority mismatch or other rule refused and the exact missing condition;
+* every acknowledgement supplied with the configuration, with the identifier and revision of the part or composition-package deviation that it names, whether it is current or stale, and whether a route reaches that deviation;
+* each part or composition-package deviation that a route reaches, with whether a current acknowledgement names it, and each known failure with the routes that it affects (<<req-ssr-strict-ack-revision,An acknowledgement names a deviation by ID and revision>>);
+* every active waiver, with its approver and the kind and reference of its interference argument (xref:../../assurance.adoc#req-ssr-waiver-record[Waivers are recorded and can be found]);
+* each selected helper or adapter admission—no optional helper (minimal selection), an explicitly selected startup-provisioning helper (with its identity, selected startup-backing functions, supplied storage regions, retained state and dependencies), an explicitly selected serialized owned-value runtime adapter (with its identity, wire or allocation-provider role, covered routes, directions, allocation domains, retained state and reached dependencies), or both as independent selections (xref:../../profiles/up-rust-asil-b.adoc#req-ssr-element-configurations[The ASIL path and supported configurations]; xref:build.adoc#req-ssr-crate-core-only-binary[The checked policy stays in the safety crate, and no admitted optional layer bypasses or reimplements it]);
+* for each route and covered assured helper scope, each resource guarantee stated separately as required, established (with the configuration and evidence it rests on, or not established) and admitted (only where both required and established), distinguishing assured-helper claim dependencies (recoverable exhaustion and panic-free cleanup, named explicitly in the composition assurance contract and affected routes when an assured helper admission is selected, without inferring either from an ASIL label or crediting a fallible wrapper over an aborting allocator) from separately requested guarantees (non-waiting acquisition, non-waiting release—including inline proven non-waiting release, an initialization-created autonomous isolated release service, or a disclosed waiting route-specific cleanup path where non-waiting release is not requested—and finite timing bounds) (xref:../../../basics/resources.adoc#req-ssr-heap-guarantees[A stronger resource guarantee is required by name, and admitted or refused]; xref:../../../up-l1/runtime.adoc#req-ssr-release-lease-drop[A lease gives back its slot and nothing else]; xref:../../../up-l1/runtime.adoc#req-ssr-qos-no-downgrade[QoS is honored or refused, never weakened]);
+* for each monitored route, its detection bound with J where a supported configuration establishes J, or a statement that no finite bound is established (xref:../../../up-l1/bindings.adoc#req-ssr-qos-deadline[Deadlines are monitored]), and any servicing or watchdog range that its configuration's representation needs;
+* the timing and assurance claims each route requested and was admitted under, with the configuration and the evidence that each rests on, and that evidence's state as its record states it, an unknown or a failed state included;
+* the composition package's identity, version and supplier authority—classified truthfully as element-supported, explicit extension (naming the extension composer assuming composition-supplier responsibility, never labelled element-supplier-supported) or unoffered gap—together with every residual gap, unresolved condition, uncovered execution context or missing evidence item (xref:../../profiles/up-rust-asil-b.adoc#req-ssr-element-configurations[The ASIL path and supported configurations]; xref:assumptions-of-use.adoc#aou-seooc-qualified-bindings-and-wires[Bindings and wires pass their contracts]);
+* for a route or process with no admitted assurance scope, that it is unassessed, which refuses nothing;
+* the assumptions of use that apply to the features configured;
+* for each cited item, its revision and its adoption status.
+
+*The report's status words.*
+The adoption status of a cited item is the status that the versioned status record of this repository states for that item at that revision, for the revision of this repository that the element declares (xref:../../../contract-generations.adoc#req-ssr-contract-transition[What a part declares and claims, and when a replacement takes effect]).
+The report reproduces that status, and it uses two status words of its own:
+
+* _Draft_: the status record states no adoption of the cited item at that revision;
+* _unassessed_: the route or process has no admitted safety-assurance scope (xref:../../../up-l1/runtime.adoc#req-ssr-qos-no-downgrade[QoS is honored or refused, never weakened]).
+
+*Routes.*
+Strict mode *MUST* also include in the report:
+
+* for each route, its TTL, against the reaction budget the integrator declares for it (xref:assumptions-of-use.adoc#aou-seooc-timing-budgets[Timing claims rest on a supported configuration, and the item's budgets are the integrator's]);
+* the end-to-end protection named for each route (xref:assumptions-of-use.adoc#aou-seooc-e2e-protection[The integrator decides which routes need end-to-end protection]);
+* for each E2E route, its senders, data IDs, `+resync_frames+`, start declarations with their duty, and thread duties (xref:assumptions-of-use.adoc#aou-seooc-e2e-protection[The integrator decides which routes need end-to-end protection]);
+* for each route, the counters the application reads and what each means, the E2E figures included (xref:assumptions-of-use.adoc#aou-seooc-application-reacts[The application reacts to what the element reports]);
+* every route's capacities (xref:assumptions-of-use.adoc#aou-seooc-capacity-sizing[Capacities are sized for the worst case]);
+* for each serialized route admitting owned values, its declared non-native, non-shared ending path and any admitted serialized owned-value runtime adapter acting within its wire or allocation-provider role (xref:../../../basics/resources.adoc#req-ssr-heap-declared[The heap class is declared, with no default]; xref:../../../up-l1/runtime.adoc#req-ssr-heap-slot-types[A decoded value is destroyed once, as its route's class admits]);
+* each route's declared peers and the shared-memory permissions its binding requests (xref:assumptions-of-use.adoc#aou-seooc-peer-access[Only authorized processes reach the transport]);
+* each shared route, with what one faulty peer can starve there (xref:assumptions-of-use.adoc#aou-seooc-peer-rates[Peer rates on shared routes are the integrator's]);
+* which ASIL routes an operator can disable, and that a disable stays latched until an external restart of the process, partition or firmware-instance reset domain (xref:../streamer.adoc#aou-seooc-operator-access[Only authorized operators reach the Streamer's operator interface]);
+* every route that a Streamer monitor can trip, and that a trip stays latched until such a restart (xref:../streamer.adoc#aou-seooc-monitor-thresholds[Monitor thresholds allow for peers' restarts]).
+
+*The deployment.*
+Strict mode *MUST* also include in the report:
+
+* the transports that share each process (xref:assumptions-of-use.adoc#aou-seooc-process-isolation[Processes or partitions are isolated]);
+* the restart path that the integrator declares, a supervisor, a partition restart or, on bare metal, a whole-reset-domain restart (xref:assumptions-of-use.adoc#aou-seooc-supervisor-restart[A supervisor outside the process restarts it]);
+* the time-sync source, where one is declared (xref:assumptions-of-use.adoc#aou-seooc-clock[The platform provides the clocks]);
+* the startup memory that each setup computes, together with whether startup backing comes from static or caller-provided storage or from an explicitly selected startup-provisioning helper (xref:assumptions-of-use.adoc#aou-seooc-capacity-sizing[Capacities are sized for the worst case]; xref:assumptions-of-use.adoc#aou-seooc-startup-storage[Startup storage that the integrator provides is exclusive and lives as long as the process]);
+* what was declared in the deployment data, and what was checked (xref:assumptions-of-use.adoc#aou-seooc-deployment-data[Deployment data is in range, verified and protected]);
+* each binding's, wire's, allocation provider's, admitted startup-provisioning helper's, admitted serialized owned-value runtime adapter's and composition package's limits, deviations, unresolved conditions and known failures, as their qualification and composition records state them (xref:../../assurance.adoc#req-ssr-binding-readme[A binding's qualification record states its limits and its failures]; xref:assumptions-of-use.adoc#aou-seooc-qualified-bindings-and-wires[Bindings and wires pass their contracts]).
+
+*Duties.*
+Strict mode *MUST* also include in the report:
+
+* both duties for data above ASIL B, the integrator's measures and the argument for a decomposition (xref:assumptions-of-use.adoc#aou-seooc-capability-ceiling[Data above ASIL B relies on measures outside the element]);
+* the coherence duty on multi-core parts, and the stack-sizing duty (xref:assumptions-of-use.adoc#aou-seooc-target-environment[The target environment is verified]);
+* overflow checks, as a checklist item (xref:assumptions-of-use.adoc#aou-seooc-build-configuration[The ASIL binary is built from its claimed graph, with the ASIL profile]);
+* for a custom platform, the entropy duty and the platform contract test (xref:assumptions-of-use.adoc#aou-seooc-integrator-platform[A custom platform keeps the platform's rules]).
+
+*Warnings.*
+Each warning is a finding of severity warning (<<req-ssr-strict-states,Strict mode has four states>>).
+Strict mode *MUST* also include in the report:
+
+* a warning of every QM transport in an ASIL process, with the coexistence duty that follows (xref:assumptions-of-use.adoc#aou-seooc-process-isolation[Processes or partitions are isolated]);
+* where no restart path is declared, a warning that none is declared (xref:assumptions-of-use.adoc#aou-seooc-supervisor-restart[A supervisor outside the process restarts it]);
+* a warning when the wall clock at setup reads earlier than the element's release date, the date that the element's documentation states for the release, a sign that the clock is not yet synchronised (xref:assumptions-of-use.adoc#aou-seooc-clock[The platform provides the clocks]);
+* a warning of each transport that the integrator has not classified, as a black channel or not (xref:assumptions-of-use.adoc#aou-seooc-e2e-protection[The integrator decides which routes need end-to-end protection]);
+* a warning of each ASIL route with several declared senders and no declared per-peer rate (xref:assumptions-of-use.adoc#aou-seooc-peer-rates[Peer rates on shared routes are the integrator's]);
+* a warning of each ASIL receive route that admits undeclared peers (xref:assumptions-of-use.adoc#aou-seooc-peer-access[Only authorized processes reach the transport]).
+
+*Checks after a refusal or a failure.*
+In the Report and Enforce states, strict mode *MUST NOT* let a refusal or a failed check stop the checks that can still run safely.
+Strict mode *MUST* include in the report every finding of each check that ran, and *MUST* name in it each check that an earlier failure kept from running.
+
+*Observation limits.*
+Strict mode *MUST* state in the report that:
+
+* the report establishes only the checks that it names and nothing else;
+* passing its checks and producing the report qualifies neither a part nor a composition, and is neither a safety qualification nor an assessment (xref:../../../contract-generations.adoc#req-ssr-contract-transition[What a part declares and claims, and when a replacement takes effect]);
+* the report discharges no assumption of use, and every applicable assumption of use remains for the integrator to validate for the item (xref:assumptions-of-use.adoc#aou-seooc-assumptions-bind[An assumption of use binds the integrator who claims the scope, and replaces no requirement]);
+* the Off, Report, Enforce and Locked states remain separate from complete-image classification, Cargo's ASIL build profile, a selected assurance scope and actual qualification, and never manufacture stronger resource guarantees (xref:assumptions-of-use.adoc#aou-seooc-build-configuration[The ASIL binary is built from its claimed graph, with the ASIL profile]; xref:../../../basics/resources.adoc#req-ssr-heap-guarantees[A stronger resource guarantee is required by name, and admitted or refused]).
+
+*Scoped replacement.*
+For the element's strict mode, this revision replaces revision 4 of this item across all configurations, adding truthful reporting of selected helper and adapter admissions (no optional helper, startup-provisioning helper, and/or serialized owned-value runtime adapter), required versus established versus admitted resource guarantees (including assured-helper recoverable exhaustion and panic-free cleanup and separately requested non-waiting acquisition, non-waiting release and finite timing bounds), composition-package identity and supplier authority (element-supported, explicit extension or unoffered gap), process/partition/firmware-instance reset-domain restart paths, residual gaps, named refusals and explicit observation limits, while preserving the report's status words and all route, deployment, duty, warning and post-refusal reporting duties of revision 4 of this item.
+--
+
+[horizontal]
+ID:: `+req~ssr-strict-report~5+`
+ASIL:: B
+Allocated to:: the element's strict mode
+Verification:: test, review
+* *test*
+** A run's report with findings of each severity: forbidden, denied and warning.
+** A run's report, in the Report state and in the Enforce state, holding every finding with its severity, its rule, its route, the requirement IDs it serves and its fix, every named refusal with its exact missing condition, every supplied acknowledgement with its part or composition-package deviation's identifier and revision, whether it is current and whether a route reaches the deviation, each reached deviation with its acknowledgement state, each known failure with the routes that it affects, every active waiver, and the warnings.
+** Each selected helper or adapter admission state reported truthfully: no optional helper (minimal selection), startup-provisioning helper only, serialized owned-value runtime adapter only, and both selected together, with their declared roles, regions or domains, retained state and dependencies.
+** Required versus established versus admitted resource guarantees reported separately per route and covered assured helper scope, covering recoverable exhaustion and panic-free cleanup under assured helper admission alongside separately requested non-waiting acquisition, non-waiting release (inline proven non-waiting release, initialization-created autonomous isolated release service, and disclosed waiting path where not requested) and finite timing bounds.
+** Composition-package identity, version and supplier authority reported truthfully for an element-supported configuration, an explicit extension and an unoffered gap, together with residual gaps, unresolved conditions and named refusals.
+** The cited-items line, for an item that the status record states as adopted and for one that it does not, reported Draft.
+** A monitored route with and without an established J.
+** A route's requested and admitted claims, with the evidence that each rests on and that evidence's recorded state, an unknown state included.
+** An ASIL-labelled configuration with no assurance package, reported unassessed and not refused.
+** In the Report state and in the Enforce state, the Locked state included, a run in which one check fails or refuses, followed by an independent check whose inputs are valid and by a dependent check that cannot run safely: the independent check runs and its finding is in the report, and the dependent check is named as kept from running.
+** Each entry of the lists on routes, on the deployment and on duties, on a configuration that has what it lists, and an entry with a condition, such as a declared time-sync source, a serialized route admitting owned values, a startup-provisioning helper or a custom platform, with and without that condition.
+** Each warning, on a configuration that draws it and on one that does not.
+** The observation-limits statement present in the report in the Report, Enforce and Locked states.
+* *review*: the report's fields against this item, including observation limits and the separation of strict-mode states, complete-image classification, build profiles, assurance scope and actual qualification.
+
+*Rationale.*
+A compliance report makes declarations, selected helper and adapter admissions, required versus established versus admitted guarantees, composition-package authority, deviations, residual gaps, named refusals and outstanding duties inspectable.
+Reporting each cited item's adoption status keeps an item that the status record does not state as adopted apart from an adopted one.
+
+A check can only show that its observable predicates held, and cannot qualify a part or composition or discharge an assumption of use.
+So the report keeps claims, supplier authority, the evidence they rest on, the checks that passed and the integrator's validation duties apart (xref:README.adoc#claims[the SEooC's claims]; xref:assumptions-of-use.adoc#aou-seooc-assumptions-bind[An assumption of use binds the integrator who claims the scope, and replaces no requirement]).

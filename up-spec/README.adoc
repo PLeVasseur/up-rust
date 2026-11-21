@@ -25,30 +25,48 @@ SPDX-License-Identifier: Apache-2.0
 
 NOTE: uProtocol is a communication protocol that enables software applications (uEntities) to easily communicate with each other running in distributed systems. The protocol is designed to be lightweight, efficient, easy to use, and run on top of any other communication middleware (transport) such as SOME/IP, MQTT, zenoh, HTTP, etc...
 
-To achieve the above mentioned objectives, we have split the specifications into sections (folders) that are:
+The repository is organized by protocol responsibility.
+Filing answers where to read; each requirement's own statement answers whom it binds.
+The reading order across these chapters is: message and protocol meaning -> applicable operation and resource contract -> component, binding, wire or platform composition -> any selected assurance scope -> conformance or qualification records for that exact subject.
 
- * xref:basics/README.adoc[*The Basics:*] Foundational principles and concepts of uProtocol (ex. such as addressing, IDs, message header definitions, etc...). 
+* xref:basics/README.adoc[*The Basics (`basics/`):*] Foundational uProtocol concepts (addressing, UUIDs, message headers, priorities, error model, payload-encoding registry and permissions) together with shared ownership, resource-lifecycle, configuration and platform contracts.
 
- * xref:up-l1/README.adoc[*Transport layer (uP-L1):*] Common interface for sending and receiving of messages intended to be implemented employing a particular communication middleware technology (ex. MQTT, SOME/IP, HTTP, Zenoh, etc...).
+* xref:up-l1/README.adoc[*Transport Layer (`up-l1/`):*] Common transport interface, payload paths, bounded transport runtime, common binding contract, faulty-peer model, integrity levels, xref:up-l1/README.adoc#transport-deployment-prerequisites[deployment prerequisites], middleware chapters (Zenoh, MQTT 5, SOME/IP, iceoryx2, LoLa) and xref:up-l1/wires/README.adoc[wires].
 
- * xref:up-l2/README.adoc[*Communication Layer (uP-L2):*] The common transport agnostic, programming language specific, API for the publisher/subscriber, notification, and RPC messaging patterns used by application/service developers to communicate with each other.
+* xref:up-l2/README.adoc[*Communication Layer (`up-l2/`):*] Transport-agnostic messaging patterns and xref:up-l2/api.adoc[Communication Layer APIs] (pub/sub, notification and RPC), xref:up-l2/roles.adoc[application-role contracts], xref:up-l2/execution.adoc[execution and asynchronous seam], xref:up-l2/streamer.adoc[bounded-runtime Streamer] and xref:up-l2/dispatchers/README.adoc[dispatchers].
 
-* xref:up-l3/README.adoc[*Application Layer (uP-L3):*] Service contracts for subscription management, service/device discovery, and event caching that is common across all deployments (implementations) of uProtocol.
+* xref:up-l3/README.adoc[*Application Layer (`up-l3/`):*] Core service contracts for subscription management, service/device discovery and event caching across uDevices, with schemas and service interfaces in xref:up-core-api/README.adoc[`up-core-api/`].
 
-* xref:safety/README.adoc[*Requirements of the up-rust SEooC:*] It holds the requirements of the up-rust SEooC and of the bindings, wires and Streamer that work with it, laid out by the layers above: their ordinary functional contract, their resource and fault obligations, and their safety requirements and assumptions of use. Whom its requirements and assumptions of use bind is stated in xref:safety/README.adoc#req-ssr-requirements-bind[A requirement binds the actors to which it gives a duty] and xref:safety/seooc-up-rust/assumptions-of-use.adoc#aou-seooc-assumptions-bind[An assumption of use binds the integrator who claims the scope, and replaces no requirement].
+* xref:languages.adoc[*Language Libraries (`languages.adoc`)*] and xref:languages/rust.adoc[*Rust language mapping (`languages/rust.adoc`)*]: Complete language-neutral `LanguageLibrary` obligations alongside Rust-specific mechanism rules (crate isolation, runtime handle drop discipline, memory-safety soundness and safe-binding boundary).
 
-* xref:sdk/owned-frame/README.adoc[*The owned-frame SDK contract:*] The ordinary obligations of an SDK that offers owned-frame routes, and of the parts that work with it, that no protocol chapter and no item of the safety area states, and how that contract relates to the classic APIs.
+* xref:contract-generations.adoc[*Contract families and applicability (`contract-generations.adoc`):*] How the repository's three requirement families (classic protocol-chapter rules, the up-rust SEooC requirement family and the owned-frame SDK contract) are identified, whom each binds (xref:contract-generations.adoc#req-ssr-requirements-bind[A requirement binds the actors to which it gives a duty]; xref:contract-generations.adoc#req-sdk-owned-frame-contract[The owned-frame SDK contract binds the parts that declare it]), how declarations and claims work (xref:contract-generations.adoc#req-ssr-contract-transition[What a part declares and claims, and when a replacement takes effect]), and how classic APIs coexist with owned-frame routes.
 
-* xref:contract-generations.adoc[*Which requirements an implementation follows:*] How those requirements relate to the chapters above.
-
+* xref:safety/README.adoc[*Safety and Assurance View (`safety/`):*] Assurance governance (xref:safety/assurance.adoc[`assurance.adoc`]), xref:safety/README.adoc#fault-models[fault-model navigation], assurance profiles (xref:safety/profiles/README.adoc[`profiles/`]), element boundaries (xref:safety/elements/up-rust/README.adoc[`up-rust` SEooC] and xref:safety/elements/streamer.adoc[Streamer safety element]), and claim-scoped integrator assumptions of use (xref:safety/elements/up-rust/assumptions-of-use.adoc#aou-seooc-assumptions-bind[An assumption of use binds the integrator who claims the scope, and replaces no requirement]).
 
 == How to get started?
 
-It is always best to start with xref:basics/README.adoc[_the basics_] to familiarize yourself with common terminology used with uProtocol. 
+Check xref:contract-generations.adoc[contract families and applicability] first: shared technical chapters (`basics/`, `up-l1/`, `up-l2/`) place classic protocol-chapter rules beside `up-rust` SEooC (`+req~ssr-*+`, `+aou~seooc-*+`) and owned-frame SDK (`+req~sdk-owned-frame-*+`) sections without merging their applicability.
+An SSR binds its named actors under its stated conditions whether or not a part declares it; an otherwise unbound implementation may take an SSR contract by declaration under the rule for another implementation.
+The owned-frame contract has its separate declaration and offering conditions (xref:contract-generations.adoc#req-sdk-owned-frame-contract[The owned-frame SDK contract binds the parts that declare it]).
 
-If you're a developer who would like to use uProtocol in your application or service, please refer to the appropriate language library's (ex. up-cpp, up-java, up-rust, etc..) `README.adoc`.
+* *Classic uEntity and application authors:* Follow the classic protocol rules in xref:basics/README.adoc[the basics] (addressing, message attributes, error model, payload encoding, UUID, versioning, permissions), xref:up-l1/README.adoc[uP-L1] (transport overview and selected middleware chapter), xref:up-l2/README.adoc[uP-L2] (`api.adoc` and `dispatchers/`) and any required xref:up-l3/README.adoc[uP-L3] service contracts, together with your chosen language library's `README.adoc` (such as `up-cpp`, `up-java` or `up-rust`).
+  A classic implementation gains no duty merely from colocation: check which SSRs already bind its part under their actor and condition rules, and whether the separate owned-frame declaration or offering conditions apply (xref:contract-generations.adoc[contract-generations.adoc]).
+* *Minimal L1 component implementers:* Read xref:basics/resources.adoc[resources], xref:basics/configurations.adoc[configurations], xref:basics/error_model.adoc[error model] and xref:basics/platform.adoc[platform contracts], then xref:up-l1/README.adoc[uP-L1], xref:up-l1/runtime.adoc[transport runtime], xref:up-l1/payload-paths.adoc[payload paths], xref:up-l1/bindings.adoc[transport bindings], xref:up-l1/peers.adoc[peers], xref:up-l1/integrity.adoc[integrity], xref:up-l1/wires/README.adoc[wires] and your chosen middleware chapter.
+  A binary may link only the foundation, binding, wire and services it uses without waiving complete language-library or uDevice duties where claimed.
+* *Owned-frame SDK users and authors:* Read the opt-in no-ASIL owned-frame contract sections in xref:contract-generations.adoc[contract-generations.adoc], xref:basics/ownership.adoc[ownership], xref:basics/resources.adoc[resources], xref:basics/configurations.adoc[configurations], xref:up-l1/payload-paths.adoc[payload paths], xref:up-l2/roles.adoc[application roles] and xref:up-l2/execution.adoc[execution].
+* *Full language-library and uDevice authors:* Follow xref:languages.adoc[uProtocol Language Library] and every applicable classic requirement across xref:basics/README.adoc[basics], xref:up-l1/README.adoc[uP-L1], xref:up-l2/api.adoc[uP-L2 APIs] and xref:up-l3/README.adoc[uP-L3] (including the discovery client).
+  Check xref:contract-generations.adoc[contract-generations.adoc] for SSR duties that already bind the part, the declarations those duties require, and the separate owned-frame applicability conditions; consult xref:languages/rust.adoc[Rust language mapping] for Rust-specific mechanisms.
+* *Binding and wire implementers:* Read xref:up-l1/README.adoc[uP-L1], xref:up-l1/bindings.adoc[transport bindings], xref:up-l1/payload-paths.adoc[payload paths], xref:up-l1/runtime.adoc[transport runtime], xref:up-l1/peers.adoc[peers], xref:up-l1/integrity.adoc[integrity] and xref:up-l1/wires/README.adoc[wires], together with the relevant middleware chapter (such as xref:up-l1/zenoh.adoc[Zenoh], xref:up-l1/mqtt_5.adoc[MQTT 5], xref:up-l1/someip.adoc[SOME/IP], xref:up-l1/iceoryx2.adoc[iceoryx2] or xref:up-l1/lola.adoc[LoLa]).
+* *Safety and assurance integrators:* Check applicability and claim rules in xref:contract-generations.adoc[contract-generations.adoc], then enter through xref:safety/README.adoc[the safety and assurance view], the relevant assurance profile (such as xref:safety/profiles/up-rust-asil-b.adoc[the `up-rust` ASIL B SEooC profile]), the element boundary (xref:safety/elements/up-rust/README.adoc[`up-rust` SEooC] and xref:safety/elements/streamer.adoc[Streamer safety element]), xref:safety/elements/up-rust/assumptions-of-use.adoc[the assumptions of use] and xref:safety/assurance.adoc[assurance governance].
+* *Contributors:* To contribute to uProtocol or edit this specification, see xref:CONTRIBUTING.adoc[CONTRIBUTING.adoc].
 
-If you would like to contribute to uProtocol to develop a new language library or transport implementation, please checkout the xref:CONTRIBUTING.adoc[CONTRIBUTING.adoc].
+== Conformance records
+
+The link:conformance/README.md[conformance intake catalogue] preserves the
+immutable historical baseline intake against an exact specification revision.
+Separately identified exact-subject assessments follow the successor documentary
+format in link:conformance/assessments/README.md[conformance assessments].
+These non-normative records neither add nor waive requirements.
 
 == Tracing Requirements
 
@@ -70,6 +88,17 @@ The uProtocol specification documents contain a lot of requirements that are def
 | `TransportLayerImplPush` | Requirements that need to be covered by concrete implementations of xref:up-l1/README.adoc[uProtocol's Transport Layer API] supporting the the xref:up-l1/README.adoc#delivery-method[push message delivery] method
 
 |===
+
+[NOTE]
+====
+*Tag families across colocated specifications.*
+The table above lists the core classic protocol tags; shared classic chapters also use `LocalUriProvider`, `uSubscription` and `uTwin` (xref:up-l3/README.adoc[uP-L3]).
+The colocated `up-rust` SEooC and owned-frame requirement families use separate tag namespaces.
+Tags and colocation do not decide applicability: SSRs bind their named actors under the stated conditions without depending on a declaration, while an otherwise unbound implementation's SSR opt-in and the owned-frame declaration or offering conditions follow their distinct rules in xref:contract-generations.adoc[contract-generations.adoc].
+
+* *`up-rust` SEooC requirement family (`Safety*`):* `SafetyUpRustCore`, `SafetyStreamer`, `SafetyBinding`, `SafetyBindingPull`, `SafetyIceoryx2`, `SafetyLola`, `SafetyWire`, `SafetyWireSerialized`, `SafetyXcdr2`, `SafetyE2eWire`, `SafetyManual` and repository gate tags (xref:safety/README.adoc#tags[safety and assurance tags]).
+* *Owned-frame SDK contract (`OwnedFrame*`):* `OwnedFrameSdk`, `OwnedFrameProvider` and `OwnedFrameScheduler` (xref:contract-generations.adoc#owned-frame-conventions[owned-frame SDK conventions and tags]).
+====
 
 === Gherkin Feature Files
 

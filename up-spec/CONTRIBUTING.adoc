@@ -113,19 +113,20 @@ The Apache 2.0 License and the MIT License are both popular open-source licenses
 
 
 [[safety-area]]
-== Changing the safety area of the specification
+== Changing contract-family requirements and safety pages
 
-The items filed under `safety/` are written and read by the conventions of xref:safety/README.adoc[the safety area's README].
+Items of the up-rust SEooC requirement family (`+req~ssr-*+` and `+aou~seooc-*+`) and the owned-frame SDK contract (`+req~sdk-owned-frame-*+`) are filed by responsibility across `basics/`, `up-l1/`, `up-l2/` and `languages/`, with contract-family governance in xref:contract-generations.adoc[Which requirements an implementation follows] and assurance views, profiles and element boundaries in xref:safety/README.adoc[Safety and Assurance View].
+Items of the up-rust SEooC requirement family are written and read by the conventions of xref:safety/README.adoc[Safety and Assurance View].
 This section says what a contributor to the specification does to keep those conventions.
 It binds the contributors and committers of this repository, and no implementation.
 
 === Statements, allocations and verification lines
 
-* A new or revised statement *MUST* name the actor that answers for each of its duties, with every condition, qualifier and exclusion, and *MUST* state each duty with a key word (xref:safety/README.adoc#req-ssr-requirements-bind[A requirement binds the actors to which it gives a duty]; xref:safety/README.adoc#req-ssr-item-reading[How an item is read]).
+* A new or revised statement *MUST* name the actor that answers for each of its duties, with every condition, qualifier and exclusion, and *MUST* state each duty with a key word (xref:contract-generations.adoc#req-ssr-requirements-bind[A requirement binds the actors to which it gives a duty]; xref:contract-generations.adoc#req-ssr-item-reading[How an item is read]).
 A clause that only defines a term carries no key word.
 * The "Allocated to" line of a requirement *MUST* agree with its statement, and *MUST NOT* introduce a part, a condition, a qualifier or an exclusion that the statement lacks.
 A disagreement between the statement and the line is a defect of the requirement, and *MUST* be corrected by a reviewed change of the specification.
-* The "Verification" line of a requirement *MUST* name one or more methods of the vocabulary and no other method, and *MUST NOT* state a duty (xref:safety/seooc-up-rust/README.adoc#req-ssr-verification-methods[The verification methods, and what a Verification line asks for]; xref:safety/README.adoc#req-ssr-item-reading[How an item is read]).
+* The "Verification" line of a requirement *MUST* name one or more methods of the vocabulary and no other method, and *MUST NOT* state a duty (xref:safety/assurance.adoc#req-ssr-verification-methods[The verification methods, and what a Verification line asks for]; xref:contract-generations.adoc#req-ssr-item-reading[How an item is read]).
 Where a method cannot show a duty of the statement, the line *MUST* be changed, in a reviewed change, to a method that can: the duty is not waived, and the requirement is not recorded as verified.
 * A duty, a permission, a condition or a definition that an item relies on *MUST* stand in an item's statement.
 A table, an index or a summary *MUST NOT* restate a duty: it links to the item under its title, or it is a labelled worked example that adds no duty.
@@ -144,7 +145,7 @@ These rules bind the specification's contributors and committers, and no part: e
 * A change of an item's meaning *MUST* raise its revision by one.
 A change of wording that provably keeps the meaning keeps the revision, and where that cannot be shown, the revision rises.
 A repair that only brings a requirement's statement and its "Allocated to" line into agreement, and changes nothing that the requirement binds, keeps the revision.
-* A change that gives a duty to another actor, or that retires a duty, *MUST* name the rule that it replaces, reallocates or retires, the actors that the rule bound, and the implementations and the behaviour for which it does so, which is what a replacement names under xref:safety/README.adoc#req-ssr-contract-transition[What a part declares and claims, and when a replacement takes effect]; so *MUST* a change after which an item no longer gives a duty to an actor to which its earlier revision gave one.
+* A change that gives a duty to another actor, or that retires a duty, *MUST* name the rule that it replaces, reallocates or retires, the actors that the rule bound, and the implementations and the behaviour for which it does so, which is what a replacement names under xref:contract-generations.adoc#req-ssr-contract-transition[What a part declares and claims, and when a replacement takes effect]; so *MUST* a change after which an item no longer gives a duty to an actor to which its earlier revision gave one.
 A duty that moves to another item, for an actor to which both revisions of the item that it leaves give a duty, needs no such sentence.
 No duty is retired by being left out of a new revision.
 * When an item's meaning changes, each item that links to it *MUST* be read again against the new text.
@@ -152,11 +153,11 @@ When the meaning or the default scope of a verification method changes, each "Ve
 
 === Filing, tags and tracing
 
-* A new item is filed where xref:safety/README.adoc#layout[the layout of the safety area] places it.
-* A requirement carries the tag of each part to which its statement gives a duty, and `SafetyBindingPull` as well where its statement holds a duty of pull bindings only; a shared item of the safety area's README carries the tags of the parts that rely on it; an assumption of use carries `SafetyManual`.
+* A new item is filed where xref:safety/README.adoc#layout[the responsibility-led filing layout] places it across `basics/`, `up-l1/`, `up-l2/`, `languages/`, `contract-generations.adoc` and `safety/`.
+* A requirement carries the tag of each part to which its statement gives a duty, and `SafetyBindingPull` as well where its statement holds a duty of pull bindings only; a shared governance or family-wide item carries the tags of the parts that rely on it; an assumption of use carries `SafetyManual`.
 A binding or a wire gets a tag of its own with the first item that is allocated to it alone, and a language-agnostic safety requirement, if one is added, gets a tag of its own.
 A tag decides nothing about whom an item binds (xref:safety/README.adoc#tags[Tags]).
-* No item of the safety area links to an item of the protocol chapters through OFT, so that the protocol chapters gain no coverage obligation from the safety area.
+* No item of the up-rust SEooC requirement family links to a classic protocol-chapter item through OFT, so that classic protocol-chapter items gain no coverage obligation from the up-rust SEooC requirement family.
 * An item gets a repository's gate tag once that repository covers it with at least one coverage link of each type that the item needs.
 * A change of the specification that defines, gates or refiles an item *MUST* land before a repository that covers the item tags it, or names the part that now holds it.
 How a covering repository then moves its copy of the specification, and records which change it copied, is stated in that repository's trace record.
@@ -169,13 +170,13 @@ It *MUST NOT* state a duty, recount earlier revisions or report the state of an 
 It *MUST NOT* cite the code of an SDK that implements the item.
 * Where a rule or a contract-affecting definition relies on an external source, its item *MUST* keep a source note that names the exact file or document, its revision or edition, and the place in it.
 A verbatim quotation, a copied table, a comparison of sources, a measurement and a pin of evidence or of an implementation of the item are kept outside the specification; the revision that a source note names is no such pin.
-* ISO 26262 is cited by part and clause number only, in the edition that xref:safety/README.adoc[the safety area's README] names.
+* ISO 26262 is cited by part and clause number only, in the edition that xref:safety/README.adoc[Safety and Assurance View] names.
 No text of the standard is quoted or closely paraphrased, and no table maps it.
 * Decisions, reviews, evidence results, delivery status and an item's history are kept outside the specification.
 
-=== The ordinary SDK area
+=== The owned-frame SDK contract
 
-The ordinary SDK area xref:sdk/owned-frame/README.adoc[`sdk/owned-frame/`] follows the same rules for statements, allocation, verification lines, revisions, replacements, links, sources and rationales, with the differences that its README states: its items are requirements only, carry no ASIL line and use the tags `OwnedFrameSdk`, `OwnedFrameProvider` and `OwnedFrameScheduler`.
+Items of the owned-frame SDK contract (xref:contract-generations.adoc#owned-frame-conventions[Owned-frame SDK conventions and tags]) are filed by responsibility across `basics/`, `up-l1/` and `up-l2/` and follow the same rules for statements, allocation, verification lines, revisions, replacements, links, sources and rationales, with the differences that those conventions state: its items are requirements only, carry no ASIL line and use the tags `OwnedFrameSdk`, `OwnedFrameProvider` and `OwnedFrameScheduler`.
 
 
 == Contact

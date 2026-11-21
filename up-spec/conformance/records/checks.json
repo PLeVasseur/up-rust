@@ -1,0 +1,73 @@
+{
+  "schema": "rx03-sdk-documentary-check-disposition/v1",
+  "at": "2026-11-20T20:31:41.726065+00:00",
+  "sdk_commit": "0786fa6e3cd7dbe12c8c10a47d2b581914854b29",
+  "spec_commit": "f18913c6ed062dc6d6c3d7a73dec7a33433b39e4",
+  "spec_tree": "29c6019918c7527a6fa8f4ed3a82d6690bea3dfa",
+  "owner_commit": "9e58439cb0dbe07157b56cc37db8884cc674426b",
+  "invocations": 4,
+  "execution_count_each": 1,
+  "all_raw_failures_preserved": true,
+  "timeout_or_output_boundary_reached": false,
+  "manual": {
+    "sdk_exit": 1,
+    "with_owner_exit": 1,
+    "stage": "OWNERSHIP_SPEC registry-v2 exact23-family gate",
+    "missing_families": [],
+    "unexpected_families": [
+      "aou~seooc-assumptions-bind",
+      "aou~seooc-ids-never-repeat",
+      "aou~seooc-lola-assumptions-kept",
+      "aou~seooc-startup-storage",
+      "aou~seooc-streamer-reaction-bound",
+      "aou~seooc-violation-classes"
+    ],
+    "limitation": "Both modes stop here; subsequent quotation, revision, ownership and owner-manual checks are not established."
+  },
+  "oft": {
+    "gating": {
+      "exit": 1,
+      "total": 499,
+      "defect": 275
+    },
+    "report_only": {
+      "exit": 1,
+      "total": 625,
+      "defect": 386
+    },
+    "warnings": "Both selections report unmatched root *.adoc and *.feature patterns and skip them; patterns are preserved from the committed selector.",
+    "interpretation": "Trace observations include outdated coverage and orphaned references. Counts are not behavioral conformance verdicts and do not identify current implementation defects by themselves."
+  },
+  "classification": "implementation_conformance",
+  "spec_adoption_blocked": false,
+  "reason": "Expected downstream checker/manual/source-trace reconciliation against newly adopted revisions and actors. Current notices explicitly retain the historical manual/trace baseline. No actual normative ambiguity or contradiction was established by these checks.",
+  "followups": [
+    {
+      "owner": "SDK/manual checker and component owners via root",
+      "work": "Reconcile the owner registry to all applicable final AoU families with explicit ownership; no catch-all owner or artificial exclusion."
+    },
+    {
+      "owner": "SDK/owner manual authors and independent reviewers",
+      "work": "Adapt quotations, assumptions, revisions, actor mappings and deployment guidance; only then run the affected manual checks on the new committed input boundary."
+    },
+    {
+      "owner": "Existing source/trace conformance owners",
+      "work": "Resolve outdated/orphaned/uncovered trace relationships against actual source/evidence, preserving old observations. Do not mechanically bump tags or claim current conformance."
+    }
+  ],
+  "notice_review": "NOTICE-REVIEW.json: ACCEPT for corrected0786fa6 notices, two findings closed by exact diff review",
+  "storage": {
+    "planned_total_bytes": 53338496,
+    "current_owner_floor_bytes": 20000000000,
+    "host_available_preexecution_bytes": 28749271040,
+    "guest_logical_bytes": 28263374,
+    "guest_allocated_bytes": 30646272,
+    "host_scratch_logical_bytes_before_this_receipt": 517816,
+    "host_scratch_allocated_bytes_before_this_receipt": 606208,
+    "combined_allocated_bytes_before_this_receipt": 31252480,
+    "ceiling_bytes": 70000000,
+    "meaning": "Metadata sums over only owned scratch paths on host and guest; not attributable APFS physical growth or reclaim. Small receipt/README metadata follows this observation."
+  },
+  "preflight_history": "Original obsolete50GB refusal preserved in RUN-ERROR.json and CHECK-IO-PLAN-REFUSED-HISTORICAL-FLOOR.json; corrected under actual20GB owner receipt before first export. FLOOR-HELPER-REVIEW.json binds change.",
+  "mutations": "Owned sdk-checks scripts/records and fresh guest snapshot only. No SDK/owner/package/live index/ref installation, push, compiler, runtime tests or native replay."
+}

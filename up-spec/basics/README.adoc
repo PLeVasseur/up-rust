@@ -30,3 +30,13 @@ The following are the foundational requirements for uProtocol specifications:
 * *xref:payload_encoding_registry.adoc[Payload-Encoding Registry]*
 * *xref:umessage.adoc[uProtocol Message (UMessage)]*
 * *xref:permissions.adoc[Permissions]*
+
+== Shared Ownership, Resource, Configuration and Platform Contracts
+
+NOTE: The chapters below hold shared definitions and obligations of the up-rust SEooC requirement family (`+req~ssr-*+`) and the owned-frame SDK contract (`+req~sdk-owned-frame-*+`), alongside additional items in xref:error_model.adoc[Error Model (UStatus, UCode)] and xref:uuid.adoc[Universal Unique Identifier (UUID)].
+Filing them in `basics/` does not broaden their applicability to classic implementations; whom each item binds is stated in xref:../contract-generations.adoc[Which requirements an implementation follows].
+
+* *xref:ownership.adoc[Ownership of Frame Storage and Decoded Values]*
+* *xref:resources.adoc[Resources, Startup Memory, Heap Classes and Memory Providers]*
+* *xref:configurations.adoc[Configurations and Application-Selectable Parts]*
+* *xref:platform.adoc[Platform Services, Clocks, Entropy and Atomics]*

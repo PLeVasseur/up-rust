@@ -1,44 +1,46 @@
 = Which requirements an implementation follows
 :toc: preamble
 
-NOTE: This page says which requirements of this repository an implementation follows.
-For some behaviours the repository holds two rules: one in a protocol chapter, and one in an item filed under `safety/`.
+The key words "*MUST*", "*MUST NOT*", "*REQUIRED*", "*SHALL*", "*SHALL NOT*", "*SHOULD*", "*SHOULD NOT*", "*RECOMMENDED*", "*MAY*", and "*OPTIONAL*" in this document are to be interpreted as described in https://www.rfc-editor.org/info/bcp14[IETF BCP14 (RFC2119 & RFC8174)]
 
-== Where the rules are stated, and who follows them
+NOTE: This page says which requirements of this repository an implementation follows, and states the binding, claim, replacement and reading rules of the repository's two implementation-family contracts.
+For some behaviours the repository holds rules from more than one contract family: a classic protocol-chapter rule, an item of the up-rust SEooC requirement family, or an item of the owned-frame SDK contract.
+
+== The three requirement families and who follows them
 
 [cols="2,4,4",options="header"]
 |===
-| Rules | Where they are stated | Who follows them
+| Family | How its items are identified | Who follows them
 
-| The protocol chapters
-| The chapters xref:basics/README.adoc[`basics/`], xref:up-l1/README.adoc[`up-l1/`], xref:up-l2/README.adoc[`up-l2/`] and xref:up-l3/README.adoc[`up-l3/`], with the items they tag for tracing: `LanguageLibrary`, `TransportLayerImpl` and the other tags that xref:README.adoc[the repository's README] lists
-| The implementations that each chapter's rules cover, as the chapter states; how a chapter's rule and an item of the safety area meet: xref:safety/README.adoc#req-ssr-contract-transition[What a part declares and claims, and when a replacement takes effect]
+| Classic protocol-chapter rules
+| The items in xref:basics/README.adoc[`basics/`], xref:up-l1/README.adoc[`up-l1/`], xref:up-l2/README.adoc[`up-l2/`], xref:up-l3/README.adoc[`up-l3/`] and xref:languages.adoc[`languages.adoc`] carrying classic protocol tags (such as `LanguageLibrary`, `TransportLayerImpl`, `TransportLayerImplPull`, `TransportLayerImplPush`, `CommunicationLayerImpl`, `ServiceConsumer`, `ServiceProvider`, `LocalUriProvider`, `uSubscription` and `uTwin`)
+| The implementations that each chapter's rules cover, as the chapter states; how a classic protocol-chapter rule and an item of the up-rust SEooC requirement family meet: <<req-ssr-contract-transition,What a part declares and claims, and when a replacement takes effect>>
 
-| The items of the safety area
-| The items filed under xref:safety/README.adoc[`safety/`], which carry the `Safety…` tags
-| xref:safety/README.adoc#req-ssr-requirements-bind[A requirement binds the actors to which it gives a duty]; xref:safety/seooc-up-rust/assumptions-of-use.adoc#aou-seooc-assumptions-bind[An assumption of use binds the integrator who claims the scope, and replaces no requirement]
+| The up-rust SEooC requirement family
+| Every requirement with identifier `+req~ssr-*+` and every assumption of use with identifier `+aou~seooc-*+`, carrying `Safety*` tags, wherever in this repository it is filed (entry navigation: xref:safety/README.adoc[`safety/`])
+| <<req-ssr-requirements-bind,A requirement binds the actors to which it gives a duty>>; xref:safety/elements/up-rust/assumptions-of-use.adoc#aou-seooc-assumptions-bind[An assumption of use binds the integrator who claims the scope, and replaces no requirement]
 
 | The owned-frame SDK contract
-| The items filed under xref:sdk/owned-frame/README.adoc[`sdk/owned-frame/`], which carry the `OwnedFrame…` tags
-| xref:sdk/owned-frame/README.adoc#req-sdk-owned-frame-contract[The owned-frame SDK contract binds the parts that declare it]
+| Every requirement with identifier `+req~sdk-owned-frame-*+`, carrying `OwnedFrame*` tags, wherever in this repository it is filed (entry pages: xref:basics/ownership.adoc[`basics/ownership.adoc`], xref:basics/resources.adoc[`basics/resources.adoc`], xref:basics/configurations.adoc[`basics/configurations.adoc`], xref:up-l1/payload-paths.adoc[`up-l1/payload-paths.adoc`], xref:up-l2/roles.adoc[`up-l2/roles.adoc`], xref:up-l2/execution.adoc[`up-l2/execution.adoc`])
+| <<req-sdk-owned-frame-contract,The owned-frame SDK contract binds the parts that declare it>>
 |===
 
 [NOTE]
 ====
 * *One implementation family.*
-The items of the safety area are written for the up-rust SEooC and for the parts that work with it.
+The items of the up-rust SEooC requirement family (`+req~ssr-*+` and `+aou~seooc-*+`) are written for the up-rust SEooC and for the parts that work with it.
 * *Kinds of claim.*
-They are filed under `safety/`, and a claim that rests on them can be of more than one kind (<<claims>>).
-* *Relation to the chapters.*
-Most items add to the protocol chapters.
-Some state a chapter's rule again with more precision, and some differ from a chapter's rule on purpose.
+Claims resting on the up-rust SEooC requirement family can be of more than one kind (xref:safety/elements/up-rust/README.adoc#claims[claims]).
+* *Relation to the classic protocol-chapter rules.*
+Most items add to the classic protocol-chapter rules.
+Some state a classic rule again with more precision, and some differ from a classic rule on purpose.
 ====
 
 [[claims]]
 == Responsibility and kind of claim
 
-NOTE: A rule answers two questions, and neither answer follows from the other or from the directory that the rule is filed in.
-Whom a rule of a protocol chapter binds is stated by that chapter, and whom an item of the safety area or of the owned-frame SDK area binds is stated by the items below.
+NOTE: A rule answers two questions, and neither answer follows from the other or from the directory or page that the rule is filed in.
+Whom a classic protocol-chapter rule binds is stated by its chapter, and whom an item of the up-rust SEooC requirement family or of the owned-frame SDK contract binds is stated by the items below.
 
 [cols="2,5",options="header"]
 |===
@@ -48,22 +50,465 @@ Whom a rule of a protocol chapter binds is stated by that chapter, and whom an i
 | The common protocol; a contract between parts, such as a wire, a binding or an interaction; the own contract of one SDK or one library; or a duty of whoever integrates and deploys.
 
 | What kind of claim can rest on it?
-| Ordinary functional behaviour; native resource behaviour; a finite timing bound; or a safety-assurance scope, with its evidence and its assumptions of use (xref:safety/README.adoc#req-ssr-contract-transition[What a part declares and claims, and when a replacement takes effect], "What a claim covers").
+| Ordinary functional behaviour; native resource behaviour; a finite timing bound; or a safety-assurance scope, with its evidence and its assumptions of use (<<req-ssr-contract-transition,What a part declares and claims, and when a replacement takes effect>>, "What a claim covers").
 |===
 
-NOTE: So an item under `safety/` can state ordinary functional behaviour of the up-rust SEooC.
+NOTE: So an item of the up-rust SEooC requirement family (`+req~ssr-*+`) can state ordinary functional behaviour of the up-rust SEooC, whether it is filed in a protocol chapter, a language mapping or the safety and assurance view.
 
 These items state when an item binds, whatever its kind of claim:
 
-* *A software requirement*: xref:safety/README.adoc#req-ssr-requirements-bind[A requirement binds the actors to which it gives a duty].
-* *An assumption of use*: xref:safety/seooc-up-rust/assumptions-of-use.adoc#aou-seooc-assumptions-bind[An assumption of use binds the integrator who claims the scope, and replaces no requirement].
-* *A requirement of the owned-frame SDK contract*: xref:sdk/owned-frame/README.adoc#req-sdk-owned-frame-contract[The owned-frame SDK contract binds the parts that declare it].
+* *A software requirement of the up-rust SEooC family*: <<req-ssr-requirements-bind,A requirement binds the actors to which it gives a duty>>.
+* *An assumption of use*: xref:safety/elements/up-rust/assumptions-of-use.adoc#aou-seooc-assumptions-bind[An assumption of use binds the integrator who claims the scope, and replaces no requirement].
+* *A requirement of the owned-frame SDK contract*: <<req-sdk-owned-frame-contract,The owned-frame SDK contract binds the parts that declare it>>.
 
-The up-rust SEooC's own account of its claims is xref:safety/seooc-up-rust/README.adoc#claims[the SEooC's claims].
+The up-rust SEooC's own account of its claims is xref:safety/elements/up-rust/README.adoc#claims[the SEooC's claims].
 
 [[selection]]
-== Which contract an implementation follows
+== Binding, claims, replacement and reading of the up-rust SEooC family
 
-xref:safety/README.adoc#req-ssr-contract-transition[What a part declares and claims, and when a replacement takes effect].
+[[req-ssr-requirements-bind]]
+=== A requirement binds the actors to which it gives a duty
 
-For the ordinary SDK contract of owned-frame routes: xref:sdk/owned-frame/README.adoc#req-sdk-owned-frame-contract[The owned-frame SDK contract binds the parts that declare it].
+[.specitem,oft-sid="req~ssr-requirements-bind~3",oft-title="A requirement binds the actors to which it gives a duty",oft-needs="uman",oft-tags="SafetyUpRustCore,SafetyStreamer,SafetyBinding,SafetyWire"]
+--
+*Whom it binds.*
+The statement of each software safety requirement of the up-rust SEooC requirement family names the actor that answers for each of its duties, and states the conditions, qualifiers and exclusions that determine the reach of each duty.
+An actor is a part, or the supplier of a part.
+The requirement binds the actors to which its statement gives a duty, and no other, wherever it is filed.
+Each of them *MUST* meet each duty that the statement gives it, within that duty's reach, which only the statement determines.
+
+*Parts and suppliers.*
+A part is a software component that a statement names explicitly: the element or one of its named parts, a binding, a wire, a platform backend, the Streamer, an optional layer, or another named component.
+A part meets a duty in its code or, where the statement says so, in what is released with it, such as its declaration, its documentation or its qualification record.
+A part's supplier is the party that releases the part.
+The supplier answers for a duty on the part's records or evidence where a statement gives the supplier that duty.
+
+*A mention gives no duty.*
+A statement can name a part, a supplier, an integrator or anything else as the source, the recipient, the object, the place or the condition of another actor's duty.
+What is named only so answers for nothing there.
+An actor meets the duties that statements give it, and not every duty of an item that names it.
+
+*The "Allocated to" line.*
+Each requirement of the up-rust SEooC requirement family has an "Allocated to" line, its explicit, reviewable allocation.
+The line mirrors the statement: it names each actor to which the statement gives a duty, with the qualifier that limits that actor's share, and it holds no actor, condition, qualifier or exclusion that the statement lacks.
+The line of a requirement whose statement only defines names the subject of its definitions, and gives nothing a duty by naming it.
+A line that names the subject of definitions beside the actors of its statement's duties says so, and gives that subject no duty.
+Where the line and the statement differ, the statement determines whom the requirement binds, and how far.
+
+*What does not decide it.*
+None of these changes whom a requirement binds, or how far: the page or the directory that holds it; its tags; a trace filter or a tracing run; the repository that implements or covers it, and who owns that repository; a status that a record keeps of its adoption, its implementation or its qualification.
+
+*Assumptions of use.*
+Whom an assumption of use binds is stated by xref:safety/elements/up-rust/assumptions-of-use.adoc#aou-seooc-assumptions-bind[An assumption of use binds the integrator who claims the scope, and replaces no requirement].
+--
+
+[horizontal]
+ID:: `+req~ssr-requirements-bind~3+`
+ASIL:: B
+Allocated to:: each part, and each supplier of a part, that a requirement of the up-rust SEooC requirement family binds
+Verification:: review
+* Each requirement's statement: it names the actor that answers for each of its duties, with the conditions, qualifiers and exclusions that determine each duty's reach.
+* Each requirement's "Allocated to" line: it names the actors to which the statement gives a duty, with their qualifiers, and holds nothing that the statement lacks.
+* That no page, directory, tag, trace filter, tracing run, repository, repository owner or recorded status is used to decide whom a requirement binds, or how far.
+
+*Rationale.*
+A requirement is read on its own, so whom it binds, and how far, is read from its statement.
+One text then decides that scope, and a claim or a safety manual that quotes the statement carries all of it.
+The "Allocated to" line keeps the allocation explicit, so that a review can check it against the statement.
+A statement names other parts to say whose input, storage or declaration a duty concerns, and a duty that fell on each of them would have no single part to answer for it.
+Pages, tags, tracing runs and repositories change as the specification is organized and traced.
+If whom a requirement binds depended on them, such a change could move a duty to another part or leave it with none.
+
+NOTE: How a contributor keeps a statement and its "Allocated to" line in agreement, and corrects a disagreement, is stated in xref:CONTRIBUTING.adoc#safety-area[Changing contract-family requirements and safety pages].
+
+[[req-ssr-contract-transition]]
+=== What a part declares and claims, and when a replacement takes effect
+
+[.specitem,oft-sid="req~ssr-contract-transition~3",oft-title="What a part declares and claims, and when a replacement takes effect",oft-needs="uman",oft-tags="SafetyUpRustCore,SafetyStreamer,SafetyBinding,SafetyWire"]
+--
+*What binds a part.*
+A requirement of the up-rust SEooC requirement family binds a part as <<req-ssr-requirements-bind,A requirement binds the actors to which it gives a duty>> states, at the revision in force for that part, whether or not the part has a declaration.
+A declaration, a component or deployment conformance claim, a change of tags and a tracing or coverage run change neither which requirements bind a part nor how far.
+A claim of a safety-assurance scope changes whom a requirement binds only where the requirement's own stated condition names such a claim.
+
+*Revisions.*
+A revision of the specification is one adopted state of the text of this repository.
+It is separate from the revision of an item, and it holds each item at one revision (<<req-ssr-item-reading,How an item is read>>).
+
+*The declaration.*
+Each part that a requirement of the up-rust SEooC requirement family binds *MUST* state, in a declaration that is released with it, which part it is, the revision of the specification that its claims rest on, and each named profile that it follows.
+A named profile is one that an item of the specification names, with each of its items by identifier or link, and the part *MUST NOT* name any other profile in its declaration.
+A supplier-defined capability name, helper name or configuration nickname is no such specification-named profile.
+The profile's own statement of its version is read at the declared revision.
+The dependency closure of an item is each item that its statement names or links, and each item that those name or link in turn; that of a named profile is that of its items.
+For the part's claims, the declared revision fixes the revision of each item and of its closure.
+The closure adds no duty: it makes no part answer for a duty of another part.
+
+*Component claims.*
+A component conformance claim is a claim that a part meets items of the up-rust SEooC requirement family.
+In each such claim, the part *MUST* name its declaration and each item that the claim rests on, at the revision that the declared revision of the specification fixes.
+A claim that rests on an item rests on its dependency closure too.
+Where a claim rests on fewer than all the requirements that bind the part, the part *MUST* rest it on a named profile that it declares.
+A claim's evidence is evidence for those revisions, for that profile and for the configuration that the evidence names, and for nothing else.
+
+*Two partial-claim grammars.*
+The partial-claim grammar of the up-rust SEooC requirement family and the partial-claim grammar of the owned-frame SDK contract (<<req-sdk-owned-frame-contract,The owned-frame SDK contract binds the parts that declare it>>) stay distinct and are never merged:
+
+* under the up-rust SEooC requirement family, a partial component conformance claim rests only on a specification-named profile that the part declares under this item;
+* under the owned-frame SDK contract, a partial component conformance claim names each binding requirement of that contract that the claim leaves out (<<req-sdk-owned-frame-contract,The owned-frame SDK contract binds the parts that declare it>>, clause "Claims").
+
+A single composition or configuration document *MAY* collect declarations, claims and facts across both contract families, provided each family's grammar and scope stay explicit and separate.
+Each part that a requirement of the up-rust SEooC requirement family binds, its supplier, each releaser of a supported composition package and each explicit extension composer *MUST NOT* treat the owned-frame SDK contract as a named profile of the up-rust SEooC requirement family, *MUST NOT* use an owned-frame omitted-requirement list to authorize a partial claim under the up-rust SEooC requirement family, and *MUST NOT* let a supplier-defined capability name, helper name or configuration nickname authorize a partial claim under the up-rust SEooC requirement family.
+
+*The supplier.*
+The supplier of each such part *MUST* release the part's declaration, and each component conformance claim made for the part, with the part.
+The supplier *MUST* keep a record of where the part implements each item of the up-rust SEooC requirement family that binds it, and of who made each entry of that record.
+For an SDK, this duty of its supplier replaces the earlier convention of the up-rust SEooC requirement family that an SDK which implements an item keeps its own record of where it does so.
+The record is kept with the part, outside the specification, and it is no statement of the up-rust SEooC requirement family.
+What the supplier shows as the evidence of a claim is stated in xref:safety/assurance.adoc#req-ssr-verification-methods[The verification methods, and what a Verification line asks for].
+
+*Composition-package responsibilities.*
+The responsibilities of a supported composition package's releaser and of an explicit extension composer, including element-supported package attribution and the limits on transferring supplier responsibility to application users, are stated in xref:safety/profiles/up-rust-asil-b.adoc#req-ssr-element-configurations[The ASIL path and supported configurations], "Supported configurations".
+Component-producer responsibilities remain those of xref:safety/elements/up-rust/README.adoc#req-ssr-element-boundary[The parts of the element, and element code].
+The integrator's deployment-matching and validation duties remain those of xref:safety/elements/up-rust/assumptions-of-use.adoc#aou-seooc-assumptions-bind[An assumption of use binds the integrator who claims the scope, and replaces no requirement]; a composition package changes none of them.
+
+*Deployment claims.*
+A deployment declaration names the deployment's profile (xref:safety/profiles/up-rust-asil-b.adoc#req-ssr-element-configurations[The ASIL path and supported configurations]), the revision of the specification, and each part that the deployment composes, with that part's declaration.
+A deployment conformance claim is a claim that a deployment meets the assumptions of use.
+Both belong to the integrator, and both are separate from every component conformance claim.
+When the integrator makes them, and what a deployment conformance claim names, are stated in xref:safety/elements/up-rust/assumptions-of-use.adoc#aou-seooc-assumptions-bind[An assumption of use binds the integrator who claims the scope, and replaces no requirement].
+A component conformance claim is no claim about a deployment, and a deployment conformance claim adds nothing to what a part's own claims state of that part.
+
+*Reusable supplier evidence and assumptions of use.*
+Reusable supplier or composition-package evidence—including component records, supported configuration packages, compatibility statements and assembled supplier evidence—assists the integrator's validation and never discharges any applicable assumption of use (xref:safety/elements/up-rust/assumptions-of-use.adoc#aou-seooc-assumptions-bind[An assumption of use binds the integrator who claims the scope, and replaces no requirement]).
+Each part that a requirement of the up-rust SEooC requirement family binds, its supplier, each releaser of a supported composition package and each explicit extension composer *MUST NOT* present supplier or composition-package evidence, a declaration, a setup check, a refusal or a report as discharging an assumption of use; determining applicability and validating every applicable assumption of use for the item remain with the integrator.
+
+*What a claim covers.*
+A claim covers what it names.
+Ordinary functional behaviour, native resource behaviour (xref:up-l1/payload-paths.adoc#req-ssr-heap-none[No heap in runtime mode on a native path]), a finite timing bound and a safety-assurance scope (xref:up-l1/runtime.adoc#req-ssr-qos-no-downgrade[QoS is honored or refused, never weakened]) are four separate subjects of a claim.
+A claim to one of them, and the evidence for it, is neither a claim to another nor evidence for it.
+
+*Claims, admission selections, assurance scopes and assessment observations.*
+Four distinct kinds of statement are never interchangeable, and none qualifies a component or a combination of components by itself:
+
+* a _formal conformance claim_: a component conformance claim (under this item or under <<req-sdk-owned-frame-contract,The owned-frame SDK contract binds the parts that declare it>>) or a deployment conformance claim (xref:safety/elements/up-rust/assumptions-of-use.adoc#aou-seooc-assumptions-bind[An assumption of use binds the integrator who claims the scope, and replaces no requirement]);
+* a _composition-package function admission selection_: an explicit selection of an admitted startup-provisioning helper, an admitted serialized owned-value runtime adapter or both under xref:safety/profiles/up-rust-asil-b.adoc#req-ssr-element-configurations[The ASIL path and supported configurations], which selects a declared function boundary and neither authorizes a partial conformance claim nor establishes qualification;
+* an _assurance-scope selection_: an explicit selection of a safety-assurance scope and its claim boundary, such as the ASIL path and its obligations (xref:safety/profiles/up-rust-asil-b.adoc#req-ssr-element-configurations[The ASIL path and supported configurations]);
+* a _scoped assessment observation_: a documentary assessment record or observation for a pinned subject, target, configuration and boundary, which is neither a formal conformance claim (complete or partial under either grammar) nor proof of a qualified combination.
+
+Each part that a requirement of the up-rust SEooC requirement family binds, its supplier, each releaser of a supported composition package and each explicit extension composer *MUST NOT* present any one of these four as another, and *MUST NOT* present a composition-package function admission selection, an assurance-scope selection or a scoped assessment observation as a formal conformance claim or as qualifying a combination by itself.
+
+*What establishes no claim.*
+A report that a part produces at build time or at run time, such as a setup result, a route's report or a strict-mode report, establishes the checks that it names and nothing else.
+It is neither a component conformance claim nor a deployment conformance claim, and it qualifies neither a part nor a deployment.
+None of these establishes a claim either: a successful build; a tag; a tracing or coverage run; an operating system, an architecture, a compiler or a middleware; a certificate or a qualification of a dependency, which holds for that dependency in its own scope.
+
+*Another implementation.*
+An implementation of uProtocol that no requirement of the up-rust SEooC requirement family binds is bound by none of them, wherever they are filed.
+It takes a contract of the up-rust SEooC requirement family only by its own declaration, as a part that the items of that contract name: the declaration names that part, a named profile and the revision of the specification, and the requirements of that profile then bind the implementation as that part.
+
+*Replacement.*
+A classic protocol-chapter rule, or an item of the up-rust SEooC requirement family at a revision, stays in force for the implementations and the behaviour that it covers until an adopted replacement takes effect for them.
+A replacement is an item of the up-rust SEooC requirement family, or a change of a classic protocol-chapter rule, that names the rule that it replaces, reallocates or retires, the actors that the rule bound, and the implementations and the behaviour for which it does so, and it takes effect only for those.
+A new revision of an item replaces its earlier revision for each actor to which both revisions give a duty.
+For an actor to which only the earlier revision gives a duty, the earlier revision stays in force until a text replaces or retires that actor's duty, or gives it to another actor or to another item, by name.
+A text is adopted when it is stated in a revision of the specification that normal adoption produced.
+No status that a record keeps of a text's adoption, implementation or qualification decides that.
+An item of the up-rust SEooC requirement family lifts a classic protocol-chapter rule, a security requirement included, only where it is such a replacement.
+A classic protocol-chapter rule keeps its own reach, whether or not an implementation that it covers also follows the items of the up-rust SEooC requirement family.
+
+*Where an item meets a classic protocol-chapter rule.*
+An item and a classic protocol-chapter rule meet in one of three ways.
+
+* Where one implementation can meet both, both hold.
+* Where one implementation cannot meet both for a behaviour, a part that the item binds *MUST* say so in its declaration, naming the item at its revision.
+It *MUST NOT* claim conformance to the classic protocol-chapter rule for that behaviour, and *MUST NOT* name both rules in one claim for it.
+* Where the two texts do not settle whether one implementation can meet both, a claim of conformance to one is no claim about the other, and the part *MUST NOT* rest a claim on an answer to that question.
+
+*Scoped replacement.*
+This revision replaces revision 2 of this item for each part that a requirement of the up-rust SEooC requirement family binds, the supplier of each such part, the releaser of a supported composition package (including the element's supplier for each element-supported configuration package that it provides) and each explicit extension composer, preserving all declaration, claim, dependency-closure, replacement and classic-rule interaction rules of revision 2 while explicitly separating the two partial-claim grammars, distinguishing formal conformance claims, composition-package function admission selections, assurance-scope selections and scoped assessment observations, codifying that reusable supplier or composition-package evidence never discharges an applicable assumption of use, and incorporating the composition-package releaser and explicit-extension-composer responsibilities stated in xref:safety/profiles/up-rust-asil-b.adoc#req-ssr-element-configurations[The ASIL path and supported configurations].
+--
+
+[horizontal]
+ID:: `+req~ssr-contract-transition~3+`
+ASIL:: B
+Allocated to:: each part that a requirement of the up-rust SEooC requirement family binds; the supplier of each such part, for releasing its declaration and claims with it, for the record of where it implements each item, for keeping the two partial-claim grammars distinct, for not presenting supplier or composition-package evidence, declarations, checks, refusals or reports as discharging an assumption of use, and for not presenting formal conformance claims, composition-package function admission selections, assurance-scope selections and scoped assessment observations as interchangeable or as qualifying a combination by itself; the releaser of a supported composition package (including the element's supplier for each element-supported configuration package that it provides), for keeping the two partial-claim grammars distinct, for not presenting supplier or composition-package evidence, declarations, checks, refusals or reports as discharging an assumption of use, and for not presenting formal conformance claims, composition-package function admission selections, assurance-scope selections and scoped assessment observations as interchangeable or as qualifying a combination by itself; each explicit extension composer, for keeping the two partial-claim grammars distinct, for not presenting supplier or composition-package evidence, declarations, checks, refusals or reports as discharging an assumption of use, and for not presenting formal conformance claims, composition-package function admission selections, assurance-scope selections and scoped assessment observations as interchangeable or as qualifying a combination by itself
+Verification:: review
+* Each part's declaration: it names the part, the revision of the specification and each named profile that the part follows, and no other profile, with no supplier-defined capability name, helper name or configuration nickname treated as a specification-named profile.
+* Each component conformance claim: it names the declaration and each item that it rests on, with their dependency closure, at their revisions, and it rests on a named profile where it rests on fewer than all the requirements that bind the part.
+* Each composition or configuration document, declaration and claim spanning both contract families: the two partial-claim grammars kept distinct and unmerged, with neither the owned-frame SDK contract nor an owned-frame omitted-requirement list nor a supplier-defined capability or helper name used to authorize a partial claim under the up-rust SEooC requirement family.
+* Formal conformance claims, composition-package function admission selections (startup provisioning and serialized owned-value runtime adapter), assurance-scope selections and scoped assessment observations: kept distinct, with none presented as another or as qualifying a combination by itself.
+* For each such part, its supplier's release of the declaration and of each component conformance claim with the part, and the supplier's record of where the part implements each item that binds it, with who made each entry.
+* Composition-package responsibility references agree with xref:safety/profiles/up-rust-asil-b.adoc#req-ssr-element-configurations[The ASIL path and supported configurations]; that item supplies the accountability verification.
+* Reusable supplier or composition-package evidence, declarations, setup checks, refusals and reports: presented only as assisting integrator validation and never as discharging any applicable assumption of use.
+* Where one implementation cannot meet an item and a classic protocol-chapter rule: the part's declaration says so with the item's revision, the part claims no conformance to the classic protocol-chapter rule for that behaviour, and no claim names both rules.
+* That no claim rests on an answer that the two texts do not settle, on a report's checks beyond what the report names, or on anything that this item says establishes no claim.
+
+*Rationale.*
+A claim is read against an exact text, so it names that text and the part that it is made for.
+A part cannot speak for the deployment that composes it, and a deployment cannot add to what a part's supplier has shown, so the two kinds of claim stay apart and each has one party that answers for it.
+Keeping the specification-named partial-profile grammar of the up-rust SEooC requirement family distinct from the per-part omitted-duty grammar of the owned-frame SDK contract prevents a multi-family composition document or a supplier capability name from silently weakening either family's claim rules.
+Separating formal conformance claims, function admission selections, assurance-scope selections and scoped assessment observations ensures that selecting a helper function, declaring an assurance scope or recording an assessment observation is never mistaken for a formal conformance claim or combination qualification.
+Keeping reusable supplier evidence strictly an aid to integrator validation preserves the rule that only the integrator determines applicability and validates each assumption of use for its item, while naming composition-package releaser and explicit-extension-composer accountability ensures that combination compatibility and assembled supplier evidence belong to an identified releaser rather than falling silently onto an application user.
+A report shows the checks that ran, and what no check observes stays unshown.
+The classic protocol-chapter rules cover implementations that the items of the up-rust SEooC requirement family do not name, so only a text that names a rule, and those for whom it replaces it, can lift that rule.
+A tracing run is arranged for coverage, so what binds a part does not depend on how a run is arranged.
+
+[[req-ssr-item-reading]]
+=== How an item is read
+
+[[spec-first]]
+[.specitem,oft-sid="req~ssr-item-reading~1",oft-title="How an item is read",oft-needs="uman",oft-tags="SafetyUpRustCore,SafetyStreamer,SafetyBinding,SafetyWire"]
+--
+*The statement.*
+An item's statement is everything inside the item's block: its paragraphs, its labels in bold, its lists and its tables.
+The statements of the items of the up-rust SEooC requirement family, and nothing else outside their item blocks on the pages that hold them, state the family's duties, its permissions, its conditions and its definitions.
+
+*Outside the statement.*
+The `ID` row, the ASIL, the "Allocated to" line, the "Verification" line, the ISO 26262 references, the "Violation" text of an assumption of use and the rationale are not part of the statement.
+Neither they nor a note, an example, a figure, a table, an index or a summary outside an item's block add, change or lift a duty.
+Where one of them differs from a statement, the statement governs.
+A "Verification" line describes evidence for its statement (xref:safety/assurance.adoc#req-ssr-verification-methods[The verification methods, and what a Verification line asks for]): it adds no duty, and it is no condition of one.
+A duty holds as its statement says, whether or not a part meets it yet, whether or not anyone has shown how to meet it, and whether or not evidence for it exists.
+An ISO 26262 reference names a clause that an item relates to, and nothing more.
+
+*Key words.*
+A statement states a duty with the key word "MUST" or "MUST NOT" in a requirement and with "SHALL" or "SHALL NOT" in an assumption of use, and a permission with "MAY", each as BCP 14 defines it (https://www.rfc-editor.org/info/bcp14[IETF BCP 14: RFC 2119 and RFC 8174]).
+"MUST" and "SHALL" are equally strong: the two words tell a requirement, whose duty falls on a part or on its supplier, from an assumption of use, whose duty falls on the integrator.
+A statement that states a duty in other words binds just the same.
+A clause that defines a term, or that states a condition, a fact or a limit, has no key word, and holds wherever a statement relies on it.
+
+*Names.*
+A name in a statement, such as that of an operation, a setting, a state, a counter or a named result, is part of the specification, and no citation of code.
+No statement, rationale or Verification line rests on an implementation's source files, internal names, review records or current state.
+
+*References.*
+A statement refers to another item by its title, linked to the item's anchor, which holds the item's type and name without its revision.
+The reference means that item at the revision that the same revision of the specification holds.
+A statement that names an earlier revision of an item, as a replacement does, means that revision.
+A classic protocol-chapter item that has no anchor or no title is named instead by its identifier, which holds its revision.
+
+*Revisions.*
+An item's revision identifies its meaning: the actors, the conditions and applicability, the duties and outcomes, the exceptions and quantifiers, and the scope in time, resources and ownership that its statement gives.
+Two texts of one item at one revision have one meaning, and a text with another meaning has another revision.
+An item's name is never changed or reused, and an item keeps its name and its revision wherever it is filed.
+--
+
+[horizontal]
+ID:: `+req~ssr-item-reading~1+`
+ASIL:: B
+Allocated to:: the items of the up-rust SEooC requirement family
+Verification:: review
+* Each item of the up-rust SEooC requirement family and its accompanying text: no duty, permission, condition or definition of the family stands only outside an item's block.
+* Each statement: its key words, its names and its references, read against this item.
+* Each item whose text differs between two revisions of the specification: the same revision only where its meaning is the same.
+* That no page makes a duty wait for an implementation, for its evidence or for a recorded status.
+
+*Rationale.*
+The items say what an implementation must satisfy, and an implementation's code, tests and reviews trace to the items.
+So a reader has to know which words of a page are the contract, and no word of the contract can depend on what one implementation does.
+A claim names an item at a revision, so a revision that kept its number while its meaning changed would let the claim say something that its evidence does not show.
+The two key words for a duty follow the convention of xref:basics/payload_encoding_registry.adoc[the payload encoding registry] ("Requirement Ownership").
+
+== The owned-frame SDK contract
+
+[[req-sdk-owned-frame-contract]]
+=== The owned-frame SDK contract binds the parts that declare it
+
+[.specitem,oft-sid="req~sdk-owned-frame-contract~1",oft-title="The owned-frame SDK contract binds the parts that declare it",oft-needs="uman",oft-tags="OwnedFrameSdk,OwnedFrameProvider,OwnedFrameScheduler"]
+--
+*The contract.*
+The owned-frame SDK contract is the requirements with identifier `+req~sdk-owned-frame-*+`.
+
+*Owned-frame routes.*
+An owned-frame route is a route that an application declares on a transport that has an initialization mode and a runtime mode, as xref:basics/resources.adoc#req-ssr-mode-two-types[Two modes, as two types] states for the element's transports.
+On such a route, the storage that carries a frame, and each value decoded from a frame, has one owner at a time (xref:basics/ownership.adoc#req-sdk-owned-frame-one-owner[Frame storage and decoded values have one owner at a time]).
+The name "owned-frame" states that ownership rule.
+It names no release generation, and it does not say that a payload is copied or serialized.
+A route is native or serialized, and lent or handed off, as xref:up-l1/payload-paths.adoc#req-ssr-payload-route-form[A route's form is fixed at setup, by what the route declares and never by a name] states, and each form keeps the guarantees that its own items state.
+
+*Parts.*
+An SDK is a xref:languages.adoc[language library] that offers owned-frame routes to applications.
+Its core is the part that holds its synchronous or polled traffic operations, its two modes and its setup checks.
+Where an SDK's core is the element (xref:safety/elements/up-rust/README.adoc#req-ssr-element-boundary[The parts of the element, and element code]), the items of the up-rust SEooC requirement family state what that core does, and an item of the owned-frame SDK contract adds a duty for that core only where its statement gives the SDK one for its core.
+A layer above the core is a part of the SDK, outside its core, that an application can leave out and that offers it operations on owned-frame routes or takes memory for them on its behalf, such as the application-role layer, the asynchronous layer or a layer that obtains startup memory from the host's heap.
+Where the core is the element, a layer above the core is an optional layer, as xref:safety/elements/up-rust/README.adoc#req-ssr-element-boundary[The parts of the element, and element code] names one.
+The classic APIs are no layer above the core, and neither is a memory provider, a scheduler integration or an adapter.
+A memory provider, a scheduler integration and an adapter are parts that the SDK ships or that another party supplies.
+
+*Words of the up-rust SEooC requirement family.*
+Some items of the up-rust SEooC requirement family define a word for the element or for a part that works with the element, such as a transport and its initialization and runtime modes, a binding and its middleware, a wire, a platform backend, a loan, a lease, a transmit loan, a retained frame, a decoded value, startup memory or a region.
+Where an item of the owned-frame SDK contract uses such a word for an SDK whose core is not the element, for its routes or for a part that works with it, the word means that SDK's own counterpart: what has the same role for that SDK.
+Where an SDK's core is the element, such a word has the meaning that the up-rust SEooC requirement gives it.
+A heap class, a route's declared policy, a native route and a guarantee that a route requires by name keep, for every SDK, the meaning that the up-rust SEooC requirement family gives them.
+
+*Whom it binds.*
+A requirement of the owned-frame SDK contract binds a part only where the part's declaration names the owned-frame SDK contract.
+It then binds the actors to which its statement gives a duty, as <<req-ssr-requirements-bind,A requirement binds the actors to which it gives a duty>> states of a requirement of the up-rust SEooC requirement family.
+Each such actor *MUST* meet each duty that the statement gives it, within the conditions that the statement states.
+A component that a declaring part uses or wraps without a declaration of its own, such as a standard allocator, takes no duty of the owned-frame SDK contract by that.
+The duties of the owned-frame SDK contract for what a declaring part supplies through such a component are the declaring part's.
+
+*Offerings.*
+Some statements give a duty for an offering, such as the selection of a memory provider, application roles, asynchronous operations on owned-frame routes, the classic APIs beside owned-frame routes or an adapter.
+Such a duty binds a declaring part wherever the part makes that offering, whether or not its declaration lists it, and nowhere else.
+
+*The declaration.*
+A part whose declaration names the owned-frame SDK contract *MUST* state in that declaration, which is released with the part:
+
+* which part it is, and which kinds of part it is: an SDK, a layer above the core, a memory provider, a scheduler integration, an adapter;
+* the revision of the specification that its claims rest on;
+* for each offering that a requirement of the owned-frame SDK contract names as a condition, whether the part makes it.
+
+A declaration is no claim.
+The owned-frame SDK contract is no named profile of the up-rust SEooC requirement family (<<req-ssr-contract-transition,What a part declares and claims, and when a replacement takes effect>>).
+
+*Claims.*
+A component conformance claim to items of the owned-frame SDK contract is a claim that a part meets items of the owned-frame SDK contract.
+In each such claim, the part *MUST* name its declaration and each item that the claim rests on, at the revision that the declared revision of the specification fixes.
+A claim that rests on an item rests on that item's dependency closure too, as <<req-ssr-contract-transition,What a part declares and claims, and when a replacement takes effect>> defines a closure.
+Where a claim rests on fewer than all the requirements of the owned-frame SDK contract that bind the part, the part *MUST* name in the claim each of them that it leaves out.
+What a claim covers, what its evidence shows, what establishes none, and what a part says where one implementation cannot meet both an item and a classic protocol-chapter rule, are as that item states for a claim of the up-rust SEooC requirement family.
+
+*The supplier.*
+The supplier of each part whose declaration names the owned-frame SDK contract *MUST* release the part's declaration, and each component conformance claim made for the part, with the part.
+The supplier *MUST* keep, for the items of the owned-frame SDK contract that bind the part, the record that <<req-ssr-contract-transition,What a part declares and claims, and when a replacement takes effect>> requires of a supplier.
+
+*How the items are read.*
+An item of the owned-frame SDK contract is read as <<req-ssr-item-reading,How an item is read>> states.
+Every item of the owned-frame SDK contract is a requirement.
+None carries an ASIL: an item of the owned-frame SDK contract states an ordinary obligation and makes no safety claim.
+
+*Rules left in force.*
+The contract adds to the rules that already bind a part, and replaces none.
+No item of the owned-frame SDK contract replaces, reallocates, retires or weakens a classic protocol-chapter rule or an item of the up-rust SEooC requirement family.
+--
+
+[horizontal]
+ID:: `+req~sdk-owned-frame-contract~1+`
+Allocated to:: each part whose declaration names the owned-frame SDK contract: an SDK, a layer above the core, a memory provider, a scheduler integration or an adapter; the supplier of each such part, for releasing its declaration and its claims with it and for the record of where the part implements each item of the owned-frame SDK contract that binds it
+Verification:: review
+* Each part's declaration: which part it is and which kinds of part it is, the revision of the specification that its claims rest on, and for each offering that a requirement of the owned-frame SDK contract names as a condition, whether the part makes it.
+* Each component conformance claim to items of the owned-frame SDK contract: its declaration and each item that it rests on, named at the revision that the declared revision of the specification fixes, with their dependency closure, and each binding requirement that the claim leaves out named in it.
+* Where one implementation cannot meet an item of the owned-frame SDK contract and a classic protocol-chapter rule: the part's declaration says so with the item's revision, the part claims no conformance to the classic protocol-chapter rule for that behaviour, and no claim names both rules.
+* That no component conformance claim to items of the owned-frame SDK contract rests on a report's checks beyond what the report names, or on anything that <<req-ssr-contract-transition,What a part declares and claims, and when a replacement takes effect>> says establishes no claim.
+* Each supplier of a declaring part: the declaration and each component conformance claim released with the part, and the record of where the part implements each item of the owned-frame SDK contract that binds it, with who made each entry, whether or not a component conformance claim is made for the part.
+* Each offering that a declaring part makes, listed in its declaration or not, held to the duties that statements of the owned-frame SDK contract give for it.
+* Each component that a declaring part uses or wraps without a declaration of its own: the duties of the owned-frame SDK contract for what the declaring part supplies through it, met by the declaring part.
+
+*Rationale.*
+An SDK, its layers, a memory provider, a scheduler integration and an adapter can be built and released apart, by different parties, and applications combine them in many ways.
+The up-rust SEooC requirement family defines words such as transport, binding and loan for the element, and another SDK has its own parts, modes and handles that do the same work, so the items of the owned-frame SDK contract use the same words for them.
+A heap class, a declared policy, a native route and a guarantee required by name rest on the element's own setup checks, so they keep their meaning.
+A declaration says which contract a part follows, so whom an item binds is read from the part's declaration and the item's statement, and never from where the part came from.
+An implementation that follows only the classic protocol-chapter rules takes on none of these obligations, because no item of the owned-frame SDK contract reaches a part without its declaration.
+The routes of the owned-frame SDK contract share one rule, one owner at a time, whether they are native or serialized, so the contract is named for that rule and for nothing else.
+A claim that names its declaration, its items and what it leaves out, at one revision, is read against one exact text, and the supplier who releases the part answers for it.
+
+[[owned-frame-conventions]]
+=== Owned-frame SDK conventions and tags
+
+[NOTE]
+====
+* *Identifiers.*
+An item's identifier is `+req~sdk-owned-frame-<name>~<revision>+`, in its block attribute line and in its `ID` row.
+Its anchor, `req-sdk-owned-frame-<name>`, holds its type and name without its revision.
+* *Fields.*
+After its statement, an item has an `ID` row, an "Allocated to" line and a "Verification" line, then its rationale.
+* *Allocation.*
+The "Allocated to" line mirrors the statement: it names each actor to which the statement gives a duty, with the qualifier that limits that actor's share.
+Where the two differ, the statement governs (<<req-ssr-item-reading,How an item is read>>).
+* *Verification.*
+A "Verification" line names methods of xref:safety/assurance.adoc#req-ssr-verification-methods[The verification methods, and what a Verification line asks for], with the meaning that item gives them, and details them with cases.
+It adds no duty.
+* *Coverage needs.*
+`impl,utest` marks behaviour in code, `uman` what a part states in what is released with it, and `impl,utest,uman` both.
+====
+
+NOTE: A tag is trace metadata: a selector by which a tracing tool chooses items.
+It decides no actor, scope, status or conformance.
+Every item of the owned-frame SDK contract carries a tag of this legend, and no gate tag, no tag of the up-rust SEooC requirement family and no classic protocol-chapter tag.
+
+[cols="2,5",options="header"]
+|===
+| Tag | Items that carry it
+
+| `OwnedFrameSdk` | items with a duty of an SDK, of a layer above its core, or of an adapter
+| `OwnedFrameProvider` | items with a duty of a memory provider
+| `OwnedFrameScheduler` | items with a duty of a scheduler integration
+|===
+
+== Classic routes beside owned-frame routes and runtime mode
+
+[[req-sdk-owned-frame-classic-apis]]
+=== The classic APIs keep their contract beside owned-frame routes
+
+[.specitem,oft-sid="req~sdk-owned-frame-classic-apis~1",oft-title="The classic APIs keep their contract beside owned-frame routes",oft-needs="impl,utest",oft-tags="OwnedFrameSdk"]
+--
+*The classic APIs.*
+The classic APIs are the Transport Layer API of xref:up-l1/README.adoc[uP-L1], which sends and receives a xref:basics/umessage.adoc[`UMessage`], and the Communication Layer APIs of xref:up-l2/api.adoc[uP-L2], with their default implementation over it.
+
+*Their contract.*
+The classic protocol-chapter rules that state them stay their contract, each key word with the strength that its chapter gives it.
+
+*Additive.*
+An SDK that offers the classic APIs beside owned-frame routes *MUST NOT* let the presence of owned-frame routes, of a layer above the core, of an adapter that the application has not selected for a call, of a memory provider or of a scheduler integration, in the same build or process, change the behaviour, the results or the defaults of a classic operation for the same input and the same configuration.
+
+*No stand-in.*
+The SDK *MUST NOT* serve a call of a classic API through an owned-frame route, or an operation on an owned-frame route through a classic API, except through an adapter that the application selects (xref:up-l1/payload-paths.adoc#req-sdk-owned-frame-adapter[An adapter keeps a message whole across a crossing, or refuses it by name]).
+
+*Runtime mode.*
+What keeps a classic route out of runtime mode: <<req-ssr-mode-classic-excluded,Classic routes never enter runtime mode>>.
+--
+
+[horizontal]
+ID:: `+req~sdk-owned-frame-classic-apis~1+`
+Allocated to:: the SDK, where it offers the classic APIs beside owned-frame routes
+Verification:: test, review
+* *test*
+** The requirements-based tests of the classic APIs, with the same inputs and the same configuration, run with owned-frame routes, a layer above the core, an adapter that the application has not selected, a memory provider and a scheduler integration present in the build and in the process, and run with them absent: the same behaviour, results and defaults.
+** A classic call with no adapter selected, beside a binding test double that records every use of an owned-frame route: no use recorded.
+** An operation on an owned-frame route with no adapter selected: no classic API called.
+* *review*: no path from a classic API into an owned-frame route, or back, outside an adapter that the application selects.
+
+*Rationale.*
+Applications and libraries written against the classic APIs rely on the behaviour, results and defaults that the classic protocol-chapter rules state, with the strength of each key word.
+If owned-frame routes in the same library or process changed any of them, those applications would break with no change of their own.
+A classic message owns its payload, while an owned-frame route lends storage that has one owner at a time.
+So a silent substitution in either direction would change who owns a payload, and for how long.
+An adapter that the application selects makes such a crossing visible, and states what it does.
+
+[[req-ssr-mode-classic-excluded]]
+=== Classic routes never enter runtime mode
+
+[.specitem,oft-sid="req~ssr-mode-classic-excluded~3",oft-title="Classic routes never enter runtime mode",oft-needs="impl,utest",oft-tags="SafetyUpRustCore,SafetyStreamer"]
+--
+*Excluded from runtime mode.*
+The element *MUST NOT* let a classic `+UTransport+` or `+UMessage+` route enter runtime mode under any waiver.
+The element *MUST* refuse at setup, by name, deployment data that puts a classic endpoint on an ASIL route, including a Streamer route.
+
+*Streamer routes.*
+The Streamer *MUST* build each of its ASIL routes through the element's admission, and *MUST* refuse at setup, by name, a route configuration that puts a classic endpoint on one of them.
+
+*Scope.*
+The exclusion reaches runtime mode only, and it withdraws no classic API: a classic route stays under its own contract outside the two-mode contract (<<req-ssr-contract-transition,What a part declares and claims, and when a replacement takes effect>>).
+--
+
+[horizontal]
+ID:: `+req~ssr-mode-classic-excluded~3+`
+ASIL:: B
+Allocated to:: the element; the Streamer, for building its ASIL routes through the element's admission and for refusing a classic endpoint on one of them
+Verification:: compile-fail (a classic `+UTransport+` cannot stand where a two-mode setup is required), test (deployment data naming a classic endpoint on an ASIL route, and a Streamer route configuration naming one, each refused at setup by name), review (every ASIL route of the Streamer built through the element's admission)
+ISO 26262:: 6-7.4.8 (part-clause numbers only)
+
+*Rationale.*
+A classic route is declared and admitted by no two-mode setup, so nothing checks it or places its storage before traffic, and its contract states no heap class.
+A waiver covers allocation inside a binding's middleware only (xref:up-l1/bindings.adoc#req-ssr-waiver-scope[A waiver covers middleware and nothing else]).
+So no waiver can admit a classic route.
+
+A two-mode type is not a classic route, whichever crate re-exports it.
+
+.The classic API outside the two-mode contract
+====
+In ordinary use, an application uses the classic API for a route outside the two-mode contract.
+====

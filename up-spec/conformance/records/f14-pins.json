@@ -1,0 +1,62 @@
+{
+ "schema": "f14-source-pins-v1",
+ "utc": "2026-11-16T23:02:13.847917+00:00",
+ "composition_rule": "Composed F14 = F13 staging and private-adapter with the overlay files below replacing their F13 counterparts byte for byte; every other file is F13's, unchanged. Same digest rule as F13: sha256 over sorted 'relative-path NUL sha256 LF' lines.",
+ "f13_base": {
+  "staging_tree": "903083a985c80397109d1eced3bca0783190fc198494da267b14abadfcb7ee52",
+  "adapter_tree": "dd9e10ae35ac225fc2dd4e6c1addf453d75edc01e7f87522faa53de543dfea83",
+  "source_pins_sha256": "e144b15d39384760eb8b92333bb74b94e8cb93ae80c8c79ff0b6acc12482cdeb"
+ },
+ "composed_f14": {
+  "staging_tree": "41bd5ed2e1d7a1b07b3a35027b2b7bc8debae882b4648fd30fb5162764d305b8",
+  "staging_files": 567,
+  "adapter_tree_with_original_lock": "a98d18bc8dfc78aa2d739da52f6ab70dc6623fd6fd3510b6e3d5cb87d74e89a5",
+  "adapter_files": 14,
+  "note": "The adapter digest uses the original Cargo.lock (bcbc8fd1); checks-1's derivative lock after P0 is 760fcaa2 and was produced by P0, not by F14."
+ },
+ "overlay_files": {
+  "staging/iceoryx2-cal-0.9.2/src/shared_memory/common.rs": {
+   "f13_base_sha256": "b915be11eb7287cdac81f521522c7ac93e9f458b8506cf5f2dc777075b04bcd3",
+   "f14_sha256": "340c024de661416e864954e93817931a284af822a04fa127ec60b4336c716393"
+  },
+  "staging/iceoryx2-cal-0.9.2/src/zero_copy_connection/common.rs": {
+   "f13_base_sha256": "d62b1004af9d74121ef9929872885b0e4c06355807a66c41a3b3cd05a28a491a",
+   "f14_sha256": "a3609b2ffe09e629cc3cae1a6f4a09a441d832d99a308d5c3e877c38c210101f"
+  },
+  "staging/iceoryx2-bb-posix-0.9.2/src/file_descriptor.rs": {
+   "f13_base_sha256": "ab9cc8ee4a01cfd150e3711034e8ccef68d1549238a0d83baf8a8f502a3fdbc7",
+   "f14_sha256": "ba3271e60bd04b32e667895cc64d209028e946b2cc48255507d809120cb2cae6"
+  },
+  "staging/iceoryx2-bb-posix-0.9.2/src/clock.rs": {
+   "f13_base_sha256": "122c4b0f6440142469fd19ff464c6c158d4b4668a508e64cbb5b96c37bf95eae",
+   "f14_sha256": "39154488d3d21b46aea1084a5860cb6e98c46a73a0f772ec68ba2c707667f7ac"
+  },
+  "staging/iceoryx2-0.9.2/src/port/notifier.rs": {
+   "f13_base_sha256": "027c6f345c14db9109927039be0da687bc9bc725996ec05fccc12d436a5db804",
+   "f14_sha256": "cd6a7e740dd810b9a120875598801148c51f86c65fab4ad28e2db4b4027c28b4"
+  },
+  "private-adapter/snapshot/src/lib.rs": {
+   "f13_base_sha256": "a16643e5d5421163ae7b5aa6a4d6a83332ad29d7f63ef09ca73140ace932555d",
+   "f14_sha256": "f08921f8799f2022f4fe9b5765ad224c990d19e0f4e8a5ef0ea7caa8e79c3507"
+  },
+  "private-adapter/snapshot/src/two_mode.rs": {
+   "f13_base_sha256": "2bcca33146d120b618ab721d3813fa359279966c897a33f29763f5dc40817086",
+   "f14_sha256": "7dc080910d390f8c037b155b426dea13afbaae6ffd0d423256549794a2b8a47d"
+  }
+ },
+ "inputs_read_named": {
+  "packet EXISTING-OWNER-AMENDMENTS.json": "0a6e6af3421a5475f16f148efd34e93435b6ea22f1efe1a14a891976773b49e0",
+  "F13 review FINDINGS.json": "920850f5e523a461bc7f6efee71ca5bbd51779895ed414849d928d3f942ca32a",
+  "REQUIRED-EXISTING-EVIDENCE.json": "0faef2b0976b64c8d58c0bd016418ac58b7c823d95b32e4a94e75cf2614c8e08",
+  "CHANGE-REGISTER.json (v002)": "29d929e597dbc7eefee8dc8621d21e9e4b2da20309de94e48dcdfb40122aa96f",
+  "PANIC-INVENTORY.md (merge-m3b)": "53d843f68f100db9f2643ea4b4759b1a68344a888a0811c329e31018ec5d3104",
+  "F13 SOURCE-PINS.json": "e144b15d39384760eb8b92333bb74b94e8cb93ae80c8c79ff0b6acc12482cdeb",
+  "checks-1 metadata-current.json (reverse dependencies)": "63c1df3536e74bbc89dec46eec739a6b814a9665964b5b01e8402d6eea8cf6e4",
+  "checks-1 K0-CX16-RECEIPT.json": "4e747c3073d90f4fb5ecc7d0ed96420d3dc27977873d468f114823fc89afd69c",
+  "F14 amendment F14-NINE": "214472ee528eb782c8eb4e60b6999a06531a931b5a233dd5b450c2239112b4f8",
+  "unsafe-rust-review skill (pinned)": "27e8df5bc9bc6f43e11747e67e695bf8ee8c4f59d6412270784d72382a4d3026"
+ },
+ "outputs": {
+  "SOURCE-PROOF.md": "3bbe4bbc74c7ef3a3cde7c8c0c925eef835926986a994bf1f74a2f9fe7b92123"
+ }
+}

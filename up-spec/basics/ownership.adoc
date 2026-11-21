@@ -1,0 +1,50 @@
+= Ownership of Frame Storage and Decoded Values
+:toc: preamble
+
+The key words "*MUST*", "*MUST NOT*", "*REQUIRED*", "*SHALL*", "*SHALL NOT*", "*SHOULD*", "*SHOULD NOT*", "*RECOMMENDED*", "*MAY*", and "*OPTIONAL*" in this document are to be interpreted as described in https://www.rfc-editor.org/info/bcp14[IETF BCP14 (RFC2119 & RFC8174)]
+
+[NOTE]
+====
+* *One-owner semantics.*
+On an owned-frame route, the storage that carries a frame and each value decoded from a frame have one owner at a time: from the moment storage is lent or reserved, or a value is decoded, until that owner gives it back or ends it, including where an owner is forgotten.
+* *Contract-family membership.*
+Filing on this page does not decide whom an item binds (xref:../contract-generations.adoc[Which requirements an implementation follows]).
+The requirement on this page (`+req~sdk-owned-frame-one-owner~1+`) belongs to the owned-frame SDK contract: it states an ordinary obligation, carries no ASIL, and binds only an SDK whose core is not the element where the part's declaration names the owned-frame SDK contract (xref:../contract-generations.adoc#req-sdk-owned-frame-contract[The owned-frame SDK contract binds the parts that declare it]; xref:../contract-generations.adoc#owned-frame-conventions[Owned-frame SDK conventions and tags]).
+* *Where the core is the element.*
+The up-rust SEooC requirement family states the element's and its bindings' corresponding ownership and release obligations across:
+** xref:../up-l1/runtime.adoc#req-ssr-release-lease-drop[A lease gives back its slot and nothing else], xref:../up-l1/runtime.adoc#req-ssr-heap-slot-types[A decoded value is destroyed once, as its route's class admits], xref:../up-l1/runtime.adoc#req-ssr-release-none[Nothing is released in runtime mode], and xref:../languages/rust.adoc#req-ssr-release-inert-drop[Dropping a runtime handle does nothing];
+** xref:../up-l1/wires/native.adoc#req-ssr-native-in-place[A native payload is written and read where it is carried, or its route is refused];
+** xref:../up-l1/bindings.adoc#req-ssr-binding-lent-storage[Lent storage is exclusive, disjoint and stable for as long as it is held];
+** xref:../up-l1/payload-paths.adoc#req-ssr-payload-written-once[A payload is written once, into the storage that carries it] and the end-to-end ownership overview in xref:../up-l1/payload-paths.adoc#lifetime[Who owns what, and until when].
+* *Memory-provider ownership.*
+Ownership and validity of blocks and regions supplied by a memory provider are stated in xref:resources.adoc#req-sdk-owned-frame-provider-ownership[Memory from a provider stays valid while it is held, and is disposed of once under its provider's contract].
+====
+
+[[req-sdk-owned-frame-one-owner]]
+== Frame storage and decoded values have one owner at a time
+
+[.specitem,oft-sid="req~sdk-owned-frame-one-owner~1",oft-title="Frame storage and decoded values have one owner at a time",oft-needs="impl,utest",oft-tags="OwnedFrameSdk"]
+--
+*The rule.*
+On each owned-frame route that it offers, an SDK whose core is not the element *MUST* give the storage that carries a frame, and each value decoded from a frame, one owner at a time: from the moment that the storage is lent or reserved, or the value decoded, until that owner gives it back or ends it.
+While an owner holds such storage or such a value, a forgotten owner included, the SDK *MUST NOT* let another owner reach it, reuse it or end it.
+
+*Where the core is the element.*
+For the element and its bindings, the items that keep this rule are xref:../up-l1/wires/native.adoc#req-ssr-native-in-place[A native payload is written and read where it is carried, or its route is refused], xref:../up-l1/bindings.adoc#req-ssr-binding-lent-storage[Lent storage is exclusive, disjoint and stable for as long as it is held], xref:../up-l1/payload-paths.adoc#req-ssr-payload-written-once[A payload is written once, into the storage that carries it], xref:../up-l1/runtime.adoc#req-ssr-release-lease-drop[A lease gives back its slot and nothing else] and xref:../up-l1/runtime.adoc#req-ssr-heap-slot-types[A decoded value is destroyed once, as its route's class admits].
+--
+
+[horizontal]
+ID:: `+req~sdk-owned-frame-one-owner~1+`
+Allocated to:: an SDK whose core is not the element, for each owned-frame route that it offers
+Verification:: test, review
+* *test*
+** On each kind of owned-frame route that the SDK offers: a lent loan, storage reserved at setup and a decoded value, each held by one owner from its start until it is given back or ended, and none reachable through a second owner meanwhile.
+** An owner that is forgotten: what it held neither reused nor ended, and reachable by no other owner.
+* *review*: each path of the SDK that creates, passes or ends an owner of frame storage or of a decoded value.
+
+*Rationale.*
+The routes of the owned-frame SDK contract are named for this rule.
+One owner at a time is what lets a payload be written once into the storage that carries it, read in place, and ended exactly once.
+Storage that two owners could reach could be written while it is read, or reused while it is held.
+A forgotten owner still holds what it owned, so nothing that it held can be reused behind it.
+For the element, the up-rust SEooC requirement family states the rule for each part that keeps it, so this item binds only an SDK whose core is another.

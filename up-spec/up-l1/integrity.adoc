@@ -1,0 +1,313 @@
+= uP-L1 Integrity Levels and Copy Routes
+:toc: preamble
+
+The key words "*MUST*", "*MUST NOT*", "*REQUIRED*", "*SHALL*", "*SHALL NOT*", "*SHOULD*", "*SHOULD NOT*", "*RECOMMENDED*", "*MAY*", and "*OPTIONAL*" in this document are to be interpreted as described in https://www.rfc-editor.org/info/bcp14[IETF BCP14 (RFC2119 & RFC8174)]
+
+[NOTE]
+====
+This page holds integrity-level, zero-copy, in-place-type and upward-crossing requirements of the up-rust SEooC requirement family (`+req~ssr-*+`, `ASIL:: B`, `SafetyUpRustCore` tag).
+Filing on this page does not bind classic protocol implementations: whom each item binds is stated in xref:../contract-generations.adoc[Which requirements an implementation follows] (xref:../contract-generations.adoc#req-ssr-requirements-bind[A requirement binds the actors to which it gives a duty]; xref:../contract-generations.adoc#req-ssr-item-reading[How an item is read]).
+Scope and element boundary: xref:../safety/elements/up-rust/README.adoc[the up-rust SEooC element].
+====
+
+These items say how the element lends or copies shared memory between integrity levels:
+
+* A binding's part, recording and reporting the writer's level, is xref:bindings.adoc#req-ssr-binding-integrity-level[A lending binding records and reports the writer's level] in xref:bindings.adoc[uP-L1 transport bindings].
+* A lending binding's statement of which way its ports write shared state is xref:bindings.adoc#req-ssr-binding-shared-state[A lending binding says which way its ports write shared state], on the same page.
+* The integrator's part, assigning each transport's level, is xref:../safety/elements/up-rust/assumptions-of-use.adoc#aou-seooc-integrity-levels[Each transport's integrity level is assigned correctly] in xref:../safety/elements/up-rust/assumptions-of-use.adoc[the element's assumptions of use].
+* The integrator's duties for access, for two-way shared state and for a zero-copy writer are xref:../safety/elements/up-rust/assumptions-of-use.adoc#aou-seooc-peer-access[Only authorized processes reach the transport], on the same page.
+* The integrator's duties for data above ASIL B, and for the element inside a process or partition that holds software at ASIL C or D, are xref:../safety/elements/up-rust/assumptions-of-use.adoc#aou-seooc-capability-ceiling[Data above ASIL B relies on measures outside the element], on the same page.
+* What a level is, its values, their order and its default: <<req-ssr-integrity-declared,Each transport declares one integrity level>>; what a level is not: xref:../safety/README.adoc#concepts[Shared concepts and fault models] and xref:../safety/README.adoc#fault-models[Fault models and fault-containment map].
+
+[[req-ssr-integrity-declared]]
+== Each transport declares one integrity level
+
+[.specitem,oft-sid="req~ssr-integrity-declared~5",oft-title="Each transport declares one integrity level",oft-needs="impl,utest",oft-tags="SafetyUpRustCore"]
+--
+*One level per transport.*
+The element *MUST* hold one integrity level for each transport: the level that the transport's deployment data declares (xref:../safety/elements/up-rust/assumptions-of-use.adoc#aou-seooc-integrity-levels[Each transport's integrity level is assigned correctly]), or QM where it declares none.
+The element *MUST* give every route on the transport that level, with no per-route override.
+
+*The levels and their order.*
+The levels are QM, A, B, C and D, in that order, from the lowest to the highest.
+A level is at or above another where it is the same level or a later one in that order, and below it where it is an earlier one.
+
+*An unknown level.*
+On a route of a lending binding, a writer's level is unknown where the route's binding reports it as unknown, or reports no level for it (xref:bindings.adoc#req-ssr-binding-integrity-level[A lending binding records and reports the writer's level]).
+An unknown level is none of the five levels.
+The element *MUST* treat it as below every level, QM included, and *MUST NOT* treat it as at or above any reader's level.
+
+*ASIL and QM.*
+A transport or a route at A, B, C or D is an ASIL transport or an ASIL route, and one at QM is a QM transport or a QM route.
+The same holds for each kind of route: an ASIL receive route, for one, is a receive route at A, B, C or D.
+Each of these words names a declared level, and a declared level establishes no assurance claim.
+A process at a declared level of A, B, C or D, or of QM, is one whose own declared level is that level (xref:../safety/elements/up-rust/assumptions-of-use.adoc#aou-seooc-integrity-levels[Each transport's integrity level is assigned correctly]).
+A process's declared level is independent of whether it is an ASIL process: an ASIL process, application, binary, image and build are words of the ASIL path, which an integrator's claim decides (xref:../safety/profiles/up-rust-asil-b.adoc#req-ssr-element-configurations[The ASIL path and supported configurations]).
+
+*A reader's and a writer's level.*
+On a route, the reader's level is the level of the reader's transport.
+On a route of a lending binding, the writer's level is the level that the route's binding reports for the route's writers, or unknown.
+On a handoff binding the reader gets a private copy and sees no shared memory, so the rules for a writer's level do not apply to its routes.
+
+*Refusal at setup.*
+At setup, the element *MUST* refuse a route on which a reader would see shared memory written below the reader's level, or at an unknown level, unless the route takes the copy route of <<req-ssr-integrity-zero-copy,Zero-copy only from a writer at or above the reader>>.
+The element *MUST* name the route and both levels, or the unknown one, in that refusal.
+
+*The writer's level.*
+How a writer's level is recorded and reported is stated in xref:bindings.adoc#req-ssr-binding-integrity-level[A lending binding records and reports the writer's level].
+That item replaces, for every binding, the sentence of revision 4 of this item that called recording and reporting the writer's level the binding's duty.
+This item gives no binding a duty.
+--
+
+[horizontal]
+ID:: `+req~ssr-integrity-declared~5+`
+ASIL:: B
+Allocated to:: the element
+Verification:: test, fault-injection, review
+* *test*
+** One level for each transport, QM where its deployment data declares none, and that level on every route of the transport.
+** A route on which a reader would see shared memory written below its level: refused at setup, with the route and both levels named; the same route with a valid copy route, every other admission condition met: admitted.
+* *fault-injection*: a binding double that reports the writer's level as unknown, and one that reports no level: each route refused at setup, with the route and the unknown level named, unless it takes the copy route.
+* *review*: each statement that uses a word of the clause "The levels and their order", "An unknown level", "ASIL and QM" or "A reader's and a writer's level", read with that clause.
+ISO 26262:: 6-7.4.8, 9-6 (part-clause numbers only)
+
+*Rationale.*
+Shared memory lets a writer change what a reader sees.
+So a writer below the reader's level could corrupt data that the reader relies on at its own level.
+
+One level per transport, with no override, keeps a route from claiming more than its transport.
+QM as the default means an undeclared transport claims nothing.
+
+A writer whose level nobody can state cannot be trusted to be at or above the reader.
+So an unknown level counts as below every level, and it gains no reader a view.
+
+[[req-ssr-integrity-zero-copy]]
+== Zero-copy only from a writer at or above the reader
+
+[.specitem,oft-sid="req~ssr-integrity-zero-copy~6",oft-title="Zero-copy only from a writer at or above the reader",oft-needs="impl,utest",oft-tags="SafetyUpRustCore"]
+--
+*Zero-copy.*
+A zero-copy route is a route that gives its reader a view into shared memory, and a reader gets zero-copy where it is given such a view.
+Only a native route gives a view (xref:wires/native.adoc#req-ssr-native-in-place[A native payload is written and read where it is carried, or its route is refused]).
+
+*When a view is allowed.*
+The element *MUST NOT* give a reader a view into shared memory unless all of these hold:
+
+* the writer's level is known, and it is at or above the reader's (<<req-ssr-integrity-declared,Each transport declares one integrity level>>);
+* where the ports of the route's binding write shared state both ways, the reader's level is the service's recorded level, as the clause "Refusals at setup" states;
+* the storage's allocation tenure stays live for the whole view (xref:bindings.adoc#req-ssr-binding-lent-storage[Lent storage is exclusive, disjoint and stable for as long as it is held]);
+* the synchronization that keeps the writer from writing the storage while the view exists is in place;
+* the type's exact ABI, layout, alignment and initialized validity are agreed (xref:peers.adoc#req-ssr-native-abi-agreed[A native representation never crosses an ABI]; xref:wires/native.adoc#req-ssr-native-agreement[A native type is read only under its exactly agreed layout]; <<req-ssr-integrity-any-bits,In-place types accept every bit pattern>>).
+
+No one of these conditions allows a view alone, the writer's level included.
+What the writer's process keeps for that synchronization is stated in xref:../safety/elements/up-rust/assumptions-of-use.adoc#aou-seooc-peer-access[Only authorized processes reach the transport].
+
+*Decoding from shared memory.*
+A serialized route gives no view, and it is no zero-copy route, whichever storage its wire decodes from: its reader gets a value that a slot owns (xref:wires/serialized.adoc#req-ssr-wire-encode-decode[A serialized wire encodes once into the storage it is given, and decodes into a value that its slot owns]).
+The element *MUST NOT* give a wire the bytes of a frame in shared memory to decode unless the conditions of the clause "When a view is allowed" on the writer's level, on two-way shared state, on tenure and on synchronization hold for as long as the decoding lasts.
+
+*The copy route.*
+A receive route of a lending binding crosses upward where its writer's level is below its reader's.
+On a receive route that crosses upward, or whose writer's level is unknown, the element *MUST*:
+
+* acquire the frame's header and metadata into storage of its own, reserved at setup, within the frame's extent as the binding gives it;
+* take the payload's place and length from that acquired copy and, before it reads the payload, establish with checked arithmetic that the payload lies within that frame extent, and check that its length is within the bound that the route declares and the storage reserved for the reader;
+* copy only the payload extent into storage that the reader owns, reserved at setup, and read nothing of the shared memory for the frame beyond its header, its metadata and that payload extent;
+* validate the acquired header and metadata, and the copied payload there: by shape and identity for a native type, by decoding for a serialized payload;
+* hand out only the validated copy, and show a reader no value of a frame before that validation has passed;
+* read the shared bytes as racing bytes, never assuming that they stay unchanged while it reads, and only through reads that are valid on a read-only mapping.
+
+The element *MUST* make the acquisition and the copy through a source-access mechanism that is valid, on the element's target and on the mapping that the binding provides, while a faulty writer races it, and *MUST* refuse the route at setup where no such mechanism can be established.
+A mechanism that holds only while the writer keeps a lock or another protocol is no such mechanism, because a faulty writer need not keep it (xref:peers.adoc#req-ssr-peer-fault-model[The requirements hold against a faulty peer]).
+
+*Refusals at setup.*
+
+* The element *MUST* refuse at setup a reader that demands zero-copy on a route that crosses upward, or whose writer's level is unknown.
+* The element *MUST* take which way the ports of a binding write shared state from what the binding states at setup (xref:bindings.adoc#req-ssr-binding-shared-state[A lending binding says which way its ports write shared state]), and *MUST* treat a lending binding that has stated nothing as one whose ports write shared state both ways.
+* The element *MUST* ensure that, on a binding whose ports write shared state both ways, a port whose level differs from the service's recorded level, higher or lower, is refused at setup, on every port kind and on the paired event service.
+
+*Reporting and heap.*
+What the element states in each route's report of the form that the route got, a read of the shared storage or the copy route's copy, is specified in xref:bindings.adoc#req-ssr-error-route-report[Each route reports what it got].
+The element *MUST* make each view, the acquisition and the copy, their validation and that report without acquiring or releasing heap memory, in its own work and in the work that it invokes for them, the decoding that validates a serialized payload included.
+A route's declared allocation does not reach these operations (xref:payload-paths.adoc#req-ssr-heap-none[No heap in runtime mode on a native path], "What a declaration does not reach").
+The element *MUST* refuse at setup a route that needs the copy route where the route's wire declares a heap class that admits allocation for decoding, naming the route and that class.
+
+*What the copy protects.*
+A copy, or a check over it, protects the payload only.
+It repairs no corrupt middleware offset, length, free list or ownership record: those need containment of their own against a faulty peer (xref:peers.adoc#req-ssr-peer-fault-model[The requirements hold against a faulty peer]).
+A level, an agreed layout, a type that accepts every bit pattern, a copy and a refusal at setup do not establish that containment, or that one process is isolated from another.
+--
+
+[horizontal]
+ID:: `+req~ssr-integrity-zero-copy~6+`
+ASIL:: B
+Allocated to:: the element
+Verification:: fault-injection, test, miri, heap-window, review
+* *fault-injection*
+** A faulty publisher writing to a sample while it is read, with real processes.
+** On a binding with two-way shared state, a port above and a port below the service's recorded level, on every port kind and on the paired event service.
+** A lending binding double that states nothing of the way its ports write shared state: a port of another level than the service's recorded level is refused at setup.
+** A faulty publisher that places a frame's payload outside the frame's extent, or gives it a length above the route's bound or the storage reserved for the reader: no byte read outside the frame's extent, and no value of the frame shown to a reader.
+* *test*
+** A reader that demands zero-copy on a route that crosses upward, and on one whose writer's level is unknown: each refused at setup.
+** A copy route for which no source-access mechanism that is valid while a faulty writer races it can be established: refused at setup.
+** A serialized route with every condition of the clause "Decoding from shared memory" established: decoded from the frame; the same route crossing upward, with a valid copy route: decoded from the validated copy; the same route without established tenure or synchronization: not decoded in shared memory.
+** A frame on the copy route that fails its validation: no value of it is shown to a reader.
+** A route that needs the copy route, on a wire that declares allocation for decoding: refused at setup, naming the route and the class.
+** On a receive route of a lending binding, the form that the route got, a read of the shared storage or the copy route's copy, as its report shows it (xref:bindings.adoc#req-ssr-error-route-report[Each route reports what it got]).
+* *miri*, under Stacked Borrows, under Tree Borrows and with strict provenance: the copy route's mechanism against a racing writer thread, where Miri can model the mechanism; and, as negative controls, a plain-read copy and an atomic read racing a plain write, each of which Miri reports as a data race.
+A mechanism over memory that another process maps is shown by the review and the fault-injection cases instead.
+* *heap-window*: a view, the copy route's acquisition, copy and validation, the decoding of a serialized payload included, and the report of a route's form.
+* *review*: the source-access mechanism of each copy route, with the extent that it reads and the target and mapping on which it relies, and the tenure and synchronization of each view and of each decoding from shared memory, at source level; and each statement that uses zero-copy or a zero-copy route, read with the clause "Zero-copy".
+ISO 26262:: 6-Annex D.2.3, 6-Table 3 1h (part-clause numbers only)
+
+*Rationale.*
+A writer below the reader's level, or of unknown level, can change shared bytes while the reader uses them.
+So the reader works only on a copy in storage it owns, checked after the copy is made.
+
+The copy is held in storage reserved at setup, like every other runtime buffer, so it needs no heap (xref:payload-paths.adoc#req-ssr-heap-none[No heap in runtime mode on a native path]).
+
+The middleware of a lending binding can map its payload memory read-only for readers.
+So the copy reads it only through loads that are valid on a read-only mapping.
+Where one middleware does so is described with its binding (xref:iceoryx2-frame.adoc#req-ssr-binding-iceoryx2-frame-wipe[On iceoryx2, the token of a loan that is not sent is wiped, and a sent frame is left as it was written]).
+Not every load is valid there: even an atomic load can be undefined on read-only memory, apart from small relaxed loads on the targets that the documentation lists (source: https://doc.rust-lang.org/1.98.1/core/sync/atomic/index.html#atomic-accesses-to-read-only-memory[the core library documentation, Rust 1.98.1, module `+core::sync::atomic+`, section Atomic accesses to read-only memory]).
+
+Two accesses to the same bytes are a data race where one of them writes, nothing orders them and at least one of them is not atomic, and a data race is undefined behaviour (source: https://doc.rust-lang.org/1.98.1/core/sync/atomic/index.html#memory-model-for-atomic-accesses[the core library documentation, Rust 1.98.1, module `+core::sync::atomic+`, section Memory model for atomic accesses]; https://doc.rust-lang.org/1.98.1/reference/behavior-considered-undefined.html#r-undefined.race[the Rust Reference, Rust 1.98.1, chapter Behavior considered undefined, rule undefined.race]).
+A read through a shared reference also relies on nothing writing the bytes while the reference lives, apart from bytes inside an `+UnsafeCell+` (source: https://doc.rust-lang.org/1.98.1/reference/behavior-considered-undefined.html#r-undefined.alias[the Rust Reference, Rust 1.98.1, chapter Behavior considered undefined, rules undefined.alias and undefined.immutable]), and a plain memory copy is not atomic (source: https://doc.rust-lang.org/1.98.1/core/ptr/index.html#safety[the core library documentation, Rust 1.98.1, module `+core::ptr+`, section Safety]; https://doc.rust-lang.org/1.98.1/core/ptr/fn.copy_nonoverlapping.html#safety[the core library documentation, Rust 1.98.1, function `+core::ptr::copy_nonoverlapping+`, section Safety]).
+Accesses that a synchronization orders are no data race, and neither are two atomic accesses of exactly the same bytes.
+A writer at or above the reader's level is kept from writing by the view's synchronization, so a read in place races nothing.
+A writer below that level, or of unknown level, may break any protocol, so the copy cannot rely on one.
+So the copy is sound only through a mechanism defined for racing access, a check of the copy cannot make an earlier invalid read valid, and a route without such a mechanism has no sound form.
+
+A lower writer is the reason for the copy route, so its bytes do not drive the reader's heap: the validation allocates nothing, and a wire that allocates when it decodes cannot serve the copy route.
+
+A serialized route copies its payload into a value, so it is no zero-copy route.
+Its wire still decodes from a shared reference to the bytes, so decoding them in shared memory needs the same conditions as a view.
+
+On a binding whose ports write shared state both ways, a reader also writes state that a writer's process reads.
+A copy protects only the process that makes it, so a port of another level is refused whichever way the levels differ.
+A direction that a binding has not stated counts as both ways, as an unknown level counts as lower.
+
+The level rule protects what a reader borrows.
+Middleware control memory that a faulty peer can corrupt lies outside that rule and needs containment of its own, as the statement says, and running in a separate process does not make a lower-assurance writer harmless.
+
+[[req-ssr-integrity-any-bits]]
+== In-place types accept every bit pattern
+
+[.specitem,oft-sid="req~ssr-integrity-any-bits~2",oft-title="In-place types accept every bit pattern",oft-needs="impl,utest",oft-tags="SafetyUpRustCore"]
+--
+*In-place types.*
+An in-place type is a native type, which a reader reads in place through a view (xref:wires/native.adoc#req-ssr-native-type[A native payload type holds its whole value in one fixed layout]).
+
+*No invalid bit pattern.*
+The element *MUST* give a reader a view only of a type that has no invalid bit patterns: no `+bool+`, `+char+`, enum or anything else with invalid values.
+The element *MUST* ensure that such fields are integers with checked getters.
+
+*At build time.*
+The derive *MUST* refuse a type that breaks this rule, when the type is built.
+The element *MUST* meet this item for the code that the derive generates into its build, the checked getters included.
+How a type becomes a native type without the derive is stated in xref:wires/native.adoc#req-ssr-native-type[A native payload type holds its whole value in one fixed layout], "Decided from the declaration".
+
+*What the rule does not do.*
+The rule decides which values a view can show, and nothing more.
+It does not make defined a read through a view, or through any other ordinary reference, that a write races.
+The conditions for a view exclude such a write (<<req-ssr-integrity-zero-copy,Zero-copy only from a writer at or above the reader>>, "When a view is allowed"), and the copy route reads bytes that a writer can race only through a mechanism defined for racing access.
+--
+
+[horizontal]
+ID:: `+req~ssr-integrity-any-bits~2+`
+ASIL:: B
+Allocated to:: the element; the derive, for its refusal of a type that breaks the rule
+Verification:: compile-fail (the derive refuses a type with such a field), test (a checked getter that reports a value outside its field's range; a view that shows frames of arbitrary bytes as values of the type)
+
+*Rationale.*
+A typed view of in-place bytes is sound only once every invalid bit pattern has been rejected.
+A check made once cannot hold while a faulty writer can still change the bytes.
+
+With no invalid bit patterns, a later bad write can only leave a wrong value.
+A checked getter reports a value outside its field's range.
+A wrong value inside that range is for whatever end-to-end protection the system supplies to detect, on the routes for which the integrator requires it (xref:../safety/elements/up-rust/assumptions-of-use.adoc#aou-seooc-e2e-protection[The integrator decides which routes need end-to-end protection]).
+That protection is the system's, and it need not be the route's wire.
+
+The writer-at-or-above rule and the view's synchronization exclude a write that races a read through an ordinary Rust reference (<<req-ssr-integrity-zero-copy,Zero-copy only from a writer at or above the reader>>).
+
+The derive runs when a type is built, so a type that breaks the rule is refused before any route can carry it.
+
+[[req-ssr-integrity-checked-at-admission]]
+== In-place frames are checked once, at admission
+
+[.specitem,oft-sid="req~ssr-integrity-checked-at-admission~2",oft-title="In-place frames are checked once, at admission",oft-needs="impl,utest",oft-tags="SafetyUpRustCore"]
+--
+The element *MUST* check an in-place frame's identity and shape once, when the frame is admitted, before any reader can see it.
+
+The element *MUST* refuse and count a frame that fails, so a reader's typed view of an admitted frame cannot fail on its bits.
+
+An in-place frame is a frame of a native route.
+A frame's shape is the size of its payload and the alignment of the address at which the payload lies, compared with the size and the alignment that the type's agreed layout fixes.
+The conditions for a view of an admitted frame are those of <<req-ssr-integrity-zero-copy,Zero-copy only from a writer at or above the reader>>, "When a view is allowed".
+--
+
+[horizontal]
+ID:: `+req~ssr-integrity-checked-at-admission~2+`
+ASIL:: B
+Allocated to:: the element
+Verification:: test (an in-place frame whose payload has the wrong size, one at an address of the wrong alignment, and one whose identity is not the route's: each refused at admission and counted)
+
+*Rationale.*
+In-place frames are borrowed through a checked typed view.
+Checking once, before any reader sees the frame, makes a malformed frame one counted refusal instead of an error at each reader.
+
+Because in-place types accept every bit pattern (<<req-ssr-integrity-any-bits,In-place types accept every bit pattern>>), the view needs no check of its bits after admission.
+
+Checking once is sound only for a frame that the reader's view keeps still.
+A frame whose writer is below the reader's level, or of unknown level, could still be changed by that writer, so it takes the copy route and is validated on the copy (<<req-ssr-integrity-zero-copy,Zero-copy only from a writer at or above the reader>>).
+
+[[req-ssr-integrity-carrier-crossing]]
+== Upward carrier crossings copy once, or are refused
+
+[.specitem,oft-sid="req~ssr-integrity-carrier-crossing~3",oft-title="Upward carrier crossings copy once, or are refused",oft-needs="impl,utest",oft-tags="SafetyUpRustCore"]
+--
+*Copy once.*
+The element *MUST* ensure that a carrier route whose ingress is a lending leg, and whose writer's level at that ingress, as the ingress's binding reports it, is below the egress's level or unknown (<<req-ssr-integrity-declared,Each transport declares one integrity level>>), copies each frame's payload extent once, directly into the lending egress's loan, which holds the payload alone, reading the ingress bytes through a source-access mechanism that is valid while the writer races it.
+That copy is the only integrity copy of the payload on the route.
+The element *MUST* ensure that the frame's header and metadata are acquired at the ingress through such a mechanism, within the frame's extent as the ingress's binding gives it, into storage of its own reserved at setup, and that the payload's place and length are taken from that acquired copy.
+Before it reads the payload, the element *MUST* establish with checked arithmetic that the payload lies within that frame extent, and check that its length is within the bound that the route declares and the payload capacity of the egress's loan.
+The element *MUST NOT* read anything else of the ingress's shared memory for the frame.
+How the egress's envelope is built is stated with the egress's binding.
+
+What makes such a mechanism valid is stated in <<req-ssr-integrity-zero-copy,Zero-copy only from a writer at or above the reader>>, "The copy route".
+
+*Validate and admit again.*
+The element *MUST* ensure that the frame is validated, and admitted again, on the acquired header and metadata and on the copied payload, because its filters and TTL were first read from memory the writer could still change.
+The element *MUST NOT* let the egress send a frame before that validation and that admission have passed.
+
+*Refusals at setup.*
+The element *MUST* ensure that each of these routes is refused at setup, naming the route and both levels, or the unknown one:
+
+* such a route to a byte-only egress, which has nothing to copy into;
+* a route whose ingress offers no such source-access mechanism, which cannot copy soundly.
+
+*Heap.*
+The element *MUST* acquire the header and metadata, copy the payload, validate the acquired header and metadata and the copied payload, and admit the frame again without acquiring or releasing heap memory, in its own work and in the work that it invokes for those operations.
+
+*What the copy protects.*
+The copy protects the payload only, not the ingress middleware's control memory.
+What a copy, a level and a refusal do not establish is stated in <<req-ssr-integrity-zero-copy,Zero-copy only from a writer at or above the reader>>, "What the copy protects".
+--
+
+[horizontal]
+ID:: `+req~ssr-integrity-carrier-crossing~3+`
+ASIL:: B
+Allocated to:: the element (carrier routes)
+Verification:: fault-injection (a writer changing a frame while it is forwarded: the frame is admitted or refused by its acquired header and metadata and its copied payload, no frame is sent before that admission, and the egress's loan holds the payload alone; a writer that places a frame's payload outside the frame's extent, or gives it a length above the route's bound or the payload capacity of the egress's loan: no byte read outside the frame's extent, and the frame not sent), test (at setup, a route from a lending ingress whose writer's level is below its egress's level, or unknown, to a byte-only egress, and such a route whose ingress offers no valid source-access mechanism, each refused, naming the route and both levels, or the unknown one; with every other route and frame admission condition met and no receive condition at the ingress requiring an integrity copy, a route whose ingress writer's level is at or above its egress's level, forwarded without an additional integrity copy), heap-window (the acquisition of the header and metadata, the payload copy, their validation and the second admission), review (each ingress's source-access mechanism, with the extent that it reads, at source level)
+
+*Rationale.*
+A carrier keeps a frame's bytes unchanged and makes at most one payload copy, into a lending egress's loan.
+So that copy, with the header and metadata acquired beside it, is the one place where a frame from a lower writer can be held still and checked.
+
+A byte-only egress (xref:../up-l2/streamer.adoc#req-ssr-carrier-route[A carrier route takes each frame at its ingress and sends it at its egress]) has no loan to copy into, so it receives the ingress bytes directly.
+
+An unknown level counts as lower, as it does on a receive route (<<req-ssr-integrity-declared,Each transport declares one integrity level>>), because a writer whose level nobody can state cannot be trusted to be at or above the reader.
+
+A copy made with ordinary loads from memory that a writer races, with nothing ordering them, is a data race (<<req-ssr-integrity-zero-copy,Zero-copy only from a writer at or above the reader>>).
+So the copy is sound only through a source-access mechanism that is valid while the writer races it.

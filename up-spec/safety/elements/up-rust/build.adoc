@@ -1,0 +1,177 @@
+= up-rust SEooC: Build and Shipped Content
+:toc: preamble
+
+The key words "*MUST*", "*MUST NOT*", "*REQUIRED*", "*SHALL*", "*SHALL NOT*", "*SHOULD*", "*SHOULD NOT*", "*RECOMMENDED*", "*MAY*", and "*OPTIONAL*" in this document are to be interpreted as described in https://www.rfc-editor.org/info/bcp14[IETF BCP14 (RFC2119 & RFC8174)]
+
+Conventions and tags: xref:../../README.adoc[Safety and assurance view].
+Scope and element boundary: xref:README.adoc[the up-rust SEooC element overview].
+Strict mode: xref:strict-mode.adoc[Strict mode].
+Rust crate isolation and soundness mechanisms: xref:../../../languages/rust.adoc[Rust language mapping].
+
+[[req-ssr-crate-core-only-binary]]
+== The checked policy stays in the safety crate, and no admitted optional layer bypasses or reimplements it
+
+[.specitem,oft-sid="req~ssr-crate-core-only-binary~5",oft-title="The checked policy stays in the safety crate, and no admitted optional layer bypasses or reimplements it",oft-needs="impl,utest",oft-tags="SafetyUpRustCore"]
+--
+*The checked policy.*
+The element's checked policy is the set of safety invariants and admission checks that the element's requirements give the element itself: the checks that each transport and route passes at its build and at the transition, and the invariants that the element's runtime path keeps.
+Strict mode's evaluation and its report are not part of it (xref:strict-mode.adoc#req-ssr-strict-states[Strict mode has four states]).
+
+*Isolation.*
+The element *MUST* keep its checked policy in the safety crate (xref:../../../languages/rust.adoc#req-ssr-crate-isolated[The safety crate cannot be tainted]), preserving the independent `+no_std+`, no-`+alloc+`, dependency-free synchronous or polled path (xref:../../../up-l1/runtime.adoc#req-ssr-crate-sync-path[Traffic is synchronous or polled]) and the minimal no-helper selection, usable without any optional allocation, startup-provisioning, serialized owned-value runtime-adapter, host, application, scheduler or memory-provider layer.
+
+*Non-bypass.*
+The element *MUST NOT* offer a way to build a transport or a route, to enter runtime mode or to carry traffic without passing the checks of its checked policy.
+It *MUST NOT* let another crate switch one of those checks off, and *MUST NOT* let its strict mode lift or replace one: strict mode reads the element's declarations and adds only refusals and reports of its own.
+
+*Strict mode's component.*
+The element *MUST* keep its strict mode in a component of its own, which needs no `+std+` and depends on no software component other than the safety crate (part E7: xref:README.adoc#req-ssr-element-boundary[The parts of the element, and element code]).
+
+*Optional layers.*
+An optional layer that a configuration admits *MUST NOT* bypass or reimplement the checked policy, and *MUST NOT* create an alternate policy engine.
+Where a configuration admits a startup-provisioning helper on the ASIL path (xref:../../profiles/up-rust-asil-b.adoc#req-ssr-element-configurations[The ASIL path and supported configurations]), that helper *MUST* delegate placement, admission and transition to the element's safety crate, *MUST NOT* bypass or weaken any check of the checked policy, and *MUST* keep within its declared scope: its initialization influence, its dependencies, its retained owners and any release code reachable from what it creates.
+Where a configuration admits a serialized owned-value runtime adapter on the ASIL path (xref:../../profiles/up-rust-asil-b.adoc#req-ssr-element-configurations[The ASIL path and supported configurations]), that adapter *MUST* confine itself strictly to implementing or serving as an explicitly identified subcomponent of an existing wire or allocation-provider role for acquisition, resize and exactly-once release of serialized message-owned values already permitted by that route's declared heap class (xref:../../../up-l1/payload-paths.adoc#req-ssr-heap-none[No heap in runtime mode on a native path]), *MUST NOT* act as a fourth unbounded allocation actor or exercise any free-standing allocation permission, *MUST NOT* bypass, weaken or reimplement any check of the checked policy, and *MUST* keep within its declared scope: its role, its allocation domains, its dependencies, its retained state and any release code reachable from what it creates.
+
+*Admission.*
+A configuration admits an optional layer only with that layer's own allocated requirements and its own evidence, covering its initialization influence, its dependencies, its retained owners or retained state, and any release code reachable from what it creates.
+Package linkage grants neither allocation permission nor assurance permission.
+On the ASIL path, a configuration admits no optional layer other than an explicitly selected startup-provisioning helper, an explicitly selected serialized owned-value runtime adapter strictly confined to an existing wire or allocation-provider role, or both as independent functional selections (xref:../../profiles/up-rust-asil-b.adoc#req-ssr-element-configurations[The ASIL path and supported configurations]): startup provisioning and the serialized owned-value runtime adapter are independent of one another, a configuration on the ASIL path that selects neither keeps the minimal no-helper selection, and generic collection libraries, arbitrary application helpers, executors, optional asynchronous or application-role layers and whole `+alloc+` or `+std+` crates remain excluded and are never admitted merely by linkage.
+
+*Scoped replacement.*
+This revision replaces the unqualified statement in revision 4 of this item that the ASIL path admits no optional layer, for the element and each optional layer that a configuration admits, solely for ASIL-path configurations that explicitly select an admitted startup-provisioning helper, an admitted serialized owned-value runtime adapter strictly confined to an existing wire or allocation-provider role, or both as independent functional selections under xref:../../profiles/up-rust-asil-b.adoc#req-ssr-element-configurations[The ASIL path and supported configurations].
+For ASIL-path configurations that select neither optional function, for the safety crate's independent checked core and non-bypass duties, and for all other optional layers, the duties and exclusions of revision 4 of this item remain in force.
+--
+
+[horizontal]
+ID:: `+req~ssr-crate-core-only-binary~5+`
+ASIL:: B
+Allocated to:: the element; each optional layer that a configuration admits, for not bypassing or reimplementing the checked policy, for creating no alternate policy engine, where it is a startup-provisioning helper admitted on the ASIL path, for delegating placement, admission and transition to the safety crate and keeping within its declared initialization, dependency, retained-owner and release scope, and, where it is a serialized owned-value runtime adapter admitted on the ASIL path, for confining itself strictly to an existing wire or allocation-provider role for permitted serialized message-owned values, acting as no fourth unbounded allocation actor or free-standing allocation permission, not bypassing, weakening or reimplementing any check of the checked policy and keeping within its declared role, domain, dependency, retained-state and release scope
+Verification:: gate, test, review
+* *gate*: strict mode's component, whose manifest names no dependency other than the safety crate, and which builds on a sysroot without `+std+`.
+* *test*: a link fixture that uses only the safety crate, a binding and a wire.
+* *review*
+** Each check of the element's checked policy, which stands in the safety crate.
+** Each public way to build a transport or a route, to enter runtime mode and to carry traffic, which passes those checks.
+** Strict mode's use of the element's declarations, which adds refusals and reports and lifts no check.
+** Each optional layer that a configuration admits, which neither bypasses nor reimplements those checks and creates no alternate policy engine; for each startup-provisioning helper admitted on the ASIL path, its delegation of placement, admission and transition to the safety crate and its declared initialization influence, dependencies, retained owners and reachable release code; for each serialized owned-value runtime adapter admitted on the ASIL path, its independence from startup provisioning, its strict confinement to implementing or serving as an explicitly identified subcomponent of an existing wire or allocation-provider role for permitted serialized message-owned values (with no fourth unbounded allocation actor or free-standing allocation permission), its non-bypass of checked core policy and its declared role, allocation domains, dependencies, retained state and reachable release code; and the exclusion of generic collection libraries, arbitrary application helpers, executors, optional asynchronous or application-role layers and whole `+alloc+` or `+std+` crates merely by linkage, with package linkage granting no allocation or assurance permission.
+
+*Rationale.*
+The safety crate's own build, and so the checked policy in it, cannot be changed by another crate's features (xref:../../../languages/rust.adoc#req-ssr-crate-isolated[The safety crate cannot be tainted]).
+Usable without any optional layer, the policy applies in full to a configuration that admits none.
+A check that a caller could go around, or that another crate could switch off, would protect only the callers that chose to pass it.
+Kept in a component that needs no `+std+` and depends only on the safety crate, strict mode can take part in a claimed graph without bringing another dependency into it.
+
+_Optional layers._
+With the checked policy in the safety crate, a claimed configuration can admit an independently specified optional layer—an admitted startup-provisioning helper, an admitted serialized owned-value runtime adapter strictly confined to an existing wire or allocation-provider role, or both on the ASIL path, or an allocation-aware or asynchronous layer outside it—for functions outside that policy.
+A layer that bypassed the policy would let a configuration run without its checks, and a layer that reimplemented it or created an alternate policy engine would run checks that the element's requirements and evidence do not cover.
+Keeping the two ASIL-path admissions independent, confining the runtime adapter strictly to an existing wire or allocation-provider role, and accounting for initialization influence, dependencies, retained owners or state and reachable release code prevent linked helper packages from silently introducing unchecked allocation, a fourth unbounded actor or assurance assumptions.
+A layer that no configuration admits stays out of every claimed graph (xref:assumptions-of-use.adoc#aou-seooc-build-configuration[The ASIL binary is built from its claimed graph, with the ASIL profile]; xref:strict-mode.adoc#req-ssr-strict-lock[The locked build allows only enforcement]).
+
+[[req-ssr-build-panic-abort]]
+== The ASIL build aborts on panic and checks overflow
+
+[.specitem,oft-sid="req~ssr-build-panic-abort~5",oft-title="The ASIL build aborts on panic and checks overflow",oft-needs="impl,utest,uman",oft-tags="SafetyUpRustCore,SafetyStreamer"]
+--
+*The ASIL profile.*
+The ASIL profile is the build profile that sets `+panic = "abort"+` and `+overflow-checks = true+`.
+An item of the up-rust SEooC requirement family that names the ASIL profile means these two settings.
+The Streamer binary *MUST* define the ASIL profile, with both settings, in its workspace's build configuration.
+The integrator's use of the ASIL profile for an ASIL binary is stated in xref:assumptions-of-use.adoc#aou-seooc-build-configuration[The ASIL binary is built from its claimed graph, with the ASIL profile].
+
+*The ASIL Streamer binary.*
+The Streamer binary *MUST* refuse to compile in a build that does not abort on panic.
+
+*An application's own binary.*
+The element *MUST* provide an ASIL build check that an application can place in its own binary.
+Placed there, the element's check *MUST* make that binary refuse to compile in a build that does not abort on panic, as the Streamer binary does.
+
+*Reach.*
+The refusal reaches only a binary that carries it: the Streamer binary, and an application's binary in which the element's check is placed.
+It judges no other binary or build, such as a binary that is not an ASIL binary, a test build or a tool of the build host.
+
+*Other builds.*
+The Streamer binary *MUST* keep its refusal out of every other build of its workspace: no test build compiles the binary, and the workspace's development build, its test builds, its lint run over all targets and its documentation build still compile.
+
+*What the profile permits.*
+The ASIL profile is a condition of the build.
+It permits no reachable panic or abort on a runtime path, which xref:../../../basics/error_model.adoc#req-ssr-refuse-no-panic[No panic on runtime paths] forbids for element code and xref:../../../up-l2/streamer.adoc#req-ssr-streamer-no-panic[The Streamer does not panic in runtime mode] forbids for the Streamer's own code and for the Streamer binary's own code, and no memory-safety failure, which xref:../../../languages/rust.adoc#req-ssr-unsafe-sound[Safe code cannot cause undefined behaviour] forbids for the element and xref:../streamer.adoc#req-ssr-streamer-memory-safety[The Streamer's own code cannot cause undefined behaviour, and its `unsafe` is inventoried] forbids for the Streamer's own code and for the Streamer binary's own code.
+--
+
+[horizontal]
+ID:: `+req~ssr-build-panic-abort~5+`
+ASIL:: B
+Allocated to:: the Streamer binary, for the ASIL profile in its workspace's build configuration, for its refusal and for keeping that refusal out of the other builds of its workspace; the element, for its ASIL build check for an application's own binary
+Verification:: gate
+* A build of the Streamer binary with unwinding fails to compile.
+* The ASIL profile's two settings in the build configuration of the Streamer binary's workspace.
+* Each test build of that workspace still compiles, and none compiles the binary.
+* The development build, the lint run over all targets and the documentation build of that workspace still compile.
+* An application's own binary that carries the element's ASIL build check fails to compile with unwinding, and compiles with `+panic = "abort"+`.
+* A binary that carries neither check still compiles with unwinding.
+
+*Rationale.*
+With `+panic = "abort"+`, a panic ends the process at once instead of unwinding through code that may hold half-changed state.
+Overflow checks turn an arithmetic overflow into that panic instead of a wrong value (source: the Cargo Book, Rust 1.98.1, chapter https://doc.rust-lang.org/1.98.1/cargo/reference/profiles.html[Profiles], sections panic and overflow-checks).
+
+_Placing the refusal._
+Cargo builds tests with unwinding (source: the Cargo Book, Rust 1.98.1, chapter https://doc.rust-lang.org/1.98.1/cargo/reference/profiles.html[Profiles], section panic).
+In a library crate, the refusal would stop that crate's tests, and every test that uses the crate, from compiling.
+
+_The development profile._
+Unless the development profile aborts on panic too, or the binary is left out of the default members, a development build of the workspace compiles the binary with unwinding, and fails (source: the Cargo Book, Rust 1.98.1, chapter https://doc.rust-lang.org/1.98.1/cargo/reference/profiles.html[Profiles], sections dev and Overrides; chapter https://doc.rust-lang.org/1.98.1/cargo/reference/workspaces.html[Workspaces], section The default-members field).
+
+_The effect of aborting._
+Aborting contains an unexpected defect.
+A reachable panic stays a defect (xref:../../../basics/error_model.adoc#req-ssr-refuse-no-panic[No panic on runtime paths]; xref:../../../up-l2/streamer.adoc#req-ssr-streamer-no-panic[The Streamer does not panic in runtime mode]).
+Aborting establishes no panic-free cleanup: a route that requires that guarantee is admitted on evidence or refused (xref:../../../basics/resources.adoc#req-ssr-heap-guarantees[A stronger resource guarantee is required by name, and admitted or refused]).
+
+[[req-ssr-build-specified-functions-only]]
+== The ASIL build contains only specified functions
+
+[.specitem,oft-sid="req~ssr-build-specified-functions-only~2",oft-title="The ASIL build contains only specified functions",oft-needs="impl,utest",oft-tags="SafetyUpRustCore,SafetyStreamer"]
+--
+In the ASIL build, the element and the Streamer *MUST* each contain only specified functions in their own code.
+
+The element and the Streamer *MUST* each keep their own instrumentation, benchmark code and test hooks out of the ASIL build, or specify them and show them unable to affect any software safety requirement.
+
+The rest of an ASIL image is the integrator's to account for (xref:assumptions-of-use.adoc#aou-seooc-build-configuration[The ASIL binary is built from its claimed graph, with the ASIL profile]).
+--
+
+[horizontal]
+ID:: `+req~ssr-build-specified-functions-only~2+`
+ASIL:: B
+Allocated to:: the element, for its own code; the Streamer, for its own code
+Verification:: gate (a symbols check on a final ASIL image, for the element's and the Streamer's test and benchmark entry points), review (the element's and the Streamer's code in the ASIL build, against their specified functions)
+ISO 26262:: 6-10.4.6 (part-clause numbers only)
+
+*Rationale.*
+Code in an image that no requirement specifies is code that no requirement's verification covers, yet it can still run and change state.
+
+Hidden test hooks are the usual case.
+An ASIL image would contain them unless they are left out, as the element's own are (<<req-ssr-no-test-hooks,The shipped element contains no test hook>>), or specified and shown unable to affect any software safety requirement.
+
+[[req-ssr-no-test-hooks]]
+== The shipped element contains no test hook
+
+[.specitem,oft-sid="req~ssr-no-test-hooks~2",oft-title="The shipped element contains no test hook",oft-needs="impl,utest",oft-tags="SafetyUpRustCore"]
+--
+The element *MUST* compile each of its code items that exists only for tests only under its test-hook configuration: one test-only build configuration, which the element's documentation names.
+The element *MUST NOT* set that configuration in any of its own shipped builds.
+What holds for the integrator's build of an ASIL binary is stated in xref:assumptions-of-use.adoc#aou-seooc-build-configuration[The ASIL binary is built from its claimed graph, with the ASIL profile].
+
+The async layer's seam is not a test hook; xref:../../../up-l2/execution.adoc#req-ssr-async-seam[The asynchronous interface has a written, executor-independent contract] states it.
+--
+
+[horizontal]
+ID:: `+req~ssr-no-test-hooks~2+`
+ASIL:: B
+Allocated to:: the element
+Verification:: gate, review
+* *gate*
+** The source scan refuses a hidden public function that is neither under the configuration nor one of the seam's names.
+** Built without the configuration, a probe naming each test hook fails to resolve.
+** The build configuration of each of the element's shipped builds, which does not set the configuration.
+* *review*: each code item of the element that exists only for tests, a function or an item of any other kind, compiled only under the configuration.
+
+*Rationale.*
+A test hook can change hidden protocol state, so in a shipped build it would be an operation that no requirement specifies (<<req-ssr-build-specified-functions-only,The ASIL build contains only specified functions>>).

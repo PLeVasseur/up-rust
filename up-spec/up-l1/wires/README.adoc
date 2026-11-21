@@ -1,0 +1,385 @@
+= uP-L1 Wires
+:toc: preamble
+
+The key words "*MUST*", "*MUST NOT*", "*REQUIRED*", "*SHALL*", "*SHALL NOT*", "*SHOULD*", "*SHOULD NOT*", "*RECOMMENDED*", "*MAY*", and "*OPTIONAL*" in this document are to be interpreted as described in https://www.rfc-editor.org/info/bcp14[IETF BCP14 (RFC2119 & RFC8174)]
+
+[NOTE]
+====
+This page holds common transport-wire contract and boundary requirements of the up-rust SEooC requirement family (`+req~ssr-*+`, `ASIL:: B`, `Safety*` tags).
+Filing on this page does not broaden any requirement to all uP-L1 implementations: whom each item binds, and how the repository's requirement families meet, is stated in xref:../../contract-generations.adoc[Which requirements an implementation follows] (xref:../../contract-generations.adoc#req-ssr-requirements-bind[A requirement binds the actors to which it gives a duty]; xref:../../contract-generations.adoc#req-ssr-item-reading[How an item is read]).
+
+Each item's statement says whom it binds: here, each wire under the conditions that the statement gives, and the element for the metadata encoding duty in <<req-ssr-wire-metadata-format,A wire states the format of its frame metadata, and decodes it>> and the wire-boundary memory-safety duty in <<req-ssr-unsafe-wire-untrusted,No wire can break the element's memory safety>>.
+What a wire is, and what is not one: <<req-ssr-wire-scope,What a wire is, and the wire contract>>.
+
+Conventions and tags: xref:../../safety/README.adoc[Safety and assurance view].
+The element whose interface a wire is written against: xref:../../safety/elements/up-rust/README.adoc[up-rust SEooC element overview].
+Related `+unsafe+` inventory governance and Rust soundness rules: xref:../../safety/assurance.adoc#req-ssr-unsafe-inventory[Every `unsafe` is inventoried and justified] and xref:../../languages/rust.adoc#req-ssr-unsafe-sound[Safe code cannot cause undefined behaviour].
+
+What depends on the kind of payload a wire carries is listed in <<one-wire>>.
+Each kind of wire has a page of its own: xref:native.adoc[the native wire], xref:serialized.adoc[serialized wires, and the values they own], xref:xcdrv2.adoc[the XCDR2 little-endian appendable profile], and xref:e2e.adoc[the end-to-end protection wire].
+====
+
+[[req-ssr-wire-scope]]
+== What a wire is, and the wire contract
+
+[.specitem,oft-sid="req~ssr-wire-scope~2",oft-title="What a wire is, and the wire contract",oft-needs="uman",oft-tags="SafetyWire"]
+--
+*What a wire is.*
+A wire is the part through which a route writes a payload into the storage that carries its frame, and reads a payload that has arrived.
+It is written against the interface between the element and a wire, whose side in the element is in part E1 of the element (xref:../../safety/elements/up-rust/README.adoc#req-ssr-element-boundary[The parts of the element, and element code]).
+
+*The wire contract.*
+The wire contract of a wire is that interface together with every duty that the statement of a requirement of the up-rust SEooC requirement family gives that wire (xref:../../contract-generations.adoc#req-ssr-requirements-bind[A requirement binds the actors to which it gives a duty]):
+
+* each duty that a statement gives each wire;
+* each duty that a statement gives the wires of its kind or of its profile, such as each serialized wire or each wire of one profile;
+* each duty that a statement gives that wire alone.
+
+A duty that a statement gives another part is not part of a wire's contract, even where the same item gives that wire a duty too.
+
+*What is not a wire.*
+A codec that is not written against that interface is not a wire.
+
+*Kinds of wire.*
+
+* A serialized wire is one that encodes a value into the bytes of a format, and decodes such bytes into a value.
+* The native wire carries a native representation: the value of a native type as it lies in memory (xref:native.adoc#req-ssr-native-type[A native payload type holds its whole value in one fixed layout]).
+
+*Native and serialized routes.*
+A native route is a route whose wire carries a native type in place.
+A serialized route is a route whose wire carries an encoding of the value in one stated format.
+
+*More than one wire.*
+A route that declares more than one wire is a composition of those wires, and so is a wire that wraps another wire together with the wire that it wraps.
+The route's declaration names each wire of a composition.
+It also names the one of them that decodes the metadata of the route's frames (<<req-ssr-wire-metadata-format,A wire states the format of its frame metadata, and decodes it>>, "The selected wire").
+Each of them keeps its own kind and its own wire contract, under the conditions that the statements of that contract give: a wrapping wire meets its own contract, and the wire that it wraps meets its own.
+A composition gives no wire a duty of another, and what is shown for one of its wires is shown for that wire alone.
+
+*Ordinary and sequenced.*
+A sequenced wire is one that deliberately changes its encoding from one encode to the next.
+Every other wire is an ordinary wire.
+
+*A separate element.*
+The native wire is in part E1 of the element (xref:../../safety/elements/up-rust/README.adoc#req-ssr-element-boundary[The parts of the element, and element code]), as the element's own wire for the Rust-only native domain (xref:native.adoc#req-ssr-native-agreement[A native type is read only under its exactly agreed layout], "Only between binaries that use the element").
+The end-to-end protection wire is part E6 of the element (xref:../../safety/elements/up-rust/README.adoc#req-ssr-element-boundary[The parts of the element, and element code]).
+Each other wire is not part of the element, whether or not it is built, shipped or deployed together with the element.
+--
+
+[horizontal]
+ID:: `+req~ssr-wire-scope~2+`
+ASIL:: B
+Allocated to:: each wire
+Verification:: review (each statement and allocation that uses a word that this item defines, read with this item)
+
+*Rationale.*
+Whom a duty of a wire binds, and which rules a payload meets, depend on what a wire is and of which kind it is.
+The items use these words in their statements and allocations.
+
+_The measure of the contract._
+A wire's contract is read from the statements that give that wire a duty.
+So a duty that an item gives the element, the page on which an item is filed, and the repository that holds a wire add nothing to it.
+
+_A separate element._
+A wire's code runs inside the element's calls, and that does not make it element code.
+A wire that is not part of the element is developed and verified as a component of its own, so a claim for the element says nothing of it.
+
+[[req-ssr-wire-no-panic]]
+== Encoding and decoding never panic
+
+[.specitem,oft-sid="req~ssr-wire-no-panic~3",oft-title="Encoding and decoding never panic",oft-needs="impl,utest",oft-tags="SafetyWire"]
+--
+*No panic.*
+A wire's encode and decode *MUST NOT* panic on any input.
+
+*Invalid input.*
+Decoding *MUST* return an error for every input that is not, in the wire's format, an encoding of a value of the type it decodes.
+An input that is malformed, that ends inside an element of its encoding, or that carries bytes its format does not accept is such an input.
+An input that the format makes an encoding of some value of the type is not such an input, however it came to be: a shorter or a longer input than a sender wrote can be one.
+
+*An empty input.*
+The wire's format decides whether an empty input is an encoding, and of which value.
+
+* Where the format gives the type no empty encoding, an empty input *MUST* be an error.
+* Where the format makes the empty input the encoding of a value of the type, decoding it *MUST* yield that value, whether or not the wire's own encoder writes that value as empty.
+* A wire *MUST NOT* accept an empty input for any other reason.
+
+*What a wire decodes.*
+The input that a wire decodes is a payload's bytes and, where a route selects the wire to decode the metadata of its frames (<<req-ssr-wire-metadata-format,A wire states the format of its frame metadata, and decodes it>>), that metadata.
+Each duty of this item holds for each such decode.
+A frame's header and envelope, and a frame that lacks them, are handled as xref:../../basics/error_model.adoc#req-ssr-refuse-no-panic[No panic on runtime paths], "Malformed frames", states, and the sample that carries a frame as the items of its binding state.
+--
+
+[horizontal]
+ID:: `+req~ssr-wire-no-panic~3+`
+ASIL:: B
+Allocated to:: each wire
+Verification:: test, fault-injection
+* *fault-injection*: arbitrary byte strings decoded as a payload and, where a route selects the wire to decode the metadata of its frames, as metadata: each one decoded or refused with an error, and none a panic.
+* *test*
+** Every expected result of the wire contract suite is stated from the wire's format and from the type decoded, before the wire runs. None is taken from the wire under test, its encoder included, or from the length of a sample's encoding.
+** Invalid inputs that the format defines, each refused: a malformed one, one that ends inside an element of its encoding, and one that carries bytes the format does not accept.
+** Where the format makes a shorter or a longer input an encoding of another value of the type, no case expects that input to be refused.
+** An empty input for a type to which the format gives no empty encoding: refused.
+** An empty input for a type whose format makes it the encoding of a value: decoded, and the result compared with the value that the case states from the format.
+** No case requires a wire's encoder to write one particular encoding of a value where the format allows several.
+** Controls on the suite itself, each a wire that the suite must fail: one whose decoder returns a default for an empty input that the format does not define; one whose decoder refuses an empty input that the format defines; one whose decoder and encoder agree with each other against the format.
+** A control that the suite must pass: a wire that decodes the empty input which its format defines, and whose encoder writes the same value with a non-empty encoding that the format also allows.
+** A property test over arbitrary byte strings decoded, and over arbitrary values of the type encoded, with no panic. A run that catches a panic uses the unwinding test profile, and counts as supporting evidence only (xref:../../safety/assurance.adoc#req-ssr-verification-methods[The verification methods, and what a Verification line asks for], "Profiles and toolchains").
+
+*Rationale.*
+Decoding reads bytes a peer sent.
+So a panic on bad input would let any faulty peer end the receiving process (xref:../../basics/error_model.adoc#req-ssr-refuse-no-panic[No panic on runtime paths]).
+
+_What is valid is the format's._
+Which inputs are encodings is defined by the wire's format, which a message names through its payload encoding (xref:../../basics/payload_encoding_registry.adoc[the payload encoding registry]).
+The safety constraint follows from that boundary: whatever the format does not make an encoding is an error, and nothing is a panic.
+
+A format can make a shortened input, or an input with further elements, an encoding of another value.
+No decoder can refuse such an input.
+Whoever needs such a change detected supplies end-to-end protection (xref:../../safety/elements/up-rust/assumptions-of-use.adoc#aou-seooc-e2e-protection[The integrator decides which routes need end-to-end protection]).
+
+_Empty inputs._
+An empty input is not malformed by being empty.
+
+* The protocol treats an explicitly set zero-length payload as a present payload (xref:../../basics/umessage.adoc[UMessage]).
+* Its error model asks an operation that returns no data to answer with an empty message, which its consumer receives as an empty payload (xref:../../basics/error_model.adoc[the error model]).
+* A format whose every encoding has at least one byte has no empty encoding, and a wire of such a format refuses an empty input.
+
+So the rule follows the format.
+
+_Why each expected result comes from the format._
+A check that asks a wire's own encoder what its decoder should accept shows only that the two agree.
+Two faults that agree pass such a check, and a correct wire whose encoder writes another encoding of the same value fails it.
+A check that accepts a refusal of every empty input passes a decoder that refuses the empty encoding its format defines.
+So the suite states each expected result from the format, and its controls show that it tells these wires apart.
+
+_What a wire decodes._
+A frame's metadata, where a wire decodes it, is bytes that a peer sent, as a payload is.
+So the same rule holds for it.
+
+[[req-ssr-wire-metadata-format]]
+== A wire states the format of its frame metadata, and decodes it
+
+[.specitem,oft-sid="req~ssr-wire-metadata-format~1",oft-title="A wire states the format of its frame metadata, and decodes it",oft-needs="impl,utest,uman",oft-tags="SafetyWire,SafetyUpRustCore"]
+--
+*The selected wire.*
+The wire that a route selects to decode the metadata of its frames is one of the wires that the route declares.
+On a route that declares one wire, it is that wire.
+On a route that declares more than one wire, it is the one of them that the route's declaration names for that metadata (<<req-ssr-wire-scope,What a wire is, and the wire contract>>, "More than one wire").
+
+*The format.*
+Each wire that a route selects to decode the metadata of its frames *MUST* state in its README the format of that metadata, at a fixed version:
+
+* the prefix that names the frame's wire, its payload family and its metadata layout, and the fields that follow the prefix in that layout;
+* the byte order of its numbers;
+* how it says whether the frame has a payload and, for a frame that has one, the payload's encoding identifier;
+* the frame's source and its sink;
+* the place and the size of each other field on which a requirement relies, such as a message's token.
+
+Where a requirement that is specific to one binding fixes one of these facts for the frames that the binding carries, such as the byte order of the numbers, the wire *MUST* state that fact, for the metadata of those frames, as that requirement fixes it.
+
+*Writing.*
+On a route that selects a wire to decode its frame metadata, the element *MUST* encode the metadata of each frame that it originates in that wire's stated metadata format.
+Metadata re-encoding when a frame is forwarded is stated in xref:../../up-l2/streamer.adoc#req-ssr-streamer-byte-identity[Carriage keeps the bytes], "Metadata at egress".
+
+*Decoding.*
+The wire *MUST* decode metadata in that format only.
+It *MUST* report to the element, for the metadata of each frame, whether that metadata decodes in the format, and it *MUST NOT* give the element a field that the metadata does not hold, by a default or by a lenient reading of its own.
+--
+
+[horizontal]
+ID:: `+req~ssr-wire-metadata-format~1+`
+ASIL:: B
+Allocated to:: each wire that a route selects to decode the metadata of its frames; the element, for encoding the metadata of each frame that it originates on a route that selects a wire to decode frame metadata
+Verification:: review, test, fault-injection
+* *review*: the stated format, against the wire's code and against the fields on which the items of each binding that carries the wire's frames rely.
+* *test*: metadata written from the stated format, for each field and for a frame with and without a payload, decoded by the wire and compared field by field; metadata that does not decode in the format, reported as not decoding; metadata that lacks a field, with no value supplied for it.
+* *test*: metadata of frames originated by the element, checked against the selected wire's stated format and the frame's fields by a reader written from that format independently of the element's writer and the selected wire's decoder: each field, an absent payload, a present empty payload and a present nonempty payload; on a route declaring two wires with different metadata formats, the format of the one selected for metadata; a control whose writer uses the other wire's format to produce metadata outside the selected wire's format fails this check.
+* *fault-injection*: arbitrary metadata bytes, each decoded or reported as not decoding.
+
+*Rationale.*
+A frame's metadata says what the frame is: which wire, payload family and layout, whether it has a payload, and where it comes from and goes to.
+The binding carries it unchanged and reads only what it needs to hand the frame over, and the element decides from it whether the frame is the route's.
+So the format has one owner, the wire that the route selects, and an independent implementation reads it from that wire's statement.
+A field that a decoder made up could let a frame pass for another route's.
+
+[[req-ssr-wire-heap-claim-tested]]
+== A heap-free claim is true, and encoding is repeatable
+
+[.specitem,oft-sid="req~ssr-wire-heap-claim-tested~4",oft-title="A heap-free claim is true, and encoding is repeatable",oft-needs="impl,utest",oft-tags="SafetyWire"]
+--
+*A heap-free claim.*
+In each direction in which a wire declares a heap class of none (xref:../../basics/resources.adoc#req-ssr-heap-declared[The heap class is declared, with no default]), the wire *MUST* make each of these hold on each route that uses it, from the moment at which the transition of the route's transport returns:
+
+* describing, sizing, encoding and decoding allocate and free nothing;
+* in the decode direction, replacing a decoded value in its slot and destroying one allocate and free nothing;
+* a size that it reports as exact is the size of what it writes;
+* the result of decoding does not depend on what the slot held before.
+
+*Repeatable encoding.*
+Whatever its heap class, a serialized wire *MUST* encode repeatably:
+
+* an ordinary serialized wire *MUST* write the same bytes each time it encodes the same value of a type that it is declared for;
+* a sequenced wire *MUST* write the same encodings, in the same order, from equal starting states and for the same values.
+--
+
+[horizontal]
+ID:: `+req~ssr-wire-heap-claim-tested~4+`
+ASIL:: B
+Allocated to:: each wire, in each direction in which it declares a heap class of none; each serialized wire, for repeatable encoding
+Verification:: heap-window, test
+* *heap-window*: the wire contract suite, for each direction in which the wire declares a heap class of none, over describing, sizing, encoding and decoding and, in the decode direction, over replacing a decoded value in its slot and destroying one; over values of the type, and over arbitrary byte strings decoded.
+** A wire whose decoded value frees memory when it is replaced or destroyed fails the check for the decode direction.
+** A wire whose decoded value runs a destructor that uses no heap passes it.
+** Receivers' slot storage is made before the window opens.
+* *test*: the wire contract suite for an ordinary wire and the sequenced wire contract suite for a sequenced wire, each with its negative controls.
+** An exact size, compared with the bytes written, and a decode into a slot that held each of several earlier values, with the same result each time.
+** A value encoded twice by an ordinary serialized wire, with the same bytes both times, for a wire that declares allocation as for one that declares none.
+** Two senders of a sequenced wire that are built from equal starting states and encode the same values: the same encodings, in the same order.
+** An ordinary wire fails the sequenced check of the sequenced wire contract suite, and the end-to-end protection wire fails the ordinary check of the wire contract suite.
+** A wire that draws a random value for each encode fails the check of repeatable encoding.
+** The interface of the sequenced check: a way to build a sender from a start value that it is given, and a way to build a receiver.
+
+*Rationale.*
+A declared heap class of none is a claim that a route relies on: the element admits a native route, or a route whose class is none, on it (xref:../../basics/resources.adoc#req-ssr-heap-declared[The heap class is declared, with no default]).
+So the claim has to be true of everything that the wire does in that direction.
+A serialized wire that declares allocation in a direction is not required by this item to be heap-free there.
+Its work that a native route shares with a serialized one is subject to xref:../payload-paths.adoc#req-ssr-heap-none[No heap in runtime mode on a native path], "What the native rule covers".
+
+_A value's whole life._
+A wire's class for its decode direction covers a decoded value's whole life (xref:../../basics/resources.adoc#req-ssr-heap-declared[The heap class is declared, with no default]).
+A check of the decoding call alone would let a value that frees memory only when it ends pass as heap-free.
+So the claim covers replacement and destruction too.
+The same reading lets a heap-free route admit a type whose destructor uses no heap (xref:../runtime.adoc#req-ssr-heap-slot-types[A decoded value is destroyed once, as its route's class admits]).
+
+_Repeatable encoding._
+A wire whose bytes changed from one encode of a value to the next, for no stated reason, could not be reproduced: a fault seen once could not be shown again, and two encodings of one value could not be compared.
+A sequenced wire deliberately changes its encoding (<<req-ssr-wire-scope,What a wire is, and the wire contract>>).
+So the duty holds for it from equal starting states, and not for every encode.
+
+[[req-ssr-wire-readme]]
+== A wire's README says what its format is and what it cannot detect
+
+[.specitem,oft-sid="req~ssr-wire-readme~1",oft-title="A wire's README says what its format is and what it cannot detect",oft-needs="uman",oft-tags="SafetyWire"]
+--
+Each wire *MUST* state in its README:
+
+* its format: the payload encoding identifier that it writes and reads, and the specification of that format at a fixed version or, for a native representation, the agreement that its types are carried under;
+* what agrees the type of a payload between a sender and a receiver, and what the wire checks of it;
+* what its format cannot detect, such as an input that was cut to another valid encoding, or a field whose meaning changed;
+* its heap class for each direction, with the policy of each direction that allocates, an unknown stated as unknown (xref:../../basics/resources.adoc#req-ssr-heap-declared[The heap class is declared, with no default]);
+* its largest encoding, or that it has none.
+
+The wire *MUST* keep its README in agreement with what it declares to the element.
+
+*What the README does not hold.*
+The facts of a wire's qualification that change from one release to the next, such as the versions that it was verified with, the evidence of its runs and its known anomalies, are no part of what this item requires the README to state.
+The README *MAY* link to a record, versioned with the wire, that holds them.
+--
+
+[horizontal]
+ID:: `+req~ssr-wire-readme~1+`
+ASIL:: B
+Allocated to:: each wire
+Verification:: review (the README against the wire's declarations and against the format's specification), test (the declared identifier, sizes and heap classes compared with the README's, by the wire contract suite)
+
+*Rationale.*
+An integrator chooses a wire for a message, and decides which routes need end-to-end protection (xref:../../safety/elements/up-rust/assumptions-of-use.adoc#aou-seooc-e2e-protection[The integrator decides which routes need end-to-end protection]).
+Both choices need to know what the wire's format can and cannot show, and what the wire costs.
+
+_What the README does not hold._
+What a wire declares of itself lasts as long as its code, so a README can state it.
+What a release was verified with changes with each release, so it belongs in a record that carries a version, where an entry can be dated and replaced.
+
+
+[[req-ssr-unsafe-wire-untrusted]]
+== No wire can break the element's memory safety
+
+[.specitem,oft-sid="req~ssr-unsafe-wire-untrusted~2",oft-title="No wire can break the element's memory safety",oft-needs="impl,utest",oft-tags="SafetyUpRustCore,SafetyGateUpRust"]
+--
+The element *MUST NOT* let its memory safety depend on a wire's code being right.
+
+Where memory safety depends on a byte count, a length or a claim, the element *MUST NOT* take it from wire code on trust:
+
+* it *MUST* check the writer after encoding and refuse one that was replaced;
+* it *MUST* refuse a frame for which the wire reports more bytes than it wrote, and *MUST NOT* send or read a byte that the wire did not write;
+* it *MUST* give decoding only a valid mutable reference to an initialized value.
+--
+
+[horizontal]
+ID:: `+req~ssr-unsafe-wire-untrusted~2+`
+ASIL:: B
+Allocated to:: the element
+Verification:: test (a replaced writer is refused; a wire that reports more bytes than it wrote has its frame refused, with no byte beyond those that it wrote sent or read), miri
+
+*Rationale.*
+A wire can be written in safe code alone, against a safe interface.
+So its code can be wrong without any `+unsafe+`, and the element cannot rely on what it reports.
+
+Encoding goes through a checked writer that keeps the count of the bytes written itself.
+So a safe wire cannot claim more initialized bytes than it wrote.
+A frame sent at a length above that count would carry bytes that nothing wrote, so the element refuses it.
+
+[[one-wire]]
+== What depends on the payload a wire carries
+
+The rules that depend on what a wire carries are stated with their owner: for a native representation on xref:native.adoc[the native wire's page], and for a serialized encoding on xref:serialized.adoc[the page of serialized wires], with the rules of one format on xref:xcdrv2.adoc[the XCDR2 little-endian appendable profile].
+The rules for serialized wires are worked through for one format, Protobuf, in xref:serialized.adoc#protobuf[a worked example: Protobuf].
+
+[cols="2,5",options="header"]
+|===
+| What the wire carries | Rules
+
+| A native representation, which a reader borrows in place
+a|
+* xref:native.adoc#req-ssr-native-type[A native payload type holds its whole value in one fixed layout]
+* xref:native.adoc#req-ssr-native-agreement[A native type is read only under its exactly agreed layout]
+* xref:native.adoc#req-ssr-native-in-place[A native payload is written and read where it is carried, or its route is refused]
+* xref:../peers.adoc#req-ssr-native-abi-agreed[A native representation never crosses an ABI]
+* xref:../integrity.adoc#req-ssr-integrity-zero-copy[Zero-copy only from a writer at or above the reader], "When a view is allowed"
+* xref:../integrity.adoc#req-ssr-integrity-any-bits[In-place types accept every bit pattern]
+* xref:../integrity.adoc#req-ssr-integrity-checked-at-admission[In-place frames are checked once, at admission]
+* xref:../../basics/resources.adoc#req-ssr-heap-declared[The heap class is declared, with no default], "Refusal at the transition", and xref:../runtime.adoc#req-ssr-heap-slot-types[A decoded value is destroyed once, as its route's class admits], "Native routes"
+
+| A serialized encoding, decoded into a value that borrows nothing from its input, its frame or its wire
+a|
+* xref:serialized.adoc#req-ssr-wire-serialized-format[A serialized wire reads and writes one stated format]
+* xref:serialized.adoc#req-ssr-wire-encode-decode[A serialized wire encodes once into the storage it is given, and decodes into a value that its slot owns]
+* xref:../../basics/resources.adoc#req-ssr-heap-declared[The heap class is declared, with no default], "What a class covers"
+* xref:../../basics/resources.adoc#req-ssr-heap-guarantees[A stronger resource guarantee is required by name, and admitted or refused], "Ordinary ownership"
+* xref:../runtime.adoc#req-ssr-heap-slot-types[A decoded value is destroyed once, as its route's class admits], "Routes that declare allocation"
+* xref:../../safety/elements/up-rust/assumptions-of-use.adoc#aou-seooc-resource-guarantees[A resource guarantee the item relies on is required by name]
+
+| A serialized encoding in the XCDR2 little-endian appendable profile
+a|
+* xref:xcdrv2.adoc#req-ssr-xcdr2-types[The profile encodes structures of fixed-width fields, and nothing else]
+* xref:xcdrv2.adoc#req-ssr-xcdr2-encoding[An encoding is an encapsulation header, a delimiter header and the fields in order, little-endian and aligned]
+* xref:xcdrv2.adoc#req-ssr-xcdr2-length[The encoded length of a type is exact]
+* xref:xcdrv2.adoc#req-ssr-xcdr2-decoding[Decoding refuses a wrong length, a wrong header or a wrong boolean byte]
+* xref:xcdrv2.adoc#req-ssr-xcdr2-evolution[A type grows only by fields added at its end, and a receiving end reads only the types that it admits]
+* xref:xcdrv2.adoc#req-ssr-xcdr2-identity[The bytes name no type, and a changed type is another type]
+
+| End-to-end protection around another wire's payload
+a|
+* The items of xref:e2e.adoc[the end-to-end protection wire]
+* xref:e2e.adoc#req-ssr-e2e-not-required[The element requires end-to-end protection on no route, outside strict mode's black-channel rule], "A route that selects the E2E wire"
+|===
+
+[[encoding-identifier]]
+=== The encoding identifier is the registry's
+
+Whatever a wire carries, the identifier that says how its payload is encoded is one of xref:../../basics/payload_encoding_registry.adoc[the payload encoding registry].
+The protocol chapters govern the identifier.
+
+* *Originating.*
+The registry's rules for whoever originates an identifier apply to a message sent through a wire (xref:../../basics/payload_encoding_registry.adoc#allocation[the payload encoding registry, "Allocation and Origination"]).
+* *Presence.*
+xref:../../basics/uattributes.adoc#common-attributes[UAttributes], `payloadEncodingId`.
+* *Type and layout.*
+The identifier does not say which type, schema or memory layout a payload has (xref:../../basics/payload_encoding_registry.adoc#type-identity[the payload encoding registry, "Encoding Identity versus Type Identity"]).
+* *Resources.*
+xref:../../basics/resources.adoc#req-ssr-heap-declared[The heap class is declared, with no default]; xref:../../basics/resources.adoc#req-ssr-heap-guarantees[A stronger resource guarantee is required by name, and admitted or refused].
+* *Reading and carrying.*
+xref:../../basics/payload_encoding_registry.adoc#acceptance[the payload encoding registry, "Carrying a Payload versus Reading It"].
+For the element, the check before a wire reads is xref:../payload-paths.adoc#req-ssr-wire-encoding-checked[A wire is given only a payload of its own encoding].

@@ -1,13 +1,13 @@
 # Implementation traceability for the up-rust SEooC requirements
 
-> **Specification pairing — November 20, 2026.** The current specification is
-> up-spec `f18913c6ed062dc6d6c3d7a73dec7a33433b39e4`, mirrored exactly under
-> `up-spec/`. This note retains its original source observations and subsequent
-> documentary mappings as they stood at SDK `8e386c12f2d7a3441fb0ff7216df5ef7ea331161`.
-> “Current”, revision tables and file locations below refer to those historical
-> baselines. Reconciliation of actors, revisions, paths, source and evidence with
-> the newly adopted specification is pending. No implementation or coverage tag
-> is upgraded by this pairing. See [the pairing record](spec-pairing-20261120.md).
+> **Specification pairing — November 21, 2026.** The current specification is
+> up-spec `fc32a01fe7ec772940c143bce4f0973896a9decb`, mirrored exactly under `up-spec/`.
+> This note preserves the source observations and documentary mappings retained
+> at SDK `0786fa6e3cd7dbe12c8c10a47d2b581914854b29`. “Current”, revision
+> tables, paths and claims below refer to their historical baselines.
+> Reconciliation of actors, revisions, paths, source and evidence with the new
+> specification is pending. No implementation or coverage tag is upgraded.
+> See [the pairing record](spec-pairing-20261121.md).
 
 **Non-normative.** This note is SDK-side traceability. The specification in
 `up-spec/safety/` defines what the SDK must satisfy: the element's own rules in

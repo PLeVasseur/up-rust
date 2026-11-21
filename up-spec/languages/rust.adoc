@@ -1,0 +1,232 @@
+= Rust language mapping
+:toc: preamble
+
+The key words "*MUST*", "*MUST NOT*", "*REQUIRED*", "*SHALL*", "*SHALL NOT*", "*SHOULD*", "*SHOULD NOT*", "*RECOMMENDED*", "*MAY*", and "*OPTIONAL*" in this document are to be interpreted as described in https://www.rfc-editor.org/info/bcp14[IETF BCP14 (RFC2119 & RFC8174)]
+
+[NOTE]
+====
+This page holds Rust-specific mechanism requirements of the up-rust SEooC requirement family (`+req~ssr-*+`, `ASIL:: B`, `Safety*` tags) alongside the language-neutral library rules of xref:../languages.adoc[uProtocol Language Library].
+Whom each `+req~ssr-*+` item binds, and how the three requirement families meet, is stated in xref:../contract-generations.adoc[Which requirements an implementation follows] (xref:../contract-generations.adoc#req-ssr-requirements-bind[A requirement binds the actors to which it gives a duty]; xref:../contract-generations.adoc#req-ssr-item-reading[How an item is read]).
+These Rust and Cargo mechanisms bind only the actors their statements name and impose no Rust crate structure on non-Rust implementations.
+====
+
+== Runtime handle drop discipline
+
+[[req-ssr-release-inert-drop]]
+=== Dropping a runtime handle does nothing
+
+[.specitem,oft-sid="req~ssr-release-inert-drop~1",oft-title="Dropping a runtime handle does nothing",oft-needs="impl,utest",oft-tags="SafetyUpRustCore,SafetyStreamer"]
+--
+The element *MUST* have every runtime-mode handle type hold only `+'static+` data and indices, and *MUST NOT* let one have drop glue.
+The Streamer *MUST* have its runtime type and its gate and counter handles hold only `+'static+` data and indices, and *MUST NOT* let one of them have drop glue.
+The handle types are:
+
+* the transport runtime;
+* every activated L2 handle;
+* the carrier routes;
+* the Streamer with its gate and counter handles.
+
+The element *MUST* have this proved for each type at compile time, and the Streamer *MUST* have it proved at compile time for its runtime type and its gate and counter handles.
+--
+
+[horizontal]
+ID:: `+req~ssr-release-inert-drop~1+`
+ASIL:: B
+Allocated to:: the element; the Streamer, for its runtime type and its gate and counter handles
+Verification:: gate (the const assertion for each handle type)
+
+*Rationale.*
+A handle that held a reference count, such as an `+Arc+`, could free memory when the last one is dropped, which runtime mode forbids (xref:../up-l1/payload-paths.adoc#req-ssr-heap-none[No heap in runtime mode on a native path]).
+A proof at compile time holds for every build of every handle type, where a test could only sample it.
+
+A per-message operation, such as a lease or an asynchronous operation still in flight, is not such a handle.
+Its drop follows xref:../up-l1/runtime.adoc#req-ssr-release-lease-drop[A lease gives back its slot and nothing else] and xref:../up-l2/execution.adoc#req-ssr-async-seam[The asynchronous interface has a written, executor-independent contract].
+
+== Crate isolation
+
+[[req-ssr-crate-isolated]]
+=== The safety crate cannot be tainted
+
+[.specitem,oft-sid="req~ssr-crate-isolated~1",oft-title="The safety crate cannot be tainted",oft-needs="impl,utest",oft-tags="SafetyUpRustCore"]
+--
+The element *MUST* keep its runtime path in one crate, the safety crate, which is `+no_std+`, uses no `+alloc+`, has no dependencies and declares no Cargo features.
+So no other crate in a build can switch `+std+` or `+alloc+` on inside it.
+--
+
+[horizontal]
+ID:: `+req~ssr-crate-isolated~1+`
+ASIL:: B
+Allocated to:: the element
+Verification:: gate (the manifest has no `+[features]+` and no `+[dependencies]+`; the crate builds on a sysroot with neither `+alloc+` nor `+std+`)
+
+*Rationale.*
+Where several packages of a build depend on one crate, Cargo builds that crate with the union of the features that they enable, apart from the situations in which its version 2 resolver keeps features apart (source: the Cargo Book, Rust 1.98.1, chapter https://doc.rust-lang.org/1.98.1/cargo/reference/features.html[Features], sections Feature unification and Feature resolver version 2).
+A crate with neither features nor dependencies offers no feature that another package can enable and has no dependency whose features a build can change.
+So nothing outside it can switch `+std+` or `+alloc+` on inside it, whatever other crates ask for and whichever resolver a build uses: the item chooses these restrictions as a boundary that holds by construction.
+Code that needs `+std+`, such as an asynchronous runtime or a Protobuf codec, therefore lives in other crates.
+
+[[req-ssr-e2e-crate-isolated]]
+=== The E2E wire's crate cannot be tainted
+
+[.specitem,oft-sid="req~ssr-e2e-crate-isolated~2",oft-title="The E2E wire's crate cannot be tainted",oft-needs="impl,utest",oft-tags="SafetyE2eWire"]
+--
+The E2E wire *MUST* live in its own crate:
+
+* `+no_std+`;
+* no `+alloc+`;
+* no Cargo features;
+* no dependency other than the crate that holds the element's runtime path;
+* no `+unsafe+` code;
+* no 64-bit atomic type.
+--
+
+[horizontal]
+ID:: `+req~ssr-e2e-crate-isolated~2+`
+ASIL:: B
+Allocated to:: the E2E wire
+Verification:: gate (manifest; restricted sysroot; `+forbid(unsafe_code)+`; a build for a bare-metal 32-bit target without 64-bit atomics)
+
+*Rationale.*
+A separate wire crate keeps protection optional.
+It keeps the heap restrictions of the crate that holds the element's runtime path.
+
+[[req-ssr-crate-streamer-isolated]]
+=== The ASIL Streamer is its own untaintable crate
+
+[.specitem,oft-sid="req~ssr-crate-streamer-isolated~4",oft-title="The ASIL Streamer is its own untaintable crate",oft-needs="impl,utest",oft-tags="SafetyStreamer"]
+--
+The Streamer *MUST* keep the ASIL Streamer's route table, admission, validation and forwarding loop in a crate of their own, which:
+
+* is `+no_std+`;
+* uses no `+alloc+`;
+* declares no Cargo features;
+* depends on no crate other than the safety crate;
+* uses no 64-bit atomic type.
+
+The Streamer *MUST* keep that crate so that no feature, dependency or build setting outside it can bring classic routes, `+std+`-only paths or heap use into it.
+
+The Streamer *MUST* have its `+std+` loader only parse deployment data, and *MUST* validate that data in this crate.
+What that validation covers is stated in xref:../up-l2/streamer.adoc#req-ssr-streamer-config-validated[The Streamer validates its deployment data in full].
+
+So bindings and wires are linked by the binary that uses the crate, not by the crate.
+--
+
+[horizontal]
+ID:: `+req~ssr-crate-streamer-isolated~4+`
+ASIL:: B
+Allocated to:: the Streamer
+Verification:: gate (the gates of the safety crate applied to this crate: its manifest, a build on a sysroot with neither `+alloc+` nor `+std+`, its resolved dependency closure, which holds only the safety crate, and its own panic-link fixture, which gives evidence for xref:../up-l2/streamer.adoc#req-ssr-streamer-no-panic[The Streamer does not panic in runtime mode]; a build for a bare-metal 32-bit target without 64-bit atomics), review (the `+std+` loader, which only parses deployment data, with all validation of it in this crate)
+
+*Rationale.*
+Separating the data plane keeps a convenience dependency, or a feature that another package of the build enables on a dependency that they share, from bringing heap use into it (source: the Cargo Book, Rust 1.98.1, chapter https://doc.rust-lang.org/1.98.1/cargo/reference/features.html[Features], sections Feature unification and Feature resolver version 2).
+
+== Soundness and safe-to-unsafe boundary
+
+[[req-ssr-unsafe-sound]]
+=== Safe code cannot cause undefined behaviour
+
+[.specitem,oft-sid="req~ssr-unsafe-sound~1",oft-title="Safe code cannot cause undefined behaviour",oft-needs="impl,utest",oft-tags="SafetyUpRustCore"]
+--
+The element *MUST NOT* let a sequence of safe calls through its public API cause undefined behaviour, items hidden from the documentation but reachable from safe code included:
+
+* no use of a slot or frame after its release;
+* no two live mutable references to one value;
+* no data race;
+* no read of an invalid value.
+--
+
+[horizontal]
+ID:: `+req~ssr-unsafe-sound~1+`
+ASIL:: B
+Allocated to:: the element
+Verification:: miri (Stacked Borrows and Tree Borrows, over the tests and over programs of safe calls that attempt undefined behaviour, at least one for each kind that the statement lists and every one that demonstrated a defect), compile-fail (each misuse of the public API from which undefined behaviour would follow and that the element's types rule out, every misuse that a fix ruled out among them), review (a sweep of each defect class)
+ISO 26262:: 6-Annex D.2.3 (part-clause numbers only)
+
+*Rationale.*
+Undefined behaviour can corrupt memory in ways that no later check can see, and no argument about the element's behaviour holds once it has occurred.
+
+In Rust, `+unsafe+` marks only code whose memory safety the compiler cannot check (source: the Rust Reference, Rust 1.98.1, chapter https://doc.rust-lang.org/1.98.1/reference/unsafe-keyword.html[The unsafe keyword], rule unsafe.intro, and chapter https://doc.rust-lang.org/1.98.1/reference/behavior-considered-undefined.html[Behavior considered undefined], rule undefined.soundness).
+So safe callers rely on the element to keep that promise for them, hidden items included.
+
+The promise holds under the faulty-peer model too (xref:../up-l1/peers.adoc#req-ssr-peer-fault-model[The requirements hold against a faulty peer]).
+
+Miri, tests and target builds are evidence at their own scope.
+None of them replaces the source-level argument for each obligation, which xref:../safety/assurance.adoc#req-ssr-unsafe-inventory[Every `unsafe` is inventoried and justified] requires.
+
+[[req-ssr-unsafe-binding-untrusted]]
+=== No binding written in safe code can break the element's memory safety
+
+[.specitem,oft-sid="req~ssr-unsafe-binding-untrusted~1",oft-title="No binding written in safe code can break the element's memory safety",oft-needs="impl,utest",oft-tags="SafetyUpRustCore"]
+--
+The element *MUST NOT* let its memory safety depend on a binding's safe methods returning correct values.
+
+* Where it relies on a claim from a binding, the element *MUST* take the claim through an `+unsafe+` trait with stated obligations, listed in the inventory.
+* The element *MUST* check, or treat as untrusted, everything else that a binding hands over, such as lengths, slices, route handles and peer references.
+--
+
+[horizontal]
+ID:: `+req~ssr-unsafe-binding-untrusted~1+`
+ASIL:: B
+Allocated to:: the element
+Verification:: review, miri
+* *review*: every value taken from a safe binding method into `+unsafe+` code.
+* *miri*: adversarial safe doubles: a frame whose lengths or slices change between calls, a route handle out of range, a reused peer reference.
+
+*Rationale.*
+A safe trait's implementation can return any value without breaking Rust's rules.
+So `+unsafe+` code cannot rely on it for memory safety, while an `+unsafe trait+` makes its implementer take on stated obligations (source: the Rustonomicon, Rust 1.98.1, chapter https://doc.rust-lang.org/1.98.1/nomicon/safe-unsafe-meaning.html[How Safe and Unsafe Interact]; the Rust Reference, Rust 1.98.1, chapter https://doc.rust-lang.org/1.98.1/reference/unsafe-keyword.html[The unsafe keyword], rule unsafe.trait.intro).
+
+The binding contract therefore keeps its interfaces safe, with their values checked.
+It puts each claim that memory safety relies on, such as the exclusivity of lent transmit storage, behind an `+unsafe trait+`.
+
+.Claims made through an unsafe trait
+====
+The element's memory safety relies on a binding's claim that lent storage is exclusive, disjoint and stable, so the element takes that claim through an `+unsafe+` trait.
+
+up-spec's iceoryx2 chapter asks the same of a Rust payload's author, through iceoryx2's `+ZeroCopySend+` (xref:../up-l1/iceoryx2.adoc[the iceoryx2 transport]), which iceoryx2 declares as an `+unsafe trait+` (source: the code of iceoryx2, release 0.9.3, https://github.com/eclipse-iceoryx/iceoryx2/blob/6ef7c55176a8487ae7ca53c2e0649d5df9a1b3b4/iceoryx2-bb/elementary-traits/src/zero_copy_send.rs#L32[`+iceoryx2-bb/elementary-traits/src/zero_copy_send.rs+`, line 32], its declaration of the trait).
+====
+
+== Rust mechanism navigation
+
+NOTE: This section is non-normative navigation; the linked items govern and add no duty here.
+On native Rust paths, an explicit `derive` or inventoried `+unsafe+` layout declaration classifies a type only after source-level verification against the native layout and bit-validity rules (xref:../up-l1/wires/native.adoc#req-ssr-native-type[A native payload type holds its whole value in one fixed layout]; xref:../safety/assurance.adoc#req-ssr-unsafe-inventory[Every `unsafe` is inventoried and justified]); arbitrary user casts or unverified derives confer no native admission.
+
+* *Type-state two-mode compile-time checks:*
+  xref:../basics/resources.adoc#req-ssr-mode-two-types[Two modes, as two types];
+  xref:../basics/resources.adoc#req-ssr-mode-no-setup-at-runtime[Setup is impossible in runtime mode];
+  xref:../basics/resources.adoc#req-ssr-mode-no-traffic-before-runtime[Traffic is impossible before runtime mode];
+  xref:../basics/platform.adoc#req-ssr-platform-init-only[Entropy and prefault stay in initialization];
+  and the run-time backstop where Rust types cannot reach (xref:../up-l1/runtime.adoc#req-ssr-mode-backstop[Run-time refusal only where types cannot reach]).
+* *`Drop`, lease return and decoded-value destruction:*
+  xref:../up-l1/runtime.adoc#req-ssr-release-lease-drop[A lease gives back its slot and nothing else];
+  xref:../up-l1/runtime.adoc#req-ssr-heap-slot-types[A decoded value is destroyed once, as its route's class admits];
+  xref:../up-l1/runtime.adoc#req-ssr-release-none[Nothing is released in runtime mode];
+  xref:../up-l1/runtime.adoc#req-ssr-mode-no-shutdown[No shutdown in runtime mode].
+* *Static and caller-provided startup storage:*
+  xref:../basics/resources.adoc#req-ssr-memory-static[ASIL-path storage is static or caller-provided];
+  xref:../basics/resources.adoc#req-ssr-memory-sealed[Startup memory is sealed];
+  xref:../basics/resources.adoc#req-ssr-memory-computable[Startup storage is computable before start].
+* *Synchronous traffic path, atomics and `Copy` runtime errors:*
+  xref:../up-l1/runtime.adoc#req-ssr-crate-sync-path[Traffic is synchronous or polled];
+  xref:../basics/platform.adoc#req-ssr-atomic-width[No target needs an atomic width it lacks];
+  xref:../basics/error_model.adoc#req-ssr-error-fixed-size[Errors are fixed-size diagnoses].
+* *`unsafe` inventory, panic-abort profile and checked-policy crate boundary:*
+  xref:../safety/assurance.adoc#req-ssr-unsafe-inventory[Every `unsafe` is inventoried and justified];
+  xref:../safety/assurance.adoc#req-ssr-binding-unsafe-inventory[A binding inventories its own `unsafe`];
+  xref:../safety/elements/up-rust/build.adoc#req-ssr-build-panic-abort[The ASIL build aborts on panic and checks overflow];
+  xref:../safety/elements/up-rust/build.adoc#req-ssr-crate-core-only-binary[The checked policy stays in the safety crate, and no admitted optional layer bypasses or reimplements it].
+* *Native in-place layout, bit-validity, ABI agreement, lent storage and frame destructors:*
+  xref:../up-l1/wires/native.adoc#req-ssr-native-type[A native payload type holds its whole value in one fixed layout];
+  xref:../up-l1/wires/native.adoc#req-ssr-native-agreement[A native type is read only under its exactly agreed layout];
+  xref:../up-l1/wires/native.adoc#req-ssr-native-in-place[A native payload is written and read where it is carried, or its route is refused];
+  xref:../up-l1/integrity.adoc#req-ssr-integrity-any-bits[In-place types accept every bit pattern];
+  xref:../up-l1/peers.adoc#req-ssr-native-abi-agreed[A native representation never crosses an ABI];
+  xref:../up-l1/bindings.adoc#req-ssr-binding-lent-storage[Lent storage is exclusive, disjoint and stable for as long as it is held];
+  xref:../up-l1/bindings.adoc#req-ssr-binding-frame-drop[What a received frame's destructor may do].
+* *Foreign FFI boundary and callback lifetimes (LoLa):*
+  xref:../up-l1/lola.adoc#req-ssr-binding-lola-foreign-boundary[Nothing unwinds across the LoLa binding's boundary, and a termination path is a panic path];
+  xref:../up-l1/lola.adoc#req-ssr-binding-lola-callbacks[What the LoLa binding gives LoLa stays valid for as long as LoLa can use it].
+* *Bounded-runtime Streamer activation lock, synchronous data plane and crate isolation:*
+  xref:../up-l2/streamer.adoc#req-ssr-streamer-route-lock[Routes and subscriptions are locked at activation];
+  xref:../up-l2/streamer.adoc#req-ssr-streamer-sync-data-plane[The Streamer's data plane is synchronous];
+  <<req-ssr-crate-streamer-isolated,The ASIL Streamer is its own untaintable crate>>.

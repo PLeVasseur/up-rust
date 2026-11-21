@@ -1,0 +1,199 @@
+<!doctype html>
+<html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>RX-03 conformance catalogue · versioned intake</title>
+<style>
+:root{color-scheme:light dark;font:15px/1.45 var(--font-sans,system-ui,sans-serif);color:var(--foreground,CanvasText)}
+*{box-sizing:border-box}html,body{margin:0;background:transparent}main{max-width:1100px;margin:auto;min-width:0}
+h1{font-size:1.6rem;line-height:1.2;margin:8px 0}h2{font-size:1.15rem}h3{font-size:1rem;margin:0}
+p{margin:8px 0}small,.muted{color:var(--muted-foreground,GrayText)}small{font-size:.82rem}a{color:var(--primary,LinkText)}
+button,select,input{font:inherit;color:inherit;background:var(--card,Canvas);border:1px solid var(--border,GrayText);border-radius:var(--radius,7px);padding:8px 10px;min-height:40px;max-width:100%}
+button,summary{cursor:pointer}button:hover{background:var(--secondary,ButtonFace)}
+button:focus-visible,a:focus-visible,input:focus-visible,select:focus-visible,summary:focus-visible{outline:3px solid var(--ring,Highlight);outline-offset:2px}
+button:disabled{opacity:.5;cursor:default}button[aria-pressed=true]{border-color:var(--primary,LinkText);box-shadow:inset 0 -3px var(--primary,LinkText)}
+code,.requirement{font-family:var(--font-mono,monospace);font-size:.82rem;overflow-wrap:anywhere}
+.top{padding:12px 0 0}.eyebrow{text-transform:uppercase;letter-spacing:.06em;font-size:.75rem;color:var(--muted-foreground,GrayText)}
+.note,.panel,.record{background:var(--card,Canvas);border:1px solid var(--border,GrayText);border-radius:var(--radius,9px);padding:16px;margin:12px 0;min-width:0}
+.note{border-left:4px solid var(--warning,GrayText)}.stats{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:8px;margin:14px 0}
+.stat{background:var(--secondary,ButtonFace);padding:10px;border-radius:var(--radius,8px)}.stat strong{display:block;font-size:1.45rem}.stat span{font-size:.8rem}
+.tabs,.toolbar,.pagination,.links,.chips,.related{display:flex;gap:8px;flex-wrap:wrap;align-items:center;margin:12px 0}
+.tabs button{flex:1 1 120px}.toolbar,.pagination{justify-content:space-between}.links{font-size:.82rem}
+.filters{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:10px;margin-top:12px}
+label{display:flex;flex-direction:column;gap:4px;font-size:.84rem;min-width:0}.wide{grid-column:1/-1}
+summary{font-weight:600;min-height:28px;overflow-wrap:anywhere}.records{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:12px}.record{margin:0}
+.jump{font-weight:650;padding:0;min-height:34px;border:0;background:transparent;text-align:left;color:var(--primary,LinkText)}
+.chip{border:1px solid var(--border,GrayText);border-radius:6px;padding:3px 6px;font-size:.75rem;overflow-wrap:anywhere}
+.dimensions{display:grid;grid-template-columns:1fr 1fr;gap:6px;margin:10px 0}.dimensions div{background:var(--secondary,ButtonFace);padding:7px;border-radius:6px;font-size:.8rem}.dimensions b{display:block}
+.break{overflow-wrap:anywhere;min-width:0}.identity{padding-top:12px;border-top:1px solid var(--border,GrayText);margin-top:12px}
+dl{display:grid;grid-template-columns:minmax(100px,1fr) minmax(0,3fr);gap:7px 12px}dt{font-weight:600}dd{margin:0;overflow-wrap:anywhere}
+pre{white-space:pre-wrap;overflow-wrap:anywhere;max-height:32rem;overflow:auto;font:12px/1.5 var(--font-mono,monospace);padding:12px;background:var(--code-background,Canvas);border-radius:var(--radius,7px)}
+.related button{font-size:.78rem;padding:5px 7px;min-height:34px}.empty{padding:24px;border:1px dashed var(--border,GrayText)}
+footer{padding:20px 0;font-size:.8rem;color:var(--muted-foreground,GrayText)}[hidden]{display:none!important}
+@media(max-width:600px){h1{font-size:1.35rem}.stats{grid-template-columns:1fr 1fr}.filters{grid-template-columns:1fr 1fr}.records{grid-template-columns:1fr}.panel,.note,.record{padding:12px}dl{grid-template-columns:1fr}dd{margin-bottom:8px}}
+@media(max-width:360px){.filters{grid-template-columns:1fr}}
+</style></head>
+<body><main>
+<header class="top"><div class="eyebrow">Versioned intake · RX-03 · version 2</div><h1>Conformance intake catalogue</h1>
+<p class="muted">Published requirements, recorded follow-ups and existing routes. Implementation and evidence assessments stay separate.</p><p id="publication" class="break"></p></header>
+<div class="note"><strong>All current assessments are unassessed.</strong> Applicability, target, configuration and profile are unknown. The 328 obligations without a recorded follow-up are not passes. Portfolio links are routing candidates, not supported component tuples.</div>
+<div class="stats" aria-label="Inventory counts"><div class="stat"><strong>504</strong><span>obligations · 226 safety-page rows</span></div><div class="stat"><strong>271</strong><span>historical follow-ups</span></div><div class="stat"><strong>12</strong><span>observation cases</span></div><div class="stat"><strong>0</strong><span>current verified claims</span></div></div>
+<details class="panel" id="context"><summary>Publication, component identities and retained check boundaries</summary><p>Root owns catalogue composition, not supplier or deployment identity. Recorded private identities are not accepted revisions or fresh custody observations.</p><div id="context-body"></div></details>
+<nav class="tabs" id="tabs" aria-label="Record type"></nav>
+<details class="panel" id="filter-panel" open><summary>Filter records <span id="filter-note" class="muted"></span></summary><div class="filters">
+<label>Component / portfolio<select id="component"></select></label><label>Specification<select id="spec"></select></label><label>Observation case<select id="case"></select></label>
+<label>Current implementation<select id="implementation"><option value="">Any current status</option><option value="unassessed">Unassessed</option><option value="implemented">Implemented (none assessed)</option><option value="implementation_gap">Implementation gap (none assessed)</option></select></label>
+<label>Current evidence<select id="evidence"><option value="">Any current status</option><option value="unassessed">Unassessed</option><option value="accepted">Accepted (none recorded)</option><option value="evidence_gap">Evidence gap (none assessed)</option></select></label>
+<label>Historical source disposition<select id="historical"><option value="">Any historical disposition</option><option value="unchecked">Unchecked</option><option value="implementation_gap">Implementation gap</option><option value="evidence_gap">Evidence gap</option><option value="annotation_only">Annotation only</option><option value="no_followup">No recorded follow-up</option></select></label>
+<label class="wide">Search identifier, requirement or page<input id="search" type="search" placeholder="RX03-FU-218, req~…, O7, safety/…" autocomplete="off"></label></div>
+<div class="toolbar"><button type="button" id="reset">Reset filters</button><button type="button" id="export">Export normalized intake JSON</button></div>
+<small>Historical dispositions are preserved findings, not current assessments. Open their exact retained records below.</small></details>
+<div class="toolbar"><strong id="count" role="status" aria-live="polite"></strong><span class="muted">Current and historical states stay separate</span></div>
+<section id="detail" class="panel" hidden tabindex="-1" aria-label="Selected record"></section>
+<section id="source-detail" class="panel" hidden tabindex="-1" aria-label="Exact retained documentary record"></section>
+<section id="results" class="records" aria-label="Catalogue records"></section>
+<div class="pagination"><button type="button" id="prev">Previous</button><span id="page-count" class="muted"></span><button type="button" id="next">Next</button></div>
+<footer>Bundle files: <a href="INPUT-MANIFEST.v2.json">Input manifest</a> · <a href="intake.v2.json">Normalized records</a> · <a href="GENERATION-RECEIPT.json">Generator checks</a> · <a href="README.md">Scope and reproduction</a>
+<p>Record text and pointer navigation work inside this HTML alone; the file links above require the full bundle. Documentary input digests bind the snapshot, not product conformance. Applicability, assessments and component-owned filings remain open. Underlying evidence locators in records are historical strings, not bundled or requalified evidence.</p></footer>
+<noscript>JavaScript enables filtering. All records remain in <a href="intake.v2.json">the normalized export</a>.</noscript>
+</main>
+<script type="application/json" id="catalogue-data">__CATALOGUE_DATA__</script>
+<script>
+"use strict";
+const D=JSON.parse(document.getElementById("catalogue-data").textContent);
+const $=id=>document.getElementById(id);
+function node(tag,text,cls){const e=document.createElement(tag);if(text!==undefined)e.textContent=text;if(cls)e.className=cls;return e;}
+function button(text,fn,cls){const b=node("button",text,cls);b.type="button";b.onclick=fn;return b;}
+const sources=new Map(D.sources.map(s=>[s.id,s]));
+const portfolios=new Map(D.component_portfolios.map(p=>[p.id,p]));
+const identities=new Map(D.identities.map(i=>[i.id,i]));
+function resolveSource(ref){
+ let value=D.source_documents[ref.source];if(value===undefined)throw Error("Unknown source "+ref.source);
+ if(ref.pointer)for(const raw of ref.pointer.slice(1).split("/")){const part=raw.replaceAll("~1","/").replaceAll("~0","~");if(value===null||!Object.hasOwn(value,part))throw Error("Missing documentary pointer");value=value[part];}
+ return value;
+}
+function openSource(ref,focus=true){
+ const source=sources.get(ref.source),value=resolveSource(ref),e=$("source-detail");e.hidden=false;e.replaceChildren();
+ const head=node("div",undefined,"toolbar");head.append(node("h2","Retained record · "+ref.source,"break"),button("Close",()=>e.hidden=true));e.append(head);
+ e.append(node("p",source.path+" · JSON pointer "+(ref.pointer||"(whole document)"),"requirement"),node("p","Documentary input SHA256 "+source.sha256,"requirement"));
+ e.append(node("p","Exact versioned metadata. Internal paths and review statements retain their historical scope; underlying evidence is not bundled or newly accepted.","muted"),node("pre",JSON.stringify(value,null,2)));
+ if(focus)e.focus();return value;
+}
+function link(ref,label){const a=node("a",label);a.href="#source="+encodeURIComponent(ref.source)+"&pointer="+encodeURIComponent(ref.pointer||"");a.onclick=event=>{event.preventDefault();openSource(ref);};return a;}
+const types={obligations:D.obligations,followups:D.followups,cases:D.observation_cases,transfers:D.destination_transfers};
+const labels={obligations:"Obligations",followups:"Follow-ups",cases:"Cases",transfers:"Transfers"};
+const all=Object.entries(types).flatMap(([type,rs])=>rs.map(r=>({...r,type})));
+const byID=new Map(all.map(r=>[r.id,r]));
+const pageSize=4,filterIDs=["component","spec","case","implementation","evidence","historical","search"];
+let state={type:"obligations",page:0};
+function historical(r){return r.historical_source_disposition?[r.historical_source_disposition]:(r.followup_ids||[]).map(id=>byID.get(id).historical_source_disposition);}
+function filtered(type=state.type,override={}){
+ const f=Object.fromEntries(filterIDs.map(k=>[k,override[k]??$(k).value]));
+ return all.filter(r=>r.type===type).filter(r=>{
+ const a=D.assessments[r.assessment_id];
+ return (!f.component||(f.component==="unmapped"?r.portfolio_ids.length===0:r.portfolio_ids.includes(f.component)))&&
+ (!f.spec||f.spec===D.specification_commit)&&(!f.case||(r.case_ids||[]).includes(f.case))&&
+ (!f.implementation||(a&&a.implementation===f.implementation))&&(!f.evidence||(a&&a.evidence===f.evidence))&&
+ (!f.historical||(f.historical==="no_followup"?r.no_recorded_followup===true:historical(r).includes(f.historical)))&&
+ (!f.search||[r.id,r.requirement,r.page,r.label,r.entry_key,...r.portfolio_ids].join(" ").toLowerCase().includes(f.search.toLowerCase()));
+ });
+}
+function dimensions(r,parent){
+ const a=D.assessments[r.assessment_id];
+ if(!a){parent.append(node("p","Filing pending"),node("small","Documentary transfer; no conformance assessment."));return;}
+ const dims=node("div",undefined,"dimensions");
+ for(const k of ["implementation","evidence"]){const box=node("div",k[0].toUpperCase()+k.slice(1));box.append(node("b",a[k]));dims.append(box);}
+ parent.append(dims,node("small","Applicability: unknown · target / config / profile: unknown"));
+}
+function card(r){
+ const e=node("article",undefined,"record");e.dataset.record=r.id;
+ const h=node("h3");h.append(button(r.id,()=>openRecord(r.id),"jump"));e.append(h,node("div",r.requirement||r.label||r.entry_key,"requirement"));
+ dimensions(r,e);
+ const chips=node("div",undefined,"chips");for(const p of r.portfolio_ids.length?r.portfolio_ids:["unmapped"])chips.append(node("span",portfolios.get(p)?.label||"Unmapped applicability","chip"));e.append(chips);
+ const hs=[...new Set(historical(r))];
+ e.append(node("small",r.no_recorded_followup?"No recorded follow-up — no pass inferred.":hs.length?"Historical source: "+hs.join(", "):"No historical disposition assigned."));
+ const links=node("div",undefined,"links");links.append(link(r.source_ref,"Authoritative record"));if(r.routing_ref)links.append(link(r.routing_ref,"Routing / scope"));
+ links.append(button("Evidence & links",()=>openRecord(r.id),"jump"));e.append(links);return e;
+}
+function render(){
+ const list=filtered(),pages=Math.max(1,Math.ceil(list.length/pageSize));state.page=Math.max(0,Math.min(state.page,pages-1));
+ $("results").replaceChildren(...(list.length?list.slice(state.page*pageSize,(state.page+1)*pageSize).map(card):[node("p","No matching records. This does not establish conformance or non-applicability.","empty")]));
+ $("count").textContent=list.length+" of "+types[state.type].length+" "+labels[state.type].toLowerCase();
+ $("page-count").textContent="Page "+(state.page+1)+" of "+pages;$("prev").disabled=state.page===0;$("next").disabled=state.page+1>=pages;
+ $("tabs").querySelectorAll("button").forEach(b=>b.setAttribute("aria-pressed",String(b.dataset.type===state.type)));
+ $("filter-note").textContent=filterIDs.some(k=>$(k).value)?" · active":"";
+}
+function openRecord(id,focus=true){
+ const r=byID.get(id);if(!r)return;const e=$("detail");e.hidden=false;e.replaceChildren();
+ const head=node("div",undefined,"toolbar");head.append(node("h2",id+" · "+(r.requirement||r.label||r.entry_key),"break"),button("Close",()=>e.hidden=true));e.append(head);dimensions(r,e);
+ const historicalStates=[...new Set(historical(r))];if(historicalStates.length)e.append(node("p","Historical source disposition: "+historicalStates.join(", ")+". These recorded findings are not discharged by the unassessed current status.","note"));
+ e.append(node("p",r.assessment_id?"No current accepted evidence or conformance claim is recorded. Original findings and historical evidence/candidate boundaries are linked below.":"Filing is pending. The linked bundled record contains the filing route and a historical source locator; original entry text and portions are not bundled."));
+ const links=node("div",undefined,"links");links.append(link(r.source_ref,"Original record / finding text"));if(r.provenance_ref)links.append(link(r.provenance_ref,"Original provenance"));if(r.routing_ref)links.append(link(r.routing_ref,"Exact routing"));e.append(links);
+ if(r.unmatched_requirement_refs?.length)e.append(node("p","Proposed / unmatched reference (not an adopted obligation): "+r.unmatched_requirement_refs.join(", "),"note break"));
+ e.append(node("p",r.type==="transfers"?r.navigation_limit:"Portfolio labels are routing candidates, not established component applicability.","muted"));
+ for(const pid of r.portfolio_ids){
+ const p=portfolios.get(pid),box=node("div",undefined,"identity");box.append(node("strong",p.label+" · "+p.routing_state));
+ const l=node("p");l.append(link(p.packet_ref,"Portfolio / evidence boundary"));if(p.historical_review_boundary_ref){l.append(" · ",link(p.historical_review_boundary_ref,"Historical review prerequisites"));}box.append(l,node("small","Accepted implementation revision, supplier/integrator and current custody: unresolved here."));e.append(box);
+ }
+ const related=r.type==="followups"?r.obligation_ids:r.followup_ids||r.navigation_followup_ids||[];e.append(node("h3","Related records"));
+ const buttons=node("div",undefined,"related");if(related.length)for(const fid of related)buttons.append(button(fid,()=>openRecord(fid)));else buttons.append(node("span",r.type==="followups"?"No adopted obligation inventory match. This follow-up remains recorded.":r.type==="transfers"?"No cluster-linked follow-up; filing remains pending.":"No recorded follow-up; no pass inferred."));e.append(buttons);if(focus)e.focus();
+}
+function option(v,t){const o=node("option",t);o.value=v;return o;}
+$("component").append(option("","All component routes"),option("unmapped","Unmapped applicability"),...D.component_portfolios.map(p=>option(p.id,p.label)));
+$("spec").append(option("","Published RX-03 specification"),option(D.specification_commit,D.specification_commit.slice(0,12)+" · published"));
+$("case").append(option("","All cases"),...D.observation_cases.map(c=>option(c.id,c.id+" · "+c.label)));
+for(const [type,rs] of Object.entries(types)){const b=button(labels[type]+" "+rs.length,()=>{state.type=type;state.page=0;$("detail").hidden=true;render();});b.dataset.type=type;$("tabs").append(b);}
+filterIDs.forEach(k=>$(k).addEventListener(k==="search"?"input":"change",()=>{state.page=0;$("detail").hidden=true;render();}));
+$("reset").onclick=()=>{filterIDs.forEach(k=>$(k).value="");state.page=0;$("detail").hidden=true;render();};
+$("prev").onclick=()=>{state.page--;render();};$("next").onclick=()=>{state.page++;render();};
+$("export").onclick=()=>{const url=URL.createObjectURL(new Blob([JSON.stringify(D,null,2)+"\n"],{type:"application/json"})),a=node("a");a.href=url;a.download="rx03-intake.v2.json";a.click();setTimeout(()=>URL.revokeObjectURL(url),1000);};
+const doc=identities.get("published-sdk-documents"),hist=identities.get("historical-sdk-receipts"),check=D.documentary_check_observation;
+$("publication").append("Spec ",node("code",D.specification_commit.slice(0,12))," · SDK documents ",node("code",doc.commit.slice(0,12))," published. ",link(D.publication_ref,"Root adoption"));
+const context=$("context-body");context.append(node("p","Spec "+D.specification_commit+"\nSDK documents "+doc.commit+"\nHistorical source-compatible receipts "+hist.commit,"requirement"));
+context.append(node("p","Both manual modes stopped at the old registry. OFT gating: "+check.oft.gating.total+" entries / "+check.oft.gating.defect+" defects; report-only: "+check.oft.report_only.total+" / "+check.oft.report_only.defect+". These are trace/check observations, not current behavior verdicts."),link(check.source_ref,"Exact check disposition"));
+for(const p of D.component_portfolios){
+ const box=node("div",undefined,"identity");box.append(node("strong",p.label+" · "+p.routing_state),node("p"));box.append(link(p.packet_ref,"Recorded portfolio scope"));
+ if(!p.identity_ids.length)box.append(node("p","Component identity unresolved; no revision or supported configuration inferred."));
+ for(const id of p.identity_ids){
+ const x=identities.get(id),details=node("details");details.append(node("summary",x.id+" · "+x.kind));const dl=node("dl");
+ for(const [k,v] of Object.entries(x))if(!["id","kind","source_ref","freeze_ref"].includes(k))dl.append(node("dt",k.replaceAll("_"," ")),node("dd",v===null?"unresolved":String(v)));
+ details.append(dl,link(x.source_ref,"Identity metadata"));box.append(details);
+ }
+ box.append(node("p","Target, configuration, profile and active custody remain unknown here.","muted"));context.append(box);
+}
+if(matchMedia("(max-width:600px)").matches)$("filter-panel").open=false;
+render();
+const initialSource=new URLSearchParams(location.hash.slice(1));if(initialSource.has("source"))try{openSource({source:initialSource.get("source"),pointer:initialSource.get("pointer")||""});}catch(error){$("source-detail").hidden=false;$("source-detail").append(node("p","Documentary pointer unavailable: "+error.message));}
+function probe(){
+ const checks=[],assert=(name,ok)=>{if(!ok)throw Error(name);checks.push(name);};
+ const blank=Object.fromEntries(filterIDs.map(k=>[k,""]));
+ assert("all 877 distinct records addressable",byID.size===877);
+ for(const [type,rs] of Object.entries(types)){
+ const list=filtered(type,blank),paged=[];for(let p=0;p<Math.ceil(list.length/pageSize);p++)paged.push(...list.slice(p*pageSize,(p+1)*pageSize));
+ assert(type+" pagination reaches all records",paged.length===rs.length&&new Set(paged.map(r=>r.id)).size===rs.length);
+ }
+ assert("328 no-followup obligations visible",filtered("obligations",{...blank,historical:"no_followup"}).length===328);
+ assert("independent dimensions unassessed",Object.values(D.assessments).every(a=>a.implementation==="unassessed"&&a.evidence==="unassessed"&&a.applicability==="unknown"));
+ assert("zero accepted evidence",filtered("obligations",{...blank,evidence:"accepted"}).length===0);
+ for(const c of D.observation_cases)assert(c.id+" case filter exact",filtered("followups",{...blank,case:c.id}).length===c.followup_ids.length);
+ for(const p of D.component_portfolios)assert(p.id+" component filter exact",filtered("followups",{...blank,component:p.id}).length===D.followups.filter(f=>f.portfolio_ids.includes(p.id)).length);
+ assert("exact specification filter",filtered("obligations",{...blank,spec:D.specification_commit}).length===504);
+ assert("unmatched specification gives no inferred records",filtered("obligations",{...blank,spec:"unmatched"}).length===0);
+ const old={...state};
+ for(const type of Object.keys(types)){state.type=type;state.page=0;render();assert(type+" DOM first page",document.querySelectorAll("#results [data-record]").length===Math.min(pageSize,types[type].length));state.page=Math.ceil(types[type].length/pageSize)-1;render();assert(type+" DOM last page",document.querySelectorAll("#results [data-record]").length===((types[type].length-1)%pageSize)+1);}
+ state.type="followups";$("search").value="RX03-FU-271";$("search").dispatchEvent(new Event("input"));assert("search input event reaches last followup",document.querySelector("#results [data-record]")?.dataset.record==="RX03-FU-271");$("search").value="";
+ openRecord("RX03-FU-218",false);assert("unmatched dispatcher reachable",$("detail").textContent.includes("dsn~dispatcher-push-flow-control~1"));
+ assert("FU218 does not claim absent followup",!$("detail").textContent.includes("No recorded follow-up"));assert("FU218 retains historical implementation gap",$("detail").textContent.includes("implementation_gap"));
+ for(const id of [D.followups.find(x=>x.historical_source_disposition==="implementation_gap").id,D.followups.find(x=>x.historical_source_disposition==="evidence_gap").id,"RX03-FU-218","O1","O4",D.destination_transfers[0].id]){
+ const r=byID.get(id),value=openSource(r.source_ref,false);assert(id+" exact source text portable",$("source-detail").querySelector("pre").textContent===JSON.stringify(value,null,2));}
+ openSource(identities.get("source9-private").source_ref,false);assert("private candidate identity accessible",$("source-detail").textContent.includes(identities.get("source9-private").source_pins_record));
+ $("source-detail").hidden=true;$("detail").hidden=true;state=old;render();
+ const wasOpen=$("filter-panel").open;$("filter-panel").open=true;
+ assert("expanded filters fit viewport",document.documentElement.scrollWidth<=document.documentElement.clientWidth+1);$("filter-panel").open=wasOpen;
+ $("context").open=true;$("context-body").querySelectorAll("details").forEach(x=>x.open=true);
+ assert("expanded identity details fit viewport",document.documentElement.scrollWidth<=document.documentElement.clientWidth+1);
+ $("context-body").querySelectorAll("details").forEach(x=>x.open=false);$("context").open=false;
+ assert("no horizontal overflow",document.documentElement.scrollWidth<=document.documentElement.clientWidth+1);
+ const result={status:"passed",width:innerWidth,records:byID.size,checks:checks.length,check_names:checks,scroll_width:document.documentElement.scrollWidth,client_width:document.documentElement.clientWidth};
+ window.CATALOGUE_RESULT=result;console.info("CATALOGUE_VALIDATION "+JSON.stringify({...result,check_names:undefined}));return result;
+}
+window.CATALOGUE={data:D,filtered,openRecord,openSource,resolveSource,probe};
+</script></body></html>

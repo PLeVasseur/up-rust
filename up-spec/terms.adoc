@@ -39,7 +39,7 @@ A pattern of software architecture, used in object-oriented design that is drive
 |Protocol |A set of rules governing the exchange or transmission of data between software components
 |https://aws.amazon.com/what-is/routing/[Routing] |Selecting a path in a network of any kind
 |Packet |A block of data transmitted across a network
-|Binding |See xref:up-l1/README.adoc#communication-protocol-binding[_communication protocol binding_] in xref:up-l1/README.adoc[Transport & Session Layer (uP-L1)], and a binding of the up-rust SEooC in xref:safety/up-l1/bindings.adoc[uP-L1 safety: Allocated to each binding].
+|Binding |See xref:up-l1/README.adoc#communication-protocol-binding[_communication protocol binding_] in xref:up-l1/README.adoc[Transport & Session Layer (uP-L1)], and a binding of the up-rust SEooC in xref:up-l1/bindings.adoc[uP-L1 Transport Bindings].
 |Communication Protocol |A protocol, such as MQTT or HTTP, that carries messages between communicating parties. It defines its own message exchange patterns and its own protocol data unit (PDU) for control information and user data. A uProtocol transport library binds uProtocol to a communication protocol.
 |Application Protocol |A protocol by which the processes of an application exchange messages. It defines the kinds of message, such as requests and responses, how each kind is structured and what its fields mean, and when a process sends a message or answers one.
 

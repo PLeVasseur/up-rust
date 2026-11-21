@@ -1,0 +1,339 @@
+= Platform Services, Clocks, Entropy and Atomics
+:toc: preamble
+
+The key words "*MUST*", "*MUST NOT*", "*REQUIRED*", "*SHALL*", "*SHALL NOT*", "*SHOULD*", "*SHOULD NOT*", "*RECOMMENDED*", "*MAY*", and "*OPTIONAL*" in this document are to be interpreted as described in https://www.rfc-editor.org/info/bcp14[IETF BCP14 (RFC2119 & RFC8174)]
+
+[NOTE]
+====
+This page holds platform-backend, initialization-entropy, runtime-behaviour classification, atomic-width and narrowed-value window requirements of the up-rust SEooC requirement family (`+req~ssr-*+`, `ASIL:: B`, `Safety*` tags).
+Filing on this page does not bind classic protocol implementations; whom each item binds is stated in xref:../contract-generations.adoc[Which requirements an implementation follows] (xref:../contract-generations.adoc#req-ssr-requirements-bind[A requirement binds the actors to which it gives a duty]; xref:../contract-generations.adoc#req-ssr-item-reading[How an item is read]).
+
+Conventions and tags: xref:../safety/README.adoc[the safety overview].
+Scope and element boundary (including platform backends, part E4): xref:../safety/elements/up-rust/README.adoc[the up-rust SEooC element].
+Rust-specific mechanisms referenced in these items are cross-linked from xref:../languages/rust.adoc[Rust language mapping].
+====
+
+[[req-ssr-platform-contract]]
+== Every platform backend of the element keeps the platform's rules
+
+[.specitem,oft-sid="req~ssr-platform-contract~4",oft-title="Every platform backend of the element keeps the platform's rules",oft-needs="impl,utest",oft-tags="SafetyUpRustCore"]
+--
+*Basic rules.*
+Every runtime platform backend of the element *MUST NOT* use the heap, panic, create a thread, or need global state that requires first-use setup.
+
+*Only through a backend.*
+In runtime mode, the element *MUST* reach the operating system from the safety crate only through a platform backend.
+
+*Waits.*
+
+* Each platform backend *MUST NOT* let its wait lose a wake that happens after the caller observed the expected value.
+* After its wait returns spuriously, after an interruption or late, in the element's deliberate idle wait (xref:../up-l1/runtime.adoc#req-ssr-bound-wait[Every bounded wait has a logical deadline]), the element *MUST* recheck the expected value and the time before it waits again or returns; after such a return in every other wait, it rechecks as that item states.
+
+*Clock reads.*
+
+* Each platform backend of the element *MUST* report a failed clock read instead of panicking or substituting another time base.
+* The element *MUST* treat a monotonic reading earlier than one it already holds as a failed read.
+* The element *MUST* treat a failed read as fail-closed: a bounded operation that depends on it ends as expired and is counted, and the TTL check of a frame whose TTL is greater than 0 refuses the frame, as xref:../up-l1/bindings.adoc#req-ssr-qos-ttl[Expired messages are not processed] states.
+
+*Prefault.*
+Each platform backend *MUST* have its prefault service make the memory that the service is given resident before it returns.
+The element *MUST* have its startup memory made resident by that service before it places anything in it.
+So no write in runtime mode to the startup memory takes a page fault while that memory stays resident; that it stays resident while the process runs is a condition of the deployment (xref:../safety/elements/up-rust/assumptions-of-use.adoc#aou-seooc-target-environment[The target environment is verified]).
+The service gives no guarantee for memory that it was not given, such as memory that a serialized route obtains in runtime mode.
+
+*Stated contracts.*
+Each platform backend of the element *MUST* state, in the package of each supported configuration that uses it:
+
+* its clock sources, with their units, resolution, monotonicity, adjustment and failure behaviour;
+* its wake protocol and memory ordering;
+* the execution contexts from which each operation may be called.
+
+*A custom platform.*
+A platform backend that an integrator supplies is no part of the element.
+Each such backend *MUST* keep the rules that this item gives a platform backend of the element, and the element keeps its own rules of this item with it.
+The integrator's duties for such a backend, its qualification and the evidence that it keeps these rules, are stated in xref:../safety/elements/up-rust/assumptions-of-use.adoc#aou-seooc-integrator-platform[A custom platform keeps the platform's rules].
+--
+
+[horizontal]
+ID:: `+req~ssr-platform-contract~4+`
+ASIL:: B
+Allocated to:: each platform backend of the element (part E4); each platform backend that an integrator supplies, for the rules that this item gives a platform backend of the element; the element, for reaching the operating system only through a platform backend, for its recheck after its backend's wait returns, for its handling of a failed read or of a reading that steps back, and for having its startup memory made resident
+Verification:: gate, test, review
+* *gate*: no path from the safety crate to the operating system outside its platform backends.
+* *test*
+** The platform contract test, run inside heap windows, for each backend on the targets that its configuration names.
+** A fault-injected backend whose clock read fails or steps back, ending a wait as expired, counted, and refusing the TTL check of a frame whose TTL is greater than 0, with a frame whose TTL is 0 not refused.
+** Startup memory made resident by the prefault service before anything is placed in it.
+* *review*: each backend's source and its package's stated contracts.
+
+*Rationale.*
+Runtime code reaches the operating system only through a backend, as the statement requires.
+So a backend that broke one of these rules would break the element's runtime requirements from below, such as xref:../up-l1/payload-paths.adoc#req-ssr-heap-none[No heap in runtime mode on a native path] and xref:error_model.adoc#req-ssr-refuse-no-panic[No panic on runtime paths].
+
+_Failed clock reads._
+The contract treats a read of the monotonic clock as one that can fail.
+An OS call can fail, and a read that succeeded during initialization does not show that a later one will succeed.
+
+A failed read that ended a wait as satisfied, or a TTL check that passed with an unknown time, would turn a platform fault into a silent timing or expiry error.
+So the outcome is fail-closed and counted.
+
+The contracts a configuration states are those an integrator needs to select it without deriving them again (xref:../safety/elements/up-rust/README.adoc#claims[the SEooC's claims]).
+
+[[req-ssr-platform-init-only]]
+== Entropy and prefault stay in initialization
+
+[.specitem,oft-sid="req~ssr-platform-init-only~1",oft-title="Entropy and prefault stay in initialization",oft-needs="impl,utest",oft-tags="SafetyUpRustCore"]
+--
+The element *MUST NOT* let its initialization-only platform services, entropy and prefault, be reachable from runtime mode: runtime code holds a platform value that offers neither.
+--
+
+[horizontal]
+ID:: `+req~ssr-platform-init-only~1+`
+ASIL:: B
+Allocated to:: the element
+Verification:: compile-fail
+
+*Rationale.*
+Both services belong to setup:
+
+* entropy seeds the message-ID generators once;
+* prefault makes the startup memory resident before anything is placed in it (<<req-ssr-platform-contract,Every platform backend of the element keeps the platform's rules>>), so that its first touch, and the page faults that the first touch takes, fall in initialization.
+
+Because runtime code holds a platform value that offers neither service, a call to either is a compile error, not a rule that each author has to remember.
+
+[[req-ssr-platform-entropy]]
+== Initialization entropy comes from a declared source
+
+[.specitem,oft-sid="req~ssr-platform-entropy~4",oft-title="Initialization entropy comes from a declared source",oft-needs="impl,utest",oft-tags="SafetyUpRustCore"]
+--
+*A named source with a stated contract.*
+Every platform backend of the element *MUST* take its initialization entropy from a source that its supported configuration's package names, with a stated contract:
+
+* for an OS entropy source, the probability that two starts draw the same value;
+* for a persistent or counter-based source, how it is stored and advanced across restarts and resets.
+
+*Failure.*
+Each platform backend of the element *MUST* report a read of its entropy source that fails, and *MUST NOT* replace it by a fixed value, a test seed or uptime.
+The element *MUST* refuse setup, with a report, on a failed read and on a source that its setup check finds short of the package's stated contract, and *MUST NOT* replace either by a fixed value, a test seed or uptime.
+
+*Non-repetition across starts.*
+Random entropy makes a repeated value improbable, not impossible.
+So the element *MUST NOT* rest a guarantee that a value never repeats across starts on entropy: where it gives such a guarantee, it *MUST* rest it on a checked persistent construction.
+The rule for message IDs is stated in xref:uuid.adoc#req-ssr-ids-unique[Message IDs are unique].
+
+*A custom platform.*
+Each platform backend that an integrator supplies *MUST* keep the rules that this item gives a platform backend of the element, and the element keeps its own rules of this item with it.
+The integrator's duties for such a backend are stated in xref:../safety/elements/up-rust/assumptions-of-use.adoc#aou-seooc-integrator-platform[A custom platform keeps the platform's rules].
+--
+
+[horizontal]
+ID:: `+req~ssr-platform-entropy~4+`
+ASIL:: B
+Allocated to:: each platform backend of the element (part E4), and each platform backend that an integrator supplies, for its entropy source, for reporting a failed read and for not replacing it by a fixed value, a test seed or uptime; the element, for its setup check, for its report and refusal of a failed read or a short source, for not replacing either by a fixed value, a test seed or uptime, and for resting no guarantee of non-repetition on entropy and, where it gives one, resting it on a checked persistent construction
+Verification:: test, review
+* *test*
+** A failed read is reported and refuses setup, through a fault-injected backend.
+** A source short of its stated contract is refused.
+* *review*
+** Each backend's source, against its OS's documentation and its package's stated contract.
+** Each argument that a value never repeats across starts, resting on a checked persistent construction and never on entropy.
+
+*Rationale.*
+Entropy seeds each route's message-ID generator once, in initialization.
+So a fixed or repeated seed could repeat IDs from one start to the next.
+
+An OS entropy source gives a small, quantifiable collision probability.
+It gives no guarantee that two starts differ.
+
+Identity requirements keep their strength: where one demands non-repetition, this item forbids resting it on entropy.
+Two starts that read different values are a smoke check, not evidence of non-repetition.
+
+.Operating-system entropy sources
+====
+`+getrandom+` on Linux, `+getentropy+` on macOS and `+/dev/urandom+` on QNX are entropy sources of this kind.
+====
+
+[[req-ssr-platform-classified]]
+== Every runtime behaviour is classified
+
+[.specitem,oft-sid="req~ssr-platform-classified~1",oft-title="Every runtime behaviour is classified",oft-needs="uman",oft-tags="SafetyUpRustCore"]
+--
+The element *MUST* classify each of its runtime behaviours as mandated by a platform or chosen by the element, and *MUST* record that classification.
+--
+
+[horizontal]
+ID:: `+req~ssr-platform-classified~1+`
+ASIL:: B
+Allocated to:: the element
+Verification:: review
+
+*Rationale.*
+A behaviour that a platform mandates holds only where the platform keeps that rule.
+One that the element chooses can be changed and tested in the element.
+So the two need different arguments and different tests.
+
+In the safety crate, only the platform backends reach the operating system in runtime mode (<<req-ssr-platform-contract,Every platform backend of the element keeps the platform's rules>>), which keeps the two kinds apart.
+
+[[req-ssr-atomic-width]]
+== No target needs an atomic width it lacks
+
+[.specitem,oft-sid="req~ssr-atomic-width~5",oft-title="No target needs an atomic width it lacks",oft-needs="impl,utest",oft-tags="SafetyUpRustCore"]
+--
+*The obligation.*
+On every supported target the element *MUST* keep the following without needing an atomic width that the target lacks:
+
+* full semantic identity: each call, peer, tenure and message keeps the full identity that <<req-ssr-atomic-windows,Every narrowed value states its window>> keeps at full width;
+* coherent reports: each report presents values that the element held together, never a torn mix of older and newer ones;
+* ownership: each slot, lease and record has one owner at a time, and passes between owners only as its item states;
+* genuine `+Full+` behaviour: a `+Full+` result only where the capacity that it names is exhausted;
+* its terminal-safe finite-lifetime policy: a pool or a slot whose reuse count or generation would wrap is retired for good, after the warning that the policy states, and never reused.
+
+*Selection.*
+The element *MUST* tell by `+target_has_atomic+`, never by a list of targets, whether a target has 32-bit atomics with compare-and-swap (xref:../safety/elements/up-rust/assumptions-of-use.adoc#aou-seooc-target-environment[The target environment is verified]).
+On a target that has none, the element *MUST* fail to build.
+
+*Platform-specific mechanisms.*
+A platform backend of the element *MAY* use, on its target, a reviewed platform-specific mechanism behind one common SDK contract: wider atomics where the target provides them, or a private exclusion where it does not.
+
+* The element and each platform backend of the element that uses such a mechanism *MUST* state the mechanism's supported execution contexts, memory ordering, alignment, lifetime and interruption obligations, and package them with its configuration.
+* The element and each platform backend of the element that uses such a mechanism *MUST* make the mechanism's source-level safety argument cover every participant that can reach its storage.
+
+*Same public semantics.*
+The element, and each platform backend of the element for its mechanism, *MUST NOT* let a difference in representation:
+
+* change public semantics;
+* add a `+Busy+` result or a limit on callers;
+* let a stale operation act on a later tenure.
+
+*Interrupt masks.*
+A private interrupt mask is not a lock shared with another process, and it excludes only the participants that it masks.
+
+*Core code.*
+Core code is the code of the safety crate, and the atomics facade is the one module of it through which its code outside the platform layer reaches atomic operations.
+
+* The element *MUST* have core code outside the platform layer reach every atomic, loads and stores included, through the atomics facade.
+* The element *MUST* keep only lengths and indices, whose meaning does not depend on their width, in core's pointer-sized atomics.
+* On every target, the element *MUST* have core read memory shared with another process in 32-bit words and bytes.
+* The element *MUST* keep core buildable for a 32-bit target without 64-bit atomics.
+
+*A custom platform.*
+Each platform backend that an integrator supplies *MUST* keep, for its mechanism, the rules that this item gives a platform backend of the element, other than the mechanism's source-level safety argument, and the element keeps its own rules of this item with it.
+For such a backend, the integrator supplies that argument, and its other duties are stated with it, in xref:../safety/elements/up-rust/assumptions-of-use.adoc#aou-seooc-integrator-platform[A custom platform keeps the platform's rules].
+--
+
+[horizontal]
+ID:: `+req~ssr-atomic-width~5+`
+ASIL:: B
+Allocated to:: the element; each platform backend of the element (part E4), for its mechanism; each platform backend that an integrator supplies, for its mechanism, other than the mechanism's source-level safety argument
+Verification:: gate, test, review
+* *gate*
+** Core builds for a bare-metal 32-bit target without 64-bit atomics.
+** A build for a target without 32-bit atomics with compare-and-swap fails.
+** No `+core::sync::atomic+` or `+std::sync::atomic+` import in core outside the facade and the platform layer.
+* *test*
+** The suite under Miri, both models, for a little-endian and for a big-endian 32-bit target without 64-bit atomics, with a test of each of the five properties that the obligation names.
+** Each backend's mechanism on the targets its configuration names.
+* *review*
+** Each mechanism's source-level safety argument, against every participant that can reach its storage.
+** The source where the element tells whether a target has 32-bit atomics with compare-and-swap: `+target_has_atomic+`, and no list of targets.
+** Each pointer-sized atomic of core, holding only a length or an index.
+** Each read by core of memory shared with another process, in 32-bit words and bytes.
+** Each mechanism's supported execution contexts, memory ordering, alignment, lifetime and interruption obligations, stated and packaged with its configuration.
+
+*Rationale.*
+Some supported targets have no 64-bit atomics.
+
+The observable obligations are what the element's users rely on.
+So the item fixes those obligations, and leaves each target's mechanism open under the conditions that its statement sets.
+
+Host execution does not show how a masked interrupt behaves on an MCU.
+So each mechanism is verified on the targets its configuration names.
+
+The element tells by `+target_has_atomic+` because a list of targets can leave out a target that has 32-bit compare-and-swap, or name one that lacks it.
+
+[[req-ssr-atomic-windows]]
+== Every narrowed value states its window
+
+[.specitem,oft-sid="req~ssr-atomic-windows~3",oft-title="Every narrowed value states its window",oft-needs="impl,utest,uman",oft-tags="SafetyUpRustCore"]
+--
+*Stated windows.*
+The element *MUST* state, for every value that it keeps narrower than what it stands for, or lets wrap or saturate, its window and the event rate that would defeat it.
+The element *MUST* state both in its documentation, and in the package of each supported configuration whose representation has the value.
+
+A value kept at full width for the element's lifetime, or closed explicitly before its range is exhausted, has no window.
+
+*Identity and tenure.*
+The element *MUST NOT* let a representation drop the tie between a full identity and the tenure that an operation acts on.
+Wherever an operation claims a call slot, a peer entry or another reusable record, or ends or fails the tenure it names, the element *MUST* compare the full identity and tenure that it names with the record's current ones atomically with that claim or change:
+
+* either in the same exclusive step;
+* or by a recheck after a claim that gives the claim back, recording nothing, on a mismatch.
+
+No wrap, reuse or stalled operation then completes or fails another call, retires another tenure or admits a stale one.
+
+*Values kept at full width.*
+Every supported profile, host and MCU alike, keeps these values at full width:
+
+* the deadline record's origin and count;
+* a peer's identity and incarnation;
+* a call slot's request ID and the peer tied to its call;
+* the message-ID generator's counter and last good time.
+
+*The windows that remain.*
+The windows that remain are:
+
+* a flow counter's wrap: fewer than 2^32^ increments between two reads that are compared (xref:../safety/elements/up-rust/assumptions-of-use.adoc#aou-seooc-application-reacts[The application reacts to what the element reports]);
+* a fault counter's saturation at 2^32^ − 1, which a read reports as saturated, not as a difference;
+* a deadline count's saturation at the end of its range, which the report states (xref:../up-l1/bindings.adoc#req-ssr-qos-deadline[Deadlines are monitored]);
+* a pool's reuse count and a call slot's generation, whose exhaustion retires that pool for good, after the warning its lifetime policy states, instead of reusing a value;
+* the message-ID generator's period, 2^64^ IDs of one route, stated with its refusal bounds (xref:uuid.adoc#req-ssr-ids-unique[Message IDs are unique]).
+
+The element *MUST* report a read of a saturated fault counter as saturated, never as a wrapped value or as a difference.
+
+*Further narrowing.*
+Each platform backend of the element whose representation narrows a value further *MUST* list each window that it adds, in the package of each supported configuration that uses it.
+
+*The narrowed 32-bit-word representation.*
+No supported profile uses the narrowed 32-bit-word representation, which keeps some of these values narrower than their full width: the list above of values kept at full width binds every supported profile, whatever words a representation stores them in.
+Its windows are listed in the example after this item, and its one-word deadline monitor is exercised as a model, as the Verification line states.
+--
+
+[horizontal]
+ID:: `+req~ssr-atomic-windows~3+`
+ASIL:: B
+Allocated to:: the element; each platform backend of the element (part E4), for the windows that its representation adds
+Verification:: test, review
+* *test*
+** Each remaining window's boundary driven through a test hook: a flow counter's wrap, a fault counter's and the deadline count's saturation, a pool retired, after the warning that its lifetime policy states, before its reuse count or a slot's generation wraps, and a route's message-ID generator at the end of its period, refusing as xref:uuid.adoc#req-ssr-ids-unique[Message IDs are unique] states.
+** A read of a saturated fault counter, reported as saturated.
+** The tie of identity to tenure at each claim and at each expiry, peer failure and retirement.
+** For the narrowed 32-bit-word representation, the one-word monitor's boundaries and an arrival racing a refresh, under Miri, under Stacked Borrows and under Tree Borrows.
+* *review*
+** The documented list against the code of every profile, host and MCU.
+** The source argument of each full-width representation's exclusive step.
+
+*Rationale.*
+Narrowed and wrapping state is correct only inside its reuse and observation windows.
+So those bounds are stated for the integrator.
+
+A window belongs to a representation.
+The list in the statement describes the representation that the supported profiles share, and a configuration that narrows a value further adds its own windows.
+
+These are facts about the representation.
+The review of each mechanism supplies the representation's exclusion, interruption, long-suspension, coherence and arithmetic arguments.
+
+Tying a full identity to its tenure is what keeps a wrap or a stalled operation from acting on a later call or tenure.
+
+.The windows of the narrowed 32-bit-word representation
+====
+A representation that kept these values in single 32-bit words would have these windows:
+
+* a call slot's generation, 2^28^ reuses of one slot during one stalled call: a stalled expiry of a call, or a stalled failure of a peer's older calls, could time out or fail a later call early;
+* a peer-table entry's generation, 2^22^ reuses of one entry during one stalled call: a stalled retirement of a peer entry could retire a later tenure, which acts as a spurious peer loss for its peer;
+* a peer entry's 8 bits of users, 255 concurrent classifications of one peer, beyond which a frame is refused;
+* the incarnation latch's sequence word: a torn read needs 2^32^ increments, 2^31^ raises, during one stalled read;
+* the message-ID period, 2^32^ IDs of one route;
+* the ID guard, 2^31^ IDs within one 64 ms bucket, whose changes a word of their own detects; after a stale store of the bucket, one bucket's IDs stay below 2^31^ + 2 × `+T_wd+` × the ID rate;
+* the last good time's saturation, at a ±4.36-year offset of the wall clock from its reading at the route's setup, beyond which an ID needed while the clock cannot be read is refused;
+* the deadline monitor's one-word tick, wrap-aware over 2^30^ ticks, refreshed into the past, to now − 2^28^, by any check that finds a counted gap 2^29^ ticks old, the counting check included. It needs the route serviced at least every 2^29^ ticks (xref:../safety/elements/up-rust/assumptions-of-use.adoc#aou-seooc-application-reacts[The application reacts to what the element reports]) and every wait inside the element, checks as well as arrivals, under 2^28^ ticks (xref:../safety/elements/up-rust/assumptions-of-use.adoc#aou-seooc-timing-budgets[Timing claims rest on a supported configuration, and the item's budgets are the integrator's]).
+====

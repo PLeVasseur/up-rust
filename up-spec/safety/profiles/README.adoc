@@ -1,0 +1,25 @@
+= Safety Assurance Profiles
+:toc: preamble
+
+[NOTE]
+====
+This section indexes safety-assurance profiles of the specification.
+A profile page maps intended specification scope for a safety element and confers no conformance claim or qualification of its own (xref:../../contract-generations.adoc#req-ssr-contract-transition[What a part declares and claims, and when a replacement takes effect]).
+====
+
+== Profiles
+
+[cols="2,5",options="header"]
+|===
+| Profile | Intended scope
+
+| xref:up-rust-asil-b.adoc[`up-rust` ASIL B SEooC profile]
+| Defines the ASIL path and supported configuration packages for the `up-rust` SEooC, and indexes the technical chapters and element pages that carry its ASIL B obligations
+|===
+
+== Scope and claim boundaries
+
+* *Element boundary and claims:* xref:../elements/up-rust/README.adoc[up-rust SEooC: Element boundary and overview] (xref:../elements/up-rust/README.adoc#claims[Claims]) and xref:../elements/up-rust/assumptions-of-use.adoc#aou-seooc-assumptions-bind[An assumption of use binds the integrator who claims the scope, and replaces no requirement].
+* *Assurance governance and verification:* xref:../assurance.adoc[Safety assurance governance, verification and evidence].
+* *Contract families and partial claims:* xref:../../contract-generations.adoc[Which requirements an implementation follows] states how named profiles work for partial component claims under xref:../../contract-generations.adoc#req-ssr-contract-transition[What a part declares and claims, and when a replacement takes effect], separately from owned-frame SDK contract claims under xref:../../contract-generations.adoc#req-sdk-owned-frame-contract[The owned-frame SDK contract binds the parts that declare it] and from application configuration selection under xref:../../basics/configurations.adoc[Configurations and Application-Selectable Parts].
+  Supplier configuration packages and optional function selections are not specification-named partial-claim profiles.

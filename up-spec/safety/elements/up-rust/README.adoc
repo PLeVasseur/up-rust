@@ -1,0 +1,254 @@
+= up-rust SEooC: Element Boundary and Overview
+:toc: preamble
+
+The key words "*MUST*", "*MUST NOT*", "*REQUIRED*", "*SHALL*", "*SHALL NOT*", "*SHOULD*", "*SHOULD NOT*", "*RECOMMENDED*", "*MAY*", and "*OPTIONAL*" in this document are to be interpreted as described in https://www.rfc-editor.org/info/bcp14[IETF BCP14 (RFC2119 & RFC8174)]
+
+The element boundary, claims, build controls, strict mode and assumptions of use of one safety element out of context (SEooC).
+
+NOTE: A safety element out of context is developed without a known item, in ISO 26262's sense: its requirements are assumed ones, and its assumptions of use say what an integrator has to provide (10-9).
+
+Conventions and tags: xref:../../README.adoc[Safety and assurance view].
+Contract-family binding and precedence: xref:../../../contract-generations.adoc[Which requirements an implementation follows].
+Profile index across all chapters carrying `up-rust` ASIL B obligations: xref:../../profiles/up-rust-asil-b.adoc[up-rust ASIL B SEooC profile].
+
+[NOTE]
+====
+The element-specific pages for `up-rust` are:
+
+* this page: element boundary (E1 to E7), claims and overview;
+* xref:assumptions-of-use.adoc[Assumptions of use]: the integrator obligations and full assumption index;
+* xref:build.adoc[Build and shipped content]: checked-policy isolation, ASIL build profile, specified functions and test-hook exclusion;
+* xref:strict-mode.adoc[Strict mode]: strict-mode states, initialization checks, locked build, rules, acknowledgements and compliance report.
+
+The Streamer is a separate part outside the element: xref:../streamer.adoc[Streamer safety element].
+====
+
+== The element
+
+[[req-ssr-element-boundary]]
+=== The parts of the element, and element code
+
+[.specitem,oft-sid="req~ssr-element-boundary~3",oft-title="The parts of the element, and element code",oft-needs="uman",oft-tags="SafetyUpRustCore,SafetyStreamer,SafetyBinding,SafetyWire"]
+--
+*The parts.*
+The element is the up-rust SEooC.
+It has the parts E1 to E7, each with its initialization-mode code: its builders, its admission, its validation of deployment data and its transition.
+
+* *E1, the runtime path.*
+** The two mode types and the transition between them.
+** The handles of the communication layer once activated: publisher, subscriber, notifier, notification listener, RPC client and RPC server.
+** Inbound slots, ready queues, the RPC call table and the peer table.
+** The QoS checks, the TTL checks and the deadline monitor.
+** Message identifiers, waiver records, route reports, counters and errors.
+** The element's share of the handling of a frame's header, envelope and metadata.
+** The element's side of the interface to a wire: the checked payload writer, and decoding into startup slots.
+** The native wire.
+** The element's hooks for end-to-end protection: the opaque call tag, protected refusal answers and route counters, with unprotected frames counted separately.
+* *E2, the lending and handoff runtime contracts.*
+The interfaces that a binding implements, which are binding setup, the lending runtime, the handoff runtime, the frame and lent transmit storage, and the service of the element that a binding calls, the runtime port.
+No binding's implementation of them belongs to E2.
+* *E3, startup memory.*
+Its regions, their placement and their seal.
+* *E4, the platform.*
+The runtime platform (`now`, `unix_time_ms`, `wait`, `wake_one`, `wake_all`), the initialization-only platform (`entropy`, `prefault`), the shared signal, and each platform backend that is shipped with the element.
+* *E5, the carrier primitives.*
+Receive, send, park and the capacity check of a carrier route (xref:../../../up-l2/streamer.adoc#req-ssr-carrier-route[A carrier route takes each frame at its ingress and sends it at its egress]).
+* *E6, the end-to-end protection wire (the E2E wire).*
+An opt-in wire that wraps another wire (xref:../../../up-l1/wires/e2e.adoc#req-ssr-e2e-not-required[The element requires end-to-end protection on no route, outside strict mode's black-channel rule]; xref:../../../up-l1/wires/e2e.adoc[The end-to-end protection wire]).
+* *E7, strict mode.*
+An opt-in check, in initialization mode only, of the integrator's setup, in a component of its own (xref:build.adoc#req-ssr-crate-core-only-binary[The checked policy stays in the safety crate, and no admitted optional layer bypasses or reimplements it], clause "Strict mode's component"), with the read-only views of each route's declarations and the hook in the runtime path that it uses.
+Its states, the severities of its findings and its rules: xref:strict-mode.adoc#req-ssr-strict-states[Strict mode has four states]; xref:strict-mode.adoc#req-ssr-strict-init-only[Strict mode checks in initialization only]; xref:strict-mode.adoc#req-ssr-strict-lock[The locked build allows only enforcement]; xref:strict-mode.adoc#req-ssr-strict-rules[The rules that strict mode checks]; xref:strict-mode.adoc#req-ssr-strict-ack-revision[An acknowledgement names a deviation by ID and revision]; xref:strict-mode.adoc#req-ssr-strict-report[Strict mode reports on every run].
+
+*Element code.*
+Element code is the code of the parts that belong to the element.
+Code that runs on a runtime path but that the element does not own, such as the destructor of an owned value, an allocator's release or a dependency that they reach, is not element code.
+Admitting a selected startup-provisioning helper or a selected serialized owned-value runtime adapter on the ASIL path (xref:../../profiles/up-rust-asil-b.adoc#req-ssr-element-configurations[The ASIL path and supported configurations]) does not enlarge element code and does not bring that helper, adapter, allocation provider or any dependency that it reaches into parts E1 to E7.
+
+*Each part keeps its own requirements.*
+Whom a requirement binds is stated in xref:../../../contract-generations.adoc#req-ssr-requirements-bind[A requirement binds the actors to which it gives a duty].
+Belonging to the element moves no duty from one part to another.
+
+*Outside the element.*
+These are separately composed parts of their own outside element code, each with its own boundary, declarations, requirements, source-bound records and evidence, and none is a part of the element:
+
+* each binding, with its middleware (xref:../../../up-l1/bindings.adoc#req-ssr-binding-scope[What a binding is, and the binding contract]);
+* each wire other than the native wire and the end-to-end protection wire (xref:../../../up-l1/wires/README.adoc#req-ssr-wire-scope[What a wire is, and the wire contract]);
+* each platform backend not shipped with the element, including a platform backend that an integrator supplies (xref:assumptions-of-use.adoc#aou-seooc-integrator-platform[A custom platform keeps the platform's rules]);
+* the Streamer and the Streamer binary (xref:../streamer.adoc#req-ssr-streamer-scope[What the Streamer is, and the bounded-runtime Streamer profile]);
+* each selected startup-provisioning helper and each selected serialized owned-value runtime adapter (xref:../../profiles/up-rust-asil-b.adoc#req-ssr-element-configurations[The ASIL path and supported configurations]), and every other optional layer, such as an allocation-aware layer, an application-role layer or an asynchronous layer, together with the scheduler that drives an asynchronous layer;
+* each memory or allocation provider, scheduler integration and adapter (xref:../../../contract-generations.adoc#req-sdk-owned-frame-contract[The owned-frame SDK contract binds the parts that declare it]).
+
+The Streamer uses the carrier primitives of E5.
+A requirement whose statement gives a duty only to the element, to element code or to a part of the element gives the Streamer no duty.
+The application's own logic, the safety function of the item, in ISO 26262's sense, with its hazards, its fault tolerant time interval, its workload and its safe state, the operating system, the hardware, the supervisor, the clock source and the deployment data are outside the element too, and the assumptions of use cover them.
+
+*Composition.*
+A deployment conformance claim (xref:../../../contract-generations.adoc#req-ssr-contract-transition[What a part declares and claims, and when a replacement takes effect]) covers the parts that the deployment's profile selects (xref:../../profiles/up-rust-asil-b.adoc#req-ssr-element-configurations[The ASIL path and supported configurations]).
+Running in one process, being linked into one binary or being kept in one repository establishes no claim and merges no requirements.
+A composition that is claimed as one unit has its own explicit boundary, the revisions of its parts and of their named profiles with their dependency closure, its lifecycle, its assumptions of use and its evidence.
+
+*Composition-package releaser and role accountability.*
+Across the element and the separately composed parts that work with it, accountability is divided among five distinct roles:
+
+* *Component producers.*
+  Each component producer (supplier of a part composed with the element) *MUST* retain responsibility for its component's allocated requirements, source-bound records, proof obligations, evidence and source-level `+unsafe+` obligations for the code that it owns (xref:../../assurance.adoc#req-ssr-unsafe-inventory[Every `unsafe` is inventoried and justified]; xref:../../assurance.adoc#req-ssr-binding-unsafe-inventory[A binding inventories its own `unsafe`]; xref:../streamer.adoc#req-ssr-streamer-memory-safety[The Streamer's own code cannot cause undefined behaviour, and its `unsafe` is inventoried]).
+  Tests and runs under Miri do not substitute for those source-level `+unsafe+` obligations.
+* *Releaser of a supported composition package.*
+  The composition-package releaser's canonical normative duties—owning and answering for the package's compatibility statement, assembled supplier evidence, sizing disclosures, helper or adapter scope declarations, composition-package deviation records (identifier, revision, scope, bounds, evidence and lapse date) and known-failure separation—are stated in xref:../../profiles/up-rust-asil-b.adoc#req-ssr-element-configurations[The ASIL path and supported configurations].
+* *Element supplier.*
+  For each element-supported configuration package that it provides, the element's supplier is that releaser and retains release responsibility for that package under xref:../../profiles/up-rust-asil-b.adoc#req-ssr-element-configurations[The ASIL path and supported configurations].
+* *Explicit extension composer.*
+  An explicit extension composer's canonical normative duties when assembling and releasing a composition package or extension beyond an element-supported configuration package—including assuming composition-supplier responsibility and not silently labeling or presenting that extension as element-supplier-supported—are stated in xref:../../profiles/up-rust-asil-b.adoc#req-ssr-element-configurations[The ASIL path and supported configurations].
+* *Integrator.*
+  The integrator matches its deployment against the selected package or extension and validates every applicable assumption of use for the item (xref:assumptions-of-use.adoc#aou-seooc-assumptions-bind[An assumption of use binds the integrator who claims the scope, and replaces no requirement]).
+  A bundle of individually reviewed or evidenced parts is not proof of their combination; where no supplier offers a needed composition, that gap is recorded; an application user is not silently made a supplier, and an integrator assumes extension-supplier duties only where it deliberately creates and declares a custom extension.
+
+*The derive and test tooling.*
+The element's derive is a build input, and no part of the element at run time.
+What holds for the code that it generates, and who accounts for that code, is stated in xref:../../assurance.adoc#req-ssr-unsafe-inventory[Every `unsafe` is inventoried and justified].
+The application code around generated code is not element code.
+Test tooling, such as heap observers, contract suites and test doubles, is no part of the element.
+
+*Scoped replacement.*
+This revision replaces revision 2 of this item for the element and for each component producer (supplier of a part composed with the element), preserving parts E1 to E7 and element code unchanged while explicitly classifying selected startup-provisioning helpers, serialized owned-value runtime adapters, memory and allocation providers and non-shipped platform backends as separately composed parts outside element code and establishing component-producer accountability and element boundary separation (with composition-package-releaser and explicit-extension-composer obligations kept canonically in xref:../../profiles/up-rust-asil-b.adoc#req-ssr-element-configurations[The ASIL path and supported configurations]).
+--
+
+[horizontal]
+ID:: `+req~ssr-element-boundary~3+`
+ASIL:: B
+Allocated to:: the element, as the subject of the definitions and the parts E1 to E7; each component producer (supplier of a part composed with the element), for retaining responsibility for its component's allocated requirements, source-bound records, proof obligations, evidence and source-level `+unsafe+` obligations for the code that it owns
+Verification:: review
+* Each statement and allocation that names the element, element code, one of the parts E1 to E7, a part outside the element (including a selected startup-provisioning helper, serialized owned-value runtime adapter, memory or allocation provider, binding, wire, platform backend or the Streamer) or a composition of parts, read against this item, verifying that parts E1 to E7 stay unchanged and that admitting a startup-provisioning helper or serialized owned-value runtime adapter does not enlarge element code.
+* Each component producer's records: ownership of its component's allocated requirements, source-bound records, proof obligations, evidence and source-level `+unsafe+` obligations for the code that it owns, with neither tests nor Miri treated as a substitute for source-level `+unsafe+` obligations.
+* Composition-package-releaser and explicit-extension-composer responsibilities referenced here: verified under xref:../../profiles/up-rust-asil-b.adoc#req-ssr-element-configurations[The ASIL path and supported configurations].
+
+*Rationale.*
+Faults of initialization-mode code show before traffic starts, but a wrong admission decision becomes a runtime fault, so the transition is safety-relevant.
+Parts that are built, released and qualified apart can be combined in many ways, so a duty stays with the part to which its requirement gives it, whatever is linked or deployed beside it.
+Keeping admitted startup-provisioning helpers, serialized owned-value runtime adapters and memory or allocation providers outside element code prevents optional helper admissions from silently enlarging the safety element's boundary, while separating component-producer duties here from the composition-package-releaser and explicit-extension-composer duties in xref:../../profiles/up-rust-asil-b.adoc#req-ssr-element-configurations[The ASIL path and supported configurations] and the integrator duties in xref:assumptions-of-use.adoc#aou-seooc-assumptions-bind[An assumption of use binds the integrator who claims the scope, and replaces no requirement] ensures each responsibility has one canonical normative home.
+
+== Outside the element
+
+What is outside the element is stated in <<req-ssr-element-boundary,The parts of the element, and element code>>.
+The entries below point at the items that govern some of it.
+
+=== Classic routes
+
+How the classic contract of the protocol chapters and the items of the up-rust SEooC requirement family meet: xref:../../../contract-generations.adoc#req-ssr-contract-transition[What a part declares and claims, and when a replacement takes effect].
+What keeps a classic route out of runtime mode: xref:../../../contract-generations.adoc#req-ssr-mode-classic-excluded[Classic routes never enter runtime mode].
+How the classic APIs stand beside owned-frame routes, and what an adapter between them keeps or refuses: xref:../../../contract-generations.adoc#req-sdk-owned-frame-classic-apis[The classic APIs keep their contract beside owned-frame routes]; xref:../../../up-l1/payload-paths.adoc#req-sdk-owned-frame-adapter[An adapter keeps a message whole across a crossing, or refuses it by name].
+
+=== Asynchronous layers
+
+Where an asynchronous layer stands and what it keeps: xref:../../../up-l2/execution.adoc#req-ssr-async-seam[The asynchronous interface has a written, executor-independent contract]; xref:../../../up-l1/runtime.adoc#req-ssr-crate-sync-path[Traffic is synchronous or polled]; <<req-ssr-element-boundary,The parts of the element, and element code>>.
+The ordinary contract of an asynchronous layer and of a scheduler integration: xref:../../../up-l2/execution.adoc#req-sdk-owned-frame-async-layer[Asynchronous operations come from one layer that needs no host library and no allocator]; xref:../../../up-l2/execution.adoc#req-sdk-owned-frame-scheduler-integration[A scheduler integration supplies wake-ups, timers and contexts through public interfaces].
+
+=== Middleware
+
+What a binding and its middleware are: xref:../../../up-l1/bindings.adoc#req-ssr-binding-scope[What a binding is, and the binding contract]; what stands outside the element: <<req-ssr-element-boundary,The parts of the element, and element code>>.
+
+* Allocation inside middleware: its permit, xref:../../../up-l1/bindings.adoc#req-ssr-binding-no-heap[Binding code allocates nothing in runtime mode on a native path]; its waiver, xref:../../../up-l1/bindings.adoc#req-ssr-waiver-required[Middleware heap needs a named waiver].
+* What a binding's middleware cannot guarantee: xref:../../assurance.adoc#req-ssr-binding-readme[A binding's qualification record states its limits and its failures].
+
+=== Optional layers and code outside the claimed graph
+
+* What an ASIL binary is built from, and how a crate is judged: xref:assumptions-of-use.adoc#aou-seooc-build-configuration[The ASIL binary is built from its claimed graph, with the ASIL profile].
+* What an optional layer may not do, and when one is admitted: xref:build.adoc#req-ssr-crate-core-only-binary[The checked policy stays in the safety crate, and no admitted optional layer bypasses or reimplements it] and xref:../../profiles/up-rust-asil-b.adoc#req-ssr-element-configurations[The ASIL path and supported configurations].
+
+=== Other things outside the element
+
+* *The classic `UStreamer`*, its dynamic routes and its cross-family adapters.
+* *Wires and bindings from elsewhere* with `unsafe` code of their own: xref:assumptions-of-use.adoc#aou-seooc-qualified-bindings-and-wires[Bindings and wires pass their contracts].
+* *A custom platform backend that an integrator supplies*: xref:assumptions-of-use.adoc#aou-seooc-integrator-platform[A custom platform keeps the platform's rules].
+* *The OS, hardware, supervisor, clock source and deployment data, and the choice of routes that need end-to-end protection*: xref:assumptions-of-use.adoc[the assumptions of use].
+
+== What the element relies on
+
+* *Bindings and wires*: what each is, and whether it is part of the element, xref:../../../up-l1/bindings.adoc#req-ssr-binding-scope[What a binding is, and the binding contract] and xref:../../../up-l1/wires/README.adoc#req-ssr-wire-scope[What a wire is, and the wire contract].
+Whom an item binds: xref:../../../contract-generations.adoc#req-ssr-requirements-bind[A requirement binds the actors to which it gives a duty].
+Which bindings and wires an integrator uses: xref:assumptions-of-use.adoc#aou-seooc-qualified-bindings-and-wires[Bindings and wires pass their contracts].
+* *The derive*: what it is, <<req-ssr-element-boundary,The parts of the element, and element code>>; what holds for the code that it generates, xref:../../assurance.adoc#req-ssr-unsafe-inventory[Every `unsafe` is inventoried and justified]; what it refuses, xref:../../../up-l1/wires/native.adoc#req-ssr-native-type[A native payload type holds its whole value in one fixed layout].
+* *Test tooling and test doubles*: what a test double is, xref:../../../up-l1/bindings.adoc#req-ssr-binding-scope[What a binding is, and the binding contract]; what a result on one shows, xref:../../assurance.adoc#req-ssr-verification-methods[The verification methods, and what a Verification line asks for].
+
+[[claims]]
+== Claims
+
+Kinds of claim, and what a claim covers: xref:../../../contract-generations.adoc#req-ssr-contract-transition[What a part declares and claims, and when a replacement takes effect].
+The items that state what a route offers, requires and reports: xref:../../../up-l1/runtime.adoc#req-ssr-qos-no-downgrade[QoS is honored or refused, never weakened]; xref:../../../basics/resources.adoc#req-ssr-heap-guarantees[A stronger resource guarantee is required by name, and admitted or refused]; xref:../../../up-l1/payload-paths.adoc#req-ssr-heap-none[No heap in runtime mode on a native path].
+
+=== Ordinary ownership and stronger resource guarantees
+
+NOTE: Most wire formats decode into values that own what they hold.
+
+What a route declares, what it may require, and what is admitted or refused: xref:../../../basics/resources.adoc#req-ssr-heap-declared[The heap class is declared, with no default] and xref:../../../basics/resources.adoc#req-ssr-heap-guarantees[A stronger resource guarantee is required by name, and admitted or refused].
+
+=== Supported configuration packages
+
+What a supported configuration package is, and who provides it: xref:../../profiles/up-rust-asil-b.adoc#req-ssr-element-configurations[The ASIL path and supported configurations].
+What an integrator does where no package supports its target: xref:assumptions-of-use.adoc#aou-seooc-integrator-platform[A custom platform keeps the platform's rules].
+
+=== Whom the assumptions of use bind
+
+Stated in xref:assumptions-of-use.adoc#aou-seooc-assumptions-bind[An assumption of use binds the integrator who claims the scope, and replaces no requirement].
+
+NOTE: A safety manual states the integration contract.
+It is not a safety case, an assessment or a certificate.
+
+== Operating modes
+
+A transport has two modes, initialization and runtime, and one transition between them.
+
+* *The modes and the transition*: xref:../../../basics/resources.adoc#req-ssr-mode-two-types[Two modes, as two types]; xref:../../../up-l1/runtime.adoc#req-ssr-mode-entry[Entering runtime mode is one all-or-nothing operation]; xref:../../../up-l1/runtime.adoc#req-ssr-mode-one-way[There is no way back]; xref:../../../up-l1/runtime.adoc#req-ssr-mode-init-failure[Initialization failure].
+What a process in runtime mode is, and the three things for which the term is used, are stated in xref:../../../up-l1/runtime.adoc#req-ssr-mode-entry[Entering runtime mode is one all-or-nothing operation].
+The operations that make the transition are named in xref:../../../up-l1/runtime.adoc#req-ssr-mode-entry[Entering runtime mode is one all-or-nothing operation], clause "One operation".
+* *What initialization prepares*: xref:../../../up-l1/runtime.adoc#req-ssr-mode-entry-admission[Every route is admitted before runtime mode]; xref:../../../basics/resources.adoc#req-ssr-memory-static[ASIL-path storage is static or caller-provided]; xref:../../../basics/resources.adoc#req-ssr-memory-sealed[Startup memory is sealed]; xref:../../../basics/resources.adoc#req-ssr-heap-lazy-forced[Lazy state is forced before runtime mode]; xref:../../../up-l1/bindings.adoc#req-ssr-binding-predecessor-cleanup[A binding cleans up after a dead predecessor, in initialization].
+* *What runtime mode allows*: xref:../../../up-l1/payload-paths.adoc#req-ssr-heap-none[No heap in runtime mode on a native path]; xref:../../../basics/resources.adoc#req-ssr-heap-declared[The heap class is declared, with no default]; xref:../../../basics/resources.adoc#req-ssr-heap-guarantees[A stronger resource guarantee is required by name, and admitted or refused]; xref:../../../up-l1/runtime.adoc#req-ssr-heap-slot-types[A decoded value is destroyed once, as its route's class admits]; xref:../../../up-l1/runtime.adoc#req-ssr-release-none[Nothing is released in runtime mode]; xref:../../../up-l1/runtime.adoc#req-ssr-release-lease-drop[A lease gives back its slot and nothing else]; xref:../../../basics/error_model.adoc#req-ssr-refuse-before-heap[Refuse before touching the heap].
+
+=== One-way runtime and external restart
+
+* *How a process leaves runtime mode, and what restarts it*: xref:../../../up-l1/runtime.adoc#req-ssr-mode-no-shutdown[No shutdown in runtime mode]; xref:../../../up-l1/runtime.adoc#req-ssr-mode-restart[A restart is an initialization]; xref:assumptions-of-use.adoc#aou-seooc-supervisor-restart[A supervisor outside the process restarts it].
+* *No degraded mode*: that there is none, and what the element does not do after an event on one route, are stated in xref:../../../up-l1/runtime.adoc#req-ssr-mode-no-shutdown[No shutdown in runtime mode], clause "No degraded mode".
+For the Streamer: xref:../../../up-l2/streamer.adoc#req-ssr-streamer-containment[A fault stays on its route] and xref:../../../up-l2/streamer.adoc#req-ssr-streamer-mode-report[The Streamer reports degraded].
+
+== Interfaces at the boundary
+
+[cols="2,3,3",options="header"]
+|===
+| Direction | Interface | Items
+
+| Provided to applications
+| L2 handles, the transition, bounded waits, route reports, counters and waiver records
+| xref:../../../basics/resources.adoc[Resources, Startup Memory, Heap Classes and Memory Providers]; xref:../../../basics/configurations.adoc[Configurations and Application-Selectable Parts]; xref:../../../basics/error_model.adoc[Error model]; xref:../../../basics/uuid.adoc[Message identifiers (UUID)]; xref:../../../up-l1/runtime.adoc[uP-L1 transport runtime]; xref:../../../up-l1/payload-paths.adoc[Payload paths]; xref:../../../up-l1/bindings.adoc[uP-L1 Transport Bindings]; xref:../../assurance.adoc[Safety Assurance Governance, Verification and Evidence]; xref:../../../up-l1/integrity.adoc[uP-L1 Integrity Levels and Copy Routes]; xref:../../../up-l1/peers.adoc[uP-L1 Peers and Fault Model]; xref:../../../up-l2/api.adoc[Communication Layer APIs and RPC interaction rules]; xref:../../../up-l2/execution.adoc[Execution and asynchronous seam]; xref:../../../languages/rust.adoc[Rust language mapping]
+
+| Provided to the Streamer
+| Carrier routes, the capacity check, park, the shared signal
+| xref:../../../up-l1/runtime.adoc[uP-L1 transport runtime]; xref:../../../up-l1/bindings.adoc[uP-L1 Transport Bindings]; xref:../../../up-l1/integrity.adoc[uP-L1 Integrity Levels and Copy Routes]; xref:../../../up-l2/streamer.adoc[Streamer]
+
+| Provided to integrators
+| The end-to-end protection wire; strict mode and its report; the Streamer's boundary, operator interface, mode report, watchdog hook and startup report
+| xref:../streamer.adoc[Streamer Safety Element]; xref:../../../up-l2/streamer.adoc[Streamer]; xref:../../../up-l1/wires/e2e.adoc[The end-to-end protection wire]; xref:build.adoc[Build and shipped content]; xref:strict-mode.adoc[Strict mode]
+
+| Required from bindings
+| The lending or handoff contract, and the bindings' duties
+| The items whose statements give a binding a duty, most of them in xref:../../../up-l1/bindings.adoc[uP-L1 Transport Bindings], xref:../../../up-l1/iceoryx2.adoc[iceoryx2], xref:../../../up-l1/iceoryx2-frame.adoc[The iceoryx2 physical frame], xref:../../../up-l1/lola.adoc[LoLa] and xref:../../../up-l1/lola-envelope.adoc[The LoLa physical envelope], alongside xref:../../assurance.adoc[Safety Assurance Governance, Verification and Evidence] and xref:../../../languages/rust.adoc[Rust language mapping]; xref:assumptions-of-use.adoc#aou-seooc-qualified-bindings-and-wires[Bindings and wires pass their contracts]
+
+| Required from wires
+| The wire contract, and the wires' duties
+| The items whose statements give a wire a duty, in xref:../../../up-l1/wires/README.adoc[Wires and the wire contract], xref:../../../up-l1/wires/native.adoc[Native wire], xref:../../../up-l1/wires/serialized.adoc[Serialized wires], xref:../../../up-l1/wires/xcdrv2.adoc[XCDR2], xref:../../../up-l1/wires/e2e.adoc[The end-to-end protection wire], xref:../../../up-l1/payload-paths.adoc[Payload paths], xref:../../assurance.adoc[Safety Assurance Governance, Verification and Evidence] and xref:../../../up-l1/peers.adoc[uP-L1 Peers and Fault Model]
+
+| Provided by the element's supplier or another supported composition-package releaser
+| Versioned supported configuration (composition) packages, compatibility statements and assembled supplier evidence
+| xref:../../profiles/up-rust-asil-b.adoc#req-ssr-element-configurations[The ASIL path and supported configurations]; <<req-ssr-element-boundary,The parts of the element, and element code>>; xref:../../../basics/platform.adoc[Platform contracts and atomics]; xref:assumptions-of-use.adoc#aou-seooc-target-environment[The target environment is verified]
+
+| Required from each platform backend
+| The platform's rules: the runtime platform, with its clocks, its wait and its wake, and the initialization-only platform
+| xref:../../../basics/platform.adoc[Platform contracts and atomics]; xref:assumptions-of-use.adoc#aou-seooc-integrator-platform[A custom platform keeps the platform's rules]
+
+| Required from the OS and hardware
+| What the assumptions of use ask of them, through the integrator
+| xref:assumptions-of-use.adoc#aou-seooc-process-isolation[Processes or partitions are isolated]; xref:assumptions-of-use.adoc#aou-seooc-clock[The platform provides the clocks]; xref:assumptions-of-use.adoc#aou-seooc-target-environment[The target environment is verified]
+
+| Required from the integrator that claims the element's safety-assurance scope
+| Its assumptions of use
+| xref:assumptions-of-use.adoc[up-rust SEooC: Assumptions of use] (states the 26 element, deployment, transport, middleware and message-identity assumptions and indexes all 29, linking to the 3 Streamer operational assumptions in xref:../streamer.adoc[Streamer Safety Element])
+|===

@@ -1,0 +1,921 @@
+= Resources, Startup Memory, Heap Classes and Memory Providers
+:toc: preamble
+
+The key words "*MUST*", "*MUST NOT*", "*REQUIRED*", "*SHALL*", "*SHALL NOT*", "*SHOULD*", "*SHOULD NOT*", "*RECOMMENDED*", "*MAY*", and "*OPTIONAL*" in this document are to be interpreted as described in https://www.rfc-editor.org/info/bcp14[IETF BCP14 (RFC2119 & RFC8174)]
+
+[NOTE]
+====
+* *Contract-family membership.*
+Filing on this page does not decide whom an item binds, and neither merges the repository's requirement families nor binds classic protocol implementations (xref:../contract-generations.adoc[Which requirements an implementation follows]).
+This page holds items from two distinct contract families:
+** *The up-rust SEooC requirement family (`+req~ssr-*+`, `ASIL:: B`, `Safety*` tags)*: <<sec-mode-types,Mode phase boundary and resource-lifetime types>>, <<sec-startup-memory,Startup memory and capacities>>, and <<sec-heap-classes,Heap classes, lazy state and stronger guarantees>>.
+Each item binds the actors to which its statement gives a duty (xref:../contract-generations.adoc#req-ssr-requirements-bind[A requirement binds the actors to which it gives a duty]; xref:../contract-generations.adoc#req-ssr-contract-transition[What a part declares and claims, and when a replacement takes effect]).
+** *The owned-frame SDK contract (`+req~sdk-owned-frame-*+`, ordinary obligations, no ASIL, `OwnedFrame*` tags)*: <<sec-memory-providers,Memory sources and allocation providers>>.
+Each item binds a part only where its declaration names the owned-frame SDK contract and within the conditions its statement sets (xref:../contract-generations.adoc#req-sdk-owned-frame-contract[The owned-frame SDK contract binds the parts that declare it]; xref:../contract-generations.adoc#owned-frame-conventions[Owned-frame SDK conventions and tags]).
+* *Section map.*
+<<sec-words,Words used on this page>> -> <<sec-mode-types,Mode phase boundary and resource-lifetime types>> -> <<sec-startup-memory,Startup memory and capacities>> -> <<sec-heap-classes,Heap classes, lazy state and stronger guarantees>> -> <<sec-memory-providers,Memory sources and allocation providers>>.
+* *Related chapters.*
+Mode transition, runtime bounds and release mechanics are stated in xref:../up-l1/runtime.adoc#req-ssr-mode-entry[Entering runtime mode is one all-or-nothing operation], the native-path heap-free rule in xref:../up-l1/payload-paths.adoc#req-ssr-heap-none[No heap in runtime mode on a native path], frame/value ownership in xref:ownership.adoc[Ownership of Frame Storage and Decoded Values], and public selection of parts in xref:configurations.adoc[Configurations and Application-Selectable Parts].
+====
+
+[[sec-words]]
+== Words used on this page
+
+These words have the meaning that the linked items give them.
+Where an SDK's core is not the element, a word that an item of the up-rust SEooC requirement family defines for the element or for a part that works with it is read as the clause "Words of the up-rust SEooC requirement family" of xref:../contract-generations.adoc#req-sdk-owned-frame-contract[The owned-frame SDK contract binds the parts that declare it] states.
+
+* An *SDK*, its *core*, a *layer above the core* and an *owned-frame route*: xref:../contract-generations.adoc#req-sdk-owned-frame-contract[The owned-frame SDK contract binds the parts that declare it].
+* A *part* and its *supplier*: xref:../contract-generations.adoc#req-ssr-requirements-bind[A requirement binds the actors to which it gives a duty].
+* The *element*: xref:../safety/elements/up-rust/README.adoc#req-ssr-element-boundary[The parts of the element, and element code].
+* A *binding* and its *middleware*: xref:../up-l1/bindings.adoc#req-ssr-binding-scope[What a binding is, and the binding contract].
+* A *wire*: xref:../up-l1/wires/README.adoc#req-ssr-wire-scope[What a wire is, and the wire contract].
+* A *route*: xref:../up-l1/payload-paths.adoc#req-ssr-payload-route-form[A route's form is fixed at setup, by what the route declares and never by a name].
+* A *transport*, its *initialization mode* and its *runtime mode*: <<req-ssr-mode-two-types,Two modes, as two types>>.
+* *Startup memory* and a *region*: <<req-ssr-memory-static,ASIL-path storage is static or caller-provided>>.
+* A *heap class*, an *allocation domain* and a *resource and failure policy*: <<req-ssr-heap-declared,The heap class is declared, with no default>>.
+* A *guarantee*: <<req-ssr-heap-guarantees,A stronger resource guarantee is required by name, and admitted or refused>>.
+* A *memory provider*, a *memory source* and an *allocation provider*: <<req-sdk-owned-frame-provider-selection,The selected memory provider is the only one used, and selecting it claims nothing>>.
+
+[[sec-mode-types]]
+== Mode phase boundary and resource-lifetime types
+
+Mode separation at type level and lifecycle boundaries between initialization and runtime:
+
+[[req-ssr-mode-two-types]]
+=== Two modes, as two types
+
+[.specitem,oft-sid="req~ssr-mode-two-types~2",oft-title="Two modes, as two types",oft-needs="impl,utest",oft-tags="SafetyUpRustCore"]
+--
+*What a transport is.*
+A transport is what the element builds over one binding.
+Routes and roles are declared on it in initialization mode, and the handles that carry traffic are activated from it in runtime mode.
+A lending transport is one whose binding is a lending binding, and a handoff transport one whose binding is a handoff binding (xref:../up-l1/bindings.adoc#req-ssr-binding-scope[What a binding is, and the binding contract]).
+
+*Two types.*
+The element *MUST* give each lending and each handoff transport an initialization mode and a runtime mode, each a distinct non-generic type.
+
+The element *MUST* give a transport built directly in code and one built from deployment data the same types, so that transports chosen at run time can sit in one list.
+--
+
+[horizontal]
+ID:: `+req~ssr-mode-two-types~2+`
+ASIL:: B
+Allocated to:: the element
+Verification:: test, review (each statement that names a transport, a lending transport or a handoff transport, read with the clause "What a transport is")
+ISO 26262:: 6-6.4.2 g, 6-7.4.5 (part-clause numbers only)
+
+*Rationale.*
+Giving each mode its own type lets the compiler refuse setup after the transition and traffic before it (<<req-ssr-mode-no-setup-at-runtime,Setup is impossible in runtime mode>>; <<req-ssr-mode-no-traffic-before-runtime,Traffic is impossible before runtime mode>>).
+
+Non-generic types let a forwarder such as the Streamer hold transports chosen from configuration at run time in one list.
+
+[[req-ssr-mode-no-setup-at-runtime]]
+=== Setup is impossible in runtime mode
+
+[.specitem,oft-sid="req~ssr-mode-no-setup-at-runtime~2",oft-title="Setup is impossible in runtime mode",oft-needs="impl,utest",oft-tags="SafetyUpRustCore"]
+--
+Once a transport is in runtime mode, the element *MUST NOT* make it possible to declare, prepare or change a route, role, wire, QoS setting, integrity level, waiver, peer list or capacity, through the transport or through any handle activated from it.
+What is fixed with a route includes its payload form and, on a native route, the agreement of its native types (xref:../up-l1/payload-paths.adoc#req-ssr-payload-route-form[A route's form is fixed at setup, by what the route declares and never by a name]; xref:../up-l1/wires/native.adoc#req-ssr-native-agreement[A native type is read only under its exactly agreed layout]).
+
+The element *MUST NOT* offer such an operation in its API, and *MUST NOT* let a use of one compile.
+--
+
+[horizontal]
+ID:: `+req~ssr-mode-no-setup-at-runtime~2+`
+ASIL:: B
+Allocated to:: the element
+Verification:: compile-fail
+ISO 26262:: 6-6.4.2 g (part-clause numbers only)
+
+*Rationale.*
+Runtime mode runs only what setup admitted and placed.
+A change after the transition would need the work of initialization to be checked and given storage (xref:../up-l1/runtime.adoc#req-ssr-mode-entry-admission[Every route is admitted before runtime mode]).
+
+The transition consumes the initialization value, so no setup call can be written afterwards (xref:../up-l1/runtime.adoc#req-ssr-mode-entry[Entering runtime mode is one all-or-nothing operation]).
+
+[[req-ssr-mode-no-traffic-before-runtime]]
+=== Traffic is impossible before runtime mode
+
+[.specitem,oft-sid="req~ssr-mode-no-traffic-before-runtime~1",oft-title="Traffic is impossible before runtime mode",oft-needs="impl,utest",oft-tags="SafetyUpRustCore"]
+--
+The element *MUST NOT* provide a send, receive, publish, notify, invoke, respond, wait or forward operation on an initialization-mode value.
+
+The element *MUST* make a handle that can carry traffic obtainable only by activating its setup against a transport in runtime mode.
+
+The element *MUST NOT* let misuse compile.
+--
+
+[horizontal]
+ID:: `+req~ssr-mode-no-traffic-before-runtime~1+`
+ASIL:: B
+Allocated to:: the element
+Verification:: compile-fail
+ISO 26262:: 6-6.4.2 g (part-clause numbers only)
+
+*Rationale.*
+Traffic before the transition would run before every route is admitted and its storage placed, which is what the transition checks (xref:../up-l1/runtime.adoc#req-ssr-mode-entry-admission[Every route is admitted before runtime mode]).
+
+[[sec-startup-memory]]
+== Startup memory and capacities
+
+Compile-time/initialization placement, capacity computation and sealing of startup memory:
+
+[[req-ssr-memory-static]]
+=== ASIL-path storage is static or caller-provided
+
+[.specitem,oft-sid="req~ssr-memory-static~4",oft-title="ASIL-path storage is static or caller-provided",oft-needs="impl,utest",oft-tags="SafetyUpRustCore,SafetyStreamer"]
+--
+*Where storage comes from.*
+On the ASIL path (xref:../safety/profiles/up-rust-asil-b.adoc#req-ssr-element-configurations[The ASIL path and supported configurations]), the element *MUST* place all storage that its runtime path uses during initialization, and *MUST* check the size, alignment and arithmetic of each placement when it makes it.
+In a minimal ASIL-path configuration that selects no startup-provisioning helper, that storage *MUST* come only from static or caller-provided non-heap memory: presenting heap-allocated memory as caller-provided memory without explicit startup-provisioning admission does not satisfy this restriction.
+Where an ASIL-path configuration explicitly selects an admitted startup-provisioning helper under xref:../safety/profiles/up-rust-asil-b.adoc#req-ssr-element-configurations[The ASIL path and supported configurations], the element *MAY* also place that startup storage from declared startup backing of heap origin that the selected helper obtains before the relevant transition, subject to every placement check, residency, exclusivity, full-lifetime and sealing rule of this item and of <<req-ssr-memory-sealed,Startup memory is sealed>>.
+Helper participation or linkage alone grants no heap-origin permission.
+
+*Checks before an object is reachable.*
+Before placed storage becomes reachable as an object, the element *MUST* have established that it:
+
+* lies within its region;
+* is aligned and sized for the object;
+* is owned by no other live object.
+
+The element *MUST* expose no object from a refused placement.
+
+*Storage covered.*
+The element's storage covers slots, startup slots, queues, peer and call tables, waker storage and route state, and the storage that the element provides to another part, such as the Streamer.
+The Streamer owns its route table and *MUST* place it in the same way, under the same conditions and with the same checks.
+Where a separately declared bounded-runtime Streamer composition on the ASIL path explicitly selects an admitted startup-provisioning helper for its route-table share of startup storage (xref:../safety/profiles/up-rust-asil-b.adoc#req-ssr-element-configurations[The ASIL path and supported configurations]; xref:../safety/elements/streamer.adoc#req-ssr-streamer-scope[What the Streamer is, and the bounded-runtime Streamer profile]), the Streamer *MAY* place its route table from declared startup backing obtained by that selected helper before the relevant transition, keeping every placement, residency, exclusivity, full-lifetime, capacity, sealing and failure duty; that selection admits neither classic Streamer, nor loader execution in runtime mode, nor any optional asynchronous layer, nor any Streamer runtime allocation.
+The element answers for no storage of an application's own.
+
+*Regions.*
+The element *MUST* take a region only through an interface whose contract hands it the region exclusively and for the full life of the process, partition or firmware instance, and *MUST* check each region and have it made resident (xref:platform.adoc#req-ssr-platform-contract[Every platform backend of the element keeps the platform's rules], clause "Prefault") before it places from it.
+The element then owns the region: it places from it as from any other, and it *MUST NOT* release or silently reclaim any of it in runtime mode.
+That a static or caller-provided region is exclusive and stays valid for the life of the process, partition or firmware instance is the integrator's to ensure (xref:../safety/elements/up-rust/assumptions-of-use.adoc#aou-seooc-startup-storage[Startup storage that the integrator provides is exclusive and lives as long as the process]).
+Where an admitted startup-provisioning helper supplies a region, its declaration and its underlying memory provider's contract state how exclusivity and full process, partition or firmware-instance lifetime are maintained (xref:../safety/profiles/up-rust-asil-b.adoc#req-ssr-element-configurations[The ASIL path and supported configurations]; <<req-sdk-owned-frame-provider-ownership,Memory from a provider stays valid while it is held, and is disposed of once under its provider's contract>>).
+
+*Startup memory from a heap.*
+On the ASIL path, the element *MUST* accept startup memory obtained from a heap—general allocation within startup-reserved RAM included—only where the configuration explicitly selects an admitted startup-provisioning helper to obtain declared startup backing before the relevant transition.
+Passing heap-allocated memory as caller-provided memory without explicit startup-provisioning admission does not erase its heap origin or satisfy the minimal no-helper restriction.
+Outside the ASIL path, the element *MUST* accept startup memory obtained from a heap only from the memory source that an optional layer provides over the standard library's allocator, or from an allocation provider that the configuration declares (<<req-sdk-owned-frame-provider-selection,The selected memory provider is the only one used, and selecting it claims nothing>> states what each is).
+
+*Scoped replacement.*
+This revision replaces the unqualified ASIL-path prohibition on heap-origin startup memory of revision 3 of this item for the element and the Streamer, solely for ASIL-path configurations—including a separately declared bounded-runtime Streamer composition—that explicitly select an admitted startup-provisioning helper under xref:../safety/profiles/up-rust-asil-b.adoc#req-ssr-element-configurations[The ASIL path and supported configurations] to obtain declared startup backing before the relevant transition.
+For ASIL-path configurations that select no startup-provisioning helper, the minimal static or caller-provided non-heap restriction of revision 3 of this item remains in force, and all placement, size, alignment, arithmetic, residency, exclusivity, full-lifetime and no-runtime-release duties remain unchanged across all configurations.
+--
+
+[horizontal]
+ID:: `+req~ssr-memory-static~4+`
+ASIL:: B
+Allocated to:: the element; the Streamer, for its route table
+Verification:: test, gate, review
+* *test*
+** A runtime path over static memory only.
+** A region from a declared allocation provider or an admitted startup-provisioning helper, placed and checked like a static one.
+** Refused placements, zero-length and over-aligned requests, exposing no object.
+* *gate*: the crate builds on a sysroot without `+alloc+`.
+* *review*: the contract of each interface through which the element takes a region, for exclusivity, residency and full process, partition or firmware-instance lifetime; no release or silent reclamation of a region in runtime mode; explicit admission selection required before accepting heap-origin startup backing on the ASIL path, with the minimal no-helper restriction preserved; the Streamer's placement of its route table, including where an explicitly selected startup-provisioning helper supplies its route-table share.
+ISO 26262:: 6-Table 6 1b (part-clause numbers only)
+
+*Rationale.*
+The safety crate is `+no_std+` with no `+alloc+` (xref:../languages/rust.adoc#req-ssr-crate-isolated[The safety crate cannot be tainted]).
+So its own placement works only on regions handed to it from static memory, from caller-provided bytes or, where a configuration explicitly selects one, from an admitted startup-provisioning helper before the transition.
+General allocation within startup-reserved RAM remains heap activity, and presenting heap-origin bytes through a caller interface does not change their origin; tying heap-origin permission to explicit startup-provisioning admission preserves the minimal no-helper path while allowing declared startup backing where selected.
+
+Exclusivity is a property of live ownership, so a region may occupy addresses that an earlier, ended owner used.
+
+[[req-ssr-memory-sealed]]
+=== Startup memory is sealed
+
+[.specitem,oft-sid="req~ssr-memory-sealed~4",oft-title="Startup memory is sealed",oft-needs="impl,utest",oft-tags="SafetyUpRustCore"]
+--
+*When memory is sealed.*
+The element *MUST* seal a startup memory—whether backed by static or caller-provided storage or by declared startup backing obtained by an admitted startup-provisioning helper—when the last live setup that uses the memory enters runtime mode, and in any case when `+enter_runtime_all+` returns, whether it succeeded or failed.
+
+*Once it is sealed.*
+Once a startup memory is sealed:
+
+* the element refuses every further placement from it, as xref:../up-l1/runtime.adoc#req-ssr-mode-backstop[Run-time refusal only where types cannot reach] states;
+* the element *MUST NOT* ask a memory source, an allocation provider or a startup-provisioning helper for memory when it refuses a placement;
+* the element *MUST* refuse a setup built on it.
+
+A sealed startup memory stays sealed until the process, partition or firmware instance ends, so a later initialization in that instance needs startup memory that is not sealed (xref:../up-l1/runtime.adoc#req-ssr-mode-one-way[There is no way back]).
+
+*Partial group success and retained backing.*
+Where `+enter_runtime_all+` fails after one or more earlier transports have entered runtime mode, each earlier successful transport *MUST* survive that later failure and remain in runtime mode (xref:../up-l1/runtime.adoc#req-ssr-mode-entry[Entering runtime mode is one all-or-nothing operation]; xref:../up-l1/runtime.adoc#req-ssr-mode-one-way[There is no way back]).
+In sealing shared startup memory or refusing a later transport, the element *MUST NOT* free or invalidate storage—admitted startup-provisioning backing included—that any successful owner can still reach, *MUST NOT* roll back an entered transport, and *MUST NOT* leave a refused transport partly entered (xref:../up-l1/runtime.adoc#req-ssr-mode-init-failure[Initialization failure]).
+Where a configuration's stated retention policy permits retaining startup backing obtained by an admitted startup-provisioning helper after sealing or refusal, the element *MUST NOT* silently reclaim that retained backing during runtime mode.
+
+*Setups still alive.*
+When `+enter_runtime_all+` returns, the element *MUST* report each setup that is still alive on that memory and has not entered runtime mode.
+
+*Scoped replacement.*
+This revision replaces revision 3 of this item for the element across all configurations, incorporating declared startup backing obtained by an explicitly selected startup-provisioning helper into the sealing, partial-group-success survival and non-reclamation duties while preserving every sealing and reporting duty of revision 3 of this item for static, caller-provided and non-ASIL startup memory.
+--
+
+[horizontal]
+ID:: `+req~ssr-memory-sealed~4+`
+ASIL:: B
+Allocated to:: the element
+Verification:: test, heap-window, review
+* *test*: each case of the statement, including a setup kept alive with `+mem::forget+`, shared startup memory backed by an admitted startup-provisioning helper, and a failed `+enter_runtime_all+` after an earlier transport has entered runtime mode with the earlier transport surviving, no storage reachable by successful owners freed or invalidated, no entered transport rolled back and no refused transport left partly entered.
+* *heap-window*: a placement refused after sealing, asking no memory source, allocation provider or startup-provisioning helper for memory, and no reclamation of retained startup backing during runtime mode.
+* *review*: sealing and non-reclamation paths for static, caller-provided and admitted startup-provisioning backing until the process, partition or firmware instance ends.
+
+*Rationale.*
+A startup memory that several setups share—whether static, caller-provided or provisioned before transition by an admitted startup-provisioning helper—places nothing once initialization ends, including after a failed `+enter_runtime_all+`, which can leave some transports in runtime mode.
+Keeping storage reachable by successful owners intact and forbidding silent reclamation of permitted retained startup backing prevents a later setup refusal from corrupting live transports or introducing runtime reclamation.
+
+[[req-ssr-memory-computable]]
+=== Startup storage is computable before start
+
+[.specitem,oft-sid="req~ssr-memory-computable~5",oft-title="Startup storage is computable before start",oft-needs="impl,utest",oft-tags="SafetyUpRustCore"]
+--
+*The computation.*
+The element *MUST* provide a computation that gives, from a deployment's data alone and before the process starts, the startup memory that deployment needs.
+The element *MUST* include in the result the storage for:
+
+* the registrations of pending asynchronous operations;
+* every backlog of retained owners, deferred releases and deferred destructions that its routes admit.
+
+The element's placement at startup *MUST NOT* need more than the computation gives.
+
+*The capacities.*
+From the worst-case semantic load that the integrator declares for each route (xref:../safety/elements/up-rust/assumptions-of-use.adoc#aou-seooc-capacity-sizing[Capacities are sized for the worst case]), the element *MUST* compute the slots, queue depth, held messages and call tables that it needs.
+The other capacities that this load sets are the registration storage, backlogs and startup memory that the computation gives, and the peer table that xref:../up-l1/peers.adoc#req-ssr-peer-admission[Undeclared peers cannot lock out declared ones] sizes.
+
+*What each figure measures.*
+The element *MUST* state, for each figure that it computes or reports, what the figure measures, and *MUST NOT* present it as another.
+The measures are:
+
+* usable object capacity;
+* storage reserved in placed regions;
+* retained backing, including what alignment, growth or a lost race leaves claimed;
+* transient setup memory or stack.
+
+A count of live objects is neither the retained backing nor the physical footprint.
+A capacity that the element computes is not the QoS depth that a route declares (xref:../up-l1/runtime.adoc#req-ssr-qos-declared[QoS is declared per route at setup]), and neither is a guarantee of what a binding's middleware has available.
+
+*Figures that are not established.*
+Where a figure depends on anything that the configuration does not bound, such as allocator overhead, scheduler storage, a thread's stack, concurrency or growth history, the element *MUST* report it as not established instead of stating a bound.
+--
+
+[horizontal]
+ID:: `+req~ssr-memory-computable~5+`
+ASIL:: B
+Allocated to:: the element
+Verification:: test, review
+* *test*
+** The computation against what placement used, for each route kind and for whole deployments, including registration and deferred backlogs.
+** The capacities computed from a declared worst-case load against what carrying that load uses, for each route kind and for whole deployments.
+** Repeated refused setups, growth histories and lost races that leave backing claimed, against what the report states.
+* *review*: each reported figure's stated measure.
+ISO 26262:: 6-7.4.13 (part-clause numbers only)
+
+*Rationale.*
+An integrator who places startup memory in a static region or a linker section has to size it before the process starts, and a request that does not fit is refused only at startup.
+So the element provides the computation.
+Each route's reserved storage is reported under xref:../up-l1/bindings.adoc#req-ssr-error-route-report[Each route reports what it got].
+
+_What each figure measures._
+The startup memory is only part of the footprint.
+A report that counted only live objects would understate two things:
+
+* the backing that refused setups, growth and lost races leave claimed;
+* the storage that asynchronous registrations and deferred work need.
+
+Sizes that depend on a scheduler's tasks and timers, an allocator's overhead or a thread's stack depend on the supported configuration, whose package states its sizing (xref:../safety/profiles/up-rust-asil-b.adoc#req-ssr-element-configurations[The ASIL path and supported configurations]).
+
+[[sec-heap-classes]]
+== Heap classes, lazy state and stronger guarantees
+
+Lazy initialization forcing, per-route declared heap classes and separately requested stronger resource guarantees:
+
+[[req-ssr-heap-lazy-forced]]
+=== Lazy state is forced before runtime mode
+
+[.specitem,oft-sid="req~ssr-heap-lazy-forced~1",oft-title="Lazy state is forced before runtime mode",oft-needs="impl,utest",oft-tags="SafetyUpRustCore"]
+--
+The element *MUST* have every primitive that would allocate or initialize itself on first use forced during initialization, or absent from the runtime path.
+This covers:
+
+* the first lock of an OS lock on pthread targets;
+* thread-local state;
+* caches;
+* message ID state;
+* wake hooks.
+--
+
+[horizontal]
+ID:: `+req~ssr-heap-lazy-forced~1+`
+ASIL:: B
+Allocated to:: the element
+Verification:: heap-window, fault-injection, review
+* *heap-window*: over first traffic, on a pthread target and on every other target that a supported configuration names.
+* *fault-injection*: a control that leaves one primitive lazy makes the window fail, on each of those targets.
+* *review*: each primitive on the runtime path that would allocate or initialize itself on first use, the five that the statement lists among them, forced during initialization or absent from the runtime path.
+ISO 26262:: 6-9.4.5, 6-10.4.7 (part-clause numbers only)
+
+*Rationale.*
+A primitive that sets itself up on first use moves that work, and any allocation in it, from initialization into the first message.
+On a native path, xref:../up-l1/payload-paths.adoc#req-ssr-heap-none[No heap in runtime mode on a native path] forbids that allocation.
+
+A serialized route's declared allocation covers the owned values that route admits.
+It never covers a primitive's first-use setup.
+
+[[req-ssr-heap-declared]]
+=== The heap class is declared, with no default
+
+[.specitem,oft-sid="req~ssr-heap-declared~5",oft-title="The heap class is declared, with no default",oft-needs="impl,utest",oft-tags="SafetyUpRustCore,SafetyWire,SafetyBinding"]
+--
+*Who declares.*
+
+* Each wire *MUST* state its runtime heap class for each direction.
+* Each binding *MUST* state its own for each route it serves.
+* Each allocation provider that a route uses *MUST* state, for that route, its runtime heap class and the resource and failure policy that it follows.
+* The element *MUST* require each prepared route's declaration to state the route's own class.
+
+Each wire, each binding and each allocation provider *MUST* state what it does, and *MUST* keep within what it states.
+The element *MUST* derive each prepared route's heap class from the classes that every wire direction, the route's binding and each allocation provider that the route uses state—including any admitted serialized owned-value runtime adapter acting within its wire or allocation-provider role—and *MUST* check it against the class that the route's declaration states, as the refusals at setup and at the transition below state.
+
+*Serialized owned-value runtime adapters.*
+An admitted serialized owned-value runtime adapter (xref:../safety/profiles/up-rust-asil-b.adoc#req-ssr-element-configurations[The ASIL path and supported configurations]) is accounted for solely as a wire or allocation-provider participant—either implementing, or acting as an explicitly declared subcomponent of, a wire or an allocation provider—and never as a fourth allocation actor with unbounded privileges.
+It adds no permission for control state, outcome or reporting work, startup backing, native or shared work, or general application allocation.
+
+* Each wire that is implemented by, or incorporates, such an adapter *MUST* include the adapter and every dependency that its acquisitions, resizes, destructions and releases can reach in each direction's stated runtime heap class, allocation domain and resource and failure policy, and *MUST* keep the adapter's runtime heap activity within what it states and within the serialized message-owned-value scope that the route's class permits.
+* Each allocation provider that is implemented by, or incorporates, such an adapter *MUST* include the adapter and every dependency that its acquisitions, resizes, destructions and releases can reach in its stated runtime heap class, allocation domain and resource and failure policy for each route and direction that uses it, and *MUST* keep the adapter's runtime heap activity within what it states and within the serialized message-owned-value scope that the route's class permits.
+* Where a stronger guarantee is claimed or required on a route that uses such an adapter, each direction's guarantee evidence covers the adapter and all of its reached dependencies, as <<req-ssr-heap-guarantees,A stronger resource guarantee is required by name, and admitted or refused>> states.
+
+*What a class covers.*
+A class covers every heap acquisition, resize and release that its subject—any admitted serialized owned-value runtime adapter participating in a wire or allocation provider and all of its reached dependencies included—can cause on the route in runtime mode.
+
+* For a wire's decode direction that is the whole life of a decoded value: its initialization, its replacement in a slot and its destruction.
+* A wire whose decoded value can release heap memory when it is replaced or destroyed *MUST* state allocation for that direction, even where decoding itself acquires none.
+
+*The classes.*
+A heap class is one of:
+
+* none;
+* allocation inside middleware under a named permit;
+* on a serialized route only, allocation by its wire, its binding or its allocation provider (with any admitted serialized owned-value runtime adapter accounted for within its wire or allocation-provider role).
+
+A wire or a binding that states the third class *MUST* name each that allocates and the allocation domain it uses.
+Each that allocates *MUST* state the resource and failure policy it follows:
+
+* what exhaustion does;
+* whether an acquisition can wait and, if it can, the dependency it waits for;
+* whether a release can wait and, if it can, the dependency it waits for and whether it returns by a finite logical deadline;
+* whether a destruction or release can panic or end the process;
+* the contexts it may be called from.
+
+Where one of these is not known, the one that states the policy *MUST* state it as unknown.
+The element *MUST NOT* read or report an unknown as the favourable answer.
+
+*The allocator's contract.*
+Each that states a policy *MUST* state the one that its allocator's stated contract establishes on every path the route can reach: allocation, growth, shrink, destruction and deallocation, dependencies and any participating serialized owned-value runtime adapter included.
+A fallible calling interface does not make exhaustion recoverable for an allocator whose contract may end the process.
+Each wire, each binding and each allocation provider *MUST NOT* let an allocation of its own fall back silently to another domain, and the element *MUST NOT* substitute one.
+
+*Effect of disclosure.*
+Stating a policy discloses it.
+It admits the route's ordinary ownership under that policy and establishes no stronger guarantee; preserving ordinary serialized declarations imposes no unrequested stronger guarantee by default.
+Owning resources or having a destructor is not by itself a reason to refuse a serialized route, or a message type, wire, binding or allocation provider on it, at setup: the element *MUST NOT* refuse a serialized route at setup solely because its values own resources, because a destructor runs when a value ends, or because an unrequested stronger guarantee is not established for it (<<req-ssr-heap-guarantees,A stronger resource guarantee is required by name, and admitted or refused>>).
+
+* How setup admits a route's decoded types, and their destruction, is stated in xref:../up-l1/runtime.adoc#req-ssr-heap-slot-types[A decoded value is destroyed once, as its route's class admits].
+* Which guarantees a route is promised, and which routes a stated policy leads the element to refuse, is stated in <<req-ssr-heap-guarantees,A stronger resource guarantee is required by name, and admitted or refused>>.
+* A release that is handed to a release service, or to a binding's deferred return, is pending cleanup, isolated as xref:../up-l1/runtime.adoc#req-ssr-release-lease-drop[A lease gives back its slot and nothing else] states.
+
+A release returns by a finite logical deadline only where its own mechanism does.
+Running it on another thread, or timing it from outside, does not make it do so.
+
+*No default.*
+The element *MUST NOT* supply a default for a heap class or for a policy, and each wire, each binding and each allocation provider *MUST NOT* state one by default.
+
+*Refusal at setup and the transition.*
+The element *MUST* refuse at the transition, naming the route and the reason:
+
+* a native route whose wire or allocation provider declares allocation in a direction the route uses, or whose binding declares allocation in its own code in such a direction;
+* a serialized route whose wire, binding or allocation provider—including any admitted serialized owned-value runtime adapter acting within its wire or allocation-provider role—declares allocation that the route does not declare;
+* a route for which a wire, its binding, an allocation provider or the route's own declaration states no class, or for which a wire, a binding or an allocation provider states no resource and failure policy where this item requires one, including where an admitted serialized owned-value runtime adapter or a dependency that it reaches is omitted from its wire's or allocation provider's declaration.
+
+The element *MUST* also refuse at setup, naming the route and the reason, any serialized route or composition that offers no non-native, non-shared ending path on which to end an owned value that the route admits (xref:../up-l1/runtime.adoc#req-ssr-heap-slot-types[A decoded value is destroyed once, as its route's class admits]).
+
+The element applies xref:../up-l1/bindings.adoc#req-ssr-waiver-required[Middleware heap needs a named waiver] to the runtime transition of a transport with a route whose binding declares allocation inside its middleware under a named permit, a native route included; the waiver's scope is stated in xref:../up-l1/bindings.adoc#req-ssr-waiver-scope[A waiver covers middleware and nothing else].
+
+A route that requires a stronger guarantee that is not established for it is refused as <<req-ssr-heap-guarantees,A stronger resource guarantee is required by name, and admitted or refused>> states.
+
+*Scope of the permission.*
+The element *MUST NOT* extend a serialized route's allocation permission to a native route or to metadata it shares with one.
+
+*Reporting.*
+The element's startup report is what the element reports of a transport's setup at its transition.
+The element *MUST* show in it each route's admitted heap class, naming which of its wire, binding and allocation provider allocate.
+
+* It *MUST* show every wire the route uses, in each direction, with the route's binding and each allocation provider, including any declared serialized owned-value runtime adapter participating in a wire or allocation provider.
+* It *MUST* show the declared policy of each that allocates, an unknown as unknown.
+* It *MUST* show the declared policy of each memory source and each allocation provider that the element's setup relied on, also where no route uses it (xref:../up-l1/runtime.adoc#req-ssr-mode-init-failure[Initialization failure]; what a memory source is, is stated in <<req-sdk-owned-frame-provider-selection,The selected memory provider is the only one used, and selecting it claims nothing>>).
+* What it shows for each stronger guarantee is stated in <<req-ssr-heap-guarantees,A stronger resource guarantee is required by name, and admitted or refused>>.
+
+In each route's report, the element *MUST* show the declared policy of the route's binding where the binding allocates on the route, whatever the route requires (the release of a received frame's storage: xref:../up-l1/bindings.adoc#req-ssr-binding-frame-drop[What a received frame's destructor may do]).
+
+*Scoped replacement.*
+This revision replaces revision 4 of this item for the element, each wire, each binding and each allocation provider across all configurations, incorporating any admitted serialized owned-value runtime adapter and all of its reached dependencies into each direction's declared heap class, policy, reporting and guarantee-evidence accounting strictly within its existing wire or allocation-provider role, stating explicitly the setup refusal of a serialized route or composition with no non-native, non-shared ending path, and preserving ordinary serialized declarations, non-refusal for ownership or destructors alone, and all other duties of revision 4 of this item without imposing unrequested stronger guarantees by default.
+--
+
+[horizontal]
+ID:: `+req~ssr-heap-declared~5+`
+ASIL:: B
+Allocated to:: the element; each wire, each binding and each allocation provider, for the classes and the policies that they state—including any admitted serialized owned-value runtime adapter and reached dependencies within their wire or allocation-provider role—and for keeping within them
+Verification:: test, heap-window, review
+* *test*
+** Refusal at the transition of a native route whose wire or allocation provider declares allocation, including allocation in work that it causes, or whose binding declares allocation in its own code, in a direction that the route uses.
+** A native route whose binding declares only allocation inside its middleware under a named permit: not refused solely by the native-route allocation entry above. With every other admission condition met, refused without the matching waiver and admitted with it; its reported class remains allocation inside middleware under a named permit, not none.
+** The same declared middleware allocation with a policy missing where this item requires one or with an incompatible required guarantee: still refused for that reason despite a matching waiver.
+** Refusal at the transition of a serialized route that does not declare its wire's or its binding's allocation.
+** A route for which a class, or a resource and failure policy that this item requires, is not stated, refused at the transition by name, including where an admitted serialized owned-value runtime adapter or a reached dependency is omitted from its wire's or allocation provider's declaration.
+** A route's heap class derived from every wire direction, its binding and each allocation provider—any declared serialized owned-value runtime adapter participating in a wire or allocation provider included—and a native route over an allocation provider that states allocation refused at the transition.
+** Admission of a serialized route that declares its allocation, with an owning decoded type (including one served via an admitted serialized owned-value runtime adapter within a wire or allocation-provider role) and no stronger guarantee required, with neither owning resources nor having a destructor treated by itself as a setup refusal.
+** A serialized route or composition with no non-native, non-shared ending path for an admitted owned value, refused at setup by name.
+** A wire whose decoded value frees memory when it is destroyed, declaring none for its decode direction, failing its heap-free check.
+** The startup report's heap class per route, naming who allocates, for every wire and direction of a route with several wires and for any declared serialized owned-value runtime adapter participating in a wire or allocation provider.
+** A declared unknown reported as unknown.
+** A setup-only memory source's declared policy shown in the startup report where no route uses it.
+** A route on which the binding allocates, its report showing the binding's declared policy, on a route that requires neither panic-free cleanup nor non-waiting release and on one that requires either.
+* *heap-window*
+** A native route, and the metadata that it shares with a serialized route, with no heap use while that serialized route allocates as its permission admits.
+** A wire or allocation provider that declares allocation in a direction—any admitted serialized owned-value runtime adapter participating in it included—with its allocation, resize and release points against its declaration and message-owned-value scope.
+* *review*
+** No default in the declaration.
+** Each declared policy against its allocator's stated contract on every reachable path, including any participating serialized owned-value runtime adapter and all of its reached dependencies.
+** Each admitted serialized owned-value runtime adapter accounted for strictly within an existing wire or allocation-provider role, never as a fourth allocation actor with unbounded privileges, with all reached dependencies covered in each direction's class, policy and any claimed guarantee evidence.
+** Each wire, binding and allocation provider keeping within the class and the policy that it states.
+** No path on which a declared unknown is read as the favourable answer.
+** No path on which an allocation falls back silently to another domain.
+** A waiting release's named dependency and any claimed deadline against the allocator's own mechanism.
+
+*Rationale.*
+A claim of no heap use can be checked only if it is stated.
+So each wire states the heap class of both directions, with no default.
+A default would let a wire that allocates pass as one that does not, and the transition could not refuse it.
+
+Refusing every allocating wire on every route would also refuse serialized routes whose allocation is declared and admissible.
+So the refusal follows the route's declared class instead.
+The refusal names the route and the wire's reason, so that whoever configured the route can correct it.
+A binding's own allocation for a serialized route is declared the same way, so an undeclared one is refused rather than hidden.
+Accounting for an admitted serialized owned-value runtime adapter strictly within its wire or allocation-provider role—together with all dependencies that its acquisitions, resizes, destructions and releases can reach—prevents a helper label from creating a fourth allocation actor with unbounded privileges while keeping ordinary serialized declarations available without unrequested stronger guarantees.
+
+A decoded value's memory is often returned when the value ends, not when it is made.
+So a class covers the value's whole life, and a serialized composition that offers no non-native, non-shared ending path cannot end its owned values without breaking native isolation and is refused at setup.
+A wire that decodes into a value which later frees memory uses the heap in that direction, whatever its decoding call does.
+
+A standard allocation interface can permit an allocator to end the process on exhaustion, and an interface that returns an error cannot intercept that (source: the standard library documentation, Rust 1.98.1, section Errors of `+std::alloc::GlobalAlloc::alloc+`: https://doc.rust-lang.org/1.98.1/std/alloc/trait.GlobalAlloc.html#errors[`+std::alloc::GlobalAlloc::alloc+`]; and section Errors of `+std::alloc::Allocator::allocate+`: https://doc.rust-lang.org/1.98.1/std/alloc/trait.Allocator.html#errors[`+std::alloc::Allocator::allocate+`]).
+So the declared policy is the one that the allocator's stated contract establishes, whatever the shape of the call.
+An ordinary allocator may also take a lock, in an acquisition as in a release, and the policy says so.
+
+A declaration tells the reader what the route does.
+It is not evidence for a stronger guarantee, which a route that requires one is admitted on separately (<<req-ssr-heap-guarantees,A stronger resource guarantee is required by name, and admitted or refused>>).
+A timer around a release is no evidence that it returns by a deadline, because a call that waits for a lock without a deadline completes when the lock is free, whatever the timer reports.
+
+_What a stated policy refuses._
+An ordinary allocator's contract seldom excludes a panic or a process end in its cleanup.
+Refusing every route whose stated policy shows one, or does not exclude one, would refuse ordinary serialized routes for stating the truth.
+So a stated policy refuses only a route that requires the guarantee it violates.
+
+[[req-ssr-heap-guarantees]]
+=== A stronger resource guarantee is required by name, and admitted or refused
+
+[.specitem,oft-sid="req~ssr-heap-guarantees~3",oft-title="A stronger resource guarantee is required by name, and admitted or refused",oft-needs="impl,utest",oft-tags="SafetyUpRustCore"]
+--
+*Ordinary ownership.*
+A serialized route whose declared heap class admits allocation (<<req-ssr-heap-declared,The heap class is declared, with no default>>) carries message types whose values own resources, heap memory included.
+The element *MUST NOT* refuse at setup such a route, or a message type, wire, binding or allocation provider on it:
+
+* because its values own resources;
+* because a destructor runs when one of them ends; or
+* because a guarantee of this item, a timing bound or an assurance scope that the route does not require is not established for it.
+
+An ordinary serialized route that does not require non-waiting release *MAY* use its disclosed waiting release path under its declared policy (<<req-ssr-heap-declared,The heap class is declared, with no default>>; xref:../up-l1/runtime.adoc#req-ssr-release-lease-drop[A lease gives back its slot and nothing else]).
+The explicit claim dependencies of an assured helper admission below apply only where that assured helper scope is selected, and impose no unrequested stronger guarantee on ordinary serialized routes by default.
+
+A refusal that another item states for a reason of its own is no refusal for ownership: such is the refusal of a route that needs the integrity copy route on a wire that allocates when it decodes (xref:../up-l1/integrity.adoc#req-ssr-integrity-zero-copy[Zero-copy only from a writer at or above the reader]).
+A decoded type is admitted as xref:../up-l1/runtime.adoc#req-ssr-heap-slot-types[A decoded value is destroyed once, as its route's class admits] states.
+
+*What holds whatever a route requires.*
+Nothing selects or waives the following:
+
+* memory safety and the ownership rules: one destruction of each initialized value, no reuse of storage while it is owned, and no reclamation behind a forgotten owner (xref:../languages/rust.adoc#req-ssr-unsafe-sound[Safe code cannot cause undefined behaviour]; xref:../up-l1/runtime.adoc#req-ssr-heap-slot-types[A decoded value is destroyed once, as its route's class admits]; xref:../up-l1/runtime.adoc#req-ssr-release-lease-drop[A lease gives back its slot and nothing else]);
+* the functional semantics that a route offers: true arrival, identity, TTL and logical deadlines, the declared overflow policy, and truthful errors, capacity and charges (xref:../up-l1/runtime.adoc#req-ssr-qos-no-downgrade[QoS is honored or refused, never weakened]; xref:../up-l1/runtime.adoc#req-ssr-bound-wait[Every bounded wait has a logical deadline]; xref:../up-l1/bindings.adoc#req-ssr-error-no-silent-loss[No silent loss, and each loss counted once]);
+* the native rule, for every native operation, the work it causes and the work a native route shares (xref:../up-l1/payload-paths.adoc#req-ssr-heap-none[No heap in runtime mode on a native path]);
+* the duties of element code itself: no panic, bounded work, and waits of its own that take a logical deadline (xref:error_model.adoc#req-ssr-refuse-no-panic[No panic on runtime paths]; xref:../up-l1/runtime.adoc#req-ssr-bound-work[Work per call is bounded by setup data]; xref:../up-l1/runtime.adoc#req-ssr-bound-wait[Every bounded wait has a logical deadline]);
+* a truthful declaration of the heap class and its policy (<<req-ssr-heap-declared,The heap class is declared, with no default>>).
+
+A fault against one of these is a defect on every route.
+The element *MUST NOT* report a fault against one of these as a guarantee that is not established.
+
+*The guarantees a route may require.*
+Four guarantees are stronger than ordinary ownership.
+Each is a property of the covered allocation and cleanup—a route's own allocation and cleanup and, under an assured startup-provisioning helper admission, that helper's startup-backing acquisition and failure-disposition cleanup—and each is separate from the others:
+
+* _Panic-free cleanup._
+Destroying each initialized value that the route can own, and releasing what it owns, cannot panic or abort, through every destructor, allocator and dependency operation that this can reach and in every context that can run it.
+* _Non-waiting acquisition._
+No acquisition that the route's declared class admits waits for a lock or other dependency.
+* _Non-waiting release._
+No call, transition or drop that ends a value the route owns waits for that value's release.
+The release cannot wait, or it leaves that path as pending cleanup, isolated as xref:../up-l1/runtime.adoc#req-ssr-release-lease-drop[A lease gives back its slot and nothing else] states.
+* _Recoverable exhaustion._
+Exhaustion at every allocation point that the route can reach is returned as that operation's refusal, and cannot panic or end the process.
+
+Each guarantee limits only the operations that its own definition names.
+Non-waiting acquisition limits acquisitions and no release, and non-waiting release limits the calls, transitions and drops that end a value and no acquisition.
+Two apply together only where the route requires both, by naming both or through a claim whose package states that it depends on both.
+
+A finite timing bound and a safety-assurance scope are the claims of xref:../up-l1/runtime.adoc#req-ssr-qos-no-downgrade[QoS is honored or refused, never weakened], required and admitted as that item states.
+Non-waiting acquisition, non-waiting release and a finite timing bound remain separately requested guarantees, established or refused by name.
+
+*Assured helper admission.*
+Where an ASIL-path configuration selects an assured helper admission—an assured startup-provisioning helper, an assured serialized owned-value runtime adapter, or both (xref:../safety/profiles/up-rust-asil-b.adoc#req-ssr-element-configurations[The ASIL path and supported configurations]):
+
+* each such assured helper *MUST NOT* panic, abort or corrupt state in its helper-authored code;
+* the releaser of the supported composition package (whether an element-supported configuration package or an explicit extension) that admits that assured helper *MUST* name recoverable exhaustion and panic-free cleanup explicitly as claim dependencies in the composition assurance contract and in the package for the admitted helper scope and for each affected transport and route—where for an assured startup-provisioning helper, "affected" covers every transport and route backed by that helper's startup regions, including a native-only transport whose routes perform no runtime allocation—never relying on an ASIL label to imply them, and *MUST* bind evidence establishing both guarantees to every actual transitive operation of covered startup-backing acquisition, failure-disposition cleanup, runtime acquisition, resize and owned-value cleanup, setup-created values and all reached dependencies included;
+* the element *MUST* admit an affected transport or route under that assured helper admission—on native-only transports backed by an assured startup-provisioning helper as on serialized routes, and in every strict-mode state (`Off`, `Report`, `Enforce` and `Locked`)—only where recoverable exhaustion and panic-free cleanup are named explicitly as required guarantees for that helper scope and affected transport or route (directly or through the package's stated claim dependencies) and established across every covered transitive operation, setup-created values and reached dependencies included, and *MUST* refuse the affected transport, route or setup at setup by name otherwise;
+* non-waiting acquisition, non-waiting release and a finite timing bound remain separately requested guarantees, established or refused by name, and neither an assured helper admission nor an ASIL label requires or establishes any of them by default.
+
+*When a guarantee is required.*
+A route requires one of these guarantees only where:
+
+* the route's declaration names it; or
+* a timing bound, an assurance scope or an assured helper admission that the route requires depends on it, as the composition assurance contract and the package of that claim's configuration state explicitly.
+
+A route requires none by default.
+
+None of the following is a requirement: an integrity level, an ASIL label, a strict-mode state, an operating system, a toolchain, or the name of a crate, package, wire format or provider.
+None of them is evidence for a guarantee either, and none exempts a route from a guarantee that it requires.
+
+*When a guarantee is established.*
+A guarantee is established for a route only by evidence that the releaser of a supported composition package (whether an element-supported configuration package or an explicit extension with evidence of its own) binds to all of:
+
+* the exact message type, and each wire that the route uses, in each direction;
+* the route's binding and each allocation provider—including any admitted serialized owned-value runtime adapter participating in a wire or allocation provider—with every dependency that their acquisitions, resizes, destructions and releases can reach, setup-created values included;
+* the build, and each context that can run them.
+
+Every stronger guarantee or claim covers its actual transitive operations: the releaser of the supported composition package (whether an element-supported configuration package or an explicit extension) that claims a guarantee *MUST* bind its evidence to every reachable acquisition, resize, destruction, release and dependency across those paths, and the element *MUST NOT* treat a guarantee as established where any reached transitive operation lacks that evidence.
+A fallible calling interface or wrapper cannot establish recoverable exhaustion over an allocator whose stated contract permits it to abort or end the process (<<req-ssr-heap-declared,The heap class is declared, with no default>>).
+
+None of the following establishes one:
+
+* a declaration or a disclosure;
+* a record, whether by being present or by matching a type or a wire;
+* a fallible calling interface or wrapper—including one placed over an allocator that may abort or end the process—or an implementation of an interface;
+* the absence of an observed failure;
+* a name or a label.
+
+A type whose values have no destructor destroys nothing.
+That fact alone establishes panic-free cleanup and non-waiting release for the destruction of its decoded values, and for nothing else.
+The route's binding, each allocation provider, and each other wire and direction still need the evidence above before either is established for the route.
+The presence of a destructor is not evidence that a value owns heap memory, that its destruction waits or that it can panic.
+
+*Admitted, refused or not required.*
+Whether a route requires a guarantee and whether that guarantee is established for the route are separate facts.
+The element *MUST NOT* infer either fact from the other, and a guarantee is admitted only where both hold.
+For each guarantee and each route:
+
+* Where the route requires the guarantee and it is established, the element *MUST* admit it at setup.
+* Where the route requires it and it is not established, the element *MUST* refuse the route at setup.
+The element *MUST* name in the refusal the route, the guarantee and the type, wire, direction, binding, provider or dependency for which it is not established.
+* Where the route does not require it, the guarantee is not admitted, and the element *MUST NOT* refuse the route for its absence.
+That holds whether or not it is established, and evidence that establishes a guarantee which the route does not require promises the route nothing.
+
+A guarantee is not established where a stated policy shows it violated, or where the configuration lacks the mechanism that it needs, such as a release service.
+Where a stated policy does not exclude the violation, the guarantee is established only by evidence, bound as above to the exact provider and configuration, that the admitted configuration cannot reach it.
+A declaration, or a passing test of something else, is no such evidence.
+
+The element *MUST NOT* state, report or rely on a guarantee as held for a route unless it is established for that route.
+
+*Setup.*
+A guarantee that a route requires covers what setup takes or creates for that route as well.
+How a refusal disposes of it is stated in xref:../up-l1/runtime.adoc#req-ssr-mode-init-failure[Initialization failure].
+
+*Reporting.*
+The element *MUST* state separately, in its startup report and in each route's report, for each of the four guarantees:
+
+* whether the route requires it;
+* whether it is established for the route, with the configuration it rests on, or not established;
+* whether it is admitted, which it is only where it is both required and established.
+
+The element *MUST* report a guarantee that is established and not required as established and not admitted.
+The element *MUST* report a guarantee as not established only where its evidence is absent or insufficient, and never because the route does not require it.
+
+*Scoped replacement.*
+This revision replaces revision 2 of this item for the element across all configurations, and extends its duties to each assured helper admitted on the ASIL path and to each releaser of a supported composition package (whether an element-supported configuration package or an explicit extension) that admits an assured helper or binds guarantee evidence, defining the explicit recoverable-exhaustion and panic-free-cleanup claim dependencies (covering every affected transport and route backed by an assured startup-provisioning helper, native-only transports included, in every strict-mode state) and no-panic, no-abort and no-state-corruption duties of assured helper admissions, requiring transitive operation coverage and excluding fallible wrappers over aborting allocators from establishing recoverable exhaustion, while preserving ordinary serialized ownership—including a disclosed waiting release path when non-waiting release is not requested—separately requested non-waiting acquisition, non-waiting release and finite timing, and all admission and reporting duties of revision 2 of this item.
+--
+
+[horizontal]
+ID:: `+req~ssr-heap-guarantees~3+`
+ASIL:: B
+Allocated to:: the element; each assured helper admitted on the ASIL path (an assured startup-provisioning helper or an assured serialized owned-value runtime adapter), for not panicking, aborting or corrupting state in its helper-authored code; each releaser of a supported composition package (whether an element-supported configuration package or an explicit extension) that admits an assured helper on the ASIL path or binds guarantee evidence, for naming required claim dependencies explicitly in the composition assurance contract and package and for binding evidence to every actual transitive operation covered
+Verification:: test, review
+* *test*
+** A serialized route with an owning message type, its wire, binding and provider declared, in a configuration that has no evidence for any guarantee, admitted with no guarantee required, using its disclosed waiting release path where non-waiting release is not requested, and reported with each guarantee not required, not established and not admitted.
+** For each of the four guarantees, one that is established and not required, reported as not required, established and not admitted, with its route admitted and nothing promised.
+** For each of the four guarantees, required and established varied independently, with admitted true only where both are.
+** The same route refused by name once it requires a guarantee that is not established, the refusal naming the route, the guarantee and what lacks it.
+** A route that requires non-waiting acquisition over a binding whose allocation can wait, refused at setup by name, the refusal naming that binding, and the same route admitted without that requirement.
+** A route that requires non-waiting release over a dependency that can wait, refused by name on a configuration without a release service, and the same route admitted without that requirement.
+** A route that requires only non-waiting acquisition, admitted on a configuration with a declared release that can wait and no release service, and a route that requires only non-waiting release, admitted with a declared acquisition that can wait.
+** A requirement that follows from a required timing bound, assurance scope or assured helper admission, admitted or refused with that claim.
+** An affected route under an assured helper admission (an assured startup-provisioning helper or an assured serialized owned-value runtime adapter): admitted when recoverable exhaustion and panic-free cleanup are named explicitly and established across every covered startup-backing acquisition, failure-disposition cleanup, runtime acquisition, resize, cleanup, setup-created value and reached dependency; a native-only transport backed by an assured startup-provisioning helper whose startup-backing acquisition or failure-disposition cleanup lacks explicitly named and evidenced recoverable exhaustion or panic-free cleanup refused at setup by name in strict mode `Off`, `Report`, `Enforce` and `Locked`; refused at setup by name where either guarantee is missing, inferred only from an ASIL label, or backed only by a fallible wrapper over an allocator whose contract permits aborting; non-waiting acquisition, non-waiting release and finite timing independently requested and admitted or refused by name.
+** An integrity level, an ASIL label, a strict-mode state and the name of a wire or provider, each changing neither what a route requires nor what is established.
+** A record that matches a type and a wire, without its evidence, admitting no guarantee.
+** A type without a destructor, with panic-free cleanup and non-waiting release established for the destruction of its decoded values and for nothing else, and a route that requires either still decided over its binding, providers and other wires.
+** A route with several wires, with each guarantee decided and reported over all of them.
+** A route that requires a guarantee, with what setup takes or creates for it held to that guarantee, and a refusal disposing of it as xref:../up-l1/runtime.adoc#req-ssr-mode-init-failure[Initialization failure] states.
+* *review*
+** Helper-authored code of each assured helper admitted on the ASIL path, for no panic, abort or state-corruption paths.
+** Composition assurance contracts and supported composition packages (whether element-supported configuration packages or explicit extensions) admitting an assured helper: recoverable exhaustion and panic-free cleanup named explicitly for the helper scope and each affected route (never inferred from an ASIL label).
+** Each admitted guarantee's evidence against the exact type, wires, directions, binding, provider, participating serialized owned-value runtime adapter, setup-created values, resizes, transitive operations, dependencies, build and contexts that it names, with no fallible wrapper over an allocator that may abort accepted as establishing recoverable exhaustion.
+** No path on which the element states, reports or relies on a guarantee as held for a route for which it is not established, and none on which it reports as admitted a guarantee that is not both required and established.
+** No path on which a report drops or changes what is established because the route does not require it, or shows a guarantee as required because it is established.
+** No path on which a fault against what holds whatever a route requires is reported as a guarantee that is not established.
+** A stated policy that does not exclude a violation, with the guarantee treated as established only on evidence that the admitted configuration cannot reach it.
+
+*Rationale.*
+Most wire formats decode into values that own what they hold: strings, sequences and nested messages.
+Ending such a value runs its destructor and returns its memory.
+That is ordinary ownership.
+
+Stronger properties of that cleanup are different in kind.
+Whether a destruction can panic, whether a release can wait and whether exhaustion is recoverable depend on the exact type, wire, binding, provider, any participating runtime adapter and build.
+So they can be shown only for a named composition.
+
+* Demanding that evidence of every owning route would make a safety package a prerequisite for ordinary use (xref:../safety/elements/up-rust/README.adoc#claims[the SEooC's claims]).
+* Granting a guarantee without it would be a silent downgrade of the guarantee (xref:../up-l1/runtime.adoc#req-ssr-qos-no-downgrade[QoS is honored or refused, never weakened]).
+
+So a guarantee is required by name, and is then admitted or refused.
+
+_Assured helper admissions._
+An assured helper admission brings a declared helper function into an ASIL-path composition, where a panic, abort or state corruption in helper-authored code or in covered acquisition, resize or cleanup would violate the composition's assurance boundary.
+Binding recoverable exhaustion and panic-free cleanup as explicit claim dependencies named in the composition assurance contract and each affected route and package keeps those obligations checkable across every reached transitive operation—including setup-created values and underlying allocators—without turning them into an implicit consequence of an ASIL label or a new default for ordinary serialized routes.
+A fallible wrapper cannot intercept an abort inside an underlying allocator, so evidence covers the actual transitive operations rather than the wrapper's signature alone.
+
+_Required, established and admitted._
+What a route asks for and what its configuration can show are different questions, so the report answers them apart.
+Evidence does not vanish because no route asked for it, and asking does not create it.
+Only a guarantee that is both asked for and shown is admitted, and only an admitted guarantee supports a deployment's claim.
+
+_Separate guarantees._
+An acquisition and a release are different operations, often with different dependencies.
+A route can need one of them not to wait and accept the declared wait of the other.
+So each guarantee limits its own operations, and none is refused or imposed on account of another.
+
+_Labels._
+An integrity level, an ASIL label or a strict-mode state says what a deployment intends, not what its allocator does.
+
+_The whole composition._
+The evidence names the whole composition because each part can change the answer.
+A record that matches a type says nothing about the provider behind it.
+A wire's record says nothing about a second wire on the same route.
+
+_Destructors._
+The presence of a destructor shows only that code runs when a value ends.
+A value can have one and own no heap memory, as a value that only updates a counter does.
+A value's destruction can also free memory though its decoding acquired none (<<req-ssr-heap-declared,The heap class is declared, with no default>>).
+So the heap class states heap use, the type states whether anything runs at all, and neither is inferred from the other.
+
+_Mechanisms._
+A release service is how a configuration gives non-waiting release over a dependency that can wait (xref:../up-l1/runtime.adoc#req-ssr-release-lease-drop[A lease gives back its slot and nothing else]).
+A configuration that has none cannot give that guarantee.
+
+[[sec-memory-providers]]
+== Memory sources and allocation providers
+
+This section states how callers select explicit memory sources and allocation providers across owned-frame and runtime paths.
+
+[[req-sdk-owned-frame-provider-selection]]
+=== The selected memory provider is the only one used, and selecting it claims nothing
+
+[.specitem,oft-sid="req~sdk-owned-frame-provider-selection~1",oft-title="The selected memory provider is the only one used, and selecting it claims nothing",oft-needs="impl,utest,uman",oft-tags="OwnedFrameSdk"]
+--
+*A memory provider.*
+A memory provider is a part that supplies memory to the SDK.
+A memory source hands over regions for startup memory, and an allocation provider serves requests to acquire, resize and release memory.
+One part can be both.
+The sources that a memory provider states that it draws on (<<req-sdk-owned-frame-provider-contract,A memory provider states the contract that the SDK relies on>>) are part of that provider.
+
+*Explicit.*
+Where the SDK's core, or a layer above its core, takes memory from a memory provider for an operation, the SDK *MUST* send each request to the provider that the application selected for that operation or, where it selected none for the operation, to the provider that it selected for the object that the operation belongs to.
+The SDK *MUST NOT* let a later change of a default redirect the requests or the releases of an object whose provider is already selected.
+
+*A layer that selects.*
+A layer that takes memory from one stated provider on the application's behalf, such as a layer that obtains startup memory from the host's heap, is the application's selection of that provider.
+Such a layer *MUST* state in its documentation that provider, its allocation domain, and when the selection takes effect.
+
+*No other domain.*
+Where the selected provider refuses a request, the SDK *MUST NOT* send the request to another provider, to an allocation provider that the application did not select or to any other allocation domain, and *MUST NOT* satisfy it from one.
+Where the core is the element, a route's allocation is outside this clause: <<req-ssr-heap-declared,The heap class is declared, with no default>> states how it stays in its domain.
+
+*Without a provider.*
+How the element stays usable without a memory-provider layer, on static or caller-provided memory: xref:../safety/elements/up-rust/build.adoc#req-ssr-crate-core-only-binary[The checked policy stays in the safety crate, and no admitted optional layer bypasses or reimplements it]; <<req-ssr-memory-static,ASIL-path storage is static or caller-provided>>.
+
+*No claim.*
+Selecting a memory provider admits no allocation on a route and establishes no guarantee.
+How a route's allocation is admitted: <<req-ssr-heap-declared,The heap class is declared, with no default>>; xref:../up-l1/payload-paths.adoc#req-ssr-heap-none[No heap in runtime mode on a native path].
+How a guarantee is established: <<req-ssr-heap-guarantees,A stronger resource guarantee is required by name, and admitted or refused>>.
+--
+
+[horizontal]
+ID:: `+req~sdk-owned-frame-provider-selection~1+`
+Allocated to:: the SDK, for each request that its core or a layer above its core makes to a memory provider, a route's allocation excepted from "No other domain" where its core is the element; each layer that takes memory from one stated provider on the application's behalf, for stating in its documentation that provider, its allocation domain and when the selection takes effect
+Verification:: test, review
+* *test*
+** Two instrumented providers in one process, selected for different operations or objects: each request sent to its own selected provider.
+** A provider selected for an object and another for one of its operations: that operation's requests sent to the operation's provider.
+** A default changed after an object's provider was selected: the object's requests and releases still sent to that provider.
+** The selected provider refusing a request, other than a route's allocation where the core is the element, while another provider and an allocation provider that the application did not select have memory: the request neither sent to nor satisfied from either of them.
+** A selected provider that draws on sources that it states: each request of the SDK sent to that provider, and none sent by the SDK to one of those sources or to another allocation domain.
+* *review*
+** Each operation of the core and of each layer above it that takes memory from a memory provider, and the provider to which it sends each request.
+** Each layer that takes memory from one stated provider on the application's behalf: its documentation states that provider, its allocation domain and when the selection takes effect.
+** No path that sends a refused request, other than a route's allocation where the core is the element, to another allocation domain, or satisfies it from one.
+
+*Rationale.*
+An application chooses a provider for what it knows of its memory: where it lies, what bounds it and what exhaustion does.
+Memory taken from anywhere else has none of those properties, and a fallback after a refusal would hide the very exhaustion that a bounded provider makes visible.
+A default that changed later would move an existing object's memory to a domain that its owner never chose.
+A layer that takes memory on the application's behalf is itself the application's choice, so its documentation names the provider that comes with it.
+A provider built over other sources is chosen with them, so drawing on them is no fallback.
+Which allocation a route admits, and which guarantee it holds, rest on the route's declaration and on evidence, and the choice of a provider supplies neither.
+
+[[req-sdk-owned-frame-provider-contract]]
+=== A memory provider states the contract that the SDK relies on
+
+[.specitem,oft-sid="req~sdk-owned-frame-provider-contract~1",oft-title="A memory provider states the contract that the SDK relies on",oft-needs="impl,utest,uman",oft-tags="OwnedFrameProvider"]
+--
+*What it states.*
+A memory provider *MUST* state, in the documentation that is released with it, for each configuration or range of parameters that it supports:
+
+* its resource and failure policy, with each point that <<req-ssr-heap-declared,The heap class is declared, with no default>> lists for a policy, an unknown point stated as unknown;
+* its allocation domains: where its memory comes from, the sources that it draws on, and what bounds it;
+* the requests that it admits: sizes, alignments and limits, what a request of size zero does, and what an inadmissible request does;
+* the conditions under which what it hands over stays valid, and who owns it;
+* the state that it is in after a refusal;
+* whether released memory becomes available again, and what it keeps for the life of the process;
+* whether a resize can wait, and for what;
+* whether it supports a call made while another of its calls is in progress.
+
+*Unknown and not stated.*
+Where a bound of its allocation domains is not known, the provider *MUST* state it as unknown.
+A context, a condition of validity or ownership, or a call made while another is in progress, that the provider does not state as supported, is not supported.
+
+*True on every path.*
+The provider *MUST* make what it states hold for every acquisition, resize and release that a request can reach under the stated conditions, its own dependencies included.
+The provider *MUST* state, as its resource and failure policy, the one that its allocator's stated contract establishes, as <<req-ssr-heap-declared,The heap class is declared, with no default>> states of a policy.
+
+*What relies on it.*
+What the element's setup and a route's declared policy take from a provider's stated contract: xref:../up-l1/runtime.adoc#req-ssr-mode-init-failure[Initialization failure]; <<req-ssr-heap-declared,The heap class is declared, with no default>>.
+
+*Not evidence.*
+What a provider states establishes no guarantee (<<req-ssr-heap-guarantees,A stronger resource guarantee is required by name, and admitted or refused>>).
+--
+
+[horizontal]
+ID:: `+req~sdk-owned-frame-provider-contract~1+`
+Allocated to:: each memory provider
+Verification:: review, test
+* *review*
+** The provider's statement, point by point and configuration by configuration, against the provider's code and its dependencies for every acquisition, resize and release that a request can reach.
+** Each point of its resource and failure policy, and each bound of its allocation domains, stated or stated as unknown; the contexts, the conditions of validity and ownership, and calls made while another is in progress, stated as supported or left out.
+** A stated panic or end of the process, read in the statement and in the code rather than provoked.
+* *test*: each failure behaviour that the provider states and that a test can provoke without ending the process, for each configuration that it supports: exhaustion, an inadmissible request, a request of size zero, a refused resize, the provider's state after a refusal, and a wait where one is stated.
+
+*Rationale.*
+The SDK's setup decides what it can rely on from a provider, and a route's declared policy states what its provider does, so both are only as true as the provider's own account.
+An allocation interface that returns an error can still end the process on exhaustion or wait for a lock, and only the provider can say which it does.
+The points of a resource and failure policy are listed once, with the heap class, and the provider states each of them for every configuration that it supports.
+A point stated as unknown is read as unknown, where a point left out invites the favourable reading.
+The SDK cannot use memory safely under conditions of validity, ownership or calling that nobody states, so what is not stated there is not supported.
+An account that held only for a first request, or without the provider's dependencies, would fail on growth, on release or on a lock deep in a dependency.
+
+[[req-sdk-owned-frame-provider-ownership]]
+=== Memory from a provider stays valid while it is held, and is disposed of once under its provider's contract
+
+[.specitem,oft-sid="req~sdk-owned-frame-provider-ownership~1",oft-title="Memory from a provider stays valid while it is held, and is disposed of once under its provider's contract",oft-needs="impl,utest",oft-tags="OwnedFrameSdk,OwnedFrameProvider"]
+--
+*The SDK's calls.*
+The SDK *MUST* call a memory provider, from its core or from a layer above its core, only from the contexts and under the conditions that the provider's statement supports (<<req-sdk-owned-frame-provider-contract,A memory provider states the contract that the SDK relies on>>).
+
+*The end of a hold.*
+When an object or an operation of the SDK's core, or of a layer above its core, that holds a block from an allocation provider ends its hold, the SDK *MUST* do exactly one of these with the block:
+
+* release it once, to the provider that supplied it or through a handle that the provider's contract makes equivalent to it, with what that contract requires of a release;
+* pass it to one other owner;
+* keep it, where the contract of that object or operation states that it retains the block.
+
+The SDK *MUST NOT* release to a provider memory that the provider did not supply.
+The SDK *MUST NOT* use a block through a handle that a release or a successful resize has made invalid.
+Where the core is the element, a route's allocation is outside this clause: xref:../up-l1/runtime.adoc#req-ssr-heap-slot-types[A decoded value is destroyed once, as its route's class admits] states how it is destroyed once.
+
+*What a block needs.*
+With each block from an allocation provider that it holds or passes to another owner, the SDK *MUST* keep what every later use and the final release of the block need: the provider or a handle that its contract makes equivalent, the description of the block that a release requires, and access to the provider's state, also after the SDK object that made the block has ended.
+While its core or a layer above its core holds a block, and while an owner to which it passed the block holds it, the SDK *MUST NOT* end a condition under which the provider's statement keeps the block valid.
+
+*Regions.*
+How the element holds a region that a memory source hands over for startup memory, for the life of the process: <<req-ssr-memory-static,ASIL-path storage is static or caller-provided>>; <<req-ssr-memory-sealed,Startup memory is sealed>>.
+The SDK *MUST* use a region that a memory source hands over for startup memory only for as long as the source's statement says that it hands the region over, where a layer above its core takes the region or where its core is not the element.
+
+*Forgotten owners.*
+Where the SDK's core is the element, that nothing that its core holds is reused while it is still owned, a forgotten owner included, is stated in xref:../up-l1/runtime.adoc#req-ssr-heap-slot-types[A decoded value is destroyed once, as its route's class admits] and xref:../up-l1/runtime.adoc#req-ssr-release-lease-drop[A lease gives back its slot and nothing else].
+Where its core is not the element, the SDK *MUST NOT* release, reuse or give to another owner a block whose owner has not ended its hold, a forgotten owner included; where its core is the element, the SDK *MUST NOT* do so with a block that a layer above its core holds.
+
+*The provider.*
+On a successful request, a memory provider *MUST* hand over storage that has the request's size, alignment and initialization, and that overlaps no storage that another owner holds.
+The provider *MUST* keep each block that it has handed over valid, and given to no other owner, until the block is released, for as long as the conditions of validity that its statement states hold.
+The provider *MUST* keep each region that it has handed over for startup memory valid, and given to no other owner, for as long as its statement says that it hands the region over.
+The provider *MUST NOT* move or invalidate a block that is held, except in a resize that the block's owner requests.
+A successful resize replaces the block as the provider's contract states.
+When it refuses a resize, the provider *MUST* leave the block valid, with its owner and its contents unchanged.
+The provider *MUST NOT* change a block or a region that is held when it serves or releases another request.
+--
+
+[horizontal]
+ID:: `+req~sdk-owned-frame-provider-ownership~1+`
+Allocated to:: the SDK, for each part of its core and of its layers above the core that calls a memory provider or holds memory from one, a route's allocation excepted from "The end of a hold" where its core is the element, for reusing no block behind its owner where a layer above its core holds the block or its core is not the element, and, where a layer above its core takes the region or its core is not the element, for using a region only for as long as its memory source hands it over; each memory provider
+Verification:: test, review
+* *test*
+** A provider test double that records the context of each call: each call that the SDK makes from a context that the provider's statement supports.
+** Two instrumented allocation providers, and a handle that one provider's contract makes equivalent to it: each block, other than a route's allocation where the core is the element, released once, to the provider that supplied it or through the equivalent handle, and none released to a provider that did not supply it.
+** A block passed to another owner, after which the SDK object that made it ends: the block still usable, and released once to its provider when its new owner ends it.
+** A block retained by an object whose contract states that it retains the block: not released, and still valid.
+** A block held by a layer above the core, and, where the SDK's core is not the element, one held by the core, each with its owner forgotten: neither released, reused nor given to another owner.
+** A provider test double whose statement keeps a block valid only under a condition that the SDK could end, such as the life of the provider's state: that condition kept while the SDK holds the block and while an owner to which the SDK passed it holds it.
+** A region from a memory source test double whose statement hands it over for a stated period, taken by a layer above the core and, where the SDK's core is not the element, by the core: not used after that period ends.
+** A resize that keeps the block in place, one that moves it, and one that the provider refuses: after the refused resize, the block valid with its owner and its contents unchanged.
+** A request of size zero, and requests at the largest size and alignment that the provider admits: storage with the request's size, alignment and initialization, overlapping no storage that another owner holds.
+** A provider that serves and releases other requests while blocks and regions that it handed over are held: each of them unchanged, still valid and given to no other owner.
+* *review*
+** Each path of the SDK's core and of its layers above the core that ends an object's or an operation's hold of a block, other than a route's allocation where the core is the element: one release, one passing or a stated retention, and no use through an invalidated handle.
+** What the SDK keeps with each block that it holds or passes to another owner, and no path that ends a condition of the validity of a block that the SDK holds or that an owner to which it passed the block still holds.
+** Each memory provider's handling of what it has handed over: on success, on a resize, and while it serves and releases other requests.
+
+*Rationale.*
+A block released to a provider that did not supply it corrupts that provider's bookkeeping.
+A block released twice, or used after its release, can be handed to another owner while it is still in use.
+A provider's contract can make two handles equivalent, so a release needs the right provider and not the same handle.
+A block that changes owner, or outlives the object that made it, still needs its provider and its description for a correct release.
+The SDK relies on each block and region staying valid and in place for as long as it is held, and only the provider can keep that true while it serves other requests.
+A provider whose own terms could end a block's validity while it is held would make the SDK's hold worthless, so validity lasts until the release, under conditions that the SDK leaves in place.
+A region that a source hands over for a stated period is valid for that period only, so a hold that outlived it would reach memory that the source has taken back.
+An owner that asks for a resize accepts that the block may move, and a refused resize leaves it where it was.
+A forgotten owner still holds what it owned, so nothing that it held can be reused behind it.
+A provider called from a context that it does not support can break any of this, whatever its code does in other contexts.
+
+[[req-sdk-owned-frame-provider-failure]]
+=== A provider's refusal reaches the caller with its cause, and leaves held memory valid
+
+[.specitem,oft-sid="req~sdk-owned-frame-provider-failure~1",oft-title="A provider's refusal reaches the caller with its cause, and leaves held memory valid",oft-needs="impl,utest,uman",oft-tags="OwnedFrameSdk,OwnedFrameProvider"]
+--
+*The core.*
+Where the SDK's core is the element, what its setup does with a provider's refusal is stated in xref:../up-l1/runtime.adoc#req-ssr-mode-init-failure[Initialization failure], and what a route does with one in runtime mode in xref:error_model.adoc#req-ssr-refuse-before-heap[Refuse before touching the heap].
+Where the SDK's core is not the element, the core *MUST* meet, for each of its operations that takes memory from a memory provider, each duty that this item gives a layer above the core.
+
+*A layer above the core.*
+Where a memory provider returns a refusal to a request of an operation of a layer above the core, the layer *MUST* fail that operation with a result that names the provider's refusal as its cause.
+The layer *MUST NOT* panic or end the process in its own handling of the refusal.
+The layer *MUST NOT* release or invalidate memory that an earlier, successful step still owns.
+
+*What happens to a caller's value.*
+For each value that an operation takes from its caller, the layer *MUST* state in its documentation each disposition that a refusal can give the value: handed back to the caller unchanged, ended once, or retained under a stated policy.
+On a refusal, the layer *MUST* give each such value one of the dispositions stated for it, and *MUST* say in the operation's result which one it gave.
+The layer *MUST* hand back unchanged each value that the result reports as handed back.
+
+*Before the request.*
+Where the provider's statement lets a request panic or end the process for a condition that the layer can check, the layer *MUST* exclude that condition before it sends the request, or refuse the operation by name.
+A request that meets the provider's conditions can still be refused for want of memory.
+
+*The provider.*
+When a memory provider refuses a request, it *MUST* leave every block and region that it has handed over and that is held valid and unchanged.
+
+*What a refusal is not.*
+How the element uses a provider whose stated contract lets a request wait or end the process: xref:../up-l1/runtime.adoc#req-ssr-mode-init-failure[Initialization failure]; <<req-ssr-heap-guarantees,A stronger resource guarantee is required by name, and admitted or refused>>.
+--
+
+[horizontal]
+ID:: `+req~sdk-owned-frame-provider-failure~1+`
+Allocated to:: the core of an SDK whose core is not the element, and each layer above the core, for their operations that take memory from a memory provider; each memory provider
+Verification:: test, review
+* *test*
+** A provider test double that refuses, in turn, each request that the core of an SDK whose core is not the element and each layer above the core sends it: the operation fails with a result that names the provider's refusal as its cause, each value that its caller gave it receives a disposition stated for it and the result says which, the process neither panics nor ends, and no memory that an earlier, successful step owns is released or invalidated.
+** A value that a result reports as handed back: handed back unchanged.
+** A request with a condition that the provider's statement lets panic or end the process, and that the layer can check: the condition excluded before the request, or the operation refused by name with the request never sent.
+** A request that meets the provider's conditions and is refused for want of memory: reported as the provider's refusal.
+** After a provider's refusal: every block and region that it handed over and that is held still valid and unchanged.
+* *review*
+** The documentation of each such operation: the dispositions that a refusal can give each value that the operation takes from its caller.
+** Each path from a provider's refusal to the operation's result, with no panic and no end of the process in the layer's or the core's own handling.
+
+*Rationale.*
+Above the core, a provider's refusal is ordinary: a pool that is full, a request that is too large.
+An application can react to it only if it learns that the provider refused, and knows what became of what it handed in.
+A disposition stated before the value is taken, and reported when it happens, is one that the caller can rely on, where a report written afterwards could describe anything.
+A panic or a process end in the layer's own handling would turn a recoverable refusal into the loss of the process.
+A provider that ends the process itself does so under its stated contract, which the layer cannot change.
+Releasing memory that an earlier step still owns would turn one failed operation into a fault in another.
+Checking a request against the provider's conditions keeps a request that the provider would answer with a panic or a process end from being sent at all, while a well-formed request can still meet a full pool.
